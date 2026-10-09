@@ -192,11 +192,11 @@ internal static class SmokeTests
             var settings = new AppSettings { SwapSideWidgets = true, ClockHeight = 276 };
             var defaults = WidgetLayout.Normalize(null, settings);
             Assert(defaults.Length == WidgetLayout.Ids.Length && defaults[0].X > defaults[5].X, "Legacy swapped arrangement was not preserved.");
-            defaults[0].X = 104; defaults[0].Y = 32; defaults[0].Width = 400; defaults[0].Height = 220;
-            defaults[1].Width = 310; defaults[1].Visible = false; settings.WidgetLayout = defaults;
+            defaults[0].X = 104; defaults[0].Y = 32; defaults[0].Width = 400; defaults[0].Height = 320;
+            defaults[1].Width = 410; defaults[1].Visible = false; settings.WidgetLayout = defaults;
             SettingsStore.Save(path, settings); string warning; var restored = SettingsStore.Load(path, out warning);
-            Assert(warning == null && restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout[0].X == 104 && restored.WidgetLayout[0].Y == 32 && restored.WidgetLayout[0].Width == 400 && restored.WidgetLayout[1].Width == 310 && !restored.WidgetLayout[1].Visible, "Independent layout or visibility was lost.");
-            restored.WidgetLayout = new[] { new WidgetPlacement { Id = "Clock", X = Double.NaN, Y = -900, Width = Double.PositiveInfinity, Height = -1 }, new WidgetPlacement { Id = "unknown" }, null };
+            Assert(warning == null && restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout[0].X == 104 && restored.WidgetLayout[0].Y == 32 && restored.WidgetLayout[0].Width == 400 && restored.WidgetLayout[1].Width == 410 && !restored.WidgetLayout[1].Visible, "Independent layout or visibility was lost.");
+            restored.WidgetLayout = new[] { new WidgetPlacement { Id = "Focus", X = Double.NaN, Y = -900, Width = Double.PositiveInfinity, Height = -1 }, new WidgetPlacement { Id = "unknown" }, null };
             restored.Normalize();
             Assert(restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout.All(p => p.X >= 0 && p.Y >= 0 && p.X + p.Width <= WidgetLayout.Width && p.Y + p.Height <= WidgetLayout.Height), "Malformed layout escaped the canvas or lost widgets.");
         });
@@ -226,32 +226,32 @@ internal static class SmokeTests
                 using (var controller = new DashboardController(window, path, true))
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                    var editor = controller.Editor; var original = editor.Bounds("Clock"); var focus = editor.Bounds("Focus");
-                    click("EditLayoutButton"); editor.Select("Clock"); editor.TransformSelected("SE", 80, 24, false);
-                    Assert(editor.Bounds("Clock").Width == original.Width + 80 && editor.Bounds("Focus") == focus, "Resizing changed a neighboring widget.");
-                    var host = (System.Windows.FrameworkElement)((System.Windows.Controls.Border)window.FindName("ClockCard")).Parent;
-                    Assert(host.Width == editor.Bounds("Clock").Width && host.Height == editor.Bounds("Clock").Height, "Resize was not live in the displayed host.");
+                    var editor = controller.Editor; var original = editor.Bounds("Focus"); var media = editor.Bounds("Media");
+                    click("EditLayoutButton"); editor.Select("Focus"); editor.TransformSelected("SE", 80, 24, false);
+                    Assert(editor.Bounds("Focus").Width == original.Width + 80 && editor.Bounds("Media") == media, "Resizing changed a neighboring widget.");
+                    var host = (System.Windows.FrameworkElement)((System.Windows.Controls.Border)window.FindName("FocusCard")).Parent;
+                    Assert(host.Width == editor.Bounds("Focus").Width && host.Height == editor.Bounds("Focus").Height, "Resize was not live in the displayed host.");
                     Assert(!((System.Windows.Controls.Border)window.FindName("MixerCard")).IsHitTestVisible, "Mixer controls are active while dragging widgets.");
-                    editor.TransformSelected("", 32, 24, false); var edited = editor.Bounds("Clock");
-                    click("UndoLayoutButton"); Assert(editor.Bounds("Clock").X == original.X, "Undo did not restore previous position.");
-                    click("RedoLayoutButton"); Assert(editor.Bounds("Clock") == edited, "Redo did not restore position.");
+                    editor.TransformSelected("", 32, 24, false); var edited = editor.Bounds("Focus");
+                    click("UndoLayoutButton"); Assert(editor.Bounds("Focus").X == original.X, "Undo did not restore previous position.");
+                    click("RedoLayoutButton"); Assert(editor.Bounds("Focus") == edited, "Redo did not restore position.");
                     editor.SetVisible("Media", false); Assert(!editor.IsVisible("Media"), "Hide did not remove media widget.");
                     editor.Undo(); Assert(editor.IsVisible("Media"), "Undo did not restore hidden widget.");
-                    click("CancelLayoutButton"); Assert(!editor.Editing && editor.Bounds("Clock") == original && !editor.CanUndo, "Cancel did not restore saved layout.");
+                    click("CancelLayoutButton"); Assert(!editor.Editing && editor.Bounds("Focus") == original && !editor.CanUndo, "Cancel did not restore saved layout.");
                     Assert(((System.Windows.Controls.Border)window.FindName("MixerCard")).IsHitTestVisible, "Normal controls did not resume after cancel.");
-                    click("EditLayoutButton"); editor.Select("Clock"); editor.TransformSelected("", 40, 32, false); editor.SetVisible("Focus", false); click("SaveLayoutButton");
+                    click("EditLayoutButton"); editor.Select("Focus"); editor.TransformSelected("", 40, 32, false); editor.SetVisible("Shortcuts", false); click("SaveLayoutButton");
                     string warning; var saved = SettingsStore.Load(path, out warning);
-                    Assert(saved.WidgetLayout != null && saved.WidgetLayout.First(p => p.Id == "Clock").X == 40 && saved.WidgetLayout.First(p => p.Id == "Clock").Layer > 0 && !saved.WidgetLayout.First(p => p.Id == "Focus").Visible, "Layout save lost edited positions, stacking order or visibility.");
+                    Assert(saved.WidgetLayout != null && saved.WidgetLayout.First(p => p.Id == "Focus").X == 40 && saved.WidgetLayout.First(p => p.Id == "Focus").Layer > 0 && !saved.WidgetLayout.First(p => p.Id == "Shortcuts").Visible, "Layout save lost edited positions, stacking order or visibility.");
                     click("SettingsButton"); ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm"; click("SaveSettings");
-                    saved = SettingsStore.Load(path, out warning); Assert(saved.WidgetLayout.First(p => p.Id == "Clock").X == 40 && saved.Theme == "Warm", "Saving theme erased custom geometry.");
-                    click("EditLayoutButton"); click("ResetLayoutButton"); editor.Undo(); Assert(editor.Bounds("Clock").X == 40 && !editor.IsVisible("Focus"), "Reset was not undoable."); click("CancelLayoutButton");
+                    saved = SettingsStore.Load(path, out warning); Assert(saved.WidgetLayout.First(p => p.Id == "Focus").X == 40 && saved.Theme == "Warm", "Saving theme erased custom geometry.");
+                    click("EditLayoutButton"); click("ResetLayoutButton"); editor.Undo(); Assert(editor.Bounds("Focus").X == 40 && !editor.IsVisible("Shortcuts"), "Reset was not undoable."); click("CancelLayoutButton");
                 }
                 window.Close();
             }
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
                 var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
-                using (var controller = new DashboardController(window, path, true)) Assert(controller.Editor.Bounds("Clock").X == 40 && !controller.Editor.IsVisible("Focus"), "Restart lost layout.");
+                using (var controller = new DashboardController(window, path, true)) Assert(controller.Editor.Bounds("Focus").X == 40 && !controller.Editor.IsVisible("Shortcuts"), "Restart lost layout.");
                 window.Close();
             }
         });
@@ -263,11 +263,11 @@ internal static class SmokeTests
                 using (var controller = new DashboardController(window, blockedPath, true))
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                    var original = controller.Editor.Bounds("Clock"); click("EditLayoutButton"); controller.Editor.Select("Clock"); controller.Editor.TransformSelected("", 32, 16, false);
-                    var edited = controller.Editor.Bounds("Clock"); click("SaveLayoutButton");
-                    Assert(controller.Editor.Editing && controller.Editor.Bounds("Clock") == edited, "Failed save discarded the draft or exited editing.");
+                    var original = controller.Editor.Bounds("Focus"); click("EditLayoutButton"); controller.Editor.Select("Focus"); controller.Editor.TransformSelected("", 32, 16, false);
+                    var edited = controller.Editor.Bounds("Focus"); click("SaveLayoutButton");
+                    Assert(controller.Editor.Editing && controller.Editor.Bounds("Focus") == edited, "Failed save discarded the draft or exited editing.");
                     Assert(((System.Windows.Controls.TextBlock)window.FindName("StatusMessage")).Text.Contains("Could not save layout"), "Save failure was not explained.");
-                    click("CancelLayoutButton"); Assert(controller.Editor.Bounds("Clock") == original, "Cancel after failed save did not restore original.");
+                    click("CancelLayoutButton"); Assert(controller.Editor.Bounds("Focus") == original, "Cancel after failed save did not restore original.");
                 }
                 window.Close();
             }
@@ -286,7 +286,7 @@ internal static class SmokeTests
                     ((System.Windows.Controls.TextBlock)window.FindName("WeatherCity")).Text = "A long weather location that cannot fit on one line";
                     var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                     dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
-                    foreach (var pair in new[] { new[] { "ClockPeriod", "ClockCard" }, new[] { "MediaHint", "MediaCard" }, new[] { "UptimeValue", "SystemCard" }, new[] { "WeatherButton", "WeatherCard" } })
+                    foreach (var pair in new[] { new[] { "MediaHint", "MediaCard" }, new[] { "UptimeValue", "SystemCard" }, new[] { "WeatherButton", "WeatherCard" } })
                     {
                         var child = (System.Windows.FrameworkElement)window.FindName(pair[0]); var card = (System.Windows.FrameworkElement)window.FindName(pair[1]);
                         Assert(child.TransformToAncestor(card).Transform(new System.Windows.Point(0, child.ActualHeight)).Y <= card.ActualHeight - 20, pair[0] + " escapes minimum widget height.");
@@ -315,6 +315,8 @@ internal static class SmokeTests
                     var uptime = (System.Windows.FrameworkElement)window.FindName("UptimeValue"); var card = (System.Windows.FrameworkElement)window.FindName("SystemCard");
                     var corner = uptime.TransformToAncestor(card).Transform(new System.Windows.Point(0, uptime.ActualHeight));
                     Assert(corner.Y <= card.ActualHeight - 20, "Uptime overflows the compact system widget.");
+                    var header = (System.Windows.FrameworkElement)window.FindName("HeaderClock");
+                    Assert(header.ActualHeight <= 72 + 8 && header.ActualWidth > 0, "Header clock does not fit the 72 px header.");
                     var shortcuts = (System.Windows.Controls.Primitives.UniformGrid)window.FindName("ShortcutGrid");
                     foreach (System.Windows.Controls.Button button in shortcuts.Children)
                     {
@@ -324,6 +326,74 @@ internal static class SmokeTests
                 }
                 window.Close();
             }
+        });
+        Check("Header clock replaces the Clock widget and old layouts give Focus its space", () => {
+            Assert(!WidgetLayout.Ids.Contains("Clock"), "Clock is still a dashboard widget.");
+            var settings = new AppSettings();
+            var focus = WidgetLayout.SpotifyDefault(settings).First(p => p.Id == "Focus");
+            Assert(focus.X == 0 && focus.Y == 0 && focus.Height == WidgetLayout.Height, "New default does not give Focus the full column.");
+            var old = WidgetLayout.SpotifyDefault(settings).Where(p => p.Id != "Focus").Concat(new[] {
+                new WidgetPlacement { Id = "Clock", X = 0, Y = 0, Width = 320, Height = 230 },
+                new WidgetPlacement { Id = "Focus", X = 0, Y = 246, Width = 320, Height = 330 } }).ToArray();
+            var migrated = WidgetLayout.Normalize(old, settings);
+            Assert(migrated.Length == WidgetLayout.Ids.Length && migrated.All(p => p.Id != "Clock"), "Saved Clock placement survived normalization.");
+            var grown = migrated.First(p => p.Id == "Focus");
+            Assert(grown.Y == 0 && grown.Height == 576 && grown.Width == 320, "Focus did not take over the old clock space.");
+            old.First(p => p.Id == "Focus").X = 900;
+            Assert(WidgetLayout.Normalize(old, settings).First(p => p.Id == "Focus").Y == 246, "A custom Focus position was moved.");
+            string path = Path.Combine(directory, "header-clock.xml"); SettingsStore.Save(path, new AppSettings { Use24HourClock = true });
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Func<string, string> text = name => ((System.Windows.Controls.TextBlock)window.FindName(name)).Text;
+                    Assert(System.Text.RegularExpressions.Regex.IsMatch(text("ClockTime"), "^[0-2][0-9]:[0-5][0-9]$") && text("ClockDate").Length > 0 && text("ClockDay").Length > 0, "Header clock shows no time or date.");
+                    Assert(((System.Windows.FrameworkElement)window.FindName("ClockPeriod")).Visibility == System.Windows.Visibility.Collapsed, "24-hour clock still shows AM/PM.");
+                    click("EditLayoutButton");
+                    Assert(((System.Windows.FrameworkElement)window.FindName("HeaderClock")).Visibility == System.Windows.Visibility.Visible, "Header clock hides while editing the layout.");
+                    click("CancelLayoutButton");
+                }
+                window.Close();
+            }
+        });
+        Check("System stats pick columns and scale with their widget", () => {
+            var cell = new System.Windows.Size(336, 46);
+            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(332, 226), cell, 5) == 1, "Compact stats did not stay in one column.");
+            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(900, 226), cell, 5) == 2, "Wide stats did not use two columns.");
+            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(1800, 120), cell, 5) == 3, "Very wide stats did not use three columns.");
+            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(0, 0), cell, 5) == 1 && SystemStatsLayout.BestColumns(new System.Windows.Size(900, 226), cell, 1) == 1, "Degenerate sizes picked several columns.");
+            Func<double, double, double> cpuHeight = (width, height) => {
+                string path = Path.Combine(directory, "stats-" + width + ".xml");
+                var settings = new AppSettings();
+                settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings).Select(p => { if (p.Id == "System") { p.Visible = true; p.X = 0; p.Y = 0; p.Width = width; p.Height = height; p.Layer = 5; } return p; }).ToArray();
+                SettingsStore.Save(path, settings);
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                    try
+                    {
+                        using (var controller = new DashboardController(window, path, true))
+                        {
+                            var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
+                            dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                            var card = (System.Windows.FrameworkElement)window.FindName("SystemCard");
+                            foreach (string name in new[] { "CpuSection", "UptimeSection" })
+                            {
+                                var row = (System.Windows.FrameworkElement)window.FindName(name);
+                                var bounds = row.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, row.ActualWidth, row.ActualHeight));
+                                Assert(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= card.ActualWidth && bounds.Bottom <= card.ActualHeight - 20, name + " escapes the system widget at " + width + " × " + height + ".");
+                            }
+                            var value = (System.Windows.FrameworkElement)window.FindName("CpuValue");
+                            return value.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, value.ActualWidth, value.ActualHeight)).Height;
+                        }
+                    }
+                    finally { window.Close(); }
+                }
+            };
+            double small = cpuHeight(380, 310), large = cpuHeight(760, 576);
+            Assert(large >= small * 1.5, "System stats did not grow with their widget (" + small.ToString("0.0") + " → " + large.ToString("0.0") + ").");
         });
         Check("Focus start, pause, reset and completion boundary", () => {
             var timer = new FocusTimer(); timer.Reset(5); timer.Toggle(); Assert(timer.Running, "Timer did not start."); Thread.Sleep(20); timer.Toggle();

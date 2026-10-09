@@ -125,7 +125,7 @@ namespace WidgetScreen
         {
             if (Editing) return;
             Editing = true; saved = WidgetLayout.Copy(current); undo.Clear(); redo.Clear();
-            Select(current.FirstOrDefault(p => IsVisible(p.Id)) == null ? "Clock" : current.First(p => IsVisible(p.Id)).Id);
+            Select(current.FirstOrDefault(p => IsVisible(p.Id)) == null ? "Focus" : current.First(p => IsVisible(p.Id)).Id);
             Draw();
         }
         public void Cancel()

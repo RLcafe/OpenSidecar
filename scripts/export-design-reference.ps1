@@ -38,9 +38,9 @@ foreach ($case in $cases) {
     try {
         # Stable display-only fixtures, explicitly marked in every image.
         $window.FindName('ClockTime').Text = '10:09'
-        $window.FindName('ClockPeriod').Text = 'AM  ' + [char]0x00B7 + '  LOCAL TIME'
-        $window.FindName('ClockDate').Text = 'Fri, Oct 9'
-        $window.FindName('Greeting').Text = 'GOOD MORNING'
+        $window.FindName('ClockPeriod').Text = 'AM'
+        $window.FindName('ClockDay').Text = 'FRIDAY'
+        $window.FindName('ClockDate').Text = 'October 9'
         $window.FindName('AudioStatus').Text = 'UNAVAILABLE'
         $window.FindName('AudioStatus').SetResourceReference([Windows.Controls.TextBlock]::ForegroundProperty, 'Warning')
         $window.FindName('AudioDevice').Text = 'Audio controls are unavailable'

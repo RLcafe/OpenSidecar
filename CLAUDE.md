@@ -96,7 +96,9 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Spotify is its own widget (PKCE, user-supplied Client ID, redirect `http://127.0.0.1:43827/callback`). Windows Now Playing stays independent.
 - Tapping a song inside a Spotify album or playlist plays it in that collection so playback continues (user request, 9 Oct 2026; diverges from spec §5.1, see `docs/decisions/003-…`). Search results and episodes still open their Spotify link.
 - Web requests skip IPv6 for hosts that also have IPv4 (`PreferIPv4Handler`), because the user's network has unrouted IPv6 that made Spotify sign-in time out.
-- Default layout shows Clock, Focus, Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
+- Time and date always show at the top left of the header, including in Edit layout. There is no Clock widget, and the header brand was removed (user request, 9 Oct 2026; see `docs/design/header-clock-and-stats.md`). Old layouts drop the Clock placement, and Focus grows into its space when it sat directly below it.
+- System stats scale with their widget: the rows sit in a Viewbox, and `SystemStatsLayout` picks 1–3 columns and widens rows to fill the card (user request, 9 Oct 2026).
+- Default layout shows Focus (full column), Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
 

@@ -23,7 +23,8 @@ namespace WidgetScreen
     public static class WidgetLayout
     {
         public const double Width = 1856, Height = 576;
-        public static readonly string[] Ids = { "Clock", "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify" };
+        // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify" };
         public static string Title(string id)
         {
             switch (id) {
@@ -38,7 +39,6 @@ namespace WidgetScreen
         public static Size Minimum(string id)
         {
             switch (id) {
-                case "Clock": return new Size(296, 200);
                 case "Focus": return new Size(296, 300);
                 case "Media": return new Size(360, 310);
                 case "Spotify": return new Size(560, 500);
@@ -56,14 +56,13 @@ namespace WidgetScreen
         public static WidgetPlacement[] Default(AppSettings settings)
         {
             double[] widths = DashboardAppearance.ColumnWidths(settings);
-            double clockX = settings.SwapSideWidgets ? Width - widths[0] + 16 : 0;
+            double focusX = settings.SwapSideWidgets ? Width - widths[0] + 16 : 0;
             double mediaX = settings.SwapSideWidgets ? widths[3] + 16 : widths[0];
             double mixerX = mediaX + widths[1];
             double infoX = settings.SwapSideWidgets ? 0 : mixerX + widths[2];
             bool stats = settings.ShowCpu || settings.ShowGpu || settings.ShowRam || settings.ShowNetwork || settings.ShowUptime;
             return new[] {
-                Place("Clock", clockX, 0, widths[0] - 16, settings.ClockHeight - 16),
-                Place("Focus", clockX, settings.ClockHeight, widths[0] - 16, Height - settings.ClockHeight),
+                Place("Focus", focusX, 0, widths[0] - 16, Height),
                 Place("Media", mediaX, 0, widths[1] - 16, settings.MediaHeight - 16),
                 Place("Shortcuts", mediaX, settings.MediaHeight, widths[1] - 16, Height - settings.MediaHeight),
                 Place("Mixer", mixerX, 0, widths[2] - 16, settings.MixerHeight),
@@ -78,8 +77,7 @@ namespace WidgetScreen
             foreach (var p in result)
             {
                 p.Visible = p.Id != "System" && p.Id != "Weather";
-                if (p.Id == "Clock") SetBounds(p, new Rect(0, 0, 320, 230));
-                if (p.Id == "Focus") SetBounds(p, new Rect(0, 246, 320, 330));
+                if (p.Id == "Focus") SetBounds(p, new Rect(0, 0, 320, 576));
                 if (p.Id == "Media") SetBounds(p, new Rect(336, 0, 472, 310));
                 if (p.Id == "Shortcuts") SetBounds(p, new Rect(336, 326, 472, 250));
                 if (p.Id == "Mixer") SetBounds(p, new Rect(824, 0, 456, 576));
@@ -91,9 +89,28 @@ namespace WidgetScreen
         {
             return Double.IsNaN(value) || Double.IsInfinity(value) ? fallback : value;
         }
+        // Layouts saved with the old Clock widget: when Focus sat directly under a visible Clock in the
+        // same column (the old default), Focus grows up into the space the clock card leaves behind.
+        private static void AbsorbClock(WidgetPlacement[] layout)
+        {
+            var clock = layout.FirstOrDefault(p => p != null && p.Id == "Clock");
+            var focus = layout.FirstOrDefault(p => p != null && p.Id == "Focus");
+            if (clock == null || focus == null || !clock.Visible) return;
+            if (new[] { clock.X, clock.Y, clock.Width, clock.Height, focus.X, focus.Y, focus.Width, focus.Height }.Any(v => Double.IsNaN(v) || Double.IsInfinity(v))) return;
+            double gap = focus.Y - (clock.Y + clock.Height);
+            if (Math.Abs(focus.X - clock.X) > 1 || Math.Abs(focus.Width - clock.Width) > 1 || gap < 0 || gap > 32) return;
+            var grown = new Rect(focus.X, clock.Y, focus.Width, focus.Y + focus.Height - clock.Y);
+            foreach (var other in layout.Where(p => p != null && p.Visible && p.Id != "Clock" && p.Id != "Focus"))
+            {
+                Rect overlap = Rect.Intersect(other.Bounds, grown);
+                if (!overlap.IsEmpty && overlap.Width > 1 && overlap.Height > 1) return;
+            }
+            focus.Height = grown.Height; focus.Y = grown.Y;
+        }
         public static WidgetPlacement[] Normalize(WidgetPlacement[] layout, AppSettings settings)
         {
             var defaults = Default(settings);
+            if (layout != null && layout.Any(p => p != null && p.Id == "Clock")) { layout = layout.Select(p => p == null ? null : p.Copy()).ToArray(); AbsorbClock(layout); }
             var result = new List<WidgetPlacement>();
             foreach (var fallback in defaults)
             {
