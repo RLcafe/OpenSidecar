@@ -51,9 +51,13 @@ namespace WidgetScreen
         {
             generation++; browseGeneration++; playback = null; likedUri = artUrl = null; liked = null; nextPoll = DateTime.MinValue;
             C<Image>("SpotifyArt").Source = null;
-            Text("SpotifyTitle", Connected ? "Loading Spotify…" : "Your music, here");
-            Text("SpotifyArtist", Connected ? "Checking current playback." : "Connect in Settings → Spotify.");
-            Status(Connected ? "Account connected." : "Set up your account in Settings → Spotify.");
+            Text("SpotifyTitle", Connected ? "Loading…" : "");
+            Text("SpotifyArtist", Connected ? "Checking what's playing." : "");
+            Status(Connected ? "" : "Connect Spotify in Settings to use your library.");
+            // Until an account is connected, one empty state replaces the tabs, list, now-playing strip and status line.
+            var connected = Connected ? Visibility.Visible : Visibility.Collapsed;
+            foreach (string name in new[] { "SpotifyTabs", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyStatus", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
+            C<FrameworkElement>("SpotifyEmpty").Visibility = Connected ? Visibility.Collapsed : Visibility.Visible;
             // The first list loads on the first visible tick: never from the constructor, and never while hidden.
             C<StackPanel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();
         }
@@ -62,11 +66,18 @@ namespace WidgetScreen
             browseGeneration++; kind = selected; offset = 0; collection = null; libraryPending = false;
             C<DockPanel>("SpotifySearchRow").Visibility = selected == "Search" ? Visibility.Visible : Visibility.Collapsed;
             C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Collapsed;
+            // Same selected look as the Focus presets and Quiet mode.
             foreach (string tab in new[] { "Albums", "Playlists", "Search" })
-                C<Button>("Spotify" + tab).SetResourceReference(Button.BorderBrushProperty, tab == selected ? "Accent" : "ControlBorder");
+            {
+                var button = C<Button>("Spotify" + tab); bool on = tab == selected;
+                button.SetResourceReference(Button.BorderBrushProperty, on ? "Accent" : "ControlBorder");
+                button.SetResourceReference(Button.BackgroundProperty, on ? "Selected" : "Raised");
+                button.BorderThickness = new Thickness(on ? 2 : 1);
+                AutomationProperties.SetName(button, tab + (on ? ", selected" : ""));
+            }
             C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
-            if (!Connected) { Status("Connect in Settings → Spotify to use your library."); return; }
-            if (selected == "Search") { Status("Enter a song or artist, then tap Find."); C<TextBox>("SpotifyQuery").Focus(); }
+            if (!Connected) { Status("Connect Spotify in Settings to use your library."); return; }
+            if (selected == "Search") { Status("Type a song or artist, then tap Find."); C<TextBox>("SpotifyQuery").Focus(); }
             else if (load) LoadPage();
             else Status("Loading from Spotify…");
         }
@@ -79,8 +90,8 @@ namespace WidgetScreen
         {
             int version = ++browseGeneration;
             C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
-            if (!Connected) { Status("Connect in Settings → Spotify to use your library."); return; }
-            if (kind == "Search" && String.IsNullOrWhiteSpace(searchQuery)) { Status("Enter a song or artist to search."); return; }
+            if (!Connected) { Status("Connect Spotify in Settings to use your library."); return; }
+            if (kind == "Search" && String.IsNullOrWhiteSpace(searchQuery)) { Status("Type a song or artist to search for."); return; }
             Status("Loading from Spotify…");
             try
             {
@@ -89,11 +100,11 @@ namespace WidgetScreen
                 foreach (var item in page.Items) C<StackPanel>("SpotifyResults").Children.Add(Row(item, version));
                 C<ScrollViewer>("SpotifyResultsScroll").ScrollToTop();
                 Paging(offset > 0, page.HasMore); Text("SpotifyPageLabel", page.Items.Length == 0 ? "" : (offset + 1) + "–" + (offset + page.Items.Length));
-                string empty = kind == "Albums" && collection == null && service.CanReadRecent ? "No recently played albums yet. Play an album in Spotify." : "No results. Try another search or save music in Spotify.";
+                string empty = kind == "Albums" && collection == null && service.CanReadRecent ? "No recent albums yet. Play an album in Spotify and it shows up here." : kind == "Search" && collection == null ? "No matches. Try a different spelling or fewer words." : "Nothing here yet. Save music in Spotify to see it here.";
                 Status(page.Items.Length == 0 ? empty
-                    : collection == null && kind == "Albums" && !service.CanReadRecent ? "Showing saved albums. Reconnect in Settings → Spotify to see recently played albums."
-                    : collection == null && kind != "Search" ? "Choose " + (kind == "Albums" ? "an album" : "a playlist") + " to browse its songs."
-                    : collection != null && service.CanControl ? "Tap a song to play it here; Spotify continues through this " + (collection.Uri.StartsWith("spotify:album:") ? "album." : "playlist.")
+                    : collection == null && kind == "Albums" && !service.CanReadRecent ? "Showing saved albums. Reconnect in Settings to see recent ones."
+                    : collection == null && kind != "Search" ? "Tap " + (kind == "Albums" ? "an album" : "a playlist") + " to see its songs."
+                    : collection != null && service.CanControl ? "Tap a song to play it. The rest of the " + (collection.Uri.StartsWith("spotify:album:") ? "album" : "playlist") + " follows."
                     : "Tap a song to open it in Spotify.");
             }
             catch (Exception error) { if (!disposed && version == browseGeneration) { Status(SpotifyAccount.Message(error)); Paging(offset > 0, false); } }
@@ -171,7 +182,7 @@ namespace WidgetScreen
                 var snapshot = await service.CurrentAsync(); if (disposed || !Connected || version != generation) return;
                 playback = snapshot; var item = snapshot.Item;
                 Text("SpotifyTitle", item == null ? "Nothing playing" : item.Name);
-                Text("SpotifyArtist", item == null ? "Start music in Spotify on any device." : item.Subtitle);
+                Text("SpotifyArtist", item == null ? "Play something in Spotify on any device." : item.Subtitle);
                 if (likedUri != (item == null ? null : item.Uri)) { likedUri = item == null ? null : item.Uri; liked = null; }
                 UpdateMode();
                 if (active && item != null && item.IsTrack && (!liked.HasValue || DateTime.UtcNow - lastLikeCheck >= TimeSpan.FromMinutes(1)) && !likeBusy)
@@ -200,7 +211,7 @@ namespace WidgetScreen
             {
                 if (disposed || version != generation) return;
                 nextPoll = DateTime.UtcNow.AddSeconds(60); playback = null; likedUri = artUrl = null; liked = null;
-                Text("SpotifyTitle", "Spotify unavailable"); Text("SpotifyArtist", "Check your connection in Settings → Spotify.");
+                Text("SpotifyTitle", "Can't reach Spotify"); Text("SpotifyArtist", "Retrying in a minute.");
                 C<Image>("SpotifyArt").Source = null;
                 Status(SpotifyAccount.Message(error)); UpdateMode();
             }
@@ -210,7 +221,7 @@ namespace WidgetScreen
         {
             if (likeBusy || playback == null || playback.Item == null || !liked.HasValue) return;
             int version = generation; string uri = playback.Item.Uri; bool target = !liked.Value; likeBusy = true; UpdateMode();
-            try { await service.SetLikedAsync(uri, target); if (!disposed && version == generation && likedUri == uri) { liked = target; lastLikeCheck = DateTime.UtcNow; Status(target ? "Saved to your Liked Songs" : "Removed from your Liked Songs"); } }
+            try { await service.SetLikedAsync(uri, target); if (!disposed && version == generation && likedUri == uri) { liked = target; lastLikeCheck = DateTime.UtcNow; Status(target ? "Saved to your Liked Songs." : "Removed from your Liked Songs."); } }
             catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
             finally { likeBusy = false; if (!disposed) UpdateMode(); }
         }
@@ -236,7 +247,7 @@ namespace WidgetScreen
                         try { await service.PlayInCollectionAsync(parent.Uri, song.Position); started = true; }
                         catch (SpotifyNoDeviceException) { }
                     }
-                    if (!started) { Status("Spotify is open but not ready. Play anything in Spotify once, then tap the song again."); return; }
+                    if (!started) { Status("Spotify opened but isn't ready yet. Play anything in it once, then tap the song again."); return; }
                 }
                 if (!disposed && version == generation) { playback = null; nextPoll = DateTime.UtcNow.AddSeconds(1); Status("Playing " + song.Name + " from " + parent.Name + "."); }
             }

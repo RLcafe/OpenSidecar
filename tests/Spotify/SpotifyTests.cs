@@ -143,7 +143,7 @@ internal static class SpotifyTests
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
                 var window = (Window)System.Windows.Markup.XamlReader.Load(stream); var editor = new LayoutEditor(window); editor.Apply(new AppSettings());
-                var original = editor.Bounds("Media"); editor.Begin(); editor.ArrangeSpotify();
+                var original = editor.Bounds("Media"); editor.Begin(); editor.Reset();
                 Assert(editor.IsVisible("Spotify") && editor.IsVisible("Media") && editor.IsVisible("Focus") && editor.IsVisible("Shortcuts") && !editor.IsVisible("System") && !editor.IsVisible("Weather") && !editor.HasOverlaps(), "Spotify arrangement lost required widgets or overlaps.");
                 editor.Cancel(); Assert(editor.Bounds("Media") == original && !editor.IsVisible("Spotify"), "Layout preview changed saved layout.");
                 editor.Begin(); editor.Reset(); Assert(editor.IsVisible("Spotify") && !editor.IsVisible("System") && !editor.IsVisible("Weather"), "Reset did not use the chosen default.");
