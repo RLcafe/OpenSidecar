@@ -348,6 +348,17 @@ namespace WidgetScreen
                 throw new ArgumentException("Choose a song from an album or playlist.");
             return new JavaScriptSerializer().Serialize(new Dictionary<string, object> { { "context_uri", collectionUri }, { "offset", new Dictionary<string, object> { { "position", position } } } });
         }
+        // Plays one song, as when tapping a search result in Spotify; Spotify's own autoplay decides what follows.
+        public async Task PlayTrackAsync(string trackUri)
+        {
+            RequirePlaybackPermission();
+            await RequestAsync(HttpMethod.Put, "me/player/play", PlayTrackBody(trackUri)).ConfigureAwait(false);
+        }
+        public static string PlayTrackBody(string trackUri)
+        {
+            if (WebUrl(trackUri) == null || !trackUri.StartsWith("spotify:track:", StringComparison.Ordinal)) throw new ArgumentException("Choose a Spotify song.");
+            return new JavaScriptSerializer().Serialize(new Dictionary<string, object> { { "uris", new[] { trackUri } } });
+        }
         private void RequirePlaybackPermission()
         {
             if (!CanControl) throw new InvalidOperationException("Reconnect in Settings → Spotify to enable playback and seeking. Spotify Premium is required.");

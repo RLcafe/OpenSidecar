@@ -22,3 +22,7 @@ This is a deliberate divergence from the as-built spec §5.1 ("Tap song or episo
 Playing directly requires Spotify Premium and an available Spotify Connect device; the link fallback did not. Retrying after opening the app may still fail if the app opens without becoming the active device, because the widget has no device-listing permission (`user-read-playback-state`). Adding that permission would let the widget target a specific device, but it would require every existing connection to reconnect, so it was left out.
 
 Real playback with the user's account has not been verified by automated checks. Tests use HTTP fixtures and never open links or start playback.
+
+## Update, 10 October 2026: search results play too
+
+At the user's request, tapping a search result now plays it as well, instead of opening its `open.spotify.com` link. A search result has no album or playlist around it, so the widget sends `PUT /me/player/play` with `{"uris": ["<track URI>"]}`. Spotify plays that one song, and its own autoplay setting decides what follows, as when tapping a search result in the Spotify app. The no-device retry and the fallbacks are the same as for collections. Connections without the playback permission still open the link. The status hint for search results says "Tap a song to play it."

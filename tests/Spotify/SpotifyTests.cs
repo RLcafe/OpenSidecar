@@ -208,6 +208,40 @@ internal static class SpotifyTests
             }
             finally { SynchronizationContext.SetSynchronizationContext(context); }
         });
+        check("Spotify search results play the song when tapped", () => {
+            Assert(SpotifyService.PlayTrackBody(Track) == "{\"uris\":[\"" + Track + "\"]}", "Play request does not name the song.");
+            foreach (string invalid in new[] { "spotify:album:1234567890123456789012", "spotify:track:bad", null }) { bool rejected = false; try { SpotifyService.PlayTrackBody(invalid); } catch (ArgumentException) { rejected = true; } Assert(rejected, "Invalid song accepted."); }
+            var context = SynchronizationContext.Current; SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+            try
+            {
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var owner = (Window)System.Windows.Markup.XamlReader.Load(stream);
+                    string playBody = null, playMethod = null;
+                    var handler = new Handler { Send = request => {
+                        string path = request.RequestUri.AbsolutePath;
+                        if (path.EndsWith("/me/player/play")) { playMethod = request.Method.Method; playBody = request.Content.ReadAsStringAsync().Result; return Reply(HttpStatusCode.NoContent, ""); }
+                        if (path.EndsWith("/search")) return Reply(HttpStatusCode.OK, "{\"tracks\":{\"items\":[{\"name\":\"Found - TEST FIXTURE\",\"uri\":\"" + Track + "\"}]}}");
+                        return Reply(HttpStatusCode.OK, "{}");
+                    } };
+                    using (var widget = new SpotifyWidget(owner, new SpotifyService(Session(directory, "play-search", false), handler)))
+                    {
+                        ((Button)owner.FindName("SpotifySearch")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        ((TextBox)owner.FindName("SpotifyQuery")).Text = "Found"; ((Button)owner.FindName("SpotifyFind")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        var results = (StackPanel)owner.FindName("SpotifyResults"); Assert(results.Children.Count == 1, "Search result missing.");
+                        var row = (Button)results.Children[0];
+                        // Never click a row that would open a link: that would launch the browser during tests.
+                        Assert(System.Windows.Automation.AutomationProperties.GetName(row) == "Play Found - TEST FIXTURE", "Search result would open a link instead of playing.");
+                        Assert(((TextBlock)owner.FindName("SpotifyStatus")).Text == "Tap a song to play it.", "Search hint still says results open in Spotify.");
+                        row.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        Assert(playMethod == "PUT" && playBody == SpotifyService.PlayTrackBody(Track), "Tapping a search result did not play it.");
+                        Assert(((TextBlock)owner.FindName("SpotifyStatus")).Text == "Playing Found - TEST FIXTURE.", "Playback start not confirmed.");
+                    }
+                    owner.Close();
+                }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(context); }
+        });
         check("Spotify songs tapped in a playlist or album play inside that collection", () => {
             Assert(SpotifyService.PlayInCollectionBody("spotify:playlist:1234567890123456789012", 11) == "{\"context_uri\":\"spotify:playlist:1234567890123456789012\",\"offset\":{\"position\":11}}", "Play request does not start the playlist at the song.");
             foreach (string invalid in new[] { Track, "spotify:playlist:bad", null }) { bool rejected = false; try { SpotifyService.PlayInCollectionBody(invalid, 0); } catch (ArgumentException) { rejected = true; } Assert(rejected, "Invalid collection accepted."); }
