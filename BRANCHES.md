@@ -7,6 +7,9 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
 | `feature/ui-polish` | Polish, distill and clarify the dashboard and Settings UI and copy | `main` @ `4ca0b18` (v0.2.0) | Ready for review | `.worktrees\ui-polish` | `.worktrees\ui-polish\artifacts\app\WidgetScreen.exe` |
+| `feature/search-play` | Tapping a Spotify search result plays the song instead of opening it in Spotify | `main` @ `aa362cd` (v0.2.0) | Ready for review | `.worktrees\search-play` | `.worktrees\search-play\artifacts\app\WidgetScreen.exe` |
+
+Merge note: `feature/search-play` and `feature/ui-polish` both change the Spotify status hints in `src/widgets/Spotify/SpotifyWidget.cs` (in `LoadPage` and `PlayInCollection`), so whichever merges second gets a small conflict there. Keep ui-polish's wording, plus search-play's "Tap a song to play it." for search results and "Playing <song>." when the song isn't in a playlist or album.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

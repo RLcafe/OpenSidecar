@@ -173,11 +173,6 @@ namespace WidgetScreen
             var p = current.First(w => w.Id == id); if (p.Visible == visible) return;
             Remember(Export()); p.Visible = visible; Draw();
         }
-        public void ArrangeSpotify()
-        {
-            if (!Editing || GestureActive) return;
-            Remember(Export()); current = WidgetLayout.SpotifyDefault(preferences); Select("Spotify"); Draw();
-        }
         public void Reset()
         {
             if (!Editing || GestureActive) return;
