@@ -43,7 +43,7 @@ namespace WidgetScreen
             if (!active) { slider.Maximum = Math.Max(1, duration); slider.SmallChange = 5000; slider.LargeChange = 15000; slider.Value = Math.Min(position, slider.Maximum); }
         }
         public void Begin() { if (active || !slider.IsEnabled) return; active = true; gestureKey = key; }
-        private void Move(double x) { slider.Value = Math.Max(0, Math.Min(1, (x - 24) / Math.Max(1, slider.ActualWidth - 48))) * duration; }
+        private void Move(double x) { slider.Value = TouchSlider.ValueAt(slider, x); }
         public void End(bool commit)
         {
             if (!active) return;

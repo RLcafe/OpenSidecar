@@ -3,7 +3,8 @@
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="Widget Screen" Width="1536" Height="640" MinWidth="960" MinHeight="400"
         Background="{DynamicResource Page}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen"
-        UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display"
+        Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False">
   <Window.Resources>
 <SolidColorBrush x:Key="Page" Color="#0C0E13"/>
 <SolidColorBrush x:Key="Surface" Color="#161A22"/>
@@ -35,7 +36,7 @@
     <SolidColorBrush x:Key="Warning" Color="#F5C47D"/>
     <SolidColorBrush x:Key="ClockMuted" Color="#A8BAAA"/>
     <SolidColorBrush x:Key="ControlBorder" Color="#343C49"/>
-    <sys:Double x:Key="SmallSize">14</sys:Double>
+    <sys:Double x:Key="SmallSize">15</sys:Double>
     <sys:Double x:Key="BodySize">18</sys:Double>
     <sys:Double x:Key="TitleSize">24</sys:Double>
     <sys:Double x:Key="HeroSize">76</sys:Double>
@@ -106,7 +107,7 @@
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
         <Border x:Name="SliderChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="10" Padding="2,0"><Track x:Name="PART_Track" VerticalAlignment="Center">
           <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Height="6" CornerRadius="3" Background="{DynamicResource Accent}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
-          <Track.Thumb><Thumb Width="44" Height="44"><Thumb.Template><ControlTemplate><Grid Background="Transparent"><Border Width="30" Height="30" Background="{DynamicResource Accent}" BorderBrush="{DynamicResource Surface}" BorderThickness="3" CornerRadius="15"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+          <Track.Thumb><Thumb Width="48" Height="48"><Thumb.Template><ControlTemplate><Grid Background="Transparent"><Border Width="30" Height="30" Background="{DynamicResource Accent}" BorderBrush="{DynamicResource Surface}" BorderThickness="3" CornerRadius="15"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
           <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Height="6" CornerRadius="3" Background="{DynamicResource Track}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
         </Track></Border>
         <ControlTemplate.Triggers>
@@ -123,7 +124,7 @@
     </Style>
     <Style TargetType="ComboBoxItem">
       <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Raised}"/>
-      <Setter Property="Padding" Value="12,10"/><Setter Property="MinHeight" Value="44"/>
+      <Setter Property="Padding" Value="12,10"/><Setter Property="MinHeight" Value="52"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
         <Border x:Name="Item" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
         <ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource Selected}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource Selected}"/></Trigger></ControlTemplate.Triggers>
@@ -132,27 +133,27 @@
     <Style TargetType="ComboBox">
       <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="FontSize" Value="{DynamicResource BodySize}"/><Setter Property="MinHeight" Value="48"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
-        <Grid>
+        <Grid x:Name="ComboRoot">
           <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
             <ToggleButton.Template><ControlTemplate><Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="8"><Path Data="M 0,0 L 5,5 L 10,0" Stroke="{DynamicResource Muted}" StrokeThickness="1.5" Width="10" Height="6" HorizontalAlignment="Right" Margin="0,0,14,0" VerticalAlignment="Center"/></Border></ControlTemplate></ToggleButton.Template>
           </ToggleButton>
           <ContentPresenter Margin="12,8,36,8" IsHitTestVisible="False" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
           <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False">
-            <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="260"><ItemsPresenter/></ScrollViewer></Border>
+            <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="312" PanningMode="VerticalOnly" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></Border>
           </Popup>
           <Border x:Name="ComboFocus" BorderBrush="{DynamicResource Accent}" BorderThickness="2" CornerRadius="8" Visibility="Collapsed" IsHitTestVisible="False"/>
         </Grid>
-        <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="ComboFocus" Property="Visibility" Value="Visible"/></Trigger></ControlTemplate.Triggers>
+        <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="ComboFocus" Property="Visibility" Value="Visible"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="ComboRoot" Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="ScrollBar">
-      <Setter Property="Width" Value="24"/>
+      <Setter Property="Width" Value="40"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
         <Grid Background="{TemplateBinding Background}">
           <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True" ViewportSize="{TemplateBinding ViewportSize}">
             <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
-            <Track.Thumb><Thumb MinHeight="44"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border x:Name="ScrollThumb" Background="#606D81" CornerRadius="5" Margin="8,2,4,2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="{DynamicResource Muted}"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+            <Track.Thumb><Thumb MinHeight="44"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border x:Name="ScrollThumb" Background="#606D81" CornerRadius="5" Margin="24,2,6,2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="{DynamicResource Muted}"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="ScrollThumb" Property="Background" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
             <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
           </Track>
         </Grid>
@@ -166,7 +167,7 @@
             <Border x:Name="Box" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="6" BorderBrush="#798598" BorderThickness="1" Background="{DynamicResource Input}">
               <Path x:Name="CheckMark" Data="M 5,11 L 9,15 L 18,6" Stroke="#11170E" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
             </Border>
-            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"><ContentPresenter.Resources><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style></ContentPresenter.Resources></ContentPresenter>
           </Grid>
         </Border>
         <ControlTemplate.Triggers>
@@ -196,7 +197,7 @@
             <Button x:Name="EditLayoutButton" Content="Edit layout" Margin="0,0,10,0" ToolTip="Move and resize widgets directly on the dashboard."/>
             <Button x:Name="QuietButton" Content="Quiet mode: off" Margin="0,0,10,0" ToolTip="Reduce polling and pause the live level display while gaming."/>
             <Button x:Name="FullscreenButton" Content="Second screen" Margin="0,0,10,0" ToolTip="Fullscreen on a secondary display. F11 toggles preview; Escape exits fullscreen."/>
-            <Button x:Name="SettingsButton" Content="&#xE713;" Style="{StaticResource IconButton}" Margin="0,0,10,0" ToolTip="Settings" AutomationProperties.Name="Settings"/>
+            <Button x:Name="SettingsButton" Margin="0,0,24,0" ToolTip="Settings" AutomationProperties.Name="Settings"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBlock Text="Settings" VerticalAlignment="Center"/></StackPanel></Button>
             <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource IconButton}" Background="Transparent" BorderBrush="{DynamicResource Raised}" ToolTip="Close Widget Screen" AutomationProperties.Name="Close Widget Screen"/>
           </StackPanel>
           <Grid x:Name="EditToolbar" Visibility="Collapsed" VerticalAlignment="Top">
@@ -233,8 +234,8 @@
               <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <DockPanel><TextBlock Text="FOCUS TIMER" Style="{StaticResource Label}"/><TextBlock Text="&#xE916;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right"/></DockPanel>
                 <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="One thing at a time." Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/></StackPanel>
-                <Grid Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" FontSize="16"/>
+                <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" FontSize="16" AutomationProperties.Name="5 minutes"/>
                 </Grid>
                 <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="FocusStart" Content="Start focus" Style="{StaticResource AccentButton}" Margin="0,0,8,0"/><Button x:Name="FocusReset" Grid.Column="1" Content="&#xE777;" Style="{StaticResource IconButton}" ToolTip="Reset timer" AutomationProperties.Name="Reset timer"/></Grid>
               </Grid>
@@ -308,14 +309,14 @@
           </Border>
 
           <Border x:Name="MixerCard" Grid.Column="2" Style="{StaticResource Card}" Margin="0,0,16,0" VerticalAlignment="Top" Height="576">
-            <Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="66"/><RowDefinition Height="52"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="100"/></Grid.RowDefinitions>
+            <Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="66"/><RowDefinition Height="52"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="104"/></Grid.RowDefinitions>
               <DockPanel><TextBlock Text="SOUND MIXER" Style="{StaticResource Label}"/><TextBlock Text="●  LIVE" FontSize="12" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right" x:Name="AudioStatus"/></DockPanel>
               <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><StackPanel VerticalAlignment="Center"><TextBlock Text="Master volume" FontSize="{DynamicResource TitleSize}"/><TextBlock x:Name="AudioDevice" Text="Connecting to audio…" Style="{StaticResource Small}" MaxWidth="310" Margin="0,5,0,0"/></StackPanel><TextBlock x:Name="MasterPercent" Grid.Column="1" Text="—" FontSize="36" FontWeight="Light" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
               <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Mute output" AutomationProperties.Name="Mute output"/><Slider x:Name="MasterSlider" Grid.Column="1" Margin="8,0" AutomationProperties.Name="Master volume"/><Button x:Name="SoundSettingsButton" Grid.Column="2" Content="&#xE713;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Choose output in Windows sound settings" AutomationProperties.Name="Windows sound settings"/></Grid>
               <DockPanel Grid.Row="3" Margin="0,18,0,0"><TextBlock Text="APPLICATIONS" Style="{StaticResource Label}"/><TextBlock x:Name="SessionCount" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right"/></DockPanel>
               <Grid Grid.Row="4"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="SessionPanel"/></ScrollViewer><TextBlock x:Name="NoSessions" Text="Apps appear here when they use audio." Style="{StaticResource Small}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12"/></Grid>
-              <Grid Grid.Row="5" Margin="0,8,0,0"><Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition/><RowDefinition Height="20"/></Grid.RowDefinitions>
-                <Button x:Name="MicrophoneButton" Content="Microphone · checking…" FontSize="16" HorizontalContentAlignment="Left" MinHeight="42"/>
+              <Grid Grid.Row="5" Margin="0,8,0,0"><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/><RowDefinition Height="20"/></Grid.RowDefinitions>
+                <Button x:Name="MicrophoneButton" Content="Microphone · checking…" FontSize="16" HorizontalContentAlignment="Left" MinHeight="48"/>
                 <Border x:Name="LevelHost" Grid.Row="1" Margin="0,8,0,3"/>
                 <TextBlock x:Name="LevelStatus" Grid.Row="2" Text="OUTPUT LEVEL  ·  LIVE" FontSize="11" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"/>
               </Grid>
@@ -352,8 +353,13 @@
       </Grid>
 
       <Grid x:Name="SettingsOverlay" Visibility="Collapsed" Background="#E80C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
-        <Border Style="{StaticResource Card}" Width="1260" Height="660" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
-          <Grid><Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition/><RowDefinition Height="62"/></Grid.RowDefinitions>
+        <Border Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
+          <Border.Resources>
+            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="52"/></Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="MinHeight" Value="52"/></Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="MinHeight" Value="52"/></Style>
+          </Border.Resources>
+          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="64"/></Grid.RowDefinitions>
             <DockPanel><StackPanel><TextBlock Text="Make yourself at home" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Display, appearance, and the things you reach for." Style="{StaticResource Small}" Margin="0,5,0,0"/></StackPanel><Button x:Name="CancelSettings" Content="&#xE8BB;" Style="{StaticResource IconButton}" HorizontalAlignment="Right" VerticalAlignment="Top" AutomationProperties.Name="Cancel settings"/></DockPanel>
 <TabControl x:Name="SettingsTabs" Grid.Row="1" Margin="0,12,0,8">
               <TabItem Header="Theme">
@@ -451,7 +457,7 @@
               <ColumnDefinition Width="110"/>
               </Grid.ColumnDefinitions>
               <TextBox x:Name="CitySearch" AutomationProperties.Name="Search city" ToolTip="City name"/>
-              <Button x:Name="SearchCityButton" Grid.Column="1" Content="Search" Margin="10,0,0,0" MinHeight="48" FontSize="16"/>
+              <Button x:Name="SearchCityButton" Grid.Column="1" Content="Search" Margin="10,0,0,0" FontSize="16"/>
               </Grid>
               <ComboBox x:Name="CityResults" Margin="0,12,0,0" AutomationProperties.Name="City results"/>
               <Button x:Name="ClearCityButton" Content="Turn weather off" Margin="0,12,0,16" HorizontalAlignment="Left" FontSize="15"/>
@@ -466,7 +472,7 @@
                     <TextBlock x:Name="SpotifyConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="{DynamicResource BodySize}"/>
                     <TextBlock Text="Developer app Client ID" Style="{StaticResource Small}"/>
                     <TextBox x:Name="SpotifyClientId" MaxLength="32" Margin="0,8,0,12" AutomationProperties.Name="Spotify Developer app Client ID"/>
-                    <WrapPanel><Button x:Name="SpotifySaveId" Content="Save Client ID" Margin="0,0,8,8"/><Button x:Name="SpotifyConnectButton" Content="Connect Spotify" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/><Button x:Name="SpotifyDisconnect" Content="Disconnect" Margin="0,0,8,8"/><Button x:Name="SpotifyCancelConnect" Content="Cancel sign-in" Visibility="Collapsed" Margin="0,0,8,8"/></WrapPanel>
+                    <WrapPanel><Button x:Name="SpotifySaveId" Content="Save Client ID" Margin="0,0,8,8"/><Button x:Name="SpotifyConnectButton" Content="Connect Spotify" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="SpotifyDisconnect" Content="Disconnect" Margin="0,0,8,8"/><Button x:Name="SpotifyCancelConnect" Content="Cancel sign-in" Visibility="Collapsed" Margin="0,0,8,8"/></WrapPanel>
                     <TextBlock Text="Account changes are saved immediately. Your Client ID stays saved when you disconnect. Tokens are encrypted for your Windows account." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,12"/>
                     <Button x:Name="SpotifyLayout" Content="Arrange dashboard for Spotify + Now Playing" HorizontalAlignment="Left"/>
                     <TextBlock Text="Opens a layout preview. Keeps Clock, Focus, Now Playing, Quick Launch and Sound Mixer; hides System Stats and Weather. Save or Cancel in the layout editor." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,0"/>
@@ -529,7 +535,7 @@
                 </Grid>
               </TabItem>
 </TabControl>
-            <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="170"/></Grid.ColumnDefinitions><TextBlock x:Name="SettingsStatus" Text="Settings are stored locally on this PC." Style="{StaticResource Small}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,20,0"/><Button x:Name="SaveSettings" Grid.Column="1" Content="Save changes" Style="{StaticResource AccentButton}" VerticalAlignment="Center"/></Grid>
+            <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="SettingsStatus" Text="Settings are stored locally on this PC." Style="{StaticResource Small}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,20,0"/><Button x:Name="CancelSettingsFooter" Grid.Column="1" Content="Cancel" MinWidth="140" Margin="0,0,12,0" VerticalAlignment="Center" AutomationProperties.Name="Cancel settings changes"/><Button x:Name="SaveSettings" Grid.Column="2" Content="Save changes" Style="{StaticResource AccentButton}" MinWidth="170" MinHeight="52" VerticalAlignment="Center"/></Grid>
           </Grid>
         </Border>
       </Grid>

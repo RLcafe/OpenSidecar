@@ -38,6 +38,7 @@ namespace WidgetScreen
         private int deckPage;
         public LayoutEditor Editor { get; private set; }
         private bool syncingEditor, shortcutsCompact;
+        private int selectedFocusPreset = -1;
         private sealed class WidgetOption
         {
             public string Id;
@@ -84,7 +85,7 @@ namespace WidgetScreen
             deckEditor = new DeckEditor(window, message => Text("SettingsStatus", message));
             deckHotkeys = new DeckHotkeys();
             BindActions();
-            ApplySettings();
+            ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
             levelTimer.Tick += (sender, e) => { if (audio != null && window.WindowState != WindowState.Minimized) levels.Push(audio.Peak()); };
             window.Loaded += Loaded;
@@ -131,6 +132,7 @@ namespace WidgetScreen
             };
             Control<CheckBox>("SnapLayoutChoice").Click += (sender, e) => Editor.Snap = Control<CheckBox>("SnapLayoutChoice").IsChecked == true;
             Button("CancelSettings", CloseSettings);
+            Button("CancelSettingsFooter", CloseSettings);
             Button("SaveSettings", SaveSettings);
             Button("FullscreenButton", ToggleFullscreen);
             Button("QuietButton", () => {
@@ -143,6 +145,7 @@ namespace WidgetScreen
             Button("MuteButton", () => AudioAction(() => audio.ToggleMute()));
             Button("MicrophoneButton", () => AudioAction(() => audio.ToggleMicrophone()));
             Button("SoundSettingsButton", () => Launch("ms-settings:sound"));
+            foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
                 if (!updatingAudio && audio != null) { AudioAction(() => audio.SetVolume(e.NewValue / 100), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
             };
@@ -206,6 +209,19 @@ namespace WidgetScreen
             Text("FocusStatus", remaining == TimeSpan.Zero ? "Session complete. Take a breath." : focus.Running ? "Stay with it. You've got this." : focus.Progress > 0 ? "Paused. Pick up when you're ready." : "One thing at a time.");
             Control<ProgressBar>("FocusProgress").Value = focus.Progress;
             Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : "Start focus";
+            int minutes = (int)focus.Duration.TotalMinutes;
+            if (minutes != selectedFocusPreset)
+            {
+                selectedFocusPreset = minutes;
+                foreach (int preset in new[] { 25, 50, 5 })
+                {
+                    var button = Control<Button>("Focus" + preset); bool selected = preset == minutes;
+                    button.SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, selected ? "Accent" : "ControlBorder");
+                    button.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, selected ? "Selected" : "Raised");
+                    button.BorderThickness = new Thickness(selected ? 2 : 1);
+                    AutomationProperties.SetName(button, preset + " minutes" + (selected ? ", selected" : ""));
+                }
+            }
             if (finished) Notify("Focus session complete. Time for a break.");
         }
 
@@ -226,7 +242,7 @@ namespace WidgetScreen
             string selectedAccent = appearance.Accent;
             string color = selectedAccent == "Glacier" ? "#8ED8F8" : selectedAccent == "Lavender" ? "#C5AEFF" : selectedAccent == "Amber" ? "#F5C47D" : "#BAF28B";
             var accent = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); accent.Freeze(); window.Resources["Accent"] = accent;
-            window.Resources["SmallSize"] = 14.0 * appearance.TextScale;
+            window.Resources["SmallSize"] = 15.0 * appearance.TextScale;
             window.Resources["BodySize"] = 18.0 * appearance.TextScale;
             window.Resources["TitleSize"] = 24.0 * appearance.TextScale;
             window.Resources["HeroSize"] = 76.0 * Math.Min(1.06, appearance.TextScale);
@@ -304,7 +320,10 @@ namespace WidgetScreen
                     Text("DisplayStatus", "ARROWS MOVE · SHIFT+ARROWS RESIZE · ESC CANCELS");
                 }
                 if (shortcutsCompact != (Editor.Bounds("Shortcuts").Height < 240)) BuildShortcuts();
-                Control<TextBlock>("FocusTime").FontSize = Editor.Bounds("Focus").Height < 320 ? 42 : 54;
+                bool compactFocus = Editor.Bounds("Focus").Height < 320;
+                Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : 54;
+                Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
+                Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
                 Control<TextBlock>("ClockTime").FontSize = Math.Min((double)window.Resources["HeroSize"], Math.Max(52, (Editor.Bounds("Clock").Height - 120) * .75));
                 var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
                 city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
@@ -442,9 +461,9 @@ namespace WidgetScreen
             row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition()); row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             row.Label = new TextBlock { FontSize = 16 * settings.TextScale, TextTrimming = TextTrimming.CharacterEllipsis }; Grid.SetColumnSpan(row.Label, 2); row.Root.Children.Add(row.Label);
             row.Percent = new TextBlock { FontSize = 14, Foreground = (Brush)window.Resources["Muted"], HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(row.Percent, 2); row.Root.Children.Add(row.Percent);
-            row.Mute = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 44 };
+            row.Mute = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48 };
             Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => AudioAction(() => audio.ToggleSessionMute(id));
-            row.Slider = new Slider { Margin = new Thickness(10, 0, 0, 0) }; Grid.SetColumn(row.Slider, 1); Grid.SetColumnSpan(row.Slider, 2); Grid.SetRow(row.Slider, 1); row.Root.Children.Add(row.Slider);
+            row.Slider = new Slider { Margin = new Thickness(10, 0, 0, 0) }; Grid.SetColumn(row.Slider, 1); Grid.SetColumnSpan(row.Slider, 2); Grid.SetRow(row.Slider, 1); row.Root.Children.Add(row.Slider); TouchSlider.Attach(row.Slider);
             row.Slider.ValueChanged += (sender, e) => { if (!updatingAudio && audio != null) { AudioAction(() => audio.SetSessionVolume(id, e.NewValue / 100), false); row.Percent.Text = Math.Round(e.NewValue) + "%"; } };
             return row;
         }
