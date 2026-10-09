@@ -1,4 +1,4 @@
-# 003 — Sound mixer output devices
+# 004 — Sound mixer output devices
 
 The user asked for three things in the Sound mixer: show every app's volume slider whatever output it plays on, a button on each app to see and change its output, and a way to change the master output from the top of the widget.
 

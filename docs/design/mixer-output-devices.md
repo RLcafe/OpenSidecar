@@ -1,6 +1,6 @@
 # Sound mixer output devices (9 Oct 2026)
 
-This note updates spec §4.5 for the mixer output features. Decision record [003](../decisions/003-mixer-output-routing.md) covers the Windows APIs and tradeoffs.
+This note updates spec §4.5 for the mixer output features. Decision record [004](../decisions/004-mixer-output-routing.md) covers the Windows APIs and tradeoffs.
 
 ## Changes from §4.5
 

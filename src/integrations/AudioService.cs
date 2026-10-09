@@ -219,7 +219,7 @@ namespace WidgetScreen
         }
 
         // Per-app output uses the undocumented factory behind Windows' "App volume and device preferences" page.
-        // See docs/decisions/003-mixer-output-routing.md for the interface layout and its risks.
+        // See docs/decisions/004-mixer-output-routing.md for the interface layout and its risks.
         private bool RoutingReady()
         {
             if (policyChecked) return policyFactory != IntPtr.Zero;
