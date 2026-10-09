@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## 0.2.1 (10 Oct 2026)
+
+Merges `feature/ui-polish`, a polish, distill and clarify pass over the dashboard and Settings (`docs/design/ui-polish.md`).
+
+- **Quieter dashboard**: labels that never change are gone (LIVE, EVERY 2 SEC, "Playing on this PC", the footer F11 hint and the tagline). The status line clears itself after about ten seconds.
+- **Clearer states**: Quiet mode is a toggle that lights up when on, Focus shows when the session ends, and the microphone button states whether it's on or muted.
+- **Spotify, not connected**: one "Connect Spotify" empty state with a Set up Spotify button replaces the empty tabs, list and Like strip. The card's header button is now "Account".
+- **Polish**: a bigger Focus time in tall cards, the mixer's output name aligned left, a shared selected look for Spotify tabs, and a 13 px caption style for the smallest text.
+- **Settings**: plainer headings and shorter copy, Weather in one column with the results list hidden until there are results, and Spotify setup as three numbered steps.
+- **Removed** the "Arrange dashboard for Spotify + Now Playing" button. Reset layout does the same.
+
 ## 0.2.0 (10 Oct 2026)
 
 Merges `feature/mixer-output-devices` and `feature/header-clock-stats`.
