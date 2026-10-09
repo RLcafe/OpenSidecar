@@ -24,7 +24,7 @@ namespace WidgetScreen
         private SpotifyItem collection;
         private string likedUri, artUrl, kind = "Albums", searchQuery = "";
         private bool? liked;
-        private bool busy, likeBusy, commandBusy, disposed, active = true;
+        private bool busy, likeBusy, commandBusy, disposed, active = true, libraryPending;
         private int generation, browseGeneration, offset;
         private DateTime nextPoll, lastLikeCheck;
         public bool Connected { get { return service.Connected; } }
@@ -54,11 +54,12 @@ namespace WidgetScreen
             Text("SpotifyTitle", Connected ? "Loading Spotify…" : "Your music, here");
             Text("SpotifyArtist", Connected ? "Checking current playback." : "Connect in Settings → Spotify.");
             Status(Connected ? "Account connected." : "Set up your account in Settings → Spotify.");
-            C<StackPanel>("SpotifyResults").Children.Clear(); Select(kind); UpdateMode();
+            // The first list loads on the first visible tick: never from the constructor, and never while hidden.
+            C<StackPanel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();
         }
-        private void Select(string selected)
+        private void Select(string selected, bool load = true)
         {
-            browseGeneration++; kind = selected; offset = 0; collection = null;
+            browseGeneration++; kind = selected; offset = 0; collection = null; libraryPending = false;
             C<DockPanel>("SpotifySearchRow").Visibility = selected == "Search" ? Visibility.Visible : Visibility.Collapsed;
             C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Collapsed;
             foreach (string tab in new[] { "Albums", "Playlists", "Search" })
@@ -66,7 +67,8 @@ namespace WidgetScreen
             C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
             if (!Connected) { Status("Connect in Settings → Spotify to use your library."); return; }
             if (selected == "Search") { Status("Enter a song or artist, then tap Find."); C<TextBox>("SpotifyQuery").Focus(); }
-            else LoadPage();
+            else if (load) LoadPage();
+            else Status("Loading from Spotify…");
         }
         private void Search()
         {
@@ -156,7 +158,9 @@ namespace WidgetScreen
         public void Tick(bool enabled, bool quiet)
         {
             active = enabled;
-            if (enabled) Refresh(quiet);
+            if (!enabled) return;
+            if (libraryPending) { libraryPending = false; LoadPage(); }
+            Refresh(quiet);
         }
         public async void Refresh(bool quiet)
         {

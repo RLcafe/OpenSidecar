@@ -24,6 +24,8 @@ namespace WidgetScreen
             {
                 var application = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
                 application.DispatcherUnhandledException += (sender, e) => { Log(e.Exception); };
+                // Awaits started before Run (for example while the dashboard is constructed) must resume on the UI thread.
+                System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 Window window;
                 using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WidgetScreen.MainWindow.xaml")) window = (Window)XamlReader.Load(stream);
                 string settingsPath = Argument(args, "--settings") ?? SettingsStore.DefaultPath;

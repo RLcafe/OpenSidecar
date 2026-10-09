@@ -184,6 +184,30 @@ internal static class SpotifyTests
             string legacy = Session(directory, "recent-old-scope", false); var session = SpotifyCredentials.Load(legacy); session.Scope = session.Scope.Replace("user-read-recently-played ", ""); SpotifyCredentials.Save(legacy, session);
             using (var service = new SpotifyService(legacy, handler)) { service.BrowseAsync("Albums", "", 0).Wait(); Assert(!service.CanReadRecent && requested == "/v1/me/albums", "Older connection lost its saved albums."); }
         });
+        check("Spotify widget starts without network calls and loads Albums on its first visible tick", () => {
+            // The app builds the dashboard before the dispatcher runs; a request started then once crashed the app on resume.
+            var context = SynchronizationContext.Current; SynchronizationContext.SetSynchronizationContext(null);
+            try
+            {
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var owner = (Window)System.Windows.Markup.XamlReader.Load(stream);
+                    var paths = new List<string>();
+                    var handler = new Handler { Send = request => { lock (paths) paths.Add(request.RequestUri.AbsolutePath); return Reply(HttpStatusCode.OK, "{\"items\":[]}"); } };
+                    using (var widget = new SpotifyWidget(owner, new SpotifyService(Session(directory, "startup", false), handler)))
+                    {
+                        Pump(); Assert(handler.Calls == 0, "Spotify widget made requests while the dashboard was being built.");
+                        SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+                        widget.Tick(false, false); Pump(); Assert(handler.Calls == 0, "Hidden Spotify widget loaded its library.");
+                        widget.Tick(true, false); Pump();
+                        lock (paths) Assert(paths.Contains("/v1/me/player/recently-played"), "Albums did not load on the first visible tick.");
+                        int calls = handler.Calls; widget.Tick(true, false); Pump(); Assert(handler.Calls == calls, "Albums reloaded on every tick.");
+                    }
+                    owner.Close();
+                }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(context); }
+        });
         check("Spotify songs tapped in a playlist or album play inside that collection", () => {
             Assert(SpotifyService.PlayInCollectionBody("spotify:playlist:1234567890123456789012", 11) == "{\"context_uri\":\"spotify:playlist:1234567890123456789012\",\"offset\":{\"position\":11}}", "Play request does not start the playlist at the song.");
             foreach (string invalid in new[] { Track, "spotify:playlist:bad", null }) { bool rejected = false; try { SpotifyService.PlayInCollectionBody(invalid, 0); } catch (ArgumentException) { rejected = true; } Assert(rejected, "Invalid collection accepted."); }
