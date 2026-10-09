@@ -102,6 +102,81 @@ internal static class SmokeTests
                 window.Close();
             }
         });
+        Check("Footer Cancel discards the same settings draft as the header Cancel", () => {
+            string path = Path.Combine(directory, "footer-cancel.xml"); SettingsStore.Save(path, new AppSettings());
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    var page = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
+                    click("SettingsButton"); ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
+                    ((System.Windows.Controls.Slider)window.FindName("ScaleChoice")).Value = 115;
+                    ((System.Windows.Controls.CheckBox)window.FindName("CpuChoice")).IsChecked = false;
+                    click("CancelSettingsFooter");
+                    Assert(((System.Windows.Controls.Grid)window.FindName("SettingsOverlay")).Visibility == System.Windows.Visibility.Collapsed, "Footer Cancel left Settings open.");
+                    Assert(((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color == page && (double)window.Resources["SmallSize"] == 15, "Footer Cancel kept the previewed appearance.");
+                    string warning; var saved = SettingsStore.Load(path, out warning);
+                    Assert(saved.Theme == "Midnight" && saved.ShowCpu && saved.TextScale == 1, "Footer Cancel saved the draft.");
+                    click("SettingsButton");
+                    Assert((string)((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem == "Midnight" && ((System.Windows.Controls.CheckBox)window.FindName("CpuChoice")).IsChecked == true, "Reopened Settings showed the discarded draft.");
+                    click("CancelSettings");
+                    var panel = (System.Windows.Controls.Border)((System.Windows.Controls.Grid)window.FindName("SettingsOverlay")).Children[0];
+                    Assert(panel.Width == 1440 && panel.Height == 672, "Settings panel is not 1440 × 672.");
+                }
+                window.Close();
+            }
+        });
+        Check("Touch sliders map to the rendered track, clamp, snap and follow direction changes", () => {
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                var style = (System.Windows.Style)window.Resources[typeof(System.Windows.Controls.Slider)];
+                Func<double, double, double, System.Windows.Controls.Slider> make = (min, max, tick) => {
+                    var s = new System.Windows.Controls.Slider { Style = style, Minimum = min, Maximum = max, TickFrequency = tick, IsSnapToTickEnabled = tick > 0 };
+                    s.ApplyTemplate(); s.Measure(new System.Windows.Size(448, 48)); s.Arrange(new System.Windows.Rect(0, 0, 448, 48)); s.UpdateLayout(); return s;
+                };
+                var volume = make(0, 100, 0);
+                var track = (System.Windows.Controls.Primitives.Track)volume.Template.FindName("PART_Track", volume);
+                Assert(track.Thumb.ActualWidth == 48 && track.Thumb.ActualHeight == 48, "Slider thumb target is not 48 × 48.");
+                double start = track.TranslatePoint(new System.Windows.Point(0, 0), volume).X, length = track.ActualWidth;
+                Func<double, double> at = fraction => start + 24 + fraction * (length - 48);
+                Assert(Math.Abs(TouchSlider.ValueAt(volume, at(.5)) - 50) < .01 && Math.Abs(TouchSlider.ValueAt(volume, at(.25)) - 25) < .01, "Touch does not map to the track centre line.");
+                Assert(TouchSlider.ValueAt(volume, -500) == 0 && TouchSlider.ValueAt(volume, 5000) == 100 && TouchSlider.ValueAt(volume, at(0)) == 0 && TouchSlider.ValueAt(volume, at(1)) == 100, "Endpoints are not clamped.");
+                // Rapid changes: the thumb has not been re-arranged, so mapping must not depend on the current value.
+                foreach (double fraction in new[] { .9, .1, .7, .3, .95 }) { volume.Value = TouchSlider.ValueAt(volume, at(fraction)); Assert(Math.Abs(volume.Value - fraction * 100) < .01, "Rapid or reversed movement drifted before relayout."); }
+                var corners = make(0, 24, 4);
+                Assert(TouchSlider.ValueAt(corners, at(.30)) == 8 && TouchSlider.ValueAt(corners, at(.36)) == 8 && TouchSlider.ValueAt(corners, at(.42)) == 12 && TouchSlider.ValueAt(corners, at(1.2)) == 24, "Corner steps do not snap.");
+                var scale = make(90, 115, 5);
+                Assert(TouchSlider.ValueAt(scale, at(0)) == 90 && TouchSlider.ValueAt(scale, at(.62)) == 105 && TouchSlider.ValueAt(scale, at(.58)) == 105 && TouchSlider.ValueAt(scale, at(.5)) % 5 == 0, "Text size steps do not snap.");
+                Assert(System.Windows.Input.Stylus.GetIsPressAndHoldEnabled(window) == false && System.Windows.Input.Stylus.GetIsFlicksEnabled(window) == false, "Press-and-hold or flicks are still enabled.");
+                window.Close();
+            }
+        });
+        Check("Settings panel touch targets and Focus preset selection", () => {
+            string path = Path.Combine(directory, "touch-targets.xml"); SettingsStore.Save(path, new AppSettings());
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    click("SettingsButton");
+                    var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
+                    dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                    foreach (string name in new[] { "SaveSettings", "CancelSettingsFooter", "ThemeChoice", "AccentChoice" })
+                        Assert(((System.Windows.FrameworkElement)window.FindName(name)).ActualHeight >= 52, name + " is shorter than 52.");
+                    click("CancelSettings");
+                    Func<string, string> nameOf = id => System.Windows.Automation.AutomationProperties.GetName((System.Windows.DependencyObject)window.FindName(id));
+                    Assert(nameOf("Focus25") == "25 minutes, selected" && nameOf("Focus50") == "50 minutes", "Default Focus preset not marked selected.");
+                    click("Focus50"); Assert(nameOf("Focus50") == "50 minutes, selected" && nameOf("Focus25") == "25 minutes", "Focus selection did not follow.");
+                    click("Focus5"); Assert(nameOf("Focus5") == "5 minutes, selected" && nameOf("Focus50") == "50 minutes", "Focus selection did not follow.");
+                    Assert(((System.Windows.Controls.Button)window.FindName("MicrophoneButton")).MinHeight >= 48, "Microphone button shorter than 48.");
+                }
+                window.Close();
+            }
+        });
         Check("Settings normalization", () => {
             var settings = new AppSettings { TextScale = 9, Accent = "invalid", Shortcuts = null, Latitude = double.NaN, WeatherLocation = "Invalid" }; settings.Normalize();
             Assert(settings.TextScale == 1.15 && settings.Accent == "Lime" && settings.Shortcuts.Count == 6 && settings.WeatherLocation == "", "Invalid settings were not normalized.");
