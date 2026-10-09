@@ -71,7 +71,7 @@ namespace WidgetScreen
     public sealed class SpotifyService : IDisposable
     {
         public const string RedirectUri = "http://127.0.0.1:43827/callback";
-        public const string Scopes = "user-read-currently-playing user-library-read user-library-modify playlist-read-private playlist-read-collaborative user-modify-playback-state";
+        public const string Scopes = "user-read-currently-playing user-read-recently-played user-library-read user-library-modify playlist-read-private playlist-read-collaborative user-modify-playback-state";
         private readonly string credentialPath;
         private readonly HttpClient http;
         private readonly Action<string> openAuthorization;
@@ -86,6 +86,7 @@ namespace WidgetScreen
         public string ClientId { get { return session.ClientId ?? ""; } }
         public bool Connected { get { return !String.IsNullOrEmpty(session.RefreshToken); } }
         public bool CanControl { get { return Connected && (session.Scope ?? "").Split(' ').Contains("user-modify-playback-state"); } }
+        public bool CanReadRecent { get { return Connected && (session.Scope ?? "").Split(' ').Contains("user-read-recently-played"); } }
 
         public SpotifyService(string path) : this(path, new PreferIPv4Handler()) { }
         public SpotifyService(string path, HttpMessageHandler handler) : this(path, handler, Launcher.Open) { }
@@ -377,10 +378,24 @@ namespace WidgetScreen
         }
         public async Task<SpotifyPage> BrowseAsync(string kind, string query, int offset)
         {
+            // Albums lists recently played albums; older connections without that permission fall back to saved albums.
+            if (kind == "Albums" && CanReadRecent) return RecentAlbums(await RequestAsync(HttpMethod.Get, "me/player/recently-played?limit=50").ConfigureAwait(false), offset);
             string path = kind == "Albums" ? "me/albums?limit=10&offset=" + offset : kind == "Playlists" ? "me/playlists?limit=10&offset=" + offset : "search?type=track&limit=10&offset=" + offset + "&q=" + Uri.EscapeDataString(query ?? "");
             var root = Object(await RequestAsync(HttpMethod.Get, path).ConfigureAwait(false));
             if (kind == "Search") root = Object(Value(root, "tracks"));
             return new SpotifyPage { Items = Array(root, "items").Select(value => ParseItem(kind == "Albums" ? Value(Object(value), "album") : value)).Where(value => value != null).ToArray(), HasMore = !String.IsNullOrEmpty(Field(root, "next")) };
+        }
+        // Distinct albums from the last 50 played songs, most recent first, paged ten at a time.
+        public static SpotifyPage RecentAlbums(object value, int offset)
+        {
+            var albums = Array(Object(value), "items").Select(item => ParseItem(Value(Object(Value(Object(item), "track")), "album")))
+                .Where(album => album != null && album.Uri.StartsWith("spotify:album:", StringComparison.Ordinal)).GroupBy(album => album.Uri).Select(group => group.First()).ToArray();
+            return new SpotifyPage { Items = albums.Skip(Math.Max(0, offset)).Take(10).ToArray(), HasMore = offset + 10 < albums.Length };
+        }
+        public static bool IsImageUrl(string value)
+        {
+            Uri uri;
+            return Uri.TryCreate(value, UriKind.Absolute, out uri) && uri.Scheme == "https" && (uri.Host.EndsWith(".scdn.co", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".spotifycdn.com", StringComparison.OrdinalIgnoreCase));
         }
         public static SpotifyPlayback ParsePlayback(object value)
         {

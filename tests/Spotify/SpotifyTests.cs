@@ -167,6 +167,23 @@ internal static class SpotifyTests
                 }
             }
         });
+        check("Spotify Albums lists recently played albums, with saved albums for older connections", () => {
+            Func<string, string, string> played = (album, name) => "{\"track\":{\"uri\":\"" + Track + "\",\"album\":{\"name\":\"" + name + "\",\"uri\":\"spotify:album:" + album + "\",\"images\":[{\"url\":\"https://i.scdn.co/image/" + album + "\"}]}}}";
+            var history = new List<string>();
+            for (int i = 0; i < 14; i++) { string id = (1000000000000000000000m + i).ToString(); history.Add(played(id, "Album " + i)); history.Add(played(id, "Album " + i + " again")); }
+            history.Insert(1, played("1000000000000000000003", "Album 3 early"));
+            var recent = new JavaScriptSerializer().DeserializeObject("{\"items\":[" + String.Join(",", history) + "]}");
+            var first = SpotifyService.RecentAlbums(recent, 0); var second = SpotifyService.RecentAlbums(recent, 10);
+            Assert(first.Items.Length == 10 && first.HasMore && first.Items[0].Name == "Album 0" && first.Items[1].Name == "Album 3 early" && first.Items[2].Name == "Album 1", "Recent albums are not distinct or not most recent first.");
+            Assert(second.Items.Length == 4 && !second.HasMore && second.Items[0].ImageUrl.StartsWith("https://i.scdn.co/"), "Recent album paging or cover lost.");
+            Assert(SpotifyService.IsImageUrl("https://i.scdn.co/image/a") && SpotifyService.IsImageUrl("https://image-cdn-ak.spotifycdn.com/image/a") && SpotifyService.IsImageUrl("https://mosaic.scdn.co/640/a")
+                && !SpotifyService.IsImageUrl("http://i.scdn.co/image/a") && !SpotifyService.IsImageUrl("https://example.com/scdn.co") && !SpotifyService.IsImageUrl(null), "Cover host filter is wrong.");
+            string requested = null;
+            var handler = new Handler { Send = request => { requested = request.RequestUri.AbsolutePath; return Reply(HttpStatusCode.OK, "{\"items\":[]}"); } };
+            using (var service = new SpotifyService(Session(directory, "recent-albums", false), handler)) { service.BrowseAsync("Albums", "", 0).Wait(); Assert(requested == "/v1/me/player/recently-played", "Albums did not use recently played."); }
+            string legacy = Session(directory, "recent-old-scope", false); var session = SpotifyCredentials.Load(legacy); session.Scope = session.Scope.Replace("user-read-recently-played ", ""); SpotifyCredentials.Save(legacy, session);
+            using (var service = new SpotifyService(legacy, handler)) { service.BrowseAsync("Albums", "", 0).Wait(); Assert(!service.CanReadRecent && requested == "/v1/me/albums", "Older connection lost its saved albums."); }
+        });
         check("Spotify songs tapped in a playlist or album play inside that collection", () => {
             Assert(SpotifyService.PlayInCollectionBody("spotify:playlist:1234567890123456789012", 11) == "{\"context_uri\":\"spotify:playlist:1234567890123456789012\",\"offset\":{\"position\":11}}", "Play request does not start the playlist at the song.");
             foreach (string invalid in new[] { Track, "spotify:playlist:bad", null }) { bool rejected = false; try { SpotifyService.PlayInCollectionBody(invalid, 0); } catch (ArgumentException) { rejected = true; } Assert(rejected, "Invalid collection accepted."); }
@@ -283,7 +300,9 @@ internal static class SpotifyTests
                 if (path.EndsWith("/albums")) return Reply(HttpStatusCode.OK, "{\"items\":[{\"album\":{\"uri\":\"spotify:album:1234567890123456789012\",\"name\":\"Album\"}}],\"next\":\"next-page\"}");
                 Assert(path.EndsWith("/me/playlists"), "Wrong playlist endpoint."); return Reply(HttpStatusCode.OK, "{\"items\":[null,{\"uri\":\"spotify:playlist:1234567890123456789012\",\"name\":\"Playlist\"}],\"next\":null}");
             } };
-            using (var service = new SpotifyService(Session(directory, "browse", false), handler))
+            // Saved albums are the fallback for connections made before the recently-played permission.
+            string browse = Session(directory, "browse", false); var saved = SpotifyCredentials.Load(browse); saved.Scope = saved.Scope.Replace("user-read-recently-played ", ""); SpotifyCredentials.Save(browse, saved);
+            using (var service = new SpotifyService(browse, handler))
             {
                 var album = service.BrowseAsync("Albums", "", 0).Result; Assert(album.Items.Length == 1 && album.HasMore && album.Items[0].Name == "Album", "Album wrapper lost.");
                 Assert(service.BrowseAsync("Playlists", "", 0).Result.Items.Length == 1, "Nullable playlist broke browsing.");
@@ -332,7 +351,7 @@ internal static class SpotifyTests
                     owner.Resources["SmallSize"] = 16.1; owner.Resources["BodySize"] = 20.7; owner.Resources["TitleSize"] = 27.6;
                     settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings); var editor = new LayoutEditor(owner); editor.Apply(settings);
                     var handler = new Handler { Send = request => Reply(HttpStatusCode.OK,
-                        request.RequestUri.AbsolutePath.EndsWith("/albums") ? "{\"items\":[{\"album\":{\"name\":\"Sample album - TEST FIXTURE\",\"uri\":\"spotify:album:1234567890123456789012\"}}]}"
+                        request.RequestUri.AbsolutePath.EndsWith("/recently-played") ? "{\"items\":[{\"track\":{\"album\":{\"name\":\"Sample album - TEST FIXTURE\",\"uri\":\"spotify:album:1234567890123456789012\"}}}]}"
                         : request.RequestUri.AbsolutePath.EndsWith("/search") ? "{\"tracks\":{\"items\":[{\"name\":\"Sample song - TEST FIXTURE\",\"uri\":\"" + Track + "\"}]}}"
                         : "{\"items\":[{\"name\":\"Sample playlist - TEST FIXTURE\",\"uri\":\"spotify:playlist:1234567890123456789012\"}]}") };
                     using (var service = new SpotifyService(Session(directory, "inline", false), handler))
@@ -379,7 +398,9 @@ internal static class SpotifyTests
                         var dashboard = (FrameworkElement)window.FindName("Dashboard"); dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                         var card = (FrameworkElement)window.FindName("SpotifyCard");
                         var hint = (FrameworkElement)window.FindName("SpotifyStatus"); Assert(hint.ActualHeight + hint.Margin.Top + hint.Margin.Bottom + .1 >= hint.DesiredSize.Height && hint.ActualHeight >= 20, "Spotify status line is clipped.");
-                        foreach (string name in new[] { "SpotifyLike", "SpotifyOpenTrack", "SpotifyAlbums", "SpotifyPlaylists", "SpotifySearch", "SpotifyAccount", "SpotifySeek" })
+                        Assert(window.FindName("SpotifyNow") == null && window.FindName("SpotifySeek") == null && window.FindName("SpotifyPlay") == null, "Playing tab or playback controls still present.");
+                        ((DockPanel)window.FindName("SpotifyPaging")).Visibility = Visibility.Visible; dashboard.UpdateLayout();
+                        foreach (string name in new[] { "SpotifyLike", "SpotifyAlbums", "SpotifyPlaylists", "SpotifySearch", "SpotifyAccount", "SpotifyPagePrevious", "SpotifyPageNext" })
                         {
                             var control = (FrameworkElement)window.FindName(name); var corner = control.TransformToAncestor(card).Transform(new Point(control.ActualWidth, control.ActualHeight));
                             Assert(control.ActualHeight >= 48 && corner.X <= card.ActualWidth - 20 && corner.Y <= card.ActualHeight - 20, name + " escapes minimum-size card.");

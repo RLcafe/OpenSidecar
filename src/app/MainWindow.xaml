@@ -279,32 +279,28 @@
 
           <Border x:Name="SpotifyCard" Style="{StaticResource Card}">
             <Grid>
-              <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="48"/><RowDefinition Height="56"/><RowDefinition Height="44"/></Grid.RowDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="36"/></Grid.RowDefinitions>
               <DockPanel LastChildFill="True"><Button x:Name="SpotifyAccount" DockPanel.Dock="Right" Content="Settings" Padding="12,4" FontSize="{DynamicResource SmallSize}"/><TextBlock Text="SPOTIFY" Style="{StaticResource Label}" VerticalAlignment="Center"/></DockPanel>
-              <UniformGrid Grid.Row="1" Columns="4" Margin="0,4,0,4">
-                <Button x:Name="SpotifyNow" Content="Playing" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
+              <UniformGrid Grid.Row="1" Columns="3" Margin="0,4,0,4">
                 <Button x:Name="SpotifyAlbums" Content="Albums" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
                 <Button x:Name="SpotifyPlaylists" Content="Playlists" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
                 <Button x:Name="SpotifySearch" Content="Search" Padding="4" FontSize="{DynamicResource SmallSize}"/>
               </UniformGrid>
-              <Grid x:Name="SpotifyNowView" Grid.Row="2" Margin="0,12,0,12">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <Border Background="{DynamicResource ClockSurface}" CornerRadius="12" Height="148" Width="148" VerticalAlignment="Center"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="44" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" HorizontalAlignment="Center"/><Image x:Name="SpotifyArt" Stretch="Uniform"/></Grid></Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="SpotifyTitle" Text="Your music, here" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="96" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="SpotifyArtist" Text="Connect in Settings &#x2192; Spotify." Style="{StaticResource Small}" TextWrapping="Wrap" MaxHeight="58" Margin="0,8,0,8"/><Button x:Name="SpotifyOpenTrack" Content="Open in Spotify" FontSize="{DynamicResource SmallSize}" Padding="8,4" HorizontalAlignment="Left" IsEnabled="False"/></StackPanel>
-              </Grid>
-              <Grid x:Name="SpotifyLibraryView" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,4">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="48"/></Grid.RowDefinitions>
+              <Grid x:Name="SpotifyLibraryView" Grid.Row="2" Margin="0,8,0,4">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <DockPanel x:Name="SpotifySearchRow" Visibility="Collapsed" Margin="0,0,0,6"><Button x:Name="SpotifyFind" DockPanel.Dock="Right" Content="Find" Margin="8,0,0,0"/><TextBox x:Name="SpotifyQuery" MaxLength="200" AutomationProperties.Name="Song or artist to search"/></DockPanel>
                 <DockPanel x:Name="SpotifyCollectionRow" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,6"><Button x:Name="SpotifyBack" DockPanel.Dock="Left" Content="Back" Margin="0,0,8,0"/><Button x:Name="SpotifyOpenCollection" DockPanel.Dock="Right" Content="Open Spotify" FontSize="{DynamicResource SmallSize}" Padding="8,4"/><TextBlock x:Name="SpotifyCollectionTitle" TextTrimming="CharacterEllipsis" Style="{StaticResource Small}" VerticalAlignment="Center" Margin="4,0"/></DockPanel>
                 <ScrollViewer x:Name="SpotifyResultsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="SpotifyResults"/></ScrollViewer>
-                <DockPanel Grid.Row="3"><Button x:Name="SpotifyPageNext" DockPanel.Dock="Right" Content="Next" IsEnabled="False"/><Button x:Name="SpotifyPagePrevious" DockPanel.Dock="Left" Content="Previous" IsEnabled="False"/><TextBlock x:Name="SpotifyPageLabel" Style="{StaticResource Small}" TextAlignment="Center" VerticalAlignment="Center"/></DockPanel>
+                <DockPanel x:Name="SpotifyPaging" Grid.Row="3" Margin="0,6,0,0" Visibility="Collapsed"><Button x:Name="SpotifyPageNext" DockPanel.Dock="Right" Content="Next" IsEnabled="False"/><Button x:Name="SpotifyPagePrevious" DockPanel.Dock="Left" Content="Previous" IsEnabled="False"/><TextBlock x:Name="SpotifyPageLabel" Style="{StaticResource Small}" TextAlignment="Center" VerticalAlignment="Center"/></DockPanel>
               </Grid>
-              <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions><TextBlock x:Name="SpotifyPosition" Text="&#x2014;:&#x2014;" Style="{StaticResource Small}" VerticalAlignment="Center"/><Slider x:Name="SpotifySeek" Grid.Column="1" Maximum="1" IsEnabled="False" AutomationProperties.Name="Seek Spotify song"/><TextBlock x:Name="SpotifyDuration" Grid.Column="2" Text="&#x2014;:&#x2014;" Style="{StaticResource Small}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
-              <Grid Grid.Row="4" Margin="0,4,0,4"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal"><Button x:Name="SpotifyPrevious" Content="&#xE892;" Style="{StaticResource IconButton}" AutomationProperties.Name="Previous Spotify song" IsEnabled="False" Margin="0,0,6,0"/><Button x:Name="SpotifyPlay" Content="&#xE768;" Style="{StaticResource AccentButton}" FontFamily="Segoe MDL2 Assets" AutomationProperties.Name="Play or pause Spotify" IsEnabled="False" Margin="0,0,6,0"/><Button x:Name="SpotifyNext" Content="&#xE893;" Style="{StaticResource IconButton}" AutomationProperties.Name="Next Spotify song" IsEnabled="False"/></StackPanel>
-                <Button x:Name="SpotifyLike" Grid.Column="1" Content="&#x2661; Like" IsEnabled="False" Padding="10,4" FontSize="{DynamicResource SmallSize}"/>
-              </Grid>
-              <TextBlock x:Name="SpotifyStatus" Grid.Row="5" Text="Set up your account in Settings &#x2192; Spotify." Style="{StaticResource Small}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+              <Border x:Name="SpotifyNowStrip" Grid.Row="3" Background="{DynamicResource Raised}" CornerRadius="14" Padding="8" Margin="0,4,0,0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <Border Background="{DynamicResource ClockSurface}" CornerRadius="10" Width="64" Height="64" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="26" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" HorizontalAlignment="Center"/><Image x:Name="SpotifyArt" Stretch="UniformToFill" AutomationProperties.Name="Current song cover"/></Grid></Border>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,8,0"><TextBlock x:Name="SpotifyTitle" Text="Your music, here" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="SpotifyArtist" Text="Connect in Settings &#x2192; Spotify." Style="{StaticResource Small}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel>
+                  <Button x:Name="SpotifyLike" Grid.Column="2" Content="&#x2661; Like" IsEnabled="False" Padding="12,4" FontSize="{DynamicResource SmallSize}" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+              <TextBlock x:Name="SpotifyStatus" Grid.Row="4" Text="Set up your account in Settings &#x2192; Spotify." Style="{StaticResource Small}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
             </Grid>
           </Border>
 
@@ -483,7 +479,7 @@
                     <Button x:Name="SpotifyDeveloper" Content="Open Developer Dashboard" HorizontalAlignment="Left" Margin="0,0,0,16"/>
                     <TextBlock Text="Register this exact redirect address:" Style="{StaticResource Small}"/>
                     <TextBox Text="http://127.0.0.1:43827/callback" IsReadOnly="True" Margin="0,8,0,16" AutomationProperties.Name="Spotify redirect address"/>
-                    <TextBlock Text="Connect opens your browser for approval. Access includes current playback, albums, playlists, likes and playback controls. Spotify Premium is needed for seeking and playback controls. Existing connections need one reconnect for the new permission." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                    <TextBlock Text="Connect opens your browser for approval. Access includes the current song, recently played albums, playlists, likes and starting playback. Spotify Premium is needed to play songs from the widget. Existing connections need one reconnect to show recently played albums." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel>
                 </Grid>
               </TabItem>

@@ -95,6 +95,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Quick Launch: a paged deck (6 per page, or 3 when compact) with App, File, Folder, Website, Hotkey and Control actions, presets and Start menu picker. Old assignments and intentionally empty decks are preserved.
 - Spotify is its own widget (PKCE, user-supplied Client ID, redirect `http://127.0.0.1:43827/callback`). Windows Now Playing stays independent.
 - Tapping a song inside a Spotify album or playlist plays it in that collection so playback continues (user request, 9 Oct 2026; diverges from spec §5.1, see `docs/decisions/003-…`). Search results and episodes still open their Spotify link.
+- The Spotify widget has no Playing tab or playback controls: tabs are Albums (recently played), Playlists and Search, with cover thumbnails, plus a bottom strip with cover, song, artist and Like (user request, 9 Oct 2026; see `docs/decisions/004-…`).
 - Web requests skip IPv6 for hosts that also have IPv4 (`PreferIPv4Handler`), because the user's network has unrouted IPv6 that made Spotify sign-in time out.
 - Default layout shows Clock, Focus, Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
 

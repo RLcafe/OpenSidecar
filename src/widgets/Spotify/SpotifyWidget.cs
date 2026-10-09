@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -6,28 +7,30 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace WidgetScreen
 {
+    // Library browsing (recent albums, playlists, search) with a now-playing strip: cover, song, artist and Like.
     public sealed class SpotifyWidget : IDisposable
     {
         private readonly Window window;
         private readonly SpotifyService service;
         private readonly HttpClient images = new HttpClient(new PreferIPv4Handler()) { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 2 * 1024 * 1024 };
-        private readonly PlaybackScrubber scrubber;
+        // Small in-memory cover cache for list rows; cleared when it grows, never written to disk.
+        private readonly Dictionary<string, BitmapSource> covers = new Dictionary<string, BitmapSource>();
         private SpotifyPlayback playback;
         private SpotifyItem collection;
-        private string likedUri, artUrl, kind = "Now", searchQuery = "";
+        private string likedUri, artUrl, kind = "Albums", searchQuery = "";
         private bool? liked;
         private bool busy, likeBusy, commandBusy, disposed, active = true;
         private int generation, browseGeneration, offset;
-        private DateTime nextPoll, lastLikeCheck, observed;
+        private DateTime nextPoll, lastLikeCheck;
         public bool Connected { get { return service.Connected; } }
         public SpotifyWidget(Window window, SpotifyService service)
         {
             this.window = window; this.service = service;
-            C<Button>("SpotifyNow").Click += (s, e) => Select("Now");
             C<Button>("SpotifyAlbums").Click += (s, e) => Select("Albums");
             C<Button>("SpotifyPlaylists").Click += (s, e) => Select("Playlists");
             C<Button>("SpotifySearch").Click += (s, e) => Select("Search");
@@ -38,11 +41,6 @@ namespace WidgetScreen
             C<Button>("SpotifyBack").Click += (s, e) => Select(kind);
             C<Button>("SpotifyOpenCollection").Click += (s, e) => Open(collection == null ? null : collection.WebUrl);
             C<Button>("SpotifyLike").Click += (s, e) => ToggleLike();
-            C<Button>("SpotifyOpenTrack").Click += (s, e) => Open(playback == null || playback.Item == null ? null : playback.Item.WebUrl);
-            C<Button>("SpotifyPrevious").Click += (s, e) => Command("previous");
-            C<Button>("SpotifyNext").Click += (s, e) => Command("next");
-            C<Button>("SpotifyPlay").Click += (s, e) => Command(playback != null && playback.Playing ? "pause" : "play");
-            scrubber = new PlaybackScrubber(C<Slider>("SpotifySeek"), Seek, value => Text("SpotifyPosition", Time(value)));
             AccountChanged();
         }
         private T C<T>(string name) where T : class { return (T)(object)window.FindName(name); }
@@ -55,30 +53,26 @@ namespace WidgetScreen
             C<Image>("SpotifyArt").Source = null;
             Text("SpotifyTitle", Connected ? "Loading Spotify…" : "Your music, here");
             Text("SpotifyArtist", Connected ? "Checking current playback." : "Connect in Settings → Spotify.");
-            Text("SpotifyPosition", "—:—"); Text("SpotifyDuration", "—:—");
             Status(Connected ? "Account connected." : "Set up your account in Settings → Spotify.");
-            C<StackPanel>("SpotifyResults").Children.Clear(); Select("Now"); UpdateMode();
+            C<StackPanel>("SpotifyResults").Children.Clear(); Select(kind); UpdateMode();
         }
         private void Select(string selected)
         {
             browseGeneration++; kind = selected; offset = 0; collection = null;
-            C<Grid>("SpotifyNowView").Visibility = selected == "Now" ? Visibility.Visible : Visibility.Collapsed;
-            C<Grid>("SpotifyLibraryView").Visibility = selected == "Now" ? Visibility.Collapsed : Visibility.Visible;
             C<DockPanel>("SpotifySearchRow").Visibility = selected == "Search" ? Visibility.Visible : Visibility.Collapsed;
             C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Collapsed;
-            foreach (string tab in new[] { "Now", "Albums", "Playlists", "Search" })
+            foreach (string tab in new[] { "Albums", "Playlists", "Search" })
                 C<Button>("Spotify" + tab).SetResourceReference(Button.BorderBrushProperty, tab == selected ? "Accent" : "ControlBorder");
             C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
             if (!Connected) { Status("Connect in Settings → Spotify to use your library."); return; }
             if (selected == "Search") { Status("Enter a song or artist, then tap Find."); C<TextBox>("SpotifyQuery").Focus(); }
-            else if (selected != "Now") LoadPage();
-            else Status(service.CanControl ? "Spotify connected" : "Reconnect in Settings → Spotify to enable seeking.");
+            else LoadPage();
         }
         private void Search()
         {
             kind = "Search"; offset = 0; collection = null; searchQuery = C<TextBox>("SpotifyQuery").Text.Trim(); LoadPage();
         }
-        private void Paging(bool previous, bool next) { C<Button>("SpotifyPagePrevious").IsEnabled = previous; C<Button>("SpotifyPageNext").IsEnabled = next; }
+        private void Paging(bool previous, bool next) { C<Button>("SpotifyPagePrevious").IsEnabled = previous; C<Button>("SpotifyPageNext").IsEnabled = next; C<DockPanel>("SpotifyPaging").Visibility = previous || next ? Visibility.Visible : Visibility.Collapsed; }
         private async void LoadPage()
         {
             int version = ++browseGeneration;
@@ -90,29 +84,67 @@ namespace WidgetScreen
             {
                 var page = collection == null ? await service.BrowseAsync(kind, searchQuery, offset) : await service.TracksAsync(collection, offset);
                 if (disposed || version != browseGeneration) return;
-                foreach (var item in page.Items)
-                {
-                    var label = new StackPanel();
-                    var title = new TextBlock { Text = item.Name, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-                    title.SetResourceReference(TextBlock.FontSizeProperty, "BodySize"); label.Children.Add(title);
-                    var sub = new TextBlock { Text = item.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) };
-                    sub.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize"); sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); label.Children.Add(sub);
-                    var row = new Button { Content = label, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 6), ToolTip = item.Name };
-                    var selected = item; var parent = collection;
-                    bool playsInCollection = parent != null && selected.IsTrack && selected.Position >= 0 && service.CanControl;
-                    row.Click += (s, e) => {
-                        if (playsInCollection) PlayInCollection(parent, selected);
-                        else if (selected.IsTrack || selected.Uri.StartsWith("spotify:episode:")) Open(selected.WebUrl);
-                        else { collection = selected; offset = 0; C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Visible; Text("SpotifyCollectionTitle", selected.Name); LoadPage(); }
-                    };
-                    AutomationProperties.SetName(row, playsInCollection ? "Play " + item.Name + " in " + parent.Name : item.IsTrack ? "Open " + item.Name + " in Spotify" : "Browse " + item.Name);
-                    C<StackPanel>("SpotifyResults").Children.Add(row);
-                }
+                foreach (var item in page.Items) C<StackPanel>("SpotifyResults").Children.Add(Row(item, version));
                 C<ScrollViewer>("SpotifyResultsScroll").ScrollToTop();
                 Paging(offset > 0, page.HasMore); Text("SpotifyPageLabel", page.Items.Length == 0 ? "" : (offset + 1) + "–" + (offset + page.Items.Length));
-                Status(page.Items.Length == 0 ? "No results. Try another search or save music in Spotify." : collection == null && kind != "Search" ? "Choose an album or playlist to browse its songs." : collection != null && service.CanControl ? "Tap a song to play it here; Spotify continues through this " + (collection.Uri.StartsWith("spotify:album:") ? "album." : "playlist.") : "Tap a song to open it in Spotify.");
+                string empty = kind == "Albums" && collection == null && service.CanReadRecent ? "No recently played albums yet. Play an album in Spotify." : "No results. Try another search or save music in Spotify.";
+                Status(page.Items.Length == 0 ? empty
+                    : collection == null && kind == "Albums" && !service.CanReadRecent ? "Showing saved albums. Reconnect in Settings → Spotify to see recently played albums."
+                    : collection == null && kind != "Search" ? "Choose " + (kind == "Albums" ? "an album" : "a playlist") + " to browse its songs."
+                    : collection != null && service.CanControl ? "Tap a song to play it here; Spotify continues through this " + (collection.Uri.StartsWith("spotify:album:") ? "album." : "playlist.")
+                    : "Tap a song to open it in Spotify.");
             }
             catch (Exception error) { if (!disposed && version == browseGeneration) { Status(SpotifyAccount.Message(error)); Paging(offset > 0, false); } }
+        }
+        private Button Row(SpotifyItem item, int version)
+        {
+            var layout = new Grid();
+            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) }); layout.ColumnDefinitions.Add(new ColumnDefinition());
+            var cover = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(8), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+            cover.SetResourceReference(Border.BackgroundProperty, "ClockSurface");
+            var fallback = new TextBlock { Text = item.Uri.StartsWith("spotify:playlist:") ? "" : "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            fallback.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+            var art = new Image { Stretch = Stretch.UniformToFill };
+            var coverContent = new Grid(); coverContent.Children.Add(fallback); coverContent.Children.Add(art); cover.Child = coverContent; layout.Children.Add(cover);
+            var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) }; Grid.SetColumn(label, 1);
+            var title = new TextBlock { Text = item.Name, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+            title.SetResourceReference(TextBlock.FontSizeProperty, "BodySize"); label.Children.Add(title);
+            var sub = new TextBlock { Text = item.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) };
+            sub.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize"); sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); label.Children.Add(sub);
+            layout.Children.Add(label);
+            var row = new Button { Content = layout, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(10, 8, 12, 8), Margin = new Thickness(0, 0, 0, 6), ToolTip = item.Name };
+            var selected = item; var parent = collection;
+            bool playsInCollection = parent != null && selected.IsTrack && selected.Position >= 0 && service.CanControl;
+            row.Click += (s, e) => {
+                if (playsInCollection) PlayInCollection(parent, selected);
+                else if (selected.IsTrack || selected.Uri.StartsWith("spotify:episode:")) Open(selected.WebUrl);
+                else { collection = selected; offset = 0; C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Visible; Text("SpotifyCollectionTitle", selected.Name); LoadPage(); }
+            };
+            AutomationProperties.SetName(row, playsInCollection ? "Play " + item.Name + " in " + parent.Name : item.IsTrack ? "Open " + item.Name + " in Spotify" : "Browse " + item.Name);
+            LoadCover(item.ImageUrl, art, version);
+            return row;
+        }
+        private async void LoadCover(string url, Image target, int version)
+        {
+            if (!SpotifyService.IsImageUrl(url)) return;
+            BitmapSource cached;
+            if (covers.TryGetValue(url, out cached)) { target.Source = cached; return; }
+            try
+            {
+                var bitmap = await Download(url, 104);
+                if (disposed || version != browseGeneration) return;
+                if (covers.Count >= 120) covers.Clear();
+                covers[url] = bitmap; target.Source = bitmap;
+            }
+            catch (Exception) { }
+        }
+        private async Task<BitmapSource> Download(string url, int width)
+        {
+            byte[] data = await images.GetByteArrayAsync(new Uri(url));
+            using (var stream = new MemoryStream(data))
+            {
+                var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = width; bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
+            }
         }
         private void UpdateMode()
         {
@@ -120,38 +152,22 @@ namespace WidgetScreen
             C<Button>("SpotifyLike").IsEnabled = item && playback.Item.IsTrack && liked.HasValue && !likeBusy;
             C<Button>("SpotifyLike").Content = liked == true ? "♥ Liked" : "♡ Like";
             AutomationProperties.SetName(C<Button>("SpotifyLike"), liked == true ? "Remove current song from Liked Songs" : "Save current song to Liked Songs");
-            C<Button>("SpotifyOpenTrack").IsEnabled = item;
-            foreach (string name in new[] { "SpotifyPrevious", "SpotifyPlay", "SpotifyNext" }) C<Button>(name).IsEnabled = item && service.CanControl && !commandBusy;
-            C<Button>("SpotifyPlay").Content = item && playback.Playing ? "\uE769" : "\uE768";
-            C<Slider>("SpotifySeek").ToolTip = service.CanControl ? "Drag or tap to seek. Arrow keys move five seconds." : "Reconnect in Settings → Spotify to enable seeking. Premium required.";
-            UpdateTimeline();
         }
         public void Tick(bool enabled, bool quiet)
         {
             active = enabled;
-            if (!enabled) { scrubber.End(false); return; }
-            UpdateTimeline(); Refresh(quiet);
-        }
-        private void UpdateTimeline()
-        {
-            bool item = playback != null && playback.Item != null;
-            double position = item ? playback.PositionMs + (playback.Playing ? (DateTime.UtcNow - observed).TotalMilliseconds : 0) : 0;
-            position = item ? Math.Min(playback.DurationMs, position) : 0;
-            scrubber.Update(item ? playback.Item.Uri : null, position, item ? playback.DurationMs : 0, item && service.CanControl && playback.CanSeek && !commandBusy);
-            if (!scrubber.Active) Text("SpotifyPosition", item ? Time(position) : "—:—");
-            Text("SpotifyDuration", item ? Time(playback.DurationMs) : "—:—");
+            if (enabled) Refresh(quiet);
         }
         public async void Refresh(bool quiet)
         {
-            if (!active || !Connected || busy || disposed || commandBusy || scrubber.Active || DateTime.UtcNow < nextPoll) return;
+            if (!active || !Connected || busy || disposed || commandBusy || DateTime.UtcNow < nextPoll) return;
             busy = true; int version = generation; nextPoll = DateTime.UtcNow.AddSeconds(quiet ? 30 : 10);
             try
             {
                 var snapshot = await service.CurrentAsync(); if (disposed || !Connected || version != generation) return;
-                playback = snapshot; observed = DateTime.UtcNow; var item = snapshot.Item;
+                playback = snapshot; var item = snapshot.Item;
                 Text("SpotifyTitle", item == null ? "Nothing playing" : item.Name);
                 Text("SpotifyArtist", item == null ? "Start music in Spotify on any device." : item.Subtitle);
-                if (kind == "Now") Status(!service.CanControl ? "Reconnect in Settings → Spotify to enable seeking." : item == null ? "Spotify connected · waiting for playback" : snapshot.Playing ? "Playing on Spotify" : "Spotify playback paused");
                 if (likedUri != (item == null ? null : item.Uri)) { likedUri = item == null ? null : item.Uri; liked = null; }
                 UpdateMode();
                 if (active && item != null && item.IsTrack && (!liked.HasValue || DateTime.UtcNow - lastLikeCheck >= TimeSpan.FromMinutes(1)) && !likeBusy)
@@ -164,17 +180,13 @@ namespace WidgetScreen
                 if (active && requestedArt != artUrl)
                 {
                     artUrl = requestedArt; C<Image>("SpotifyArt").Source = null;
-                    Uri uri;
-                    if (Uri.TryCreate(requestedArt, UriKind.Absolute, out uri) && uri.Scheme == "https" && uri.Host.EndsWith(".scdn.co", StringComparison.OrdinalIgnoreCase))
+                    if (SpotifyService.IsImageUrl(requestedArt))
                     {
                         try
                         {
-                            byte[] data = await images.GetByteArrayAsync(uri);
+                            var bitmap = await Download(requestedArt, 128);
                             if (disposed || !Connected || artUrl != requestedArt || version != generation) return;
-                            using (var stream = new MemoryStream(data))
-                            {
-                                var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 192; bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); C<Image>("SpotifyArt").Source = bitmap;
-                            }
+                            C<Image>("SpotifyArt").Source = bitmap;
                         }
                         catch (Exception) { artUrl = null; }
                     }
@@ -198,31 +210,10 @@ namespace WidgetScreen
             catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
             finally { likeBusy = false; if (!disposed) UpdateMode(); }
         }
-        private async void Seek(string uri, double position)
-        {
-            if (commandBusy || disposed) return;
-            commandBusy = true; int version = generation; UpdateMode();
-            try
-            {
-                await service.SeekAsync(uri, position);
-                if (!disposed && version == generation && playback != null && playback.Item != null && playback.Item.Uri == uri)
-                { playback.PositionMs = SpotifyService.SeekPosition(position, playback.DurationMs); observed = DateTime.UtcNow; Status("Playback position updated."); }
-            }
-            catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
-            finally { commandBusy = false; if (!disposed) { nextPoll = DateTime.UtcNow.AddSeconds(2); UpdateMode(); } }
-        }
-        private async void Command(string command)
-        {
-            if (commandBusy || disposed) return;
-            commandBusy = true; int version = generation; UpdateMode();
-            try { await service.PlaybackAsync(command); if (!disposed && version == generation) { playback = null; nextPoll = DateTime.UtcNow.AddSeconds(1); Status("Updating playback…"); } }
-            catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
-            finally { commandBusy = false; if (!disposed) UpdateMode(); }
-        }
         private async void PlayInCollection(SpotifyItem parent, SpotifyItem song)
         {
             if (commandBusy || disposed) return;
-            commandBusy = true; int version = generation; UpdateMode();
+            commandBusy = true; int version = generation;
             Status("Starting " + song.Name + "…");
             try
             {
@@ -246,9 +237,8 @@ namespace WidgetScreen
                 if (!disposed && version == generation) { playback = null; nextPoll = DateTime.UtcNow.AddSeconds(1); Status("Playing " + song.Name + " from " + parent.Name + "."); }
             }
             catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
-            finally { commandBusy = false; if (!disposed) UpdateMode(); }
+            finally { commandBusy = false; }
         }
-        private static string Time(double ms) { var value = TimeSpan.FromMilliseconds(Math.Max(0, ms)); return ((int)value.TotalMinutes) + ":" + value.Seconds.ToString("00"); }
-        public void Dispose() { disposed = true; generation++; browseGeneration++; scrubber.End(false); service.Dispose(); images.Dispose(); }
+        public void Dispose() { disposed = true; generation++; browseGeneration++; service.Dispose(); images.Dispose(); }
     }
 }
