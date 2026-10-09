@@ -4,7 +4,7 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+- **Release copies**: `scripts\release.ps1` builds a tagged version from a clean checkout of its tag, runs every check and puts a self-contained copy in `releases\vX.Y.Z\` (git-ignored). The desktop shortcut now opens `releases\v0.2.2\WidgetScreen.exe` instead of the `artifacts\app` build. See "Releases" in `BRANCHES.md`.
 
 ## 0.2.2 (10 Oct 2026)
 

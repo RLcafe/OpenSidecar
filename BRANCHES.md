@@ -37,6 +37,19 @@ None yet.
 5. Delete any build of the branch made from the main folder, such as `artifacts\<name>`.
 6. Delete the branch with `git branch -d <branch>`. Lowercase `-d` refuses to delete unmerged work, which is the point. Use `-D` only for a branch the user has dropped.
 7. Run `git worktree prune` to clear stale worktree records.
+8. Make the release copy with `scripts\release.ps1 -UpdateShortcut` (see [Releases](#releases)).
+
+## Releases
+
+The copy you actually use lives in `releases\vX.Y.Z\` inside this folder (git-ignored), never in `artifacts\` and never next to `Widget screen`. Each release folder is self-contained: `WidgetScreen.exe`, `WidgetScreen.exe.config` and a `release.txt` naming the version and commit. Settings and the Spotify session stay in `%LOCALAPPDATA%\WidgetScreen\`, so every build shares them.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -UpdateShortcut
+```
+
+- With no `-Version`, it builds the newest `vX.Y.Z` tag on `main`. It checks the tag out into a temporary `.worktrees\release-vX.Y.Z`, runs `build.ps1 -Test` there, copies the app into `releases\vX.Y.Z\` and removes the checkout, so uncommitted or later work never ends up in a release.
+- `-UpdateShortcut` points the desktop "Widget Screen" shortcut at the new release. `-Force` rebuilds a release folder that already exists (close the app first).
+- Keep older release folders until the new one has been used for a while, then delete them by hand.
 
 ## Versions
 

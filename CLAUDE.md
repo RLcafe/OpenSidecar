@@ -45,8 +45,9 @@ Widget screen/
 │   └── integrations/      Windows APIs, devices, external services (Spotify/ subfolder)
 ├── assets/                Assets shipped with the app (none today; glyphs come from Segoe MDL2)
 ├── tests/                 Automated checks and manual procedures (QuickLaunch/, Spotify/)
-├── scripts/               build.ps1, run.ps1, export-design-reference.ps1
+├── scripts/               build.ps1, run.ps1, release.ps1, export-design-reference.ps1
 ├── artifacts/             Build output (git-ignored, created by the build)
+├── releases/              Self-contained release copies, releases\vX.Y.Z (git-ignored)
 └── .worktrees/            One git worktree per branch (git-ignored)
 ```
 
@@ -68,6 +69,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\render-checks.ps
 powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-design-reference.ps1
 ```
 
+- The desktop "Widget Screen" shortcut opens the latest release in `releases\vX.Y.Z\`, made by `scripts\release.ps1 -UpdateShortcut` after tagging (see "Releases" in `BRANCHES.md`). Day-to-day builds stay in `artifacts\`.
 - Output goes to `artifacts/app/WidgetScreen.exe`. If the running app locks it, build with `-OutputDirectory artifacts\live-edit` and run with `-AppDirectory artifacts\live-edit`.
 - The tests are a console exe (`artifacts/tests/WidgetScreen.Tests.exe`) that prints `PASS`/`FAIL` lines. Add new checks to `tests/SmokeTests.cs`, `tests/QuickLaunch/DeckTests.cs` or `tests/Spotify/SpotifyTests.cs` with the `Check(name, action)` pattern.
 - App flags: `--settings <path>` isolates preferences and the Spotify session; `--windowed`; `--render <png>` with `--render-settings`, `--render-tab N`, `--render-edit`, `--render-edit-demo`.
@@ -114,7 +116,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 
 - **Every new branch or worktree lives inside this folder**, at `.worktrees\<name>` (git-ignored). Never create folders in `C:\Users\PCD\Documents\AI Apps\Claud` (user rule, 10 Oct 2026). Create one with `git worktree add ".worktrees\<name>" -b feature/<name> main`, or `fix/<name>` for a bug fix.
 - When you create a branch, add it to the table in `BRANCHES.md` with its purpose, base commit, status, checkout and test build path (`.worktrees\<name>\artifacts\app\WidgetScreen.exe`). Keep that row current.
-- After a merge: run `build.ps1 -Test` on `main`, move the change into `CHANGELOG.md` under a new version, remove the branch's row, commit, and add an annotated `vX.Y.Z` tag. Then `git worktree remove` the worktree, delete any `artifacts\<name>` build, `git branch -d` the branch, and `git worktree prune`.
+- After a merge: run `build.ps1 -Test` on `main`, move the change into `CHANGELOG.md` under a new version, remove the branch's row, commit, and add an annotated `vX.Y.Z` tag. Then `git worktree remove` the worktree, delete any `artifacts\<name>` build, `git branch -d` the branch, and `git worktree prune`. Finish with `scripts\release.ps1 -UpdateShortcut` so the desktop shortcut runs the new version.
 - Versions are semver. MAJOR stays 0 until the user calls it 1.0. MINOR is for a new widget, feature or visible behavior change. PATCH is for fixes and polish. Docs-only changes go under Unreleased. `v0.1.0` is the first tag.
 
 ## Working process

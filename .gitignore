@@ -1,5 +1,6 @@
 /artifacts/
 /.worktrees/
+/releases/
 **/bin/
 **/obj/
 .vs/
