@@ -13,7 +13,7 @@ namespace WidgetScreen
     {
         private readonly Window window;
         private readonly SpotifyService service;
-        private readonly HttpClient images = new HttpClient { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 2 * 1024 * 1024 };
+        private readonly HttpClient images = new HttpClient(new PreferIPv4Handler()) { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 2 * 1024 * 1024 };
         private readonly PlaybackScrubber scrubber;
         private SpotifyPlayback playback;
         private SpotifyItem collection;

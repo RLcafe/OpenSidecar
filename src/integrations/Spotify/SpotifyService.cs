@@ -81,7 +81,7 @@ namespace WidgetScreen
         public bool Connected { get { return !String.IsNullOrEmpty(session.RefreshToken); } }
         public bool CanControl { get { return Connected && (session.Scope ?? "").Split(' ').Contains("user-modify-playback-state"); } }
 
-        public SpotifyService(string path) : this(path, new HttpClientHandler()) { }
+        public SpotifyService(string path) : this(path, new PreferIPv4Handler()) { }
         public SpotifyService(string path, HttpMessageHandler handler) : this(path, handler, Launcher.Open) { }
         public SpotifyService(string path, HttpMessageHandler handler, Action<string> openAuthorization)
         {

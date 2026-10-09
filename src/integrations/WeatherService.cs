@@ -22,7 +22,7 @@ namespace WidgetScreen
     }
     public sealed class WeatherService : IDisposable
     {
-        private readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        private readonly HttpClient http = new HttpClient(new PreferIPv4Handler()) { Timeout = TimeSpan.FromSeconds(12) };
         public async Task<List<WeatherLocation>> SearchAsync(string query)
         {
             if (String.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) throw new InvalidOperationException("Enter at least two characters for a city.");
