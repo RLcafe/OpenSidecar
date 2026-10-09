@@ -6,8 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-
-None right now. `feature/mixer-output-devices` and `feature/header-clock-stats` were merged into `v0.2.0`.
+| `feature/ui-polish` | Polish, distill and clarify the dashboard and Settings UI and copy | `main` @ `4ca0b18` (v0.2.0) | In progress | `.worktrees\ui-polish` | `.worktrees\ui-polish\artifacts\app\WidgetScreen.exe` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
