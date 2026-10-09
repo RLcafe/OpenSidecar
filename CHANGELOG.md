@@ -4,6 +4,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.2.0 (10 Oct 2026)
+
+Merges `feature/mixer-output-devices` and `feature/header-clock-stats`.
+
+- **Sound mixer outputs**: every app's volume slider shows, whatever output it plays on. Each app has an output button to see and move it to another device, and tapping Master volume picks the default output (decision 005, `docs/design/mixer-output-devices.md`).
+- **Header clock**: the time and date always show at the top left of the header, including in Edit layout. The Clock widget and the header brand are gone. Old layouts drop the Clock, and Focus grows into its space when it sat directly below it (`docs/design/header-clock-and-stats.md`).
+- **Default layout**: Focus fills the left column, followed by Now Playing, Quick Launch, Sound Mixer and Spotify. Custom layouts are kept.
+- **System stats scale with their widget**, using one to three columns that fill the card.
 - Branch and version tracking: `BRANCHES.md`, this changelog, and worktrees under the git-ignored `.worktrees\` folder.
 
 ## 0.1.0 (9 Oct 2026)

@@ -6,13 +6,8 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/mixer-output-devices` | The Sound mixer shows every app on every output. Each app has an output button to see and change its device, and tapping Master volume picks the default output. | `5e75faf` | Ready for review | None. `..\Widget screen-mixer` no longer exists, and the branch lives only in this repo. | `artifacts\mixer-branch\WidgetScreen.exe` |
-| `feature/header-clock-stats` | Time and date sit at the top left of the header (the Clock widget and header brand are gone), and System stats scale with their widget. | `92d1632` | Ready for review | `.worktrees\header-clock-stats` | `.worktrees\header-clock-stats\artifacts\app\WidgetScreen.exe` |
 
-`feature/mixer-output-devices` was built from the main folder before the folder rule below, so its build is in the main `artifacts\`. On 10 Oct 2026 the header branch's separate clone was replaced by its worktree. Merge notes:
-
-- **Both** branched before `v0.1.0`, so they don't have the IPv4 sign-in fix, the Spotify library widget or the startup crash fix. Merging them will conflict in `CLAUDE.md`, `MainWindow.xaml`, `DashboardController.cs` and `tests/SmokeTests.cs`, and they touch the same files as each other.
-- `feature/mixer-output-devices` adds `docs/decisions/004-mixer-output-routing.md`, but `main` already has `004-spotify-library-widget.md`. Renumber it to the next free number when merging.
+None right now. `feature/mixer-output-devices` and `feature/header-clock-stats` were merged into `v0.2.0`.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
