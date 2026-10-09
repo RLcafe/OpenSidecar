@@ -1,4 +1,5 @@
 /artifacts/
+/.worktrees/
 **/bin/
 **/obj/
 .vs/

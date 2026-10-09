@@ -14,6 +14,9 @@ Use this layout when adding files. See [README.md](README.md) for the workspace 
 | --- | --- |
 | `AGENTS.md` | Project requirements and instructions for agents working in this repository. |
 | `README.md` | Workspace overview and, once implemented, setup and run instructions. |
+| `BRANCHES.md` | Active branches with their purpose, status and test build, the worktree and post-merge process, and the version bump rules. |
+| `CHANGELOG.md` | Released versions, each tagged `vX.Y.Z` on `main`. |
+| `.worktrees/` | One git worktree per unmerged branch (git-ignored). |
 | `docs/planning/` | Feature scope, milestones, backlog, and implementation plans. |
 | `docs/design/` | Screen layouts, mockups, touch behavior, and visual references. |
 | `docs/decisions/` | Agreed technical decisions, including their rationale and tradeoffs. |
@@ -90,6 +93,7 @@ Confirm which widgets belong in the first version before implementing them. Spot
 * Use checks appropriate to the change; avoid tests that only repeat implementation details.
 * For integrations, check relevant failure states such as unavailable devices, expired account access, or missing sensor data.
 * Report what changed, what was verified, and any remaining limitations in plain language.
+* Do new work on a `feature/<name>` or `fix/<name>` branch in a worktree at `.worktrees\<name>` inside this folder. Never create folders beside the project folder. Record each branch in `BRANCHES.md`, and after a merge follow its steps: update `CHANGELOG.md`, tag the version, then remove the worktree, its build folder and the branch.
 
 ## Settled customization requirements
 

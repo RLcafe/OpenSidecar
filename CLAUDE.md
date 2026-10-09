@@ -32,6 +32,8 @@ The source in `implementation-source.zip` is the baseline **before** the touchsc
 ```text
 Widget screen/
 ├── CLAUDE.md
+├── BRANCHES.md            Unmerged branches, worktree and merge process, version rules
+├── CHANGELOG.md           Released versions (vX.Y.Z tags on main)
 ├── design specfication/   Read-only as-built spec and reference package
 ├── docs/
 │   ├── planning/          Scope, milestones, backlog, implementation plans
@@ -44,7 +46,8 @@ Widget screen/
 ├── assets/                Assets shipped with the app (none today; glyphs come from Segoe MDL2)
 ├── tests/                 Automated checks and manual procedures (QuickLaunch/, Spotify/)
 ├── scripts/               build.ps1, run.ps1, export-design-reference.ps1
-└── artifacts/             Build output (git-ignored, created by the build)
+├── artifacts/             Build output (git-ignored, created by the build)
+└── .worktrees/            One git worktree per branch (git-ignored)
 ```
 
 - Keep widget presentation separate from integrations that fetch data or run actions.
@@ -100,6 +103,15 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Default layout shows Clock, Focus, Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
+
+## Branches, worktrees and versions
+
+[`BRANCHES.md`](BRANCHES.md) has the full process. The short version:
+
+- **Every new branch or worktree lives inside this folder**, at `.worktrees\<name>` (git-ignored). Never create folders in `C:\Users\PCD\Documents\AI Apps\Claud` (user rule, 10 Oct 2026). Create one with `git worktree add ".worktrees\<name>" -b feature/<name> main`, or `fix/<name>` for a bug fix.
+- When you create a branch, add it to the table in `BRANCHES.md` with its purpose, base commit, status, checkout and test build path (`.worktrees\<name>\artifacts\app\WidgetScreen.exe`). Keep that row current.
+- After a merge: run `build.ps1 -Test` on `main`, move the change into `CHANGELOG.md` under a new version, remove the branch's row, commit, and add an annotated `vX.Y.Z` tag. Then `git worktree remove` the worktree, delete any `artifacts\<name>` build, `git branch -d` the branch, and `git worktree prune`.
+- Versions are semver. MAJOR stays 0 until the user calls it 1.0. MINOR is for a new widget, feature or visible behavior change. PATCH is for fixes and polish. Docs-only changes go under Unreleased. `v0.1.0` is the first tag.
 
 ## Working process
 

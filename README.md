@@ -78,6 +78,8 @@ The smoke checks cover XAML templates, settings persistence and migration, theme
 Widget Screen/
 ├── AGENTS.md             Project requirements and agent instructions
 ├── README.md             Workspace guide
+├── BRANCHES.md           Unmerged branches, worktree and merge process, version rules
+├── CHANGELOG.md          Released versions
 ├── docs/
 │   ├── planning/         Scope, milestones, feature notes, and backlog
 │   ├── design/           Layouts, mockups, touch behavior, and visual references
@@ -88,8 +90,14 @@ Widget Screen/
 │   └── integrations/     Windows APIs, devices, and external service providers
 ├── assets/               Assets used by the application, such as icons and images
 ├── tests/                Automated checks, fixtures, and manual test procedures
-└── scripts/              Repeatable development, build, and packaging helpers
+├── scripts/              Repeatable development, build, and packaging helpers
+├── artifacts/            Build output (git-ignored)
+└── .worktrees/           One git worktree per unmerged branch (git-ignored)
 ```
+
+## Branches and versions
+
+New work happens on a `feature/<name>` or `fix/<name>` branch, checked out as a worktree in `.worktrees\<name>` inside this folder, never next to it. Each branch builds and tests in its own worktree, so its test build is `.worktrees\<name>\artifacts\app\WidgetScreen.exe`. [BRANCHES.md](BRANCHES.md) lists the active branches and their test builds, and explains what to do after a merge. Released versions are tagged `vX.Y.Z` on `main` and described in [CHANGELOG.md](CHANGELOG.md).
 
 ## Organization conventions
 
