@@ -151,6 +151,7 @@ namespace WidgetScreen
             Button("SoundSettingsButton", () => Launch("ms-settings:sound"));
             Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
+            SystemStatsLayout.Attach(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
                 if (!updatingAudio && audio != null) { AudioAction(() => audio.SetVolume(e.NewValue / 100), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
             };
@@ -200,10 +201,12 @@ namespace WidgetScreen
         private void UpdateClock()
         {
             DateTime now = DateTime.Now;
-            Text("ClockTime", now.ToString(settings.Use24HourClock ? "HH:mm" : "h:mm", System.Globalization.CultureInfo.InvariantCulture));
-            Text("ClockPeriod", settings.Use24HourClock ? "LOCAL TIME  ·  24 HOUR" : now.ToString("tt", System.Globalization.CultureInfo.InvariantCulture) + "  ·  LOCAL TIME");
-            Text("ClockDate", now.ToString("ddd, MMM d", System.Globalization.CultureInfo.InvariantCulture));
-            Text("Greeting", now.Hour < 12 ? "GOOD MORNING" : now.Hour < 18 ? "GOOD AFTERNOON" : "GOOD EVENING");
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            Text("ClockTime", now.ToString(settings.Use24HourClock ? "HH:mm" : "h:mm", culture));
+            Text("ClockPeriod", now.ToString("tt", culture));
+            Control<TextBlock>("ClockPeriod").Visibility = settings.Use24HourClock ? Visibility.Collapsed : Visibility.Visible;
+            Text("ClockDay", now.ToString("dddd", culture).ToUpperInvariant());
+            Text("ClockDate", now.ToString("MMMM d", culture));
         }
         private void SetFocus(int minutes) { focus.Reset(minutes); UpdateFocus(); }
         private void UpdateFocus()
@@ -250,7 +253,7 @@ namespace WidgetScreen
             window.Resources["SmallSize"] = 15.0 * appearance.TextScale;
             window.Resources["BodySize"] = 18.0 * appearance.TextScale;
             window.Resources["TitleSize"] = 24.0 * appearance.TextScale;
-            window.Resources["HeroSize"] = 76.0 * Math.Min(1.06, appearance.TextScale);
+            window.Resources["HeaderClockSize"] = 52.0 * Math.Min(1.06, appearance.TextScale);
             levels.BarBrush = accent;
         }
 
@@ -271,7 +274,8 @@ namespace WidgetScreen
             Control<FrameworkElement>("GpuSection").Visibility = layout.ShowGpu ? Visibility.Visible : Visibility.Collapsed;
             Control<FrameworkElement>("RamSection").Visibility = layout.ShowRam ? Visibility.Visible : Visibility.Collapsed;
             Control<FrameworkElement>("NetworkSection").Visibility = layout.ShowNetwork ? Visibility.Visible : Visibility.Collapsed;
-            Control<FrameworkElement>("UptimeValue").Visibility = layout.ShowUptime ? Visibility.Visible : Visibility.Collapsed;
+            Control<FrameworkElement>("UptimeSection").Visibility = layout.ShowUptime ? Visibility.Visible : Visibility.Collapsed;
+            SystemStatsLayout.Update(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
         }
 
         private void BeginLayoutEdit()
@@ -307,7 +311,6 @@ namespace WidgetScreen
                 bool editing = Editor.Editing;
                 if (editing) outputPicker.Close();
                 Control<Grid>("EditToolbar").Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
-                Control<StackPanel>("HeaderBrand").Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
                 Control<StackPanel>("MainActions").Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
                 if (editing)
                 {
@@ -330,7 +333,6 @@ namespace WidgetScreen
                 Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : 54;
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
-                Control<TextBlock>("ClockTime").FontSize = Math.Min((double)window.Resources["HeroSize"], Math.Max(52, (Editor.Bounds("Clock").Height - 120) * .75));
                 var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
                 city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
                 city.MaxHeight = compactWeather ? 28 : 58;
@@ -550,14 +552,15 @@ namespace WidgetScreen
             {
                 var snapshot = await Task.Run(() => system.Read(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime));
                 if (disposed || requested != settings) return;
-                Text("CpuValue", snapshot.CpuAvailable ? Math.Round(snapshot.Cpu) + "%" : "—");
+                Text("CpuValue", snapshot.CpuAvailable ? Math.Round(snapshot.Cpu) + "%" : "—"); Load("CpuValue", snapshot.CpuAvailable ? snapshot.Cpu : 0);
                 Text("SystemStatus", settings.QuietMode ? "EVERY 5 SEC" : "EVERY 2 SEC");
-                Text("GpuValue", snapshot.Gpu.HasValue ? Math.Round(snapshot.Gpu.Value) + "%" : "—");
+                Text("GpuValue", snapshot.Gpu.HasValue ? Math.Round(snapshot.Gpu.Value) + "%" : "—"); Load("GpuValue", snapshot.Gpu ?? 0);
                 Text("GpuStatus", snapshot.GpuStatus ?? "Unavailable"); Control<ProgressBar>("GpuBar").Value = snapshot.Gpu ?? 0;
                 Text("MemoryValue", snapshot.MemoryAvailable ? snapshot.UsedMemoryGB.ToString("0.0") + " / " + snapshot.TotalMemoryGB.ToString("0.0") + " GB" : "Unavailable");
-                Text("MemoryPercent", snapshot.MemoryAvailable ? "RAM · " + Math.Round(snapshot.MemoryPercent) + "%" : "RAM · unavailable"); Control<ProgressBar>("MemoryBar").Value = snapshot.MemoryPercent;
-                Text("DownloadValue", snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.DownloadBytes) : "— KB/s"); Text("UploadValue", snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.UploadBytes) : "— KB/s");
-                Text("UptimeValue", "Uptime  ·  " + (int)snapshot.Uptime.TotalDays + "d " + snapshot.Uptime.Hours + "h " + snapshot.Uptime.Minutes + "m");
+                Text("MemoryPercent", snapshot.MemoryAvailable ? Math.Round(snapshot.MemoryPercent) + "%" : "—"); Control<ProgressBar>("MemoryBar").Value = snapshot.MemoryPercent;
+                Load("MemoryPercent", snapshot.MemoryAvailable ? snapshot.MemoryPercent : 0);
+                Text("DownloadValue", "↓ " + (snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.DownloadBytes) : "— KB/s")); Text("UploadValue", "↑ " + (snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.UploadBytes) : "— KB/s"));
+                Text("UptimeValue", (int)snapshot.Uptime.TotalDays + "d " + snapshot.Uptime.Hours + "h " + snapshot.Uptime.Minutes + "m");
                 if (snapshot.CpuAvailable) cpuHistory.Add(snapshot.Cpu); else cpuHistory.Clear();
                 if (cpuHistory.Count > 48) cpuHistory.RemoveAt(0);
                 var points = new PointCollection(); double width = Math.Max(1, Control<Canvas>("CpuGraphHost").ActualWidth);
@@ -567,12 +570,19 @@ namespace WidgetScreen
             catch (Exception)
             {
                 if (disposed) return;
-                Text("SystemStatus", "UNAVAILABLE"); Text("CpuValue", "—%"); Text("MemoryValue", "— / — GB");
+                Text("SystemStatus", "UNAVAILABLE"); Text("CpuValue", "—"); Text("MemoryValue", "Unavailable");
                 Text("GpuValue", "—"); Text("GpuStatus", "Unavailable"); Control<ProgressBar>("GpuBar").Value = 0;
-                Text("MemoryPercent", "RAM · unavailable"); Text("DownloadValue", "— KB/s"); Text("UploadValue", "— KB/s");
+                Text("MemoryPercent", "—"); Text("DownloadValue", "↓ — KB/s"); Text("UploadValue", "↑ — KB/s");
+                foreach (string name in new[] { "CpuValue", "GpuValue", "MemoryPercent" }) Load(name, 0);
                 Control<ProgressBar>("MemoryBar").Value = 0; Control<Polyline>("CpuGraph").Points = new PointCollection(); cpuHistory.Clear();
             }
             finally { systemBusy = false; if (!disposed && requested != settings) RefreshSystem(); }
+        }
+
+        // A reading at 90% or more switches to the theme's warning color so it stands out at a glance.
+        private void Load(string name, double percent)
+        {
+            Control<TextBlock>(name).SetResourceReference(TextBlock.ForegroundProperty, percent >= 90 ? "Warning" : "Text");
         }
 
         private async void RefreshMedia()

@@ -42,9 +42,9 @@ namespace WidgetScreen
                                 ((System.Windows.Controls.Button)window.FindName("EditLayoutButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                                 if (args.Contains("--render-edit-demo"))
                                 {
-                                    controller.Editor.Select("Clock"); controller.Editor.TransformSelected("", 32, 16, false);
+                                    controller.Editor.Select("Focus"); controller.Editor.TransformSelected("", 32, 16, false);
                                     controller.Editor.TransformSelected("SE", 48, 24, false);
-                                    controller.Editor.SetVisible("Focus", false);
+                                    controller.Editor.SetVisible("Media", false);
                                 }
                             }
                             if (args.Contains("--render-settings"))
