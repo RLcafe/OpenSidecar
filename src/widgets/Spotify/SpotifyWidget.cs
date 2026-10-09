@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -97,17 +98,19 @@ namespace WidgetScreen
                     var sub = new TextBlock { Text = item.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) };
                     sub.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize"); sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); label.Children.Add(sub);
                     var row = new Button { Content = label, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 6), ToolTip = item.Name };
-                    var selected = item;
+                    var selected = item; var parent = collection;
+                    bool playsInCollection = parent != null && selected.IsTrack && selected.Position >= 0 && service.CanControl;
                     row.Click += (s, e) => {
-                        if (selected.IsTrack || selected.Uri.StartsWith("spotify:episode:")) Open(selected.WebUrl);
+                        if (playsInCollection) PlayInCollection(parent, selected);
+                        else if (selected.IsTrack || selected.Uri.StartsWith("spotify:episode:")) Open(selected.WebUrl);
                         else { collection = selected; offset = 0; C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Visible; Text("SpotifyCollectionTitle", selected.Name); LoadPage(); }
                     };
-                    AutomationProperties.SetName(row, item.IsTrack ? "Open " + item.Name + " in Spotify" : "Browse " + item.Name);
+                    AutomationProperties.SetName(row, playsInCollection ? "Play " + item.Name + " in " + parent.Name : item.IsTrack ? "Open " + item.Name + " in Spotify" : "Browse " + item.Name);
                     C<StackPanel>("SpotifyResults").Children.Add(row);
                 }
                 C<ScrollViewer>("SpotifyResultsScroll").ScrollToTop();
                 Paging(offset > 0, page.HasMore); Text("SpotifyPageLabel", page.Items.Length == 0 ? "" : (offset + 1) + "–" + (offset + page.Items.Length));
-                Status(page.Items.Length == 0 ? "No results. Try another search or save music in Spotify." : collection == null && kind != "Search" ? "Choose an album or playlist to browse its songs." : "Tap a song to open it in Spotify.");
+                Status(page.Items.Length == 0 ? "No results. Try another search or save music in Spotify." : collection == null && kind != "Search" ? "Choose an album or playlist to browse its songs." : collection != null && service.CanControl ? "Tap a song to play it here; Spotify continues through this " + (collection.Uri.StartsWith("spotify:album:") ? "album." : "playlist.") : "Tap a song to open it in Spotify.");
             }
             catch (Exception error) { if (!disposed && version == browseGeneration) { Status(SpotifyAccount.Message(error)); Paging(offset > 0, false); } }
         }
@@ -213,6 +216,35 @@ namespace WidgetScreen
             if (commandBusy || disposed) return;
             commandBusy = true; int version = generation; UpdateMode();
             try { await service.PlaybackAsync(command); if (!disposed && version == generation) { playback = null; nextPoll = DateTime.UtcNow.AddSeconds(1); Status("Updating playback…"); } }
+            catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
+            finally { commandBusy = false; if (!disposed) UpdateMode(); }
+        }
+        private async void PlayInCollection(SpotifyItem parent, SpotifyItem song)
+        {
+            if (commandBusy || disposed) return;
+            commandBusy = true; int version = generation; UpdateMode();
+            Status("Starting " + song.Name + "…");
+            try
+            {
+                bool noDevice = false;
+                try { await service.PlayInCollectionAsync(parent.Uri, song.Position); }
+                catch (SpotifyNoDeviceException) { noDevice = true; }
+                if (noDevice)
+                {
+                    // No device is active: open the Spotify app and retry briefly while it starts.
+                    if (disposed || version != generation) return;
+                    Open("spotify:"); Status("Opening Spotify to play " + song.Name + "…");
+                    bool started = false;
+                    for (int attempt = 0; attempt < 6 && !started; attempt++)
+                    {
+                        await Task.Delay(2000); if (disposed || version != generation) return;
+                        try { await service.PlayInCollectionAsync(parent.Uri, song.Position); started = true; }
+                        catch (SpotifyNoDeviceException) { }
+                    }
+                    if (!started) { Status("Spotify is open but not ready. Play anything in Spotify once, then tap the song again."); return; }
+                }
+                if (!disposed && version == generation) { playback = null; nextPoll = DateTime.UtcNow.AddSeconds(1); Status("Playing " + song.Name + " from " + parent.Name + "."); }
+            }
             catch (Exception error) { if (!disposed && version == generation) Status(SpotifyAccount.Message(error)); }
             finally { commandBusy = false; if (!disposed) UpdateMode(); }
         }

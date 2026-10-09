@@ -45,8 +45,14 @@ namespace WidgetScreen
     public sealed class SpotifyItem
     {
         public string Id, Uri, Name, Subtitle, ImageUrl, AlbumUrl;
+        // Zero-based place in its album or playlist, counting items this app cannot show; -1 outside a collection.
+        public int Position = -1;
         public string WebUrl { get { return SpotifyService.WebUrl(Uri); } }
         public bool IsTrack { get { return Uri != null && Uri.StartsWith("spotify:track:", StringComparison.Ordinal); } }
+    }
+    public sealed class SpotifyNoDeviceException : InvalidOperationException
+    {
+        public SpotifyNoDeviceException() : base("No active Spotify device. Start a song in Spotify, then try again.") { }
     }
     public sealed class SpotifyPlayback
     {
@@ -293,7 +299,7 @@ namespace WidgetScreen
                                 throw new InvalidOperationException("Spotify is limiting requests. Requests paused until " + retryAt.ToLocalTime().ToString("HH:mm") + ".");
                             }
                             if (response.StatusCode == HttpStatusCode.Forbidden) throw new InvalidOperationException("Spotify denied access. Check the app owner's Premium, user allowlist and permissions, then reconnect.");
-                            if (response.StatusCode == HttpStatusCode.NotFound && path.StartsWith("me/player/")) throw new InvalidOperationException("No active Spotify device. Start a song in Spotify, then try again.");
+                            if (response.StatusCode == HttpStatusCode.NotFound && path.StartsWith("me/player/")) throw new SpotifyNoDeviceException();
                             if (response.StatusCode == HttpStatusCode.Unauthorized)
                             {
                                 lock (stateLock) { if (version != generation) throw new OperationCanceledException(); session = new SpotifySession { ClientId = ClientId }; SpotifyCredentials.Save(credentialPath, session); }
@@ -329,6 +335,18 @@ namespace WidgetScreen
             if (command != "previous" && command != "next" && command != "play" && command != "pause") throw new ArgumentException("Unknown playback command.");
             await RequestAsync(command == "previous" || command == "next" ? HttpMethod.Post : HttpMethod.Put, "me/player/" + command).ConfigureAwait(false);
         }
+        // Starts the album or playlist at the chosen song, so playback continues through the collection.
+        public async Task PlayInCollectionAsync(string collectionUri, int position)
+        {
+            RequirePlaybackPermission();
+            await RequestAsync(HttpMethod.Put, "me/player/play", PlayInCollectionBody(collectionUri, position)).ConfigureAwait(false);
+        }
+        public static string PlayInCollectionBody(string collectionUri, int position)
+        {
+            if (WebUrl(collectionUri) == null || !(collectionUri.StartsWith("spotify:album:", StringComparison.Ordinal) || collectionUri.StartsWith("spotify:playlist:", StringComparison.Ordinal)) || position < 0)
+                throw new ArgumentException("Choose a song from an album or playlist.");
+            return new JavaScriptSerializer().Serialize(new Dictionary<string, object> { { "context_uri", collectionUri }, { "offset", new Dictionary<string, object> { { "position", position } } } });
+        }
         private void RequirePlaybackPermission()
         {
             if (!CanControl) throw new InvalidOperationException("Reconnect in Settings → Spotify to enable playback and seeking. Spotify Premium is required.");
@@ -339,7 +357,12 @@ namespace WidgetScreen
             string[] parts = collection.Uri.Split(':'); bool album = parts[1] == "album";
             if (!album && parts[1] != "playlist") throw new ArgumentException("Choose an album or playlist.");
             var root = Object(await RequestAsync(HttpMethod.Get, (album ? "albums/" : "playlists/") + parts[2] + (album ? "/tracks" : "/items") + "?limit=10&offset=" + offset).ConfigureAwait(false));
-            return new SpotifyPage { Items = Array(root, "items").Select(value => ParseItem(album ? value : Value(Object(value), "item") ?? Value(Object(value), "track"))).Where(value => value != null).ToArray(), HasMore = !String.IsNullOrEmpty(Field(root, "next")) };
+            var items = Array(root, "items").Select((value, index) => {
+                var item = ParseItem(album ? value : Value(Object(value), "item") ?? Value(Object(value), "track"));
+                if (item != null) item.Position = offset + index;
+                return item;
+            });
+            return new SpotifyPage { Items = items.Where(value => value != null).ToArray(), HasMore = !String.IsNullOrEmpty(Field(root, "next")) };
         }
         public async Task<bool> IsLikedAsync(string uri)
         {

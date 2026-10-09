@@ -163,8 +163,49 @@ internal static class SpotifyTests
                 {
                     var page = service.TracksAsync(new SpotifyItem { Uri = "spotify:" + kind + ":1234567890123456789012" }, 10).Result;
                     Assert(page.Items.Length == 1 && page.Items[0].IsTrack && page.HasMore == (kind == "playlist"), "Collection song wrapper or paging lost.");
+                    Assert(page.Items[0].Position == (kind == "playlist" ? 11 : 10), "Song position ignores paging or skipped items.");
                 }
             }
+        });
+        check("Spotify songs tapped in a playlist or album play inside that collection", () => {
+            Assert(SpotifyService.PlayInCollectionBody("spotify:playlist:1234567890123456789012", 11) == "{\"context_uri\":\"spotify:playlist:1234567890123456789012\",\"offset\":{\"position\":11}}", "Play request does not start the playlist at the song.");
+            foreach (string invalid in new[] { Track, "spotify:playlist:bad", null }) { bool rejected = false; try { SpotifyService.PlayInCollectionBody(invalid, 0); } catch (ArgumentException) { rejected = true; } Assert(rejected, "Invalid collection accepted."); }
+            using (var service = new SpotifyService(Session(directory, "no-device-collection", false), new Handler { Send = request => Reply(HttpStatusCode.NotFound, "") }))
+            {
+                bool typed = false; try { service.PlayInCollectionAsync("spotify:album:1234567890123456789012", 0).GetAwaiter().GetResult(); } catch (SpotifyNoDeviceException) { typed = true; }
+                Assert(typed, "Missing device is not distinguishable.");
+            }
+            var context = SynchronizationContext.Current; SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+            try
+            {
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var owner = (Window)System.Windows.Markup.XamlReader.Load(stream);
+                    string playBody = null, playMethod = null;
+                    var handler = new Handler { Send = request => {
+                        string path = request.RequestUri.AbsolutePath;
+                        if (path.EndsWith("/me/player/play")) { playMethod = request.Method.Method; playBody = request.Content.ReadAsStringAsync().Result; return Reply(HttpStatusCode.NoContent, ""); }
+                        if (path.EndsWith("/me/playlists")) return Reply(HttpStatusCode.OK, "{\"items\":[{\"name\":\"Road trip - TEST FIXTURE\",\"uri\":\"spotify:playlist:1234567890123456789012\"}]}");
+                        if (path.EndsWith("/items")) return Reply(HttpStatusCode.OK, "{\"items\":[{\"item\":{\"name\":\"First - TEST FIXTURE\",\"uri\":\"spotify:track:2234567890123456789012\"}},{\"item\":{\"name\":\"Second - TEST FIXTURE\",\"uri\":\"" + Track + "\"}}]}");
+                        return Reply(HttpStatusCode.OK, "{}");
+                    } };
+                    using (var widget = new SpotifyWidget(owner, new SpotifyService(Session(directory, "play-in-playlist", false), handler)))
+                    {
+                        ((Button)owner.FindName("SpotifyPlaylists")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        var results = (StackPanel)owner.FindName("SpotifyResults");
+                        Assert(results.Children.Count == 1, "Playlist missing."); ((Button)results.Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        Assert(results.Children.Count == 2, "Playlist songs missing.");
+                        var second = (Button)results.Children[1];
+                        // Never click a row that would open a link: that would launch the browser during tests.
+                        Assert(System.Windows.Automation.AutomationProperties.GetName(second) == "Play Second - TEST FIXTURE in Road trip - TEST FIXTURE", "Song row would open a link instead of playing in the playlist.");
+                        second.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+                        Assert(playMethod == "PUT" && playBody == SpotifyService.PlayInCollectionBody("spotify:playlist:1234567890123456789012", 1), "Tapping a playlist song did not start the playlist at that song.");
+                        Assert(((TextBlock)owner.FindName("SpotifyStatus")).Text.Contains("from Road trip"), "Playback start not confirmed.");
+                    }
+                    owner.Close();
+                }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(context); }
         });
         check("Spotify seek clamps song end, refuses changed/restricted items and requires scope", () => {
             Assert(SpotifyService.SeekPosition(300000, 200000) == 199999 && SpotifyService.SeekPosition(-10, 200000) == 0, "Seek boundary can skip to the next song.");
