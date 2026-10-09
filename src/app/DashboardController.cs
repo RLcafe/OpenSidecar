@@ -49,7 +49,7 @@ namespace WidgetScreen
         }
         private bool openingSettings, systemBusy;
         private bool updatingAudio, audioAvailable, mediaBusy, mediaCommandBusy, weatherBusy, disposed, fullscreen;
-        private int ticks, weatherGeneration, settingsGeneration;
+        private int ticks, weatherGeneration, settingsGeneration, statusClearsAt;
         private DateTime lastWeatherAttempt = DateTime.MinValue;
         private WeatherSnapshot lastWeather;
         private WeatherLocation pendingLocation;
@@ -106,7 +106,8 @@ namespace WidgetScreen
         }
         private void Text(string name, string value) { Control<TextBlock>(name).Text = value; }
         private void Button(string name, Action action) { Control<Button>(name).Click += (sender, e) => action(); }
-        private void Notify(string text) { Text("StatusMessage", text); }
+        // Status messages are transient: they clear after about ten seconds on the existing heartbeat. A sticky message stays until replaced.
+        private void Notify(string text, bool sticky = false) { Text("StatusMessage", text); statusClearsAt = sticky ? int.MaxValue : ticks + 10; }
 
         private void BindActions()
         {
@@ -117,7 +118,7 @@ namespace WidgetScreen
             Button("DeckPrevious", () => { deckPage--; BuildShortcuts(); });
             Button("DeckNext", () => { deckPage++; BuildShortcuts(); });
             Button("SpotifyAccount", () => { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 4; });
-            Button("SpotifyLayout", () => { CloseSettings(); BeginLayoutEdit(); Editor.ArrangeSpotify(); });
+            Button("SpotifySetup", () => { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 4; });
             Button("EditLayoutButton", BeginLayoutEdit);
             Button("OpenLayoutEditor", () => { CloseSettings(); BeginLayoutEdit(); });
             Button("UndoLayoutButton", () => Editor.Undo());
@@ -141,7 +142,7 @@ namespace WidgetScreen
             Button("FullscreenButton", ToggleFullscreen);
             Button("QuietButton", () => {
                 settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();
-                Notify(settings.QuietMode ? "Quiet mode is on. Live levels are paused; system and media updates are less frequent." : "Quiet mode is off. Normal refresh rates restored.");
+                Notify(settings.QuietMode ? "Quiet mode on. Output levels are paused and updates are slower." : "Quiet mode off.");
             });
             Button("FocusStart", () => { focus.Toggle(); UpdateFocus(); });
             Button("FocusReset", () => { focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); });
@@ -180,12 +181,13 @@ namespace WidgetScreen
             UpdateDisplayStatus();
             UpdateClock(); UpdateFocus(); RefreshAudio(); RefreshSystem(); RefreshMedia(); RefreshWeather();
             clockTimer.Start(); UpdateLevelTimer();
-            if (!String.IsNullOrEmpty(pendingMessage)) Notify(pendingMessage);
+            if (!String.IsNullOrEmpty(pendingMessage)) Notify(pendingMessage, true);
         }
 
         private void Tick(object sender, EventArgs e)
         {
             ticks++; UpdateClock(); UpdateFocus();
+            if (ticks >= statusClearsAt && !Editor.Editing) { Text("StatusMessage", ""); statusClearsAt = int.MaxValue; }
             spotify.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
             if (window.WindowState == WindowState.Minimized) return;
             int interval = settings.QuietMode ? 5 : 2;
@@ -214,7 +216,8 @@ namespace WidgetScreen
             bool finished = focus.FinishIfElapsed();
             TimeSpan remaining = focus.Remaining;
             Text("FocusTime", ((int)Math.Ceiling(remaining.TotalSeconds) / 60).ToString("00") + ":" + ((int)Math.Ceiling(remaining.TotalSeconds) % 60).ToString("00"));
-            Text("FocusStatus", remaining == TimeSpan.Zero ? "Session complete. Take a breath." : focus.Running ? "Stay with it. You've got this." : focus.Progress > 0 ? "Paused. Pick up when you're ready." : "One thing at a time.");
+            string ends = (DateTime.Now + remaining).ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            Text("FocusStatus", remaining == TimeSpan.Zero ? "Done. Take a break." : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
             Control<ProgressBar>("FocusProgress").Value = focus.Progress;
             Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : "Start focus";
             int minutes = (int)focus.Duration.TotalMinutes;
@@ -230,17 +233,20 @@ namespace WidgetScreen
                     AutomationProperties.SetName(button, preset + " minutes" + (selected ? ", selected" : ""));
                 }
             }
-            if (finished) Notify("Focus session complete. Time for a break.");
+            if (finished) Notify("Focus session complete.");
         }
 
         private void ApplySettings()
         {
             ApplyAppearance(settings);
             ApplyLayout(settings);
-            foreach (var row in sessionRows.Values) row.Label.FontSize = 16 * settings.TextScale;
-            Control<Button>("QuietButton").Content = settings.QuietMode ? "Quiet mode: on" : "Quiet mode: off";
-            Control<Button>("QuietButton").SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, settings.QuietMode ? "Accent" : "ControlBorder");
-            Text("SystemStatus", settings.QuietMode ? "EVERY 5 SEC" : "EVERY 2 SEC");
+            foreach (var row in sessionRows.Values) { row.Label.FontSize = 16 * settings.TextScale; row.Percent.FontSize = 14 * settings.TextScale; }
+            // Quiet mode is a toggle: when on it takes the same selected look as the chosen Focus preset.
+            var quiet = Control<Button>("QuietButton");
+            quiet.SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, settings.QuietMode ? "Accent" : "ControlBorder");
+            quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
+            quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
+            AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
             BuildShortcuts(); UpdateClock(); UpdateLevelTimer();
         }
 
@@ -300,7 +306,7 @@ namespace WidgetScreen
             }
             Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
             if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); }
-            Notify("Layout saved. Your widgets are ready."); Control<Button>("EditLayoutButton").Focus();
+            Notify("Layout saved."); Control<Button>("EditLayoutButton").Focus();
         }
         private void UpdateEditor()
         {
@@ -323,14 +329,14 @@ namespace WidgetScreen
                     var bounds = Editor.Bounds(Editor.SelectedId);
                     string info = WidgetLayout.Title(Editor.SelectedId) + " · " + Math.Round(bounds.Width) + " × " + Math.Round(bounds.Height) + " · X " + Math.Round(bounds.X) + ", Y " + Math.Round(bounds.Y);
                     if (Editor.SelectedId == "System" && !Editor.IsVisible("System") && Editor.IsEnabled("System")) info += " · Enable metrics in Settings to show system stats";
-                    else if (!Editor.IsEnabled(Editor.SelectedId)) info += " · Hidden · Check Show widget to restore";
+                    else if (!Editor.IsEnabled(Editor.SelectedId)) info += " · Hidden · Turn on Show widget to bring it back";
                     if (Editor.HasOverlaps()) info += " · Widgets overlap";
-                    Notify(info);
+                    Notify(info, true);
                     Text("DisplayStatus", "ARROWS MOVE · SHIFT+ARROWS RESIZE · ESC CANCELS");
                 }
                 if (shortcutsCompact != (Editor.Bounds("Shortcuts").Height < 240)) BuildShortcuts();
-                bool compactFocus = Editor.Bounds("Focus").Height < 320;
-                Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : 54;
+                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320, tallFocus = focusBounds.Height >= 440 && focusBounds.Width >= 296;
+                Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : tallFocus ? 84 : 54;
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
                 var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
@@ -344,7 +350,7 @@ namespace WidgetScreen
         {
             bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && window.WindowState != WindowState.Minimized;
             if (enabled) levelTimer.Start(); else { levelTimer.Stop(); levels.Clear(); }
-            Text("LevelStatus", enabled ? "OUTPUT LEVEL  ·  LIVE" : !audioAvailable ? "OUTPUT LEVEL  ·  UNAVAILABLE" : Editor.Editing ? "OUTPUT LEVEL  ·  PAUSED WHILE EDITING" : settings.QuietMode ? "OUTPUT LEVEL  ·  PAUSED IN QUIET MODE" : "OUTPUT LEVEL  ·  OFF");
+            Text("LevelStatus", enabled || !settings.ShowLevels ? "" : !audioAvailable ? "OUTPUT LEVEL UNAVAILABLE" : Editor.Editing ? "OUTPUT LEVEL PAUSED WHILE EDITING" : settings.QuietMode ? "OUTPUT LEVEL PAUSED IN QUIET MODE" : "");
         }
 
         private void BuildShortcuts()
@@ -410,12 +416,11 @@ namespace WidgetScreen
                 if (audio == null) audio = new AudioService();
                 var snapshot = audio.Read();
                 audioAvailable = true;
-                Text("AudioDevice", snapshot.Device); Text("AudioStatus", "●  LIVE");
+                Text("AudioDevice", snapshot.Device); Text("AudioStatus", "");
                 outputs = snapshot.Devices;
                 var outputButton = Control<Button>("OutputDeviceButton"); outputButton.IsEnabled = true;
                 outputButton.ToolTip = "Output: " + snapshot.Device + ". Tap to choose another output.";
                 AutomationProperties.SetName(outputButton, "Choose output device. Current: " + snapshot.Device);
-                Control<TextBlock>("AudioStatus").SetResourceReference(TextBlock.ForegroundProperty, "Accent");
                 Text("MasterPercent", Math.Round(snapshot.Volume * 100).ToString() + "%");
                 var slider = Control<Slider>("MasterSlider"); slider.IsEnabled = true;
                 if (!slider.IsMouseCaptureWithin && !slider.AreAnyTouchesCapturedWithin) slider.Value = snapshot.Volume * 100;
@@ -423,24 +428,21 @@ namespace WidgetScreen
                 Control<Button>("MuteButton").Content = snapshot.Muted ? "\uE74F" : "\uE767";
                 Control<Button>("MuteButton").ToolTip = snapshot.Muted ? "Unmute output" : "Mute output";
                 AutomationProperties.SetName(Control<Button>("MuteButton"), snapshot.Muted ? "Unmute output" : "Mute output");
-                var microphone = Control<Button>("MicrophoneButton"); microphone.IsEnabled = snapshot.MicrophoneMuted.HasValue;
-                microphone.Content = !snapshot.MicrophoneMuted.HasValue ? "No default microphone" : snapshot.MicrophoneMuted.Value ? "Microphone muted  ·  tap to unmute" : "Microphone on  ·  tap to mute";
-                microphone.Foreground = snapshot.MicrophoneMuted == true ? (Brush)window.Resources["Accent"] : (Brush)window.Resources["Text"];
+                ShowMicrophone(!snapshot.MicrophoneMuted.HasValue ? "No microphone" : snapshot.MicrophoneMuted.Value ? "Microphone muted" : "Microphone on", snapshot.MicrophoneMuted);
                 UpdateSessions(snapshot.Sessions);
-                Text("NoSessions", snapshot.SessionsAvailable ? "Apps appear here when they use audio." : "App volumes are unavailable. Master volume still works.");
+                Text("NoSessions", snapshot.SessionsAvailable ? "Apps show up here when they play sound." : "App volumes aren't available right now. Master volume still works.");
                 if (!snapshot.SessionsAvailable) Text("SessionCount", "UNAVAILABLE");
             }
             catch (Exception)
             {
                 audioAvailable = false;
-                Text("AudioStatus", "UNAVAILABLE"); Text("AudioDevice", "Audio controls are unavailable"); Text("MasterPercent", "—");
+                Text("AudioStatus", "UNAVAILABLE"); Text("AudioDevice", "No audio output found"); Text("MasterPercent", "—");
                 outputs = new List<AudioDevice>(); outputPicker.Close(); Control<Button>("OutputDeviceButton").IsEnabled = false;
-                Control<TextBlock>("AudioStatus").SetResourceReference(TextBlock.ForegroundProperty, "Warning");
                 Control<Slider>("MasterSlider").IsEnabled = false; Control<Button>("MuteButton").IsEnabled = false;
-                Control<Button>("MicrophoneButton").IsEnabled = false; Control<Button>("MicrophoneButton").Content = "Audio device unavailable";
+                ShowMicrophone("Microphone unavailable", null);
                 UpdateSessions(new List<AudioSession>());
                 Text("SessionCount", "—");
-                Text("NoSessions", "Reconnect your audio output or open Windows sound settings using the gear above.");
+                Text("NoSessions", "Reconnect your speakers or headphones, or open Windows sound settings with the gear above. Retrying automatically.");
             }
             finally { updatingAudio = false; UpdateLevelTimer(); }
         }
@@ -481,8 +483,18 @@ namespace WidgetScreen
                 AutomationProperties.SetName(row.Output, "Output for " + session.Name + ": " + deviceName);
             }
             foreach (var pair in stale) { panel.Children.Remove(pair.Value.Root); sessionRows.Remove(pair.Key); }
-            Text("SessionCount", sessions.Count == 1 ? "1 SESSION" : sessions.Count + " SESSIONS");
+            Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString());
             Control<TextBlock>("NoSessions").Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // The microphone toggle states what is true now; the muted state takes the accent so it stands out.
+        private void ShowMicrophone(string label, bool? muted)
+        {
+            var microphone = Control<Button>("MicrophoneButton"); microphone.IsEnabled = muted.HasValue;
+            Text("MicrophoneLabel", label);
+            AutomationProperties.SetName(microphone, label);
+            microphone.ToolTip = !muted.HasValue ? null : muted.Value ? "Unmute microphone" : "Mute microphone";
+            foreach (string name in new[] { "MicrophoneGlyph", "MicrophoneLabel" }) Control<TextBlock>(name).SetResourceReference(TextBlock.ForegroundProperty, muted == true ? "Accent" : "Text");
         }
 
         private SessionRow CreateSessionRow()
@@ -492,7 +504,7 @@ namespace WidgetScreen
             row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition());
             row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
             row.Label = new TextBlock { FontSize = 16 * settings.TextScale, TextTrimming = TextTrimming.CharacterEllipsis }; Grid.SetColumnSpan(row.Label, 2); row.Root.Children.Add(row.Label);
-            row.Percent = new TextBlock { FontSize = 14, Foreground = (Brush)window.Resources["Muted"], HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(row.Percent, 2); Grid.SetColumnSpan(row.Percent, 2); row.Root.Children.Add(row.Percent);
+            row.Percent = new TextBlock { FontSize = 14 * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; row.Percent.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Grid.SetColumn(row.Percent, 2); Grid.SetColumnSpan(row.Percent, 2); row.Root.Children.Add(row.Percent);
             row.Mute = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48 };
             Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => AudioAction(() => audio.ToggleSessionMute(row.Session.Id));
             row.Slider = new Slider { Margin = new Thickness(10, 0, 0, 0) }; Grid.SetColumn(row.Slider, 1); Grid.SetColumnSpan(row.Slider, 2); Grid.SetRow(row.Slider, 1); row.Root.Children.Add(row.Slider); TouchSlider.Attach(row.Slider);
@@ -510,7 +522,7 @@ namespace WidgetScreen
             var choices = outputs.Select(d => new OutputChoice { Id = d.Id, Label = d.Name, Selected = d.IsDefault }).ToList();
             outputPicker.Show("MASTER OUTPUT", "Master volume", choices, true, "Apps set to Windows default follow this output.", choice => {
                 try { audio.SetDefaultOutput(choice.Id); Notify("Sound now plays on " + choice.Label + "."); }
-                catch (Exception) { Notify("Couldn't switch to " + choice.Label + ". Use the gear to open Windows sound settings."); }
+                catch (Exception) { Notify("Couldn't switch to " + choice.Label + ". Try again, or use the gear to open Windows sound settings."); }
                 RefreshAudio();
             });
         }
@@ -539,7 +551,7 @@ namespace WidgetScreen
         private void AudioAction(Action action, bool refresh = true)
         {
             try { if (audio == null) audio = new AudioService(); action(); if (refresh) RefreshAudio(); }
-            catch (Exception) { Notify("The audio device changed or is unavailable. Reconnecting…"); RefreshAudio(); }
+            catch (Exception) { Notify("The audio device changed or went away. Reconnecting…"); RefreshAudio(); }
         }
 
         private async void RefreshSystem()
@@ -553,7 +565,7 @@ namespace WidgetScreen
                 var snapshot = await Task.Run(() => system.Read(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime));
                 if (disposed || requested != settings) return;
                 Text("CpuValue", snapshot.CpuAvailable ? Math.Round(snapshot.Cpu) + "%" : "—"); Load("CpuValue", snapshot.CpuAvailable ? snapshot.Cpu : 0);
-                Text("SystemStatus", settings.QuietMode ? "EVERY 5 SEC" : "EVERY 2 SEC");
+                Text("SystemStatus", "");
                 Text("GpuValue", snapshot.Gpu.HasValue ? Math.Round(snapshot.Gpu.Value) + "%" : "—"); Load("GpuValue", snapshot.Gpu ?? 0);
                 Text("GpuStatus", snapshot.GpuStatus ?? "Unavailable"); Control<ProgressBar>("GpuBar").Value = snapshot.Gpu ?? 0;
                 Text("MemoryValue", snapshot.MemoryAvailable ? snapshot.UsedMemoryGB.ToString("0.0") + " / " + snapshot.TotalMemoryGB.ToString("0.0") + " GB" : "Unavailable");
@@ -592,10 +604,10 @@ namespace WidgetScreen
             try
             {
                 var snapshot = await media.ReadAsync(); if (disposed) return;
-                Text("TrackTitle", snapshot.Available ? snapshot.Title : "Ready when you are");
-                Text("TrackArtist", snapshot.Available ? (String.IsNullOrWhiteSpace(snapshot.Artist) ? "Your active media session" : snapshot.Artist) : "Play something in Spotify or a media app.");
+                Text("TrackTitle", snapshot.Available ? snapshot.Title : "Nothing playing");
+                Text("TrackArtist", snapshot.Available ? (snapshot.Artist ?? "") : "Start music or a video in any app.");
                 string source = snapshot.Source ?? "";
-                Text("MediaSource", !snapshot.Available ? "WINDOWS MEDIA" : source.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 ? "SPOTIFY" : source.IndexOf("chrome", StringComparison.OrdinalIgnoreCase) >= 0 ? "CHROME" : source.IndexOf("edge", StringComparison.OrdinalIgnoreCase) >= 0 ? "EDGE" : "MEDIA SESSION");
+                Text("MediaSource", !snapshot.Available ? "" : source.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 ? "SPOTIFY" : source.IndexOf("chrome", StringComparison.OrdinalIgnoreCase) >= 0 ? "CHROME" : source.IndexOf("edge", StringComparison.OrdinalIgnoreCase) >= 0 ? "EDGE" : "");
                 Text("MediaPosition", snapshot.Available ? FormatTime(snapshot.Position) : "—:—");
                 Text("MediaDuration", snapshot.Duration > TimeSpan.Zero ? FormatTime(snapshot.Duration) : "—:—");
                 mediaScrubber.Update(snapshot.Key, snapshot.Position.TotalMilliseconds, snapshot.Duration.TotalMilliseconds, snapshot.CanSeek);
@@ -606,15 +618,15 @@ namespace WidgetScreen
                 Control<Button>("PlayButton").IsEnabled = snapshot.Available && snapshot.CanPlayPause;
                 Control<Button>("PreviousButton").IsEnabled = snapshot.Available && snapshot.CanPrevious;
                 Control<Button>("NextButton").IsEnabled = snapshot.Available && snapshot.CanNext;
-                Text("MediaHint", snapshot.Available ? snapshot.Playing ? "Playing on this PC" : "Playback paused" : "Track information comes from your active media app.");
+                Text("MediaHint", "");
             }
             catch (Exception)
             {
                 if (disposed) return;
-                Text("TrackTitle", "Media unavailable"); Text("TrackArtist", "Open Spotify or another supported media app.");
-                Text("MediaSource", "NOT CONNECTED"); Text("MediaPosition", "—:—"); Text("MediaDuration", "—:—");
+                Text("TrackTitle", "Media controls unavailable"); Text("TrackArtist", "Windows isn't sharing what's playing right now.");
+                Text("MediaSource", ""); Text("MediaPosition", "—:—"); Text("MediaDuration", "—:—");
                 mediaScrubber.Update(null, 0, 0, false); Control<Image>("AlbumArt").Source = null;
-                Text("MediaHint", "Waiting for a media session. Retrying automatically.");
+                Text("MediaHint", "Retrying automatically.");
                 Control<Button>("PlayButton").IsEnabled = false; Control<Button>("PreviousButton").IsEnabled = false; Control<Button>("NextButton").IsEnabled = false;
             }
             finally { mediaBusy = false; }
@@ -624,16 +636,16 @@ namespace WidgetScreen
             if (mediaCommandBusy || disposed) return;
             mediaCommandBusy = true;
             Control<Button>("PlayButton").IsEnabled = false; Control<Button>("PreviousButton").IsEnabled = false; Control<Button>("NextButton").IsEnabled = false;
-            try { if (!await media.CommandAsync(command)) Notify("The media app did not accept that control."); }
-            catch (Exception) { Notify("Media control is unavailable. Check your media app."); }
+            try { if (!await media.CommandAsync(command)) Notify("The media app didn't respond to that control."); }
+            catch (Exception) { Notify("Media controls aren't available. Check that your media app is open."); }
             finally { mediaCommandBusy = false; if (!disposed) RefreshMedia(); }
         }
         private async void SeekMedia(string key, double position)
         {
             if (mediaCommandBusy || disposed) return;
             mediaCommandBusy = true;
-            try { if (!await media.SeekAsync(key, position)) Text("MediaHint", "This media app could not seek, or the song changed."); }
-            catch (Exception) { Text("MediaHint", "Seeking is unavailable in this media app."); }
+            try { if (!await media.SeekAsync(key, position)) Text("MediaHint", "Couldn't jump there. The app may not allow it, or the song changed."); }
+            catch (Exception) { Text("MediaHint", "This media app doesn't allow jumping to a position."); }
             finally { mediaCommandBusy = false; }
         }
         private static string FormatTime(TimeSpan time) { return ((int)time.TotalMinutes).ToString("0") + ":" + time.Seconds.ToString("00"); }
@@ -643,8 +655,8 @@ namespace WidgetScreen
             if (disposed || weatherBusy || !Editor.IsVisible("Weather")) return;
             if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
             {
-                Text("WeatherTemperature", "—°"); Text("WeatherCity", "Choose your city"); Text("WeatherDetails", "Weather is not configured.");
-                Text("WeatherCondition", "YOUR LOCAL OUTLOOK"); Control<Button>("WeatherButton").Content = "Set location"; Text("WeatherCredit", "Weather data by Open-Meteo"); return;
+                Text("WeatherTemperature", "—°"); Text("WeatherCity", "No city yet"); Text("WeatherDetails", "Choose a city to see current conditions.");
+                Text("WeatherCondition", ""); Control<Button>("WeatherButton").Content = "Choose city"; Text("WeatherCredit", "Weather data by Open-Meteo"); return;
             }
             weatherBusy = true; lastWeatherAttempt = DateTime.UtcNow; int generation = weatherGeneration;
             Text("WeatherCity", settings.WeatherLocation); Control<Button>("WeatherButton").Content = "Updating…"; Control<Button>("WeatherButton").IsEnabled = false;
@@ -659,7 +671,7 @@ namespace WidgetScreen
             }
             catch (Exception)
             {
-                if (generation == weatherGeneration) { Text("WeatherCondition", "OFFLINE"); Text("WeatherDetails", lastWeather == null ? "Can't reach weather. Tap to retry." : "Showing earlier data. Tap to retry."); }
+                if (generation == weatherGeneration) { Text("WeatherCondition", "OFFLINE"); Text("WeatherDetails", lastWeather == null ? "Can't reach the weather service. Tap Refresh to try again." : "Showing the last update. Tap Refresh to try again."); }
             }
             finally
             {
@@ -675,7 +687,7 @@ namespace WidgetScreen
             spotifyAccount.Prepare();
             settingsGeneration++;
             var monitors = DisplayService.Screens.Where(s => !s.Primary).Select(s => new MonitorOption { Id = s.DeviceName, Label = s.DeviceName + "  ·  " + s.Bounds.Width + " × " + s.Bounds.Height }).ToList();
-            if (monitors.Count == 0) monitors.Add(new MonitorOption { Id = "", Label = "No secondary display — window preview" });
+            if (monitors.Count == 0) monitors.Add(new MonitorOption { Id = "", Label = "No second display connected" });
             var monitorChoice = Control<ComboBox>("MonitorChoice"); monitorChoice.ItemsSource = monitors; monitorChoice.SelectedItem = monitors.FirstOrDefault(m => m.Id == settings.Monitor) ?? monitors[0];
             var accent = Control<ComboBox>("AccentChoice"); accent.ItemsSource = new[] { "Lime", "Glacier", "Lavender", "Amber" }; accent.SelectedItem = settings.Accent;
             var theme = Control<ComboBox>("ThemeChoice"); theme.ItemsSource = new[] { "Midnight", "Slate", "Warm" }; theme.SelectedItem = settings.Theme;
@@ -688,7 +700,7 @@ namespace WidgetScreen
             pendingLocation = String.IsNullOrWhiteSpace(settings.WeatherLocation) ? null : new WeatherLocation { Name = settings.WeatherLocation, Latitude = settings.Latitude, Longitude = settings.Longitude };
             Control<ComboBox>("CityResults").ItemsSource = pendingLocation == null ? new List<WeatherLocation>() : new List<WeatherLocation> { pendingLocation };
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
-            Text("SettingsStatus", "Settings are stored locally on this PC.");
+            Text("SettingsStatus", "");
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
             openingSettings = false; PreviewAppearance();
@@ -699,7 +711,7 @@ namespace WidgetScreen
         private void SaveSettings()
         {
             string spotifyId = Control<TextBox>("SpotifyClientId").Text.Trim();
-            if (spotifyId.Length > 0 && !SpotifyService.ValidClientId(spotifyId)) { Text("SettingsStatus", "Spotify: enter the 32-character Client ID, or clear this field to keep the saved ID."); return; }
+            if (spotifyId.Length > 0 && !SpotifyService.ValidClientId(spotifyId)) { Text("SettingsStatus", "Spotify: the Client ID must be 32 letters and numbers. Fix it, or clear the field to keep the saved one."); return; }
             List<Shortcut> shortcuts;
             if (!deckEditor.TryGet(out shortcuts)) return;
             var monitor = Control<ComboBox>("MonitorChoice").SelectedItem as MonitorOption;
@@ -724,22 +736,22 @@ namespace WidgetScreen
             settings = candidate; CloseSettings(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
             if (locationChanged) { weatherGeneration++; lastWeather = null; Text("WeatherTemperature", "—°"); Text("WeatherDetails", "Updating weather…"); RefreshWeather(); }
-            Notify("Saved. Your dashboard is ready.");
+            Notify("Settings saved.");
         }
 
         private async void SearchCity()
         {
             int generation = settingsGeneration;
-            var button = Control<Button>("SearchCityButton"); button.IsEnabled = false; button.Content = "Searching…"; Text("SettingsStatus", "Finding matching cities…");
+            var button = Control<Button>("SearchCityButton"); button.IsEnabled = false; button.Content = "Searching…"; Text("SettingsStatus", "Searching for cities…");
             try
             {
                 var results = await weather.SearchAsync(Control<TextBox>("CitySearch").Text);
                 if (disposed || generation != settingsGeneration) return;
                 Control<ComboBox>("CityResults").ItemsSource = results;
-                Text("SettingsStatus", results.Count == 0 ? "No cities found. Try a nearby city or another spelling." : "Choose your city from the results, then save changes.");
+                Text("SettingsStatus", results.Count == 0 ? "No cities found. Try a nearby city or another spelling." : "Pick your city from the list, then save.");
                 if (results.Count > 0) Control<ComboBox>("CityResults").IsDropDownOpen = true;
             }
-            catch (Exception e) { if (!disposed && generation == settingsGeneration) Text("SettingsStatus", "City search failed: " + e.GetBaseException().Message); }
+            catch (Exception e) { if (!disposed && generation == settingsGeneration) Text("SettingsStatus", "City search didn't work. Check your connection and try again. (" + e.GetBaseException().Message + ")"); }
             finally { if (!disposed) { button.IsEnabled = true; button.Content = "Search"; } }
         }
 
@@ -748,12 +760,12 @@ namespace WidgetScreen
         {
             if (fullscreen) { DisplayService.Windowed(window); fullscreen = false; }
             else if (DisplayService.Fullscreen(window, settings.Monitor)) fullscreen = true;
-            else Notify("Connect a second display to use fullscreen. This preview stays on the primary monitor.");
+            else Notify("Fullscreen needs a second display. Connect one, then try again.");
             UpdateDisplayStatus();
         }
         private void UpdateDisplayStatus()
         {
-            Text("DisplayStatus", fullscreen ? "SECOND SCREEN  ·  ESC TO WINDOW" : "WINDOW PREVIEW  ·  F11 SECOND SCREEN");
+            if (!Editor.Editing) Text("DisplayStatus", "");
             Control<Button>("FullscreenButton").Content = fullscreen ? "Window preview" : "Second screen";
         }
         private void KeyDown(object sender, KeyEventArgs e)
@@ -786,7 +798,7 @@ namespace WidgetScreen
             if (disposed) return;
             window.Dispatcher.BeginInvoke(new Action(() => {
                 if (disposed || !fullscreen) return;
-                if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Secondary display disconnected. Switched to window preview."); }
+                if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Your second display was disconnected, so the dashboard moved to a window.", true); }
                 UpdateDisplayStatus();
             }));
         }
