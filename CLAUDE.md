@@ -25,7 +25,7 @@ The authoritative handoff lives in [`design specfication/`](design%20specficatio
 2. After that comes the as-built spec prose for behavior, then the XAML and reference package for exact values.
 3. Older notes and README summaries come last.
 
-The source in `implementation-source.zip` is the baseline **before** the touchscreen polish (for example, `MainWindow.xaml` still declares 1260 × 660). On 9 Oct 2026 the user chose to unpack this snapshot into the project root as the starting point (all 48 files match `baseline.json`). So the code in `src/` does **not** yet include the touchscreen polish; implementing `touchscreen-polish.md` is pending work. `AGENTS.md` and `README.md` at the root come from the snapshot; README's link to `docs/design/as-built-specification-and-design.md` points to a file that actually lives in `design specfication/`.
+The source in `implementation-source.zip` is the baseline **before** the touchscreen polish (for example, `MainWindow.xaml` still declares 1260 × 660). On 9 Oct 2026 the user chose to unpack this snapshot into the project root as the starting point (all 48 files match `baseline.json`). The touchscreen polish was implemented on top of it on 9 Oct 2026 (finger gestures on sliders go through `src/widgets/TouchSlider.cs`), so `src/` now differs from the snapshot and from `ui-reference.md` wherever `touchscreen-polish.md` says so. `AGENTS.md` and `README.md` at the root come from the snapshot; README's link to `docs/design/as-built-specification-and-design.md` points to a file that actually lives in `design specfication/`.
 
 ## Project layout
 
