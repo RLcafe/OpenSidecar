@@ -6,6 +6,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## 0.2.2 (10 Oct 2026)
+
+Merges `feature/search-play`.
+
+- **Spotify search plays songs**: tapping a search result now plays the song, like tapping a song in a playlist or album, instead of opening it in Spotify. Spotify's own autoplay decides what follows. If no Spotify device is active, the widget opens Spotify and retries. Connections without the playback permission still open the link (decision 003, updated).
+
 ## 0.2.1 (10 Oct 2026)
 
 Merges `feature/ui-polish`, a polish, distill and clarify pass over the dashboard and Settings (`docs/design/ui-polish.md`).
