@@ -350,8 +350,86 @@ internal static class SmokeTests
             Assert(!disabled.Gpu.HasValue && !disabled.CpuAvailable && !disabled.MemoryAvailable && !disabled.NetworkAvailable, "Hidden metrics were still sampled.");
             }
         });
+        Check("Mixer lists apps on every output once, where they play", () => {
+            Func<string, string, uint, bool, AudioSession> make = (id, device, pid, active) => new AudioSession { Id = id, Name = id, DeviceId = device, ProcessId = pid, Active = active };
+            var sessions = new[] {
+                make("system-a", "A", 0, false), make("system-b", "B", 0, false),
+                make("moved-old", "a", 10, false), make("moved-new", "B", 10, true),
+                make("elsewhere", "B", 20, true),
+                make("routed-old", "A", 30, false), make("routed-idle", "B", 30, false),
+                make("default-idle", "A", 40, false), make("default-old", "B", 40, false),
+                make("same-1", "A", 50, true), make("same-2", "A", 50, false),
+            };
+            var lookups = new System.Collections.Generic.List<uint>();
+            var visible = AudioService.VisibleSessions(sessions, "A", pid => { lookups.Add(pid); return pid == 30 ? "b" : null; }).Select(s => s.Id).ToArray();
+            Assert(String.Join(",", visible) == "system-a,moved-new,elsewhere,routed-idle,default-idle,same-1,same-2", "Unexpected sessions: " + String.Join(",", visible));
+            Assert(lookups.Count == 2 && lookups.Contains(30) && lookups.Contains(40), "Routing looked up for apps that did not need it.");
+            Assert(AudioService.VisibleSessions(sessions, "A", pid => { throw new InvalidOperationException(); }).Count == 7, "A failing routing lookup hid apps.");
+            string endpoint = "{0.0.0.00000000}.{6a3b6a1e-1111-4c2d-9e0f-0123456789ab}";
+            Assert(AudioService.PolicyDeviceId(endpoint) == @"\\?\SWD#MMDEVAPI#" + endpoint + "#{e6327cad-dcec-4949-ae8a-991e976a79d2}", "Routing device id is not in the policy format.");
+            Assert(AudioService.EndpointId(AudioService.PolicyDeviceId(endpoint)) == endpoint && AudioService.EndpointId("") == null && AudioService.EndpointId(null) == null, "Routing device id does not round trip.");
+        });
+        Check("Mixer output buttons and picker keep touch targets inside the card", () => {
+            string path = Path.Combine(directory, "mixer-outputs.xml"); SettingsStore.Save(path, new AppSettings());
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                    typeof(DashboardController).GetField("outputs", flags).SetValue(controller, new System.Collections.Generic.List<AudioDevice> {
+                        new AudioDevice { Id = "a", Name = "Speakers", FormFactor = 1, IsDefault = true }, new AudioDevice { Id = "b", Name = "Headphones", FormFactor = 3 } });
+                    var update = typeof(DashboardController).GetMethod("UpdateSessions", flags);
+                    Func<string, string, string, uint, AudioSession> session = (id, name, device, pid) => new AudioSession { Id = id, Name = name, DeviceId = device, ProcessId = pid, Active = true, Volume = .5f };
+                    update.Invoke(controller, new object[] { new System.Collections.Generic.List<AudioSession> { session("1", "Spotify", "b", 5), session("2", "Discord", "a", 6) } });
+                    var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
+                    Action layout = () => { dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout(); };
+                    layout();
+                    var panel = (System.Windows.Controls.StackPanel)window.FindName("SessionPanel");
+                    var spotifyRow = (System.Windows.Controls.Grid)panel.Children[0];
+                    Func<System.Windows.Controls.Grid, System.Windows.Controls.Button> outputOf = row => row.Children.OfType<System.Windows.Controls.Button>().Last();
+                    Func<System.Windows.DependencyObject, string> nameOf = element => System.Windows.Automation.AutomationProperties.GetName(element);
+                    var output = outputOf(spotifyRow);
+                    Assert(output.ActualHeight >= 48 && output.ActualWidth >= 48, "App output button is smaller than 48.");
+                    Assert(nameOf(output) == "Output for Spotify: Headphones" && (string)output.Content == "\uE7F6", "App output button does not show its device.");
+                    var label = spotifyRow.Children.OfType<System.Windows.Controls.TextBlock>().First();
+                    Assert(new System.Windows.Documents.TextRange(label.ContentStart, label.ContentEnd).Text.Contains("Headphones"), "App on another output is not labelled with it.");
+                    Assert(nameOf(outputOf((System.Windows.Controls.Grid)panel.Children[1])) == "Output for Discord: Speakers", "Default-output app button is wrong.");
+                    update.Invoke(controller, new object[] { new System.Collections.Generic.List<AudioSession> { session("2", "Discord", "a", 6), session("3", "Spotify", "a", 5) } });
+                    Assert(panel.Children.Count == 2 && panel.Children[0] == spotifyRow && nameOf(outputOf(spotifyRow)) == "Output for Spotify: Speakers", "A moved app lost its place in the list.");
+                    var master = (System.Windows.Controls.Button)window.FindName("OutputDeviceButton");
+                    Assert(master.ActualHeight >= 48, "Master output button is shorter than 48.");
+
+                    var picker = new OutputPicker(window); OutputChoice chosen = null;
+                    picker.Show("APP OUTPUT", "Spotify", new[] { new OutputChoice { Label = "Windows default", Selected = true }, new OutputChoice { Id = "a", Label = "Speakers" }, new OutputChoice { Id = "b", Label = "Headphones", Detail = "Playing here now" } }, true, "Note", choice => chosen = choice);
+                    layout();
+                    var card = (System.Windows.FrameworkElement)window.FindName("MixerCard"); var overlay = (System.Windows.FrameworkElement)window.FindName("OutputPicker");
+                    var options = ((System.Windows.Controls.StackPanel)window.FindName("OutputOptions")).Children.OfType<System.Windows.Controls.Button>().ToArray();
+                    Assert(picker.IsOpen && options.Length == 3 && options.All(b => b.ActualHeight >= 52), "Output choices are missing or shorter than 52.");
+                    Assert(((System.Windows.FrameworkElement)window.FindName("OutputPickerClose")).ActualHeight >= 48, "Picker close button is shorter than 48.");
+                    Assert(overlay.TransformToAncestor(card).Transform(new System.Windows.Point(0, overlay.ActualHeight)).Y <= card.ActualHeight, "Output picker escapes the mixer card.");
+                    Assert(nameOf(options[0]) == "Windows default, selected" && nameOf(options[1]) == "Speakers", "Selected output is not marked.");
+                    options[0].RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Assert(!picker.IsOpen && chosen == null, "Choosing the current output should only close the picker.");
+                    picker.Show("APP OUTPUT", "Spotify", new[] { new OutputChoice { Label = "Windows default", Selected = true }, new OutputChoice { Id = "b", Label = "Headphones" } }, true, null, choice => chosen = choice);
+                    ((System.Windows.Controls.StackPanel)window.FindName("OutputOptions")).Children.OfType<System.Windows.Controls.Button>().Last().RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Assert(!picker.IsOpen && chosen != null && chosen.Id == "b", "Choosing an output did not apply it.");
+                }
+                window.Close();
+            }
+        });
         Check("Live audio read (does not change volume)", () => {
             using (var audio = new AudioService()) { var result = audio.Read(); Assert(result.Volume >= 0 && result.Volume <= 1, "Master volume invalid."); Console.WriteLine("  Output: " + result.Device + "; sessions: " + result.Sessions.Count); }
+        });
+        Check("Live output list and app routing lookup (reads only)", () => {
+            using (var audio = new AudioService())
+            {
+                var result = audio.Read();
+                Assert(result.Devices.Count >= 1 && result.Devices.Count(d => d.IsDefault) == 1 && result.Devices.First(d => d.IsDefault).Id == result.DeviceId, "Output list does not contain exactly one default.");
+                Assert(result.Sessions.All(s => result.Devices.Any(d => String.Equals(d.Id, s.DeviceId, StringComparison.OrdinalIgnoreCase))), "A session belongs to an unlisted output.");
+                string routed = audio.CanRouteApps ? audio.AppOutput((uint)System.Diagnostics.Process.GetCurrentProcess().Id) : null;
+                Console.WriteLine("  Outputs: " + result.Devices.Count + "; per-app routing " + (audio.CanRouteApps ? "available" : "unavailable") + "; this process follows " + (routed ?? "the default"));
+            }
         });
         Check("Windows media session access (does not control playback)", () => {
             var task = new MediaService().ReadAsync(); Assert(task.Wait(10000), "Media read timed out."); var result = task.Result; Console.WriteLine(result.Available ? "  A media session is available." : "  No media session is active; empty state is expected.");

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -29,6 +30,8 @@ namespace WidgetScreen
         private readonly WeatherService weather = new WeatherService();
         private readonly FocusTimer focus = new FocusTimer();
         private readonly LevelVisualizer levels = new LevelVisualizer();
+        private readonly OutputPicker outputPicker;
+        private List<AudioDevice> outputs = new List<AudioDevice>();
         private readonly DispatcherTimer clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         private readonly Dictionary<string, SessionRow> sessionRows = new Dictionary<string, SessionRow>();
@@ -52,7 +55,7 @@ namespace WidgetScreen
         private WeatherLocation pendingLocation;
         private string pendingMessage;
 
-        private sealed class SessionRow { public Grid Root; public Slider Slider; public Button Mute; public TextBlock Percent, Label; }
+        private sealed class SessionRow { public Grid Root; public Slider Slider; public Button Mute, Output; public TextBlock Percent, Label; public AudioSession Session; public string Shown; }
         private sealed class MonitorOption
         {
             public string Id, Label;
@@ -65,6 +68,7 @@ namespace WidgetScreen
             string warning; settings = SettingsStore.Load(settingsPath, out warning); pendingMessage = warning;
             Control<Border>("LevelHost").Child = levels;
             Editor = new LayoutEditor(window);
+            outputPicker = new OutputPicker(window);
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             var spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -145,6 +149,7 @@ namespace WidgetScreen
             Button("MuteButton", () => AudioAction(() => audio.ToggleMute()));
             Button("MicrophoneButton", () => AudioAction(() => audio.ToggleMicrophone()));
             Button("SoundSettingsButton", () => Launch("ms-settings:sound"));
+            Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
                 if (!updatingAudio && audio != null) { AudioAction(() => audio.SetVolume(e.NewValue / 100), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
@@ -300,6 +305,7 @@ namespace WidgetScreen
             try
             {
                 bool editing = Editor.Editing;
+                if (editing) outputPicker.Close();
                 Control<Grid>("EditToolbar").Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
                 Control<StackPanel>("HeaderBrand").Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
                 Control<StackPanel>("MainActions").Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
@@ -403,6 +409,10 @@ namespace WidgetScreen
                 var snapshot = audio.Read();
                 audioAvailable = true;
                 Text("AudioDevice", snapshot.Device); Text("AudioStatus", "●  LIVE");
+                outputs = snapshot.Devices;
+                var outputButton = Control<Button>("OutputDeviceButton"); outputButton.IsEnabled = true;
+                outputButton.ToolTip = "Output: " + snapshot.Device + ". Tap to choose another output.";
+                AutomationProperties.SetName(outputButton, "Choose output device. Current: " + snapshot.Device);
                 Control<TextBlock>("AudioStatus").SetResourceReference(TextBlock.ForegroundProperty, "Accent");
                 Text("MasterPercent", Math.Round(snapshot.Volume * 100).ToString() + "%");
                 var slider = Control<Slider>("MasterSlider"); slider.IsEnabled = true;
@@ -422,6 +432,7 @@ namespace WidgetScreen
             {
                 audioAvailable = false;
                 Text("AudioStatus", "UNAVAILABLE"); Text("AudioDevice", "Audio controls are unavailable"); Text("MasterPercent", "—");
+                outputs = new List<AudioDevice>(); outputPicker.Close(); Control<Button>("OutputDeviceButton").IsEnabled = false;
                 Control<TextBlock>("AudioStatus").SetResourceReference(TextBlock.ForegroundProperty, "Warning");
                 Control<Slider>("MasterSlider").IsEnabled = false; Control<Button>("MuteButton").IsEnabled = false;
                 Control<Button>("MicrophoneButton").IsEnabled = false; Control<Button>("MicrophoneButton").Content = "Audio device unavailable";
@@ -435,37 +446,92 @@ namespace WidgetScreen
         private void UpdateSessions(List<AudioSession> sessions)
         {
             var panel = Control<StackPanel>("SessionPanel");
-            foreach (string id in sessionRows.Keys.Where(id => !sessions.Any(s => s.Id == id)).ToArray()) { panel.Children.Remove(sessionRows[id].Root); sessionRows.Remove(id); }
+            var stale = sessionRows.Where(pair => !sessions.Any(s => s.Id == pair.Key)).ToList();
             foreach (var session in sessions)
             {
                 SessionRow row;
                 if (!sessionRows.TryGetValue(session.Id, out row))
                 {
-                    row = CreateSessionRow(session.Id); sessionRows.Add(session.Id, row); panel.Children.Add(row.Root);
+                    // An app moved to another output gets a new session there. Reuse its row so it stays in place.
+                    var moved = stale.FirstOrDefault(pair => session.ProcessId != 0 && pair.Value.Session.ProcessId == session.ProcessId);
+                    if (moved.Value != null) { stale.Remove(moved); sessionRows.Remove(moved.Key); row = moved.Value; }
+                    else { row = CreateSessionRow(); panel.Children.Add(row.Root); }
+                    sessionRows.Add(session.Id, row);
                 }
-                row.Label.Text = session.Name; row.Percent.Text = Math.Round(session.Volume * 100) + "%";
+                row.Session = session;
+                var device = outputs.FirstOrDefault(d => SameOutput(d.Id, session.DeviceId));
+                string deviceName = device != null ? device.Name : "Unknown output";
+                bool elsewhere = device != null && !device.IsDefault;
+                string shown = session.Name + "\n" + (elsewhere ? deviceName : "");
+                if (row.Shown != shown)
+                {
+                    row.Shown = shown; row.Label.Inlines.Clear(); row.Label.Inlines.Add(new Run(session.Name));
+                    if (elsewhere) { var run = new Run("  ·  " + deviceName); run.SetResourceReference(TextElement.ForegroundProperty, "Muted"); row.Label.Inlines.Add(run); }
+                }
+                row.Percent.Text = Math.Round(session.Volume * 100) + "%";
                 if (!row.Slider.IsMouseCaptureWithin && !row.Slider.AreAnyTouchesCapturedWithin) row.Slider.Value = session.Volume * 100;
-                row.Mute.Content = session.Muted ? "\uE74F" : "\uE767";
+                row.Mute.Content = session.Muted ? "" : "";
                 row.Mute.ToolTip = (session.Muted ? "Unmute " : "Mute ") + session.Name;
                 AutomationProperties.SetName(row.Mute, (session.Muted ? "Unmute " : "Mute ") + session.Name);
                 AutomationProperties.SetName(row.Slider, session.Name + " volume");
+                row.Output.Content = OutputPicker.Glyph(device != null ? device.FormFactor : 0);
+                row.Output.ToolTip = "Output: " + deviceName + ". Tap to change.";
+                AutomationProperties.SetName(row.Output, "Output for " + session.Name + ": " + deviceName);
             }
+            foreach (var pair in stale) { panel.Children.Remove(pair.Value.Root); sessionRows.Remove(pair.Key); }
             Text("SessionCount", sessions.Count == 1 ? "1 SESSION" : sessions.Count + " SESSIONS");
             Control<TextBlock>("NoSessions").Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private SessionRow CreateSessionRow(string id)
+        private SessionRow CreateSessionRow()
         {
             var row = new SessionRow { Root = new Grid { Margin = new Thickness(0, 8, 0, 0), Height = 74 } };
             row.Root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(24) }); row.Root.RowDefinitions.Add(new RowDefinition());
-            row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition()); row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition());
+            row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
             row.Label = new TextBlock { FontSize = 16 * settings.TextScale, TextTrimming = TextTrimming.CharacterEllipsis }; Grid.SetColumnSpan(row.Label, 2); row.Root.Children.Add(row.Label);
-            row.Percent = new TextBlock { FontSize = 14, Foreground = (Brush)window.Resources["Muted"], HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(row.Percent, 2); row.Root.Children.Add(row.Percent);
+            row.Percent = new TextBlock { FontSize = 14, Foreground = (Brush)window.Resources["Muted"], HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(row.Percent, 2); Grid.SetColumnSpan(row.Percent, 2); row.Root.Children.Add(row.Percent);
             row.Mute = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48 };
-            Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => AudioAction(() => audio.ToggleSessionMute(id));
+            Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => AudioAction(() => audio.ToggleSessionMute(row.Session.Id));
             row.Slider = new Slider { Margin = new Thickness(10, 0, 0, 0) }; Grid.SetColumn(row.Slider, 1); Grid.SetColumnSpan(row.Slider, 2); Grid.SetRow(row.Slider, 1); row.Root.Children.Add(row.Slider); TouchSlider.Attach(row.Slider);
-            row.Slider.ValueChanged += (sender, e) => { if (!updatingAudio && audio != null) { AudioAction(() => audio.SetSessionVolume(id, e.NewValue / 100), false); row.Percent.Text = Math.Round(e.NewValue) + "%"; } };
+            row.Slider.ValueChanged += (sender, e) => { if (!updatingAudio && audio != null) { AudioAction(() => audio.SetSessionVolume(row.Session.Id, e.NewValue / 100), false); row.Percent.Text = Math.Round(e.NewValue) + "%"; } };
+            row.Output = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48, Margin = new Thickness(4, 0, 0, 0) };
+            Grid.SetRow(row.Output, 1); Grid.SetColumn(row.Output, 3); row.Root.Children.Add(row.Output); row.Output.Click += (sender, e) => OpenAppOutputs(row.Session);
             return row;
+        }
+
+        private static bool SameOutput(string first, string second) { return String.Equals(first, second, StringComparison.OrdinalIgnoreCase); }
+
+        private void OpenMasterOutputs()
+        {
+            if (audio == null || outputs.Count == 0) return;
+            var choices = outputs.Select(d => new OutputChoice { Id = d.Id, Label = d.Name, Selected = d.IsDefault }).ToList();
+            outputPicker.Show("MASTER OUTPUT", "Master volume", choices, true, "Apps set to Windows default follow this output.", choice => {
+                try { audio.SetDefaultOutput(choice.Id); Notify("Sound now plays on " + choice.Label + "."); }
+                catch (Exception) { Notify("Couldn't switch to " + choice.Label + ". Use the gear to open Windows sound settings."); }
+                RefreshAudio();
+            });
+        }
+
+        private void OpenAppOutputs(AudioSession session)
+        {
+            if (audio == null || session == null || outputs.Count == 0) return;
+            bool system = session.ProcessId == 0, routable = !system && audio.CanRouteApps;
+            string routed = null;
+            if (routable) { try { routed = audio.AppOutput(session.ProcessId); } catch (Exception) { routable = false; } }
+            bool missing = routed != null && !outputs.Any(d => SameOutput(d.Id, routed));
+            var master = outputs.FirstOrDefault(d => d.IsDefault);
+            var choices = new List<OutputChoice> { new OutputChoice { Label = "Windows default", Detail = master == null ? null : "Same as master  ·  " + master.Name, Selected = routed == null } };
+            choices.AddRange(outputs.Select(d => new OutputChoice { Id = d.Id, Label = d.Name, Detail = SameOutput(d.Id, session.DeviceId) ? "Playing here now" : null, Selected = routed != null && SameOutput(d.Id, routed) }));
+            string note = system ? "System sounds always play on the master output. Change it at the top of the mixer."
+                : !routable ? "Windows didn't allow changing this app's output here. Use the gear to open Windows sound settings."
+                : missing ? "This app is set to an output that isn't connected. Choose another output or Windows default."
+                : "Windows remembers this for the app. Some apps switch only after they restart.";
+            outputPicker.Show("APP OUTPUT", session.Name, choices, routable, note, choice => {
+                try { audio.SetAppOutput(session.ProcessId, choice.Id); Notify(session.Name + (choice.Id == null ? " now follows the master output." : " now plays on " + choice.Label + ".")); }
+                catch (Exception) { Notify("Couldn't change the output for " + session.Name + ". Use the gear to open Windows sound settings."); }
+                RefreshAudio();
+            });
         }
 
         private void AudioAction(Action action, bool refresh = true)
@@ -595,6 +661,7 @@ namespace WidgetScreen
         private void OpenSettings()
         {
             openingSettings = true;
+            outputPicker.Close();
             spotifyAccount.Prepare();
             settingsGeneration++;
             var monitors = DisplayService.Screens.Where(s => !s.Primary).Select(s => new MonitorOption { Id = s.DeviceName, Label = s.DeviceName + "  ·  " + s.Bounds.Width + " × " + s.Bounds.Height }).ToList();

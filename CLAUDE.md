@@ -101,6 +101,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - The Spotify widget has no Playing tab or playback controls: tabs are Albums (recently played), Playlists and Search, with cover thumbnails, plus a bottom strip with cover, song, artist and Like (user request, 9 Oct 2026; see `docs/decisions/004-…`).
 - Web requests skip IPv6 for hosts that also have IPv4 (`PreferIPv4Handler`), because the user's network has unrouted IPv6 that made Spotify sign-in time out.
 - Default layout shows Clock, Focus, Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
+- Sound mixer (9 Oct 2026): app sliders come from every output, each app has an output button to see and change its device, and the master output is chosen by tapping Master volume. See `docs/decisions/005-mixer-output-routing.md` and `docs/design/mixer-output-devices.md`.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
 
