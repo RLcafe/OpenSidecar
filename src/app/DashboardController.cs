@@ -165,7 +165,7 @@ namespace WidgetScreen
                 else RefreshWeather();
             });
             Button("SearchCityButton", () => SearchCity());
-            Button("ClearCityButton", () => { pendingLocation = null; Control<ComboBox>("CityResults").ItemsSource = null; Text("SettingsStatus", "Weather will be turned off when you save."); });
+            Button("ClearCityButton", () => { pendingLocation = null; ShowCityResults(null); Text("SettingsStatus", "Weather will be turned off when you save."); });
             Control<ComboBox>("CityResults").SelectionChanged += (sender, e) => { var selected = Control<ComboBox>("CityResults").SelectedItem as WeatherLocation; if (selected != null) pendingLocation = selected; };
             Control<Slider>("ScaleChoice").ValueChanged += (sender, e) => Text("ScaleLabel", Math.Round(e.NewValue) + "%");
             Control<ComboBox>("ThemeChoice").SelectionChanged += (sender, e) => PreviewAppearance();
@@ -698,7 +698,7 @@ namespace WidgetScreen
             Control<Slider>("ScaleChoice").Value = settings.TextScale * 100;
             Control<CheckBox>("ClockChoice").IsChecked = settings.Use24HourClock; Control<CheckBox>("LevelsChoice").IsChecked = settings.ShowLevels;
             pendingLocation = String.IsNullOrWhiteSpace(settings.WeatherLocation) ? null : new WeatherLocation { Name = settings.WeatherLocation, Latitude = settings.Latitude, Longitude = settings.Longitude };
-            Control<ComboBox>("CityResults").ItemsSource = pendingLocation == null ? new List<WeatherLocation>() : new List<WeatherLocation> { pendingLocation };
+            ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             Text("SettingsStatus", "");
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
@@ -739,6 +739,13 @@ namespace WidgetScreen
             Notify("Settings saved.");
         }
 
+        // The results list only appears once there is something to pick.
+        private void ShowCityResults(List<WeatherLocation> results)
+        {
+            var list = Control<ComboBox>("CityResults"); list.ItemsSource = results;
+            list.Visibility = results != null && results.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private async void SearchCity()
         {
             int generation = settingsGeneration;
@@ -747,7 +754,7 @@ namespace WidgetScreen
             {
                 var results = await weather.SearchAsync(Control<TextBox>("CitySearch").Text);
                 if (disposed || generation != settingsGeneration) return;
-                Control<ComboBox>("CityResults").ItemsSource = results;
+                ShowCityResults(results);
                 Text("SettingsStatus", results.Count == 0 ? "No cities found. Try a nearby city or another spelling." : "Pick your city from the list, then save.");
                 if (results.Count > 0) Control<ComboBox>("CityResults").IsDropDownOpen = true;
             }

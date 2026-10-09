@@ -211,7 +211,7 @@
           </StackPanel>
           <Grid x:Name="EditToolbar" Grid.Column="1" Visibility="Collapsed" VerticalAlignment="Top">
             <Grid.ColumnDefinitions><ColumnDefinition Width="225"/><ColumnDefinition/><ColumnDefinition Width="260"/></Grid.ColumnDefinitions>
-            <StackPanel><TextBlock Text="Edit layout" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="Drag to move · stretch corners" Style="{StaticResource Small}" Margin="0,2,0,0"/></StackPanel>
+            <StackPanel><TextBlock Text="Edit layout" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="Drag to move or resize" Style="{StaticResource Small}" Margin="0,2,0,0"/></StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal">
               <Button x:Name="UndoLayoutButton" Content="Undo" Margin="0,0,8,0" ToolTip="Undo the last layout change (Ctrl+Z)."/>
               <Button x:Name="RedoLayoutButton" Content="Redo" Margin="0,0,8,0" ToolTip="Redo a layout change (Ctrl+Y)."/>
@@ -483,7 +483,7 @@
               <TextBox x:Name="CitySearch" AutomationProperties.Name="Search city" ToolTip="City name"/>
               <Button x:Name="SearchCityButton" Grid.Column="1" Content="Search" Margin="10,0,0,0" FontSize="16"/>
               </Grid>
-              <ComboBox x:Name="CityResults" Margin="0,12,0,0" AutomationProperties.Name="City results"/>
+              <ComboBox x:Name="CityResults" Margin="0,12,0,0" AutomationProperties.Name="City results" Visibility="Collapsed"/>
               <Button x:Name="ClearCityButton" Content="Turn weather off" Margin="0,12,0,16" HorizontalAlignment="Left" FontSize="15"/>
               <TextBlock Text="Search sends the city name to Open-Meteo. No account is needed. Once saved, weather updates every 15 minutes." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               </StackPanel>
