@@ -1,0 +1,256 @@
+{
+    "baselineDate":  "2026-10-09",
+    "applicationVersion":  "0.1.0.0",
+    "sourceBasis":  "Current working tree, including pre-existing uncommitted and untracked implementation files; not HEAD alone.",
+    "headCommit":  "416d86382598c83580d3e1b530ad5ad6e52b2e0c",
+    "archive":  "implementation-source.zip",
+    "archiveSha256":  "e39cbda9cbdf1e86aa292e5a1603c590a4b2f86ccd6a34fb8dc0c9f8f864b01c",
+    "excluded":  [
+                     "artifacts and binaries",
+                     "personal settings and credentials",
+                     ".git history",
+                     "new as-built documentation (distributed alongside this archive)"
+                 ],
+    "files":  [
+                  {
+                      "path":  ".gitignore",
+                      "bytes":  122,
+                      "sha256":  "3e3643a5207623f3e38ae37eeed373b0b4ca13455697e8a44cdafefa04d7d54a"
+                  },
+                  {
+                      "path":  "AGENTS.md",
+                      "bytes":  9260,
+                      "sha256":  "64ac320fca61d367fb51e5588b0043294277848c31353269275f0c5448fb0907"
+                  },
+                  {
+                      "path":  "assets/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "docs/decisions/001-spotify-integration.md",
+                      "bytes":  6965,
+                      "sha256":  "ede829e5817763c19256895ab90347c4a68967b50eb3c367e463f6f175013bc9"
+                  },
+                  {
+                      "path":  "docs/decisions/002-customizable-quick-launch.md",
+                      "bytes":  3038,
+                      "sha256":  "2261f99710a787334f47da2b6c2fa1f6d2eae98ab9e2a534e63f40324bf42836"
+                  },
+                  {
+                      "path":  "docs/design/customization-notes.md",
+                      "bytes":  2659,
+                      "sha256":  "dd49776932743b49bded501ab7e5c7a09f32d1ea9ca15901b1511658e0bd29d3"
+                  },
+                  {
+                      "path":  "docs/design/live-layout-notes.md",
+                      "bytes":  2772,
+                      "sha256":  "13f050dfbbab1cd3971c4ea4626d04051a634f480a71499aef676802b78098dd"
+                  },
+                  {
+                      "path":  "docs/design/polish-notes.md",
+                      "bytes":  2177,
+                      "sha256":  "1691e4500ca4e21403f7a0c11fa25a83ad4a1d65833c9bab328a276782ee688c"
+                  },
+                  {
+                      "path":  "README.md",
+                      "bytes":  14014,
+                      "sha256":  "130a5d3e739f57636460b2416c1fa5fcf28bb08314a42ab3834e5f487ca2803a"
+                  },
+                  {
+                      "path":  "scripts/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "scripts/build.ps1",
+                      "bytes":  3363,
+                      "sha256":  "ee340a91cf12362d2edffad1da907fe7ba484c8986099e10eaee082fda4c6095"
+                  },
+                  {
+                      "path":  "scripts/export-design-reference.ps1",
+                      "bytes":  5437,
+                      "sha256":  "449160fc660a88dd68dac3873ef6a2f0646b0ce2e9eefe091e4b1e76484aec88"
+                  },
+                  {
+                      "path":  "scripts/run.ps1",
+                      "bytes":  527,
+                      "sha256":  "6c1661b80bddba67726dd23fbea65aa2716be86bb727f1383e45b9d5d0bdfa8f"
+                  },
+                  {
+                      "path":  "src/app/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "src/app/App.config",
+                      "bytes":  455,
+                      "sha256":  "708dfc217e6b9dddfd7742d6e47a72c50f23378f99da5e096c11fd36d8c32a1c"
+                  },
+                  {
+                      "path":  "src/app/app.manifest",
+                      "bytes":  866,
+                      "sha256":  "ab8a7314f6e5c25e1c2d97f0f5887e6a86a957e8b749f45efc264d6ffb328fc4"
+                  },
+                  {
+                      "path":  "src/app/DashboardAppearance.cs",
+                      "bytes":  1910,
+                      "sha256":  "c7b5d65fdd81873e2f909689bba8aed933ff58f8712b58ea1313201d7fb0a968"
+                  },
+                  {
+                      "path":  "src/app/DashboardController.cs",
+                      "bytes":  53234,
+                      "sha256":  "5ffe963542ef2142d8c8c0d0da30c4403fd0563b32f561cc435c447cb04f21cb"
+                  },
+                  {
+                      "path":  "src/app/LayoutEditor.cs",
+                      "bytes":  14019,
+                      "sha256":  "e0acdc216f6f78d425e610370c7608f13b0b238e8c46ba6833a3497125a6323a"
+                  },
+                  {
+                      "path":  "src/app/MainWindow.xaml",
+                      "bytes":  61463,
+                      "sha256":  "bde92703ee82a978a80da8030679df4a83b7e79c3fc28298e606c02e09583bee"
+                  },
+                  {
+                      "path":  "src/app/Program.cs",
+                      "bytes":  5164,
+                      "sha256":  "b43a7df7a3362a67a5f13cd5137039b2a8018253f30cfb13c0ca506b1927e23a"
+                  },
+                  {
+                      "path":  "src/app/Settings.cs",
+                      "bytes":  7957,
+                      "sha256":  "ccc8b5e3d1a28e089261caa67031d51cc336dbda7e21e0ac8e584265ece9a723"
+                  },
+                  {
+                      "path":  "src/app/WidgetLayout.cs",
+                      "bytes":  7260,
+                      "sha256":  "f331a464f30789649a180cb6d0fd14bede1c23fd2ca4b35d17dfdb5776a8e1dd"
+                  },
+                  {
+                      "path":  "src/integrations/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "src/integrations/AudioService.cs",
+                      "bytes":  16592,
+                      "sha256":  "231f3c5e9efc119f7cd261538496a08f66ee3065527caa245a41d2f9bb4a1155"
+                  },
+                  {
+                      "path":  "src/integrations/DeckActions.cs",
+                      "bytes":  8042,
+                      "sha256":  "9756df1e8bf5df264eff029db578ea7fa30bde5cef76f02a4a99892e8868a519"
+                  },
+                  {
+                      "path":  "src/integrations/DeckHotkeys.cs",
+                      "bytes":  6585,
+                      "sha256":  "b520a6ca008b50d1892d46e432686b1a3acca301622da19d7c1243cecfd99051"
+                  },
+                  {
+                      "path":  "src/integrations/DisplayService.cs",
+                      "bytes":  1977,
+                      "sha256":  "ea9299b64ba0b0ac9b88ae5367665c1cd251aa8685ed3f0377d0e0d5564f81cd"
+                  },
+                  {
+                      "path":  "src/integrations/GpuService.cs",
+                      "bytes":  4503,
+                      "sha256":  "1ebaa64b941f78a77ae56b022513cf43fa96e6c26330454bd8a0ac5c963d2647"
+                  },
+                  {
+                      "path":  "src/integrations/Launcher.cs",
+                      "bytes":  1176,
+                      "sha256":  "f184f73151860730ef34c6a89bcd368d04f3d797e9eb70d70fdbc7fdd8478dc1"
+                  },
+                  {
+                      "path":  "src/integrations/MediaService.cs",
+                      "bytes":  6525,
+                      "sha256":  "1e515806f8f4a128db032d262104530d7154fe653ed6cdfcb4ee217025e3fc87"
+                  },
+                  {
+                      "path":  "src/integrations/Spotify/SpotifyService.cs",
+                      "bytes":  28359,
+                      "sha256":  "0193a680b75c85f61dba946d3cf3b14f530fbf7151be0c645def1dac28fd1fc5"
+                  },
+                  {
+                      "path":  "src/integrations/SystemService.cs",
+                      "bytes":  5158,
+                      "sha256":  "3a22ec2c38a394ca7e2729b4de0e727ee0f3667295fd327d15e1d5c8395fb617"
+                  },
+                  {
+                      "path":  "src/integrations/WeatherService.cs",
+                      "bytes":  4429,
+                      "sha256":  "dba59ac73da081ab9dbd470998f0beca980f416c078222bdb646dc6628c24f8b"
+                  },
+                  {
+                      "path":  "src/widgets/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "src/widgets/DeckEditor.cs",
+                      "bytes":  13986,
+                      "sha256":  "f8e948836840573f57c80eef5ce48f30b69eaf04f7f919a43ad5c047e02b8486"
+                  },
+                  {
+                      "path":  "src/widgets/FocusTimer.cs",
+                      "bytes":  1068,
+                      "sha256":  "74edb7787ef9d6899a307a8101280136618cb7cff935cba86cd9ed1ea517f3e3"
+                  },
+                  {
+                      "path":  "src/widgets/LevelVisualizer.cs",
+                      "bytes":  1182,
+                      "sha256":  "215a0164781f1d84ec1aebf912299b08124e9d47002d9bcdfa6b8327c3ebdd25"
+                  },
+                  {
+                      "path":  "src/widgets/PlaybackScrubber.cs",
+                      "bytes":  3992,
+                      "sha256":  "157bad6b617e020cf9562d8471c30daf6410b0def09a9e13867f5c117c283f24"
+                  },
+                  {
+                      "path":  "src/widgets/Spotify/SpotifyAccount.cs",
+                      "bytes":  4905,
+                      "sha256":  "2bd28caea5e5ff8c1488849283d5cef1b270934953f31edda9a8c762e6718c4c"
+                  },
+                  {
+                      "path":  "src/widgets/Spotify/SpotifyWidget.cs",
+                      "bytes":  16357,
+                      "sha256":  "e5e8227b422e0a7b1e198a536cf2240ac6eccf0e0d716096461522b8dbb08285"
+                  },
+                  {
+                      "path":  "tests/.gitkeep",
+                      "bytes":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "path":  "tests/QuickLaunch/DeckTests.cs",
+                      "bytes":  10352,
+                      "sha256":  "a41f38de047088d1858cb26f7d613809ab3a1d4c82407d9c11afa4afe2a7f3a1"
+                  },
+                  {
+                      "path":  "tests/QuickLaunch/manual-verification.md",
+                      "bytes":  2612,
+                      "sha256":  "353715019785eb442ebc6a0feab1a974d33a300b8db4f2e806cd7abf93657583"
+                  },
+                  {
+                      "path":  "tests/render-checks.ps1",
+                      "bytes":  4632,
+                      "sha256":  "fabb7e2927ee15b095c08ebdb0bbf52fb6dac66572b426073b17de7a881377a6"
+                  },
+                  {
+                      "path":  "tests/SmokeTests.cs",
+                      "bytes":  27902,
+                      "sha256":  "941c5cc237c9a333effe26304faaaa21578bc3d870eccbebb4a8a82cb7633546"
+                  },
+                  {
+                      "path":  "tests/Spotify/manual-verification.md",
+                      "bytes":  3455,
+                      "sha256":  "21db6a2d86d06d3616985a0307e7189d58fccbf62eaa1db42798610da1a1e794"
+                  },
+                  {
+                      "path":  "tests/Spotify/SpotifyTests.cs",
+                      "bytes":  38769,
+                      "sha256":  "b94d274099c7ec6f9eba737a2508dda812ee47463f2f3cbcf90ed2e92f672965"
+                  }
+              ]
+}

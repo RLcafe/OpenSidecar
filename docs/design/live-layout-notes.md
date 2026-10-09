@@ -1,0 +1,13 @@
+# Live dashboard editing — 2026-10-09
+
+The user requested direct manipulation of widgets on the dashboard. The previous column sizing UI is replaced by a free 1856 × 576 content canvas within the existing 1920 × 720 screen. All seven widget cards move and resize independently; existing column preferences provide their initial placement until a custom layout is saved. Theme and system metric settings remain in their dedicated tabs. Impeccable was not used for this change, per the user's instruction.
+
+Edit layout replaces the header actions with Undo, Redo, Reset layout, Snap, a widget selector, Show widget, Cancel, and Save layout. Four visible corner grips have 48 × 48 touch targets. The whole widget surface captures movement during editing; underlying volume, media, timer, and shortcut controls cannot receive pointer gestures. Mouse and touch use positions relative to the fixed canvas, preserving motion under Viewbox and DPI scaling. A pointer gesture adds one undo entry at release or capture loss. Keyboard users can nudge or resize with arrows and use Ctrl+Z/Ctrl+Y.
+
+Positions, independent dimensions, visibility, snapping, and stacking order persist locally. Selecting a widget exposes its handles above overlaps; moving or resizing brings it forward in the saved layout. Overlaps are indicated in the footer and permitted. Hide/show is reversible through the selector, including when every widget is hidden. Cancel restores the complete saved layout; reset is undoable. Save failure keeps the draft open and explains the problem. Saving other settings retains custom geometry.
+
+Widget minimums protect touch controls; clock and focus typography adapt to short cards, weather location becomes a single trimmed line in compact weather cards, and short quick-launch cards use horizontal buttons. Hidden integrations stop polling. Output levels pause during editing; live system/media information remains visible. No animation loop or external dependencies are added.
+
+Automated verification covers migration, nonfinite and offscreen values, all corner anchors, minimums and screen bounds, snapping, live host geometry, undo/redo, hide/show, cancel, save/restart, preserved geometry when saving a theme, failed-save recovery, and content bounds at the smallest supported sizes. Native renders cover the dashboard, all Settings tabs, large text, resized widgets, hidden stats, and the active editor. Physical mouse/touch gestures and exclusive fullscreen games still need hardware verification.
+
+The existing dashboard executable was running during this change and could not be overwritten. The new build is delivered in `artifacts/live-edit/WidgetScreen.exe`. Build, launch, and render helpers accept an alternate artifact folder for this situation.
