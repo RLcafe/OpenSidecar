@@ -311,7 +311,7 @@
           <Border x:Name="MixerCard" Grid.Column="2" Style="{StaticResource Card}" Margin="0,0,16,0" VerticalAlignment="Top" Height="576">
             <Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="66"/><RowDefinition Height="52"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="104"/></Grid.RowDefinitions>
               <DockPanel><TextBlock Text="SOUND MIXER" Style="{StaticResource Label}"/><TextBlock Text="●  LIVE" FontSize="12" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right" x:Name="AudioStatus"/></DockPanel>
-              <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><StackPanel VerticalAlignment="Center"><TextBlock Text="Master volume" FontSize="{DynamicResource TitleSize}"/><TextBlock x:Name="AudioDevice" Text="Connecting to audio…" Style="{StaticResource Small}" MaxWidth="310" Margin="0,5,0,0"/></StackPanel><TextBlock x:Name="MasterPercent" Grid.Column="1" Text="—" FontSize="36" FontWeight="Light" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+              <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><Button x:Name="OutputDeviceButton" Background="Transparent" BorderThickness="0" Padding="8,0" Margin="-8,0,8,0" HorizontalContentAlignment="Left" ToolTip="Choose the output device" AutomationProperties.Name="Choose output device"><StackPanel><TextBlock Text="Master volume" FontSize="{DynamicResource TitleSize}"/><DockPanel Margin="0,5,0,0"><TextBlock DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/><TextBlock x:Name="AudioDevice" Text="Connecting to audio…" Style="{StaticResource Small}" MaxWidth="310"/></DockPanel></StackPanel></Button><TextBlock x:Name="MasterPercent" Grid.Column="1" Text="—" FontSize="36" FontWeight="Light" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
               <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Mute output" AutomationProperties.Name="Mute output"/><Slider x:Name="MasterSlider" Grid.Column="1" Margin="8,0" AutomationProperties.Name="Master volume"/><Button x:Name="SoundSettingsButton" Grid.Column="2" Content="&#xE713;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Choose output in Windows sound settings" AutomationProperties.Name="Windows sound settings"/></Grid>
               <DockPanel Grid.Row="3" Margin="0,18,0,0"><TextBlock Text="APPLICATIONS" Style="{StaticResource Label}"/><TextBlock x:Name="SessionCount" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right"/></DockPanel>
               <Grid Grid.Row="4"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="SessionPanel"/></ScrollViewer><TextBlock x:Name="NoSessions" Text="Apps appear here when they use audio." Style="{StaticResource Small}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12"/></Grid>
@@ -320,6 +320,16 @@
                 <Border x:Name="LevelHost" Grid.Row="1" Margin="0,8,0,3"/>
                 <TextBlock x:Name="LevelStatus" Grid.Row="2" Text="OUTPUT LEVEL  ·  LIVE" FontSize="11" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"/>
               </Grid>
+              <Border x:Name="OutputPicker" Grid.Row="1" Grid.RowSpan="5" Margin="-8,0,-8,0" Padding="8,0" Background="{DynamicResource Surface}" Visibility="Collapsed">
+                <DockPanel>
+                  <Grid DockPanel.Dock="Top"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center"><TextBlock x:Name="OutputPickerTitle" Text="OUTPUT DEVICE" Style="{StaticResource Label}"/><TextBlock x:Name="OutputPickerSubject" FontSize="{DynamicResource TitleSize}" Margin="0,4,0,0"/></StackPanel>
+                    <Button x:Name="OutputPickerClose" Grid.Column="1" Content="&#xE8BB;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Close" AutomationProperties.Name="Close output devices"/>
+                  </Grid>
+                  <TextBlock x:Name="OutputPickerNote" DockPanel.Dock="Bottom" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                  <ScrollViewer x:Name="OutputOptionsScroll" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="OutputOptions"/></ScrollViewer>
+                </DockPanel>
+              </Border>
             </Grid>
           </Border>
 

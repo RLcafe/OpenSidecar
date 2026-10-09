@@ -95,6 +95,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Quick Launch: a paged deck (6 per page, or 3 when compact) with App, File, Folder, Website, Hotkey and Control actions, presets and Start menu picker. Old assignments and intentionally empty decks are preserved.
 - Spotify is its own widget (PKCE, user-supplied Client ID, redirect `http://127.0.0.1:43827/callback`). Windows Now Playing stays independent.
 - Default layout shows Clock, Focus, Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
+- Sound mixer (9 Oct 2026): app sliders come from every output, each app has an output button to see and change its device, and the master output is chosen by tapping Master volume. See `docs/decisions/003-mixer-output-routing.md` and `docs/design/mixer-output-devices.md`.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
 
