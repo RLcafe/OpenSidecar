@@ -8,11 +8,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
-[assembly: AssemblyTitle("Widget Screen")]
-[assembly: AssemblyDescription("A native Windows dashboard for a secondary touchscreen")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
-
 namespace WidgetScreen
 {
     public static class Program

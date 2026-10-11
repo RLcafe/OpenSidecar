@@ -43,9 +43,9 @@ Widget screen/
 │   ├── app/               Startup, window and display, dashboard layout, settings, XAML
 │   ├── widgets/           Widget presentation and interactions (Spotify/ subfolder)
 │   └── integrations/      Windows APIs, devices, external services (Spotify/ subfolder)
-├── assets/                Assets shipped with the app (none today; glyphs come from Segoe MDL2)
+├── assets/                WidgetScreen.ico, the exe and window logo (drawn by scripts\make-icon.ps1)
 ├── tests/                 Automated checks and manual procedures (QuickLaunch/, Spotify/)
-├── scripts/               build.ps1, run.ps1, release.ps1, export-design-reference.ps1
+├── scripts/               build.ps1, run.ps1, release.ps1, make-icon.ps1, export-design-reference.ps1
 ├── artifacts/             Build output (git-ignored, created by the build)
 ├── releases/              Self-contained release copies, releases\vX.Y.Z (git-ignored)
 └── .worktrees/            One git worktree per branch (git-ignored)
@@ -106,6 +106,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Time and date always show at the top left of the header, including in Edit layout. There is no Clock widget, and the header brand was removed (user request, 9 Oct 2026; see `docs/design/header-clock-and-stats.md`). Old layouts drop the Clock placement, and Focus grows into its space when it sat directly below it.
 - System stats scale with their widget: the rows sit in a Viewbox, and `SystemStatsLayout` picks 1–3 columns and widens rows to fill the card (user request, 9 Oct 2026).
 - Default layout shows Focus (full column), Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
+- Exe identity (user request, 11 Oct 2026): the exe shows the app name "Widget Screen", author "Ali Alyami" and the logo in `assets\WidgetScreen.ico` (Focus in Lime beside Now Playing, Quick Launch and the mixer on a Midnight tile). `scripts\make-icon.ps1` (run with `-STA`) redraws it. The attributes live in `src\app\AssemblyInfo.cs`, and `build.ps1` stamps the version from the newest `vX.Y.Z` tag, so releases need no manual version bump. In-app glyphs still come from Segoe MDL2.
 - UI polish (user request, 10 Oct 2026): dashboard text only speaks when something is true or wrong, and the Spotify card shows one empty state until connected. The Arrange-for-Spotify button was removed because Reset layout does the same. See `docs/design/ui-polish.md`.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
