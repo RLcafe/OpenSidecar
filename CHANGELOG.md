@@ -4,7 +4,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-- **Release copies**: `scripts\release.ps1` builds a tagged version from a clean checkout of its tag, runs every check and puts a self-contained copy in `releases\vX.Y.Z\` (git-ignored). The desktop shortcut now opens `releases\v0.2.2\WidgetScreen.exe` instead of the `artifacts\app` build. See "Releases" in `BRANCHES.md`.
+Nothing yet.
+
+## 0.2.3 (11 Oct 2026)
+
+Merges `feature/app-identity`.
+
+- **App identity**: the exe has a logo (Focus in Lime beside Now Playing, Quick Launch and the mixer on a Midnight tile), shown in Explorer, on the window and in the taskbar. Its properties show the app name "Widget Screen", the author "Ali Alyami" and the version, which the build now takes from the newest tag.
+- **Release copies**: `scripts\release.ps1` builds a tagged version from a clean checkout of its tag, runs every check and puts a self-contained copy in `releases\vX.Y.Z\` (git-ignored). The desktop shortcut opens the release copy instead of the `artifacts\app` build. See "Releases" in `BRANCHES.md`.
 
 ## 0.2.2 (10 Oct 2026)
 
