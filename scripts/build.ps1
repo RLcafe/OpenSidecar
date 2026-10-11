@@ -15,12 +15,26 @@ foreach ($assemblyName in @('System.Runtime', 'System.Runtime.WindowsRuntime', '
 foreach ($metadataName in @('Windows.Foundation.winmd', 'Windows.Media.winmd', 'Windows.Storage.winmd')) {
     $references += '/reference:' + (Join-Path $env:windir "System32\WinMetadata\$metadataName")
 }
-$sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Recurse -Filter '*.cs' | Sort-Object FullName | Select-Object -ExpandProperty FullName)
-$arguments = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/utf8output', '/warn:4', ('/out:' + (Join-Path $outputPath 'WidgetScreen.exe')), ('/win32manifest:' + (Join-Path $projectRoot 'src\app\app.manifest')), ('/resource:' + (Join-Path $projectRoot 'src\app\MainWindow.xaml') + ',WidgetScreen.MainWindow.xaml')) + $references + $sources
+# The exe's version comes from the newest vX.Y.Z tag; builds after a tag carry the commit count and hash.
+$described = git -C $projectRoot describe --tags --match 'v[0-9]*' --dirty 2>$null
+$versionMatch = [regex]::Match([string]$described, '^v(\d+)\.(\d+)\.(\d+)(?:-(\d+)-g[0-9a-f]+)?')
+$versionCore = if ($versionMatch.Success) { '{0}.{1}.{2}' -f $versionMatch.Groups[1].Value, $versionMatch.Groups[2].Value, $versionMatch.Groups[3].Value } else { '0.0.0' }
+$commitsSinceTag = if ($versionMatch.Groups[4].Success) { $versionMatch.Groups[4].Value } else { '0' }
+$informationalVersion = if ($described) { ([string]$described).TrimStart('v') } else { '0.0.0-unknown' }
+$generatedPath = Join-Path $projectRoot 'artifacts\obj'
+New-Item -ItemType Directory -Path $generatedPath -Force | Out-Null
+$versionSource = Join-Path $generatedPath 'BuildVersion.cs'
+@(
+    '[assembly: System.Reflection.AssemblyVersion("' + $versionCore + '.0")]'
+    '[assembly: System.Reflection.AssemblyFileVersion("' + $versionCore + '.' + $commitsSinceTag + '")]'
+    '[assembly: System.Reflection.AssemblyInformationalVersion("' + $informationalVersion + '")]'
+) | Set-Content -LiteralPath $versionSource -Encoding utf8
+$sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Recurse -Filter '*.cs' | Sort-Object FullName | Select-Object -ExpandProperty FullName) + $versionSource
+$arguments = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/utf8output', '/warn:4', ('/out:' + (Join-Path $outputPath 'WidgetScreen.exe')), ('/win32manifest:' + (Join-Path $projectRoot 'src\app\app.manifest')), ('/win32icon:' + (Join-Path $projectRoot 'assets\WidgetScreen.ico')), ('/resource:' + (Join-Path $projectRoot 'src\app\MainWindow.xaml') + ',WidgetScreen.MainWindow.xaml')) + $references + $sources
 & $compilerPath $arguments
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)." }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\app\App.config') -Destination (Join-Path $outputPath 'WidgetScreen.exe.config') -Force
-Write-Output "Built: $outputPath\WidgetScreen.exe"
+Write-Output "Built: $outputPath\WidgetScreen.exe ($informationalVersion)"
 if ($Test) {
     $testOutput = Join-Path $projectRoot 'artifacts\tests'
     New-Item -ItemType Directory -Path $testOutput -Force | Out-Null
