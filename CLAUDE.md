@@ -58,7 +58,7 @@ Widget screen/
 - Name decision records sequentially (`003-…md`) and cover the decision, rationale and tradeoffs. 001 (Spotify) and 002 (Quick Launch) exist in the source snapshot.
 - Never extract `implementation-source.zip` on top of a live `src/`. The recursive build would compile duplicate sources. Extract it to a separate folder, or into an empty project root.
 
-Source responsibilities (spec §11): `Program.cs` handles startup, render mode and error log. `MainWindow.xaml` is the visual tree. `DashboardController.cs` handles wiring, polling, settings transactions and display mode. `WidgetLayout.cs` and `LayoutEditor.cs` own the canvas, bounds and gesture history. `Settings.cs` holds the XML model and migration. Widgets live in `src/widgets/` (FocusTimer, LevelVisualizer, PlaybackScrubber, DeckEditor, Spotify). Integrations live in `src/integrations/` (Audio, System, Gpu, Media, Weather, Display, DeckActions/DeckHotkeys/Launcher, Spotify).
+Source responsibilities (spec §11): `Program.cs` handles startup, render mode and error log. `MainWindow.xaml` is the visual tree. `DashboardController.cs` handles wiring, polling, settings transactions and display mode. `WidgetLayout.cs` and `LayoutEditor.cs` own the canvas, bounds and gesture history. `Settings.cs` holds the XML model and migration. Widgets live in `src/widgets/` (FocusTimer, LevelVisualizer, PlaybackScrubber, DeckEditor, Spotify, Discord). Integrations live in `src/integrations/` (Audio, System, Gpu, Media, Weather, Display, DeckActions/DeckHotkeys/Launcher, Spotify, Discord).
 
 ## Build, run, test (Windows, PowerShell, from the project root)
 
@@ -71,7 +71,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 
 - The desktop "Widget Screen" shortcut opens the latest release in `releases\vX.Y.Z\`, made by `scripts\release.ps1 -UpdateShortcut` after tagging (see "Releases" in `BRANCHES.md`). Day-to-day builds stay in `artifacts\`.
 - Output goes to `artifacts/app/WidgetScreen.exe`. If the running app locks it, build with `-OutputDirectory artifacts\live-edit` and run with `-AppDirectory artifacts\live-edit`.
-- The tests are a console exe (`artifacts/tests/WidgetScreen.Tests.exe`) that prints `PASS`/`FAIL` lines. Add new checks to `tests/SmokeTests.cs`, `tests/QuickLaunch/DeckTests.cs` or `tests/Spotify/SpotifyTests.cs` with the `Check(name, action)` pattern.
+- The tests are a console exe (`artifacts/tests/WidgetScreen.Tests.exe`) that prints `PASS`/`FAIL` lines. Add new checks to `tests/SmokeTests.cs`, `tests/QuickLaunch/DeckTests.cs`, `tests/Spotify/SpotifyTests.cs` or `tests/Discord/DiscordTests.cs` with the `Check(name, action)` pattern.
 - App flags: `--settings <path>` isolates preferences and the Spotify session; `--windowed`; `--render <png>` with `--render-settings`, `--render-tab N`, `--render-edit`, `--render-edit-demo`.
 - Live Windows integrations (audio, media, GPU) need ordinary desktop access. "Unavailable" in a sandbox doesn't mean a device is missing.
 - Use isolated `--settings` paths in tests and renders. Never touch the user's real `%LOCALAPPDATA%\WidgetScreen\settings.xml`, Spotify session, playback, likes or volume from automated checks.
@@ -85,7 +85,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Keep resource use low. Use one 1 s dispatcher heartbeat with tick counters. Hidden or minimized widgets and hidden metrics don't poll. Don't add new timers or polling without a reason.
 - Keep integrations isolated. One failing service must never break the dashboard. Clearly distinguish loading, unavailable, disconnected and working states.
 - **Never show simulated readings as live data.** Fixtures must be labelled.
-- Store preferences locally (XML, written atomically). Never commit credentials. Spotify tokens go only in DPAPI-encrypted `spotify-session.dat`, which is git-ignored.
+- Store preferences locally (XML, written atomically). Never commit credentials. Spotify tokens go only in DPAPI-encrypted `spotify-session.dat`, and Discord app details and tokens only in DPAPI-encrypted `discord-session.dat`. Both are git-ignored.
 - Quick Launch actions must be inspectable in Settings. Confirm destructive or consequential actions (arguments, scripts and installers, Delete, Alt+F4, or `Confirm=true`).
 - Fonts are Segoe UI, Segoe UI Light for the clock, and Segoe MDL2 Assets for glyphs. Don't add images or emoji for icons, or custom fonts.
 - Keep the visual system: Midnight, Slate and Warm palettes, Lime, Glacier, Lavender and Amber accents, and the dynamic resources in spec §3.3–3.5.
@@ -108,6 +108,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\export-de
 - Default layout shows Focus (full column), Now Playing, Quick Launch, Sound Mixer and Spotify. System stats and Weather are hidden. Custom layouts are preserved.
 - Exe identity (user request, 11 Oct 2026): the exe shows the app name "Widget Screen", author "Ali Alyami" and the logo in `assets\WidgetScreen.ico` (Focus in Lime beside Now Playing, Quick Launch and the mixer on a Midnight tile). `scripts\make-icon.ps1` (run with `-STA`) redraws it. The attributes live in `src\app\AssemblyInfo.cs`, and `build.ps1` stamps the version from the newest `vX.Y.Z` tag, so releases need no manual version bump. In-app glyphs still come from Segoe MDL2.
 - UI polish (user request, 10 Oct 2026): dashboard text only speaks when something is true or wrong, and the Spotify card shows one empty state until connected. The Arrange-for-Spotify button was removed because Reset layout does the same. See `docs/design/ui-polish.md`.
+- Discord soundboard (user request, 20 Oct 2026): a Soundboard widget, hidden by default, plays sounds as the user in their current voice channel through the Discord desktop app's local RPC pipe, using the user's own Discord app (Client ID and Secret in Settings → Discord, encrypted in `discord-session.dat`). The Discord tab comes after Quick Launch. No bot and no user token. See `docs/decisions/006-discord-soundboard.md`.
 
 **Still open:** physical monitor size and comfortable text and touch sizing; whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
 

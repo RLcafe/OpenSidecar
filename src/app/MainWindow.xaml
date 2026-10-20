@@ -127,6 +127,12 @@
       <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/><Setter Property="Padding" Value="12,8"/><Setter Property="MinHeight" Value="48"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
+    <Style TargetType="PasswordBox">
+      <Setter Property="FontSize" Value="{DynamicResource BodySize}"/><Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="Background" Value="{DynamicResource Input}"/><Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/><Setter Property="Padding" Value="12,8"/><Setter Property="MinHeight" Value="48"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
     <Style TargetType="ComboBoxItem">
       <Setter Property="Foreground" Value="{DynamicResource Text}"/><Setter Property="Background" Value="{DynamicResource Raised}"/>
       <Setter Property="Padding" Value="12,10"/><Setter Property="MinHeight" Value="52"/>
@@ -312,6 +318,29 @@
             </Grid>
           </Border>
 
+          <Border x:Name="SoundboardCard" Style="{StaticResource Card}" Padding="20">
+            <Grid><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <DockPanel LastChildFill="True">
+                <Button x:Name="SoundboardRefresh" DockPanel.Dock="Right" Content="&#xE72C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" Margin="6,0,0,0" ToolTip="Reload sounds from Discord" AutomationProperties.Name="Reload Discord sounds"/>
+                <StackPanel x:Name="SoundboardPages" DockPanel.Dock="Right" Orientation="Horizontal" Visibility="Collapsed">
+                  <Button x:Name="SoundboardPrevious" Content="&#xE76B;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Previous sound page"/>
+                  <TextBlock x:Name="SoundboardPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
+                  <Button x:Name="SoundboardNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next sound page"/>
+                </StackPanel>
+                <TextBlock Text="SOUNDBOARD" Style="{StaticResource Label}" Margin="4,0,12,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SoundboardChannel" Text="" Style="{StaticResource Small}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              </DockPanel>
+              <UniformGrid x:Name="SoundboardGrid" Grid.Row="1" Margin="-4,0,-4,0"/>
+              <TextBlock x:Name="SoundboardStatus" Grid.Row="2" Text="" Style="{StaticResource Small}" Margin="4,6,4,0" Visibility="Collapsed" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+              <!-- Shown instead of the sounds until Discord is connected. -->
+              <StackPanel x:Name="SoundboardEmpty" Grid.Row="1" Grid.RowSpan="2" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="380" Visibility="Collapsed">
+                <TextBlock Text="Connect Discord" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <TextBlock Text="Play soundboard sounds in the voice channel you're in." Style="{StaticResource Small}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,14"/>
+                <Button x:Name="SoundboardSetup" Content="Set up Discord" Style="{StaticResource AccentButton}" HorizontalAlignment="Center" MinWidth="200"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+
           <Border x:Name="MixerCard" Grid.Column="2" Style="{StaticResource Card}" Margin="0,0,16,0" VerticalAlignment="Top" Height="576">
             <Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="66"/><RowDefinition Height="52"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="104"/></Grid.RowDefinitions>
               <DockPanel><TextBlock Text="SOUND MIXER" Style="{StaticResource Label}"/><TextBlock x:Name="AudioStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center"/></DockPanel>
@@ -393,6 +422,7 @@
           <Border.Resources>
             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="52"/></Style>
             <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="MinHeight" Value="52"/></Style>
+            <Style TargetType="PasswordBox" BasedOn="{StaticResource {x:Type PasswordBox}}"><Setter Property="MinHeight" Value="52"/></Style>
             <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="MinHeight" Value="52"/></Style>
           </Border.Resources>
           <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="64"/></Grid.RowDefinitions>
@@ -555,6 +585,30 @@
                       </StackPanel>
                     </StackPanel>
                   </ScrollViewer>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Discord">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Connection" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="DiscordConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="{DynamicResource BodySize}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                      <StackPanel><TextBlock Text="Client ID (Application ID)" Style="{StaticResource Small}"/><TextBox x:Name="DiscordClientId" MaxLength="20" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client ID"/></StackPanel>
+                      <StackPanel Grid.Column="2"><TextBlock x:Name="DiscordSecretHint" Text="Client Secret" Style="{StaticResource Small}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><PasswordBox x:Name="DiscordClientSecret" MaxLength="128" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client Secret"/></StackPanel>
+                    </Grid>
+                    <WrapPanel><Button x:Name="DiscordSaveApp" Content="Save app details" Margin="0,0,8,8"/><Button x:Name="DiscordConnectButton" Content="Connect Discord" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="DiscordDisconnect" Content="Disconnect" Margin="0,0,8,8"/><Button x:Name="DiscordCancelConnect" Content="Cancel sign-in" Visibility="Collapsed" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock Text="Account changes take effect right away. Your app details and sign-in are encrypted for your Windows account, and the secret is never shown again." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,12"/>
+                    <TextBlock Text="Sounds play as you, in the voice channel you're in, through the Discord app on this PC. Only the app's owner can use a personal app like this. Sounds from other servers need Nitro." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                  </StackPanel></ScrollViewer>
+                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="First-time setup" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="1.  In the Discord Developer Portal, create a New Application. Any name works." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <Button x:Name="DiscordDeveloper" Content="Open Developer Portal" HorizontalAlignment="Left" Margin="0,0,0,16"/>
+                    <TextBlock Text="2.  On its OAuth2 page, add this redirect, then copy the Client ID and Client Secret:" Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                    <TextBox Text="http://127.0.0.1" IsReadOnly="True" Margin="0,8,0,16" AutomationProperties.Name="Discord redirect address"/>
+                    <TextBlock Text="3.  Paste both on the left and tap Connect Discord. Discord asks you once to authorize the app." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="4.  Turn on the Soundboard widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
                 </Grid>
               </TabItem>
 </TabControl>

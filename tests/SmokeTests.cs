@@ -25,6 +25,7 @@ internal static class SmokeTests
         string directory = args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         SpotifyTests.Run(directory, Check);
         DeckTests.Run(directory, Check);
+        DiscordTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -84,7 +85,7 @@ internal static class SmokeTests
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     click("SettingsButton");
-                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 6, "Settings tabs missing.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 7, "Settings tabs missing.");
                     ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
                     var preview = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
                     click("CancelSettings");
