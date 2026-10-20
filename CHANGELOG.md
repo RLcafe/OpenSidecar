@@ -6,6 +6,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## 0.3.0 (20 Oct 2026)
+
+Merges `feature/discord-soundboard`.
+
+- **Discord soundboard**: a new Soundboard widget plays your servers' soundboard sounds as you, in the voice channel you're in, through the Discord app on this PC. Connect it in the new Settings → Discord tab with your own Discord app's Client ID and Client Secret; Discord asks you once to authorize it. The widget starts hidden (turn it on in Edit layout), lists the current server's sounds first, then Discord's built-in sounds, and reacts to joining or leaving voice without polling. App details and sign-in are stored encrypted in `discord-session.dat` (decision 006). The live Discord sign-in and playback haven't been verified yet.
+
 ## 0.2.3 (11 Oct 2026)
 
 Merges `feature/app-identity`.

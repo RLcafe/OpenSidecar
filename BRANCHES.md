@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/discord-soundboard` | Soundboard widget that plays Discord soundboard sounds in your voice channel (decision 006) | `fb10d02` (v0.2.3) | In progress: built, waiting for a live test with your Discord app | `.worktrees\discord-soundboard` | `.worktrees\discord-soundboard\artifacts\app\WidgetScreen.exe` |
+None right now. `feature/discord-soundboard` was merged as v0.3.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
