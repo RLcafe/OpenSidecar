@@ -1,0 +1,162 @@
+package com.alialyami.widgetscreen;
+
+import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.WidgetLayout;
+import com.alialyami.widgetscreen.core.WidgetLayout.Box;
+import com.alialyami.widgetscreen.core.WidgetLayout.Placement;
+
+import java.util.ArrayList;
+import java.util.List;
+
+// Port of the Windows LayoutEditor's model: the current and saved arrangement, gestures, undo and redo (50),
+// show and hide, Reset, Save and Cancel. WidgetCanvas draws it and feeds it touches.
+public final class LayoutEditor {
+    public interface Listener { void changed(boolean structure); }
+
+    private final List<Placement[]> undo = new ArrayList<Placement[]>(), redo = new ArrayList<Placement[]>();
+    private Placement[] saved, current, gestureBefore;
+    private AppSettings preferences;
+    private String gestureId, gestureCorner, selected = "Focus";
+    private Box gestureBounds;
+    private int gestureLayer;
+    private boolean editing, snap, gestureMoved;
+    private Listener listener;
+
+    public void setListener(Listener listener) { this.listener = listener; }
+    public boolean editing() { return editing; }
+    public boolean snap() { return snap; }
+    public String selected() { return selected; }
+    public boolean canUndo() { return !undo.isEmpty(); }
+    public boolean canRedo() { return !redo.isEmpty(); }
+    public boolean gestureActive() { return gestureId != null; }
+    public Placement[] placements() { return current; }
+
+    private void changed(boolean structure) { if (listener != null) listener.changed(structure); }
+
+    public void apply(AppSettings settings) {
+        preferences = settings;
+        if (editing) return;
+        snap = settings.snapWidgets;
+        current = WidgetLayout.normalize(settings.layout());
+        saved = WidgetLayout.copy(current);
+    }
+
+    public void begin() {
+        if (editing) return;
+        editing = true; saved = WidgetLayout.copy(current); undo.clear(); redo.clear();
+        selected = "Focus";
+        for (Placement p : current) if (isVisible(p.id)) { selected = p.id; break; }
+        changed(true);
+    }
+
+    public void cancel() {
+        gestureId = null;
+        current = WidgetLayout.copy(saved); editing = false; snap = preferences.snapWidgets; undo.clear(); redo.clear();
+        changed(true);
+    }
+
+    public Placement[] export() { return WidgetLayout.copy(current); }
+
+    public void accept() {
+        gestureId = null;
+        saved = WidgetLayout.copy(current); editing = false; undo.clear(); redo.clear();
+        changed(true);
+    }
+
+    public void setSnap(boolean value) { snap = value; changed(false); }
+
+    public void select(String id) {
+        if (WidgetLayout.find(current, id) == null) return;
+        selected = id; changed(false);
+    }
+
+    public boolean isVisible(String id) {
+        if (current == null) return true;
+        Placement p = WidgetLayout.find(current, id);
+        return p != null && p.visible && (!id.equals("System") || preferences == null || preferences.anyStats());
+    }
+
+    public boolean isEnabled(String id) { Placement p = WidgetLayout.find(current, id); return p != null && p.visible; }
+
+    public Box bounds(String id) { return WidgetLayout.find(current, id).bounds(); }
+
+    public int layer(String id) { return WidgetLayout.find(current, id).layer; }
+
+    public boolean hasOverlaps() {
+        List<Placement> visible = new ArrayList<Placement>();
+        for (Placement p : current) if (isVisible(p.id)) visible.add(p);
+        for (int i = 0; i < visible.size(); i++)
+            for (int j = i + 1; j < visible.size(); j++) {
+                Box a = visible.get(i).bounds(), b = visible.get(j).bounds();
+                double width = Math.min(a.right(), b.right()) - Math.max(a.x, b.x), height = Math.min(a.bottom(), b.bottom()) - Math.max(a.y, b.y);
+                if (width > 1 && height > 1) return true;
+            }
+        return false;
+    }
+
+    private void remember(Placement[] before) {
+        undo.add(before);
+        if (undo.size() > 50) undo.remove(0);
+        redo.clear();
+    }
+
+    public void setVisible(String id, boolean visible) {
+        if (!editing || gestureActive()) return;
+        Placement p = WidgetLayout.find(current, id);
+        if (p == null || p.visible == visible) return;
+        remember(export()); p.visible = visible;
+        if (visible) selected = id;
+        changed(true);
+    }
+
+    public void reset() {
+        if (!editing || gestureActive()) return;
+        remember(export()); current = WidgetLayout.defaults();
+        changed(true);
+    }
+
+    public void undo() {
+        if (!editing || !canUndo() || gestureActive()) return;
+        redo.add(export()); current = undo.remove(undo.size() - 1);
+        changed(true);
+    }
+
+    public void redo() {
+        if (!editing || !canRedo() || gestureActive()) return;
+        undo.add(export()); current = redo.remove(redo.size() - 1);
+        changed(true);
+    }
+
+    private int topLayer() { int top = 0; for (Placement p : current) top = Math.max(top, p.layer); return top; }
+
+    public void startGesture(String id, String corner) {
+        if (!editing || gestureActive()) return;
+        gestureBefore = export(); gestureId = id; gestureCorner = corner; gestureMoved = false;
+        gestureBounds = bounds(id); gestureLayer = topLayer() + 1;
+        selected = id;
+        changed(false);
+    }
+
+    // Movement since the gesture started, in canvas units.
+    public void continueGesture(double dx, double dy) {
+        if (gestureId == null) return;
+        // A tap selects a widget without snapping or changing its saved stacking order.
+        if (!gestureMoved && Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
+        gestureMoved = true;
+        Placement p = WidgetLayout.find(current, gestureId);
+        Box next = WidgetLayout.transform(p.id, gestureBounds, gestureCorner, dx, dy, snap);
+        p.layer = next.equals(gestureBounds) ? WidgetLayout.find(gestureBefore, p.id).layer : gestureLayer;
+        p.setBounds(next);
+        changed(false);
+    }
+
+    public void endGesture() {
+        if (gestureId == null) return;
+        String id = gestureId;
+        boolean moved = !bounds(id).equals(gestureBounds);
+        if (moved) remember(gestureBefore);
+        gestureId = null; gestureBefore = null;
+        // The card's content picks its compact or tall arrangement again for its new size.
+        changed(moved);
+    }
+}
