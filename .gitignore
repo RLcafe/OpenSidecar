@@ -11,6 +11,8 @@
 !.env.example
 **/spotify-session.dat
 **/spotify-session.dat.tmp
+**/discord-session.dat
+**/discord-session.dat.tmp
 
 # Build leftovers outside artifacts/
 *.pdb

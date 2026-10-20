@@ -24,7 +24,7 @@ namespace WidgetScreen
     {
         public const double Width = 1856, Height = 576;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
         public static string Title(string id)
         {
             switch (id) {
@@ -45,6 +45,7 @@ namespace WidgetScreen
                 case "Shortcuts": return new Size(420, 190);
                 case "Mixer": return new Size(380, 420);
                 case "System": return new Size(380, 310);
+                case "Soundboard": return new Size(360, 240);
                 default: return new Size(360, 220);
             }
         }
@@ -68,7 +69,9 @@ namespace WidgetScreen
                 Place("Mixer", mixerX, 0, widths[2] - 16, settings.MixerHeight),
                 Place("System", infoX, 0, widths[3], settings.SystemHeight - 16),
                 Place("Weather", infoX, stats ? settings.SystemHeight : 0, widths[3], stats ? Height - settings.SystemHeight : Height),
-                new WidgetPlacement { Id = "Spotify", X = 376, Y = 0, Width = 600, Height = 576, Visible = false }
+                new WidgetPlacement { Id = "Spotify", X = 376, Y = 0, Width = 600, Height = 576, Visible = false },
+                // Starts hidden; turned on in Edit layout once Discord is set up.
+                new WidgetPlacement { Id = "Soundboard", X = 336, Y = 326, Width = 472, Height = 250, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)
@@ -76,7 +79,7 @@ namespace WidgetScreen
             var result = Default(settings);
             foreach (var p in result)
             {
-                p.Visible = p.Id != "System" && p.Id != "Weather";
+                p.Visible = p.Id != "System" && p.Id != "Weather" && p.Id != "Soundboard";
                 if (p.Id == "Focus") SetBounds(p, new Rect(0, 0, 320, 576));
                 if (p.Id == "Media") SetBounds(p, new Rect(336, 0, 472, 310));
                 if (p.Id == "Shortcuts") SetBounds(p, new Rect(336, 326, 472, 250));

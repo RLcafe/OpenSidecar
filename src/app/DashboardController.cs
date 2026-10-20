@@ -26,6 +26,8 @@ namespace WidgetScreen
         private readonly MediaService media = new MediaService();
         private readonly SpotifyWidget spotify;
         private readonly SpotifyAccount spotifyAccount;
+        private readonly SoundboardWidget soundboard;
+        private readonly DiscordAccount discordAccount;
         private readonly PlaybackScrubber mediaScrubber;
         private readonly WeatherService weather = new WeatherService();
         private readonly FocusTimer focus = new FocusTimer();
@@ -82,6 +84,9 @@ namespace WidgetScreen
                 string previous = settings.SpotifyClientId; settings.SpotifyClientId = value;
                 try { SettingsStore.Save(settingsPath, settings); } catch { settings.SpotifyClientId = previous; throw; }
             }, () => { spotify.AccountChanged(); spotify.Tick(Editor.IsVisible("Spotify"), settings.QuietMode); });
+            var discordService = new DiscordService(SettingsStore.DiscordPath(settingsPath));
+            soundboard = new SoundboardWidget(window, discordService) { OpenSetup = OpenDiscordSettings };
+            discordAccount = new DiscordAccount(window, discordService, () => { soundboard.AccountChanged(); soundboard.Tick(Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode); });
             mediaScrubber = new PlaybackScrubber(Control<Slider>("MediaProgress"), SeekMedia, value => Text("MediaPosition", FormatTime(TimeSpan.FromMilliseconds(value))));
             if (settings.WidgetLayout == null && !settings.SwapSideWidgets && settings.ClockWidth == 1 && settings.MediaWidth == 3 && settings.MixerWidth == 3 && settings.SystemWidth == 2
                 && settings.ClockHeight == 246 && settings.MediaHeight == 326 && settings.MixerHeight == 576 && settings.SystemHeight == 326)
@@ -189,6 +194,7 @@ namespace WidgetScreen
             ticks++; UpdateClock(); UpdateFocus();
             if (ticks >= statusClearsAt && !Editor.Editing) { Text("StatusMessage", ""); statusClearsAt = int.MaxValue; }
             spotify.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
+            soundboard.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
             if (window.WindowState == WindowState.Minimized) return;
             int interval = settings.QuietMode ? 5 : 2;
             if (ticks % interval == 0)
@@ -378,6 +384,7 @@ namespace WidgetScreen
             }
         }
         private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
+        private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 6; }
         private async void RunDeckAction(Shortcut shortcut)
         {
             try
@@ -684,7 +691,7 @@ namespace WidgetScreen
         {
             openingSettings = true;
             outputPicker.Close();
-            spotifyAccount.Prepare();
+            spotifyAccount.Prepare(); discordAccount.Prepare();
             settingsGeneration++;
             var monitors = DisplayService.Screens.Where(s => !s.Primary).Select(s => new MonitorOption { Id = s.DeviceName, Label = s.DeviceName + "  ·  " + s.Bounds.Width + " × " + s.Bounds.Height }).ToList();
             if (monitors.Count == 0) monitors.Add(new MonitorOption { Id = "", Label = "No second display connected" });
@@ -706,7 +713,7 @@ namespace WidgetScreen
             openingSettings = false; PreviewAppearance();
             ((TabItem)Control<TabControl>("SettingsTabs").Items[0]).Focus();
         }
-        private void CloseSettings() { spotifyAccount.Cancel(); settingsGeneration++; Control<Grid>("SettingsOverlay").Visibility = Visibility.Collapsed; ApplySettings(); Control<Grid>("DashboardContent").IsEnabled = true; Control<Button>("SettingsButton").Focus(); }
+        private void CloseSettings() { spotifyAccount.Cancel(); discordAccount.Cancel(); settingsGeneration++; Control<Grid>("SettingsOverlay").Visibility = Visibility.Collapsed; ApplySettings(); Control<Grid>("DashboardContent").IsEnabled = true; Control<Button>("SettingsButton").Focus(); }
 
         private void SaveSettings()
         {
@@ -714,6 +721,8 @@ namespace WidgetScreen
             if (spotifyId.Length > 0 && !SpotifyService.ValidClientId(spotifyId)) { Text("SettingsStatus", "Spotify: the Client ID must be 32 letters and numbers. Fix it, or clear the field to keep the saved one."); return; }
             List<Shortcut> shortcuts;
             if (!deckEditor.TryGet(out shortcuts)) return;
+            string discordError = discordAccount.SaveDraft();
+            if (discordError != null) { Text("SettingsStatus", discordError); return; }
             var monitor = Control<ComboBox>("MonitorChoice").SelectedItem as MonitorOption;
             var candidate = new AppSettings {
                 SpotifyClientId = spotifyId.Length == 0 ? settings.SpotifyClientId : spotifyId,
@@ -812,7 +821,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             disposed = true; clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); if (audio != null) audio.Dispose();
+            weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); if (audio != null) audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }
