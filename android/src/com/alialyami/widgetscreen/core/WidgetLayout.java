@@ -4,8 +4,8 @@ package com.alialyami.widgetscreen.core;
 // sizes, an optional 8-unit snap. Android stretches this canvas to fill the screen.
 public final class WidgetLayout {
     public static final double WIDTH = 1856, HEIGHT = 576;
-    // The Windows Discord soundboard has no Android counterpart, so its placement doesn't exist here.
-    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify" };
+    // The same widgets as the Windows dashboard, which the phone mirrors.
+    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
 
     public static final class Box {
         public final double x, y, width, height;
@@ -40,7 +40,7 @@ public final class WidgetLayout {
             case "Focus": return "Focus timer";
             case "Media": return "Now playing";
             case "Shortcuts": return "Quick launch";
-            case "Mixer": return "Sound";
+            case "Mixer": return "Sound mixer";
             case "System": return "System stats";
             default: return id;
         }
@@ -54,12 +54,13 @@ public final class WidgetLayout {
             case "Shortcuts": return new double[] { 420, 190 };
             case "Mixer": return new double[] { 380, 420 };
             case "System": return new double[] { 380, 310 };
+            case "Soundboard": return new double[] { 360, 240 };
             default: return new double[] { 360, 220 };
         }
     }
 
     // The Windows default (its Spotify arrangement): Focus in the left column, Now Playing over Quick Launch,
-    // Sound, then Spotify. System stats and Weather start hidden at the right.
+    // the mixer, then Spotify. System stats, Weather and the Soundboard start hidden.
     public static Placement[] defaults() {
         return new Placement[] {
             new Placement("Focus", 0, 0, 320, 576, true),
@@ -68,7 +69,8 @@ public final class WidgetLayout {
             new Placement("Mixer", 824, 0, 456, 576, true),
             new Placement("System", 1384, 0, 472, 310, false),
             new Placement("Weather", 1384, 326, 472, 250, false),
-            new Placement("Spotify", 1296, 0, 560, 576, true)
+            new Placement("Spotify", 1296, 0, 560, 576, true),
+            new Placement("Soundboard", 336, 326, 472, 250, false)
         };
     }
 

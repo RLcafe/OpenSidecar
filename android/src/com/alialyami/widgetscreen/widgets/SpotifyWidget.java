@@ -20,7 +20,10 @@ import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.integrations.Async;
 import com.alialyami.widgetscreen.integrations.Images;
-import com.alialyami.widgetscreen.integrations.SpotifyService;
+import com.alialyami.widgetscreen.core.Json;
+import com.alialyami.widgetscreen.core.PcLink;
+import com.alialyami.widgetscreen.core.PcState;
+import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.GlyphView;
 
 // Port of the Windows SpotifyWidget: recent albums, playlists and search with cover thumbnails, plus a
@@ -47,14 +50,45 @@ public final class SpotifyWidget extends Widget {
 
     public SpotifyWidget(Dashboard dash) { super("Spotify", dash); }
 
-    private SpotifyService service() { return dash.spotify; }
+    // The PC's Spotify connection, reached through the phone link, with the same calls as the Windows SpotifyService.
+    private final class Proxy {
+        private PcLink link;
+        private PcState.SpotifyFlags flags() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.spotify; }
+        boolean connected() { PcState.SpotifyFlags f = flags(); return f != null && f.connected; }
+        boolean canControl() { PcState.SpotifyFlags f = flags(); return f != null && f.canControl; }
+        boolean canReadRecent() { PcState.SpotifyFlags f = flags(); return f != null && f.canReadRecent; }
+        // Work runs on the link's command thread, one call at a time, so the link field belongs to it.
+        <T> void call(final Async.Work<T> work, Async.Done<T> done, Async.Failed failed) {
+            dash.pc.send(new Pc.Call<T>() { @Override public T run(PcLink current) throws Exception { link = current; return work.run(); } }, done, failed);
+        }
+        Spotify.Page browse(String kind, String query, int offset) throws Exception { return PcState.page(link.spotify(Json.map("op", "browse", "kind", kind, "query", query, "offset", offset))); }
+        Spotify.Page tracks(Spotify.Item collection, int offset) throws Exception { return PcState.page(link.spotify(Json.map("op", "tracks", "uri", collection.uri, "offset", offset))); }
+        Spotify.Playback current() throws Exception { return PcState.playback(link.spotify(Json.map("op", "current"))); }
+        boolean isLiked(String uri) throws Exception { return Boolean.TRUE.equals(Json.value(link.spotify(Json.map("op", "liked", "uri", uri)), "liked")); }
+        void setLiked(String uri, boolean liked) throws Exception { link.spotify(Json.map("op", "like", "uri", uri, "liked", liked)); }
+        void playTrack(String uri) throws Exception { link.spotify(Json.map("op", "playTrack", "uri", uri)); }
+        void playInCollection(String uri, int position) throws Exception { link.spotify(Json.map("op", "playCollection", "uri", uri, "position", position)); }
+        void openOnPc() throws Exception { link.spotify(Json.map("op", "open")); }
+    }
+    private final Proxy proxy = new Proxy();
+    private Proxy service() { return proxy; }
+    private static boolean noDevice(Exception error) { return error instanceof PcLink.Failure && ((PcLink.Failure) error).noDevice; }
+    private boolean wasConnected;
+
+    @Override public String part() { return "spotify"; }
+
+    // Readings arrive every couple of seconds; only a change in the PC's Spotify connection matters here.
+    @Override public void stateChanged() {
+        boolean connected = service().connected();
+        if (connected != wasConnected) { wasConnected = connected; accountChanged(); }
+    }
 
     @Override protected View create() {
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
         header.addView(ui.label("SPOTIFY"), ui.ll(0, Ui.WRAP, 1));
-        account = ui.button("Account", new View.OnClickListener() { @Override public void onClick(View v) { dash.openSettings("Spotify"); } });
+        account = ui.button("Account", new View.OnClickListener() { @Override public void onClick(View v) { dash.say("Spotify is connected on the PC. Manage it there in Settings → Spotify."); } });
         account.setTextSize(TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
         account.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));
         account.setContentDescription("Spotify account and setup in Settings");
@@ -162,10 +196,10 @@ public final class SpotifyWidget extends Widget {
         TextView heading = ui.heading("Connect Spotify");
         heading.setTypeface(Ui.MEDIUM);
         emptyState.addView(heading, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 20, 0, 0));
-        TextView blurb = Ui.wrap(ui.smallText("Browse your recent albums and playlists, and like the song that's playing."), 3);
+        TextView blurb = Ui.wrap(ui.smallText("Connect Spotify on the PC to browse your recent albums and playlists here, and like the song that's playing."), 3);
         blurb.setGravity(Gravity.CENTER);
         emptyState.addView(blurb, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 22));
-        TextView setup = ui.accentButton("Set up Spotify", new View.OnClickListener() { @Override public void onClick(View v) { dash.openSettings("Spotify"); } });
+        TextView setup = ui.accentButton("How to connect", new View.OnClickListener() { @Override public void onClick(View v) { dash.say("On the PC, open Settings → Spotify and connect your account. The phone uses the PC's connection."); } });
         setup.setMinWidth(ui.px(200));
         emptyState.addView(setup, ui.ll(Ui.WRAP, Ui.WRAP));
         FrameLayout.LayoutParams emptyParams = new FrameLayout.LayoutParams(Math.min(ui.px(360), Ui.MATCH), Ui.WRAP, Gravity.CENTER);
@@ -184,7 +218,7 @@ public final class SpotifyWidget extends Widget {
     private final class OpenLink implements Runnable {
         private final String url;
         OpenLink(String url) { this.url = url; }
-        @Override public void run() { try { SpotifyService.openInBrowser(dash.activity, url); } catch (Exception e) { setStatus("Could not open Spotify."); } }
+        @Override public void run() { try { dash.openUrl(url); } catch (Exception e) { setStatus("Could not open Spotify."); } }
     }
 
     // A connection change (connect, disconnect, expiry) resets everything that came from the old account.
@@ -192,7 +226,7 @@ public final class SpotifyWidget extends Widget {
         generation++; browseGeneration++; playback = null; likedUri = artUrl = null; liked = null; artBitmap = null; nextPoll = 0;
         page = null; collection = null; offset = 0; pageError = null;
         libraryPending = service().connected();
-        setStatus(service().connected() ? "" : "Connect Spotify in Settings to use your library.");
+        setStatus(service().connected() ? "" : "Connect Spotify on the PC to use your library.");
         render();
     }
 
@@ -245,7 +279,7 @@ public final class SpotifyWidget extends Widget {
 
     private void select(String selected, boolean load) {
         browseGeneration++; kind = selected; offset = 0; collection = null; libraryPending = false; page = null; loading = false;
-        if (!service().connected()) { setStatus("Connect Spotify in Settings to use your library."); render(); return; }
+        if (!service().connected()) { setStatus("Connect Spotify on the PC to use your library."); render(); return; }
         if (selected.equals("Search")) {
             setStatus("Type a song or artist, then tap Find.");
             render();
@@ -266,7 +300,7 @@ public final class SpotifyWidget extends Widget {
     private void loadPage() {
         final int version = ++browseGeneration;
         page = null;
-        if (!service().connected()) { setStatus("Connect Spotify in Settings to use your library."); render(); return; }
+        if (!service().connected()) { setStatus("Connect Spotify on the PC to use your library."); render(); return; }
         if (kind.equals("Search") && collection == null && searchQuery.isEmpty()) { setStatus("Type a song or artist to search for."); render(); return; }
         loading = true;
         setStatus("Loading from Spotify…");
@@ -288,8 +322,8 @@ public final class SpotifyWidget extends Widget {
             @Override public void error(Exception error) {
                 if (version != browseGeneration) return;
                 loading = false; page = new Spotify.Page(new java.util.ArrayList<Spotify.Item>(), false);
-                setStatus(SpotifyService.message(error));
-                if (!service().connected()) dash.spotifyAccountChanged(); else render();
+                setStatus(Pc.message(error));
+                if (!service().connected()) accountChanged(); else render();
             }
         });
     }
@@ -364,7 +398,7 @@ public final class SpotifyWidget extends Widget {
                 String uri = item == null ? null : item.uri;
                 if (uri == null ? likedUri != null : !uri.equals(likedUri)) { likedUri = uri; liked = null; }
                 if (result[1] != null) { liked = (Boolean) result[1]; lastLikeCheck = SystemClock.elapsedRealtime(); }
-                if (result[2] != null) setStatus(SpotifyService.message((Exception) result[2]));
+                if (result[2] != null) setStatus(Pc.message((Exception) result[2]));
                 final String requested = item == null ? null : item.imageUrl;
                 if (requested == null ? artUrl != null : !requested.equals(artUrl)) {
                     artUrl = requested; artBitmap = null;
@@ -379,9 +413,9 @@ public final class SpotifyWidget extends Widget {
                 busy = false;
                 if (version != generation) return;
                 nextPoll = SystemClock.elapsedRealtime() + 60000; playback = null; likedUri = artUrl = null; liked = null; artBitmap = null;
-                pageError = SpotifyService.message(error);
+                pageError = Pc.message(error);
                 setStatus(pageError);
-                if (!service().connected()) dash.spotifyAccountChanged(); else if (built()) renderNow();
+                if (!service().connected()) accountChanged(); else if (built()) renderNow();
             }
         });
     }
@@ -401,7 +435,7 @@ public final class SpotifyWidget extends Widget {
                 if (built()) renderNow();
             }
         }, new Async.Failed() {
-            @Override public void error(Exception error) { likeBusy = false; if (version == generation) setStatus(SpotifyService.message(error)); if (built()) renderNow(); }
+            @Override public void error(Exception error) { likeBusy = false; if (version == generation) setStatus(Pc.message(error)); if (built()) renderNow(); }
         });
     }
 
@@ -431,18 +465,17 @@ public final class SpotifyWidget extends Widget {
         }, new Async.Failed() {
             @Override public void error(Exception error) {
                 if (version != generation) { commandBusy = false; return; }
-                if (error instanceof SpotifyService.NoDeviceException && tries < 6) {
+                if (noDevice(error) && tries < 6) {
                     if (tries == 0) {
-                        boolean opened = false;
-                        try { opened = dash.launcher.openSpotify(dash.activity); } catch (Exception ignored) { }
-                        if (!opened) { commandBusy = false; setStatus("No active Spotify device, and the Spotify app isn't installed here. Play on another device, then tap the song again."); return; }
-                        setStatus("Opening Spotify to play " + song.name + "…");
+                        // No device is active: open Spotify on the PC and retry briefly while it starts.
+                        service().call(new Async.Work<Void>() { @Override public Void run() throws Exception { service().openOnPc(); return null; } }, null, null);
+                        setStatus("Opening Spotify on the PC to play " + song.name + "…");
                     }
                     Async.MAIN.postDelayed(new Runnable() { @Override public void run() { attempt(parent, song, version, tries + 1); } }, 2000);
                     return;
                 }
                 commandBusy = false;
-                setStatus(error instanceof SpotifyService.NoDeviceException ? "Spotify opened but isn't ready yet. Play anything in it once, then tap the song again." : SpotifyService.message(error));
+                setStatus(noDevice(error) ? "Spotify opened but isn't ready yet. Play anything in it once, then tap the song again." : Pc.message(error));
             }
         });
     }

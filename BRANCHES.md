@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/android-app` | Android version of the dashboard as an installable APK (decision 007); the Windows app is unchanged | `0247453` (v0.3.0) | Ready for review | `.worktrees\android-app` | `.worktrees\android-app\artifacts\android\WidgetScreen.apk` |
+| `feature/android-app` | Android app as a phone remote for the PC (decisions 007, 008), plus Settings → Phone in the Windows app | `0247453` (v0.3.0) | Ready for review | `.worktrees\android-app` | `.worktrees\android-app\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

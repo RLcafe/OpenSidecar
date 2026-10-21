@@ -8,28 +8,42 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
-import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.Format;
+import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.StatsLayout;
 import com.alialyami.widgetscreen.core.Theme;
-import com.alialyami.widgetscreen.integrations.SystemReader;
 import com.alialyami.widgetscreen.views.FitBox;
 import com.alialyami.widgetscreen.views.ProgressLine;
+import com.alialyami.widgetscreen.views.Sparkline;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// System stats: battery, memory, storage, network and uptime rows at one design size, scaled to the card.
+// The PC's System stats: CPU (with its recent history), GPU, RAM, network and uptime, the readings chosen on
+// the PC. Rows have one design size and scale with the card, like SystemStatsLayout on Windows.
 public final class SystemWidget extends Widget {
-    private static final double ROW_MIN_WIDTH = 344, ROW_HEIGHT = 40, ROW_MARGIN_X = 6, ROW_MARGIN_Y = 3;
-    private TextView status, batteryValue, batteryDetail, memoryValue, memoryDetail, storageValue, storageDetail, download, upload, uptime;
-    private ProgressLine batteryBar, memoryBar, storageBar;
+    private static final double ROW_MIN_WIDTH = 324, ROW_HEIGHT = 40, ROW_MARGIN_X = 6, ROW_MARGIN_Y = 3;
+    private TextView status, cpuValue, gpuValue, gpuDetail, memoryValue, memoryDetail, download, upload, uptime;
+    private ProgressLine gpuBar, memoryBar;
+    private Sparkline cpuGraph;
+    private final List<Double> cpuHistory = new ArrayList<Double>();
+    private String builtFor = "";
 
     public SystemWidget(Dashboard dash) { super("System", dash); }
 
+    @Override public String part() { return "system"; }
+
+    private PcState.System stats() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.system; }
+
+    // Which rows the PC shows; the card is rebuilt when that changes.
+    private static String selection(PcState.System s) { return s == null ? "" : (s.showCpu ? "c" : "") + (s.showGpu ? "g" : "") + (s.showRam ? "r" : "") + (s.showNetwork ? "n" : "") + (s.showUptime ? "u" : ""); }
+
     @Override protected View create() {
-        AppSettings s = dash.settings;
+        PcState.System s = stats();
+        builtFor = selection(s);
+        boolean cpu = s == null || s.showCpu, gpu = s == null || s.showGpu, ram = s == null || s.showRam, net = s == null || s.showNetwork, up = s == null || s.showUptime;
+        cpuValue = gpuValue = memoryValue = download = upload = uptime = null;
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
         header.addView(ui.label("SYSTEM STATS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -39,39 +53,44 @@ public final class SystemWidget extends Widget {
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 
         List<View> rows = new ArrayList<View>();
-        int count = (s.showBattery ? 1 : 0) + (s.showRam ? 1 : 0) + (s.showStorage ? 1 : 0) + (s.showNetwork ? 1 : 0) + (s.showUptime ? 1 : 0);
-        double availableWidth = Math.max(1, width - 48), availableHeight = Math.max(1, height - 48 - 28 - 8);
-        double cellWidth = ROW_MIN_WIDTH + 2 * ROW_MARGIN_X, cellHeight = ROW_HEIGHT + 2 * ROW_MARGIN_Y;
-        int columns = StatsLayout.bestColumns(availableWidth, availableHeight, cellWidth, cellHeight, Math.max(1, count));
-        double rowWidth = StatsLayout.rowWidth(availableWidth, availableHeight, ROW_MIN_WIDTH, 2 * ROW_MARGIN_X, cellHeight, Math.max(1, count), columns);
-        if (s.showBattery) {
-            batteryValue = value("—", 30); batteryBar = bar("Battery level"); batteryDetail = detail("Reading battery…");
-            rows.add(meter("BATTERY", batteryValue, batteryBar, batteryDetail));
+        if (cpu) {
+            LinearLayout row = ui.row();
+            row.addView(name("CPU"), ui.ll(ui.px(76), Ui.WRAP));
+            cpuValue = value("—", 30);
+            row.addView(cpuValue, ui.ll(ui.px(96), Ui.WRAP));
+            cpuGraph = new Sparkline(ui.context, ui.theme.accent, ui.fpx(2));
+            row.addView(cpuGraph, ui.ll(0, ui.px(32), 1));
+            rows.add(row);
         }
-        if (s.showRam) {
-            memoryValue = value("—", 30); memoryBar = bar("RAM in use"); memoryDetail = detail("— / — GB");
+        if (gpu) {
+            gpuValue = value("—", 30); gpuBar = bar("GPU utilization"); gpuDetail = detail("Sampling…");
+            rows.add(meter("GPU", gpuValue, gpuBar, gpuDetail));
+        }
+        if (ram) {
+            memoryValue = value("—", 30); memoryBar = bar("RAM utilization"); memoryDetail = detail("— / — GB");
             rows.add(meter("RAM", memoryValue, memoryBar, memoryDetail));
         }
-        if (s.showStorage) {
-            storageValue = value("—", 30); storageBar = bar("Storage used"); storageDetail = detail("— / — GB");
-            rows.add(meter("STORAGE", storageValue, storageBar, storageDetail));
-        }
-        if (s.showNetwork) {
+        if (net) {
             LinearLayout row = ui.row();
-            row.addView(name("NET"), ui.ll(ui.px(96), Ui.WRAP));
+            row.addView(name("NET"), ui.ll(ui.px(76), Ui.WRAP));
             download = value("↓ — KB/s", 21); download.setContentDescription("Download rate");
             row.addView(download, ui.ll(0, Ui.WRAP, 1));
             upload = value("↑ — KB/s", 21); upload.setContentDescription("Upload rate");
             row.addView(upload, ui.ll(0, Ui.WRAP, 1));
             rows.add(row);
         }
-        if (s.showUptime) {
+        if (up) {
             LinearLayout row = ui.row();
-            row.addView(name("UPTIME"), ui.ll(ui.px(96), Ui.WRAP));
+            row.addView(name("UPTIME"), ui.ll(ui.px(76), Ui.WRAP));
             uptime = value("—", 21);
             row.addView(uptime, ui.ll(0, Ui.WRAP, 1));
             rows.add(row);
         }
+        int count = Math.max(1, rows.size());
+        double availableWidth = Math.max(1, width - 48), availableHeight = Math.max(1, height - 48 - 28 - 8);
+        double cellHeight = ROW_HEIGHT + 2 * ROW_MARGIN_Y;
+        int columns = StatsLayout.bestColumns(availableWidth, availableHeight, ROW_MIN_WIDTH + 2 * ROW_MARGIN_X, cellHeight, count);
+        double rowWidth = StatsLayout.rowWidth(availableWidth, availableHeight, ROW_MIN_WIDTH, 2 * ROW_MARGIN_X, cellHeight, count, columns);
         LinearLayout grid = ui.column();
         LinearLayout line = null;
         for (int i = 0; i < rows.size(); i++) {
@@ -91,7 +110,7 @@ public final class SystemWidget extends Widget {
 
     private View meter(String label, TextView value, ProgressLine bar, TextView detail) {
         LinearLayout row = ui.row();
-        row.addView(name(label), ui.ll(ui.px(96), Ui.WRAP));
+        row.addView(name(label), ui.ll(ui.px(76), Ui.WRAP));
         row.addView(value, ui.ll(ui.px(96), Ui.WRAP));
         LinearLayout right = ui.column();
         right.addView(bar, ui.ll(Ui.MATCH, ui.px(8)));
@@ -100,46 +119,34 @@ public final class SystemWidget extends Widget {
         return row;
     }
 
-    // A reading that needs attention (90% full, or 15% battery and not charging) takes the warning color.
-    private void load(TextView view, boolean warn) { view.setTextColor(warn ? Theme.WARNING : ui.theme.text); }
+    // A reading at 90% or more switches to the warning color so it stands out at a glance.
+    private void load(TextView view, double percent) { view.setTextColor(percent >= 90 ? Theme.WARNING : ui.theme.text); }
+    private static String percent(Double value) { return value == null ? "—" : Math.round(value) + "%"; }
 
-    public void refresh() {
-        if (!active()) return;
-        AppSettings s = dash.settings;
-        SystemReader.Snapshot snapshot;
-        try { snapshot = dash.system.read(s.showBattery, s.showRam, s.showStorage, s.showNetwork, s.showUptime); }
-        catch (Exception e) { status.setText("UNAVAILABLE"); return; }
-        status.setText("");
-        if (s.showBattery && batteryValue != null) {
-            if (snapshot.batteryAvailable) {
-                batteryValue.setText(snapshot.batteryPercent + "%");
-                load(batteryValue, snapshot.batteryPercent <= 15 && !snapshot.charging);
-                batteryBar.setValue(snapshot.batteryPercent / 100.0);
-                batteryDetail.setText((snapshot.charging ? "Charging" : "On battery") + (Double.isNaN(snapshot.batteryTemperature) ? "" : String.format(Locale.US, "  ·  %.0f°C", snapshot.batteryTemperature)));
-            } else { batteryValue.setText("—"); batteryBar.setValue(0); batteryDetail.setText("Unavailable"); }
+    @Override public void render() {
+        if (!built()) return;
+        PcState.System s = stats();
+        if (s != null && !s.error && !selection(s).equals(builtFor)) { dash.rebuildWidget(id); return; }
+        boolean ok = s != null && !s.error;
+        status.setText(!dash.online() ? "PC OFFLINE" : ok ? "" : "UNAVAILABLE");
+        if (cpuValue != null) {
+            cpuValue.setText(ok ? percent(s.cpu) : "—"); load(cpuValue, ok && s.cpu != null ? s.cpu : 0);
+            if (ok && s.cpu != null) { cpuHistory.add(s.cpu); if (cpuHistory.size() > 48) cpuHistory.remove(0); } else cpuHistory.clear();
+            cpuGraph.setValues(cpuHistory, 48);
         }
-        if (s.showRam && memoryValue != null) {
-            if (snapshot.memoryAvailable) {
-                double percent = 100.0 * snapshot.memoryUsed / snapshot.memoryTotal;
-                memoryValue.setText(Format.percent(percent)); load(memoryValue, percent >= 90);
-                memoryBar.setValue(percent / 100); memoryDetail.setText(Format.gigabytes(snapshot.memoryUsed) + " / " + Format.gigabytes(snapshot.memoryTotal) + " GB");
-            } else { memoryValue.setText("—"); memoryBar.setValue(0); memoryDetail.setText("Unavailable"); }
+        if (gpuValue != null) {
+            gpuValue.setText(ok ? percent(s.gpu) : "—"); load(gpuValue, ok && s.gpu != null ? s.gpu : 0);
+            gpuBar.setValue(ok && s.gpu != null ? s.gpu / 100 : 0); gpuDetail.setText(ok ? s.gpuStatus : "Unavailable");
         }
-        if (s.showStorage && storageValue != null) {
-            if (snapshot.storageAvailable) {
-                double percent = 100.0 * snapshot.storageUsed / snapshot.storageTotal;
-                storageValue.setText(Format.percent(percent)); load(storageValue, percent >= 90);
-                storageBar.setValue(percent / 100); storageDetail.setText(Math.round(snapshot.storageUsed / 1e9) + " / " + Math.round(snapshot.storageTotal / 1e9) + " GB");
-            } else { storageValue.setText("—"); storageBar.setValue(0); storageDetail.setText("Unavailable"); }
+        if (memoryValue != null) {
+            memoryValue.setText(ok ? percent(s.memoryPercent) : "—"); load(memoryValue, ok && s.memoryPercent != null ? s.memoryPercent : 0);
+            memoryBar.setValue(ok && s.memoryPercent != null ? s.memoryPercent / 100 : 0);
+            memoryDetail.setText(ok && s.memoryPercent != null ? String.format(Locale.US, "%.1f / %.1f GB", s.memoryUsedGB, s.memoryTotalGB) : "Unavailable");
         }
-        if (s.showNetwork && download != null) {
-            download.setText("↓ " + (snapshot.networkAvailable ? Format.rate(snapshot.download) : "— KB/s"));
-            upload.setText("↑ " + (snapshot.networkAvailable ? Format.rate(snapshot.upload) : "— KB/s"));
+        if (download != null) {
+            download.setText("↓ " + (ok && s.download != null ? Format.rate(s.download) : "— KB/s"));
+            upload.setText("↑ " + (ok && s.upload != null ? Format.rate(s.upload) : "— KB/s"));
         }
-        if (s.showUptime && uptime != null) uptime.setText(Format.uptime(snapshot.uptimeMs));
+        if (uptime != null) uptime.setText(ok ? Format.uptime((long) s.uptimeMs) : "—");
     }
-
-    @Override public void render() { refresh(); }
-
-    @Override public void tick(int ticks, boolean quiet) { if (ticks % (quiet ? 5 : 2) == 0) refresh(); }
 }

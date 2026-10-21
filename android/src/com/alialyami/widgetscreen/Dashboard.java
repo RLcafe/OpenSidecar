@@ -1,10 +1,8 @@
 package com.alialyami.widgetscreen;
 
-import android.app.AlertDialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.SharedPreferences;
-import android.os.SystemClock;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
@@ -14,25 +12,22 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.alialyami.widgetscreen.core.AppSettings;
-import com.alialyami.widgetscreen.core.Deck;
-import com.alialyami.widgetscreen.core.FocusTimer;
 import com.alialyami.widgetscreen.core.Format;
+import com.alialyami.widgetscreen.core.Json;
+import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.WidgetLayout;
 import com.alialyami.widgetscreen.integrations.Async;
-import com.alialyami.widgetscreen.integrations.AudioControl;
 import com.alialyami.widgetscreen.integrations.Images;
-import com.alialyami.widgetscreen.integrations.Launcher;
-import com.alialyami.widgetscreen.integrations.MediaSessions;
-import com.alialyami.widgetscreen.integrations.SpotifyService;
-import com.alialyami.widgetscreen.integrations.SystemReader;
+import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ScaledHost;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.MediaWidget;
 import com.alialyami.widgetscreen.widgets.QuickLaunchWidget;
-import com.alialyami.widgetscreen.widgets.SoundWidget;
+import com.alialyami.widgetscreen.widgets.MixerWidget;
+import com.alialyami.widgetscreen.widgets.SoundboardWidget;
 import com.alialyami.widgetscreen.widgets.SpotifyWidget;
 import com.alialyami.widgetscreen.widgets.SystemWidget;
 import com.alialyami.widgetscreen.widgets.WeatherWidget;
@@ -40,26 +35,23 @@ import com.alialyami.widgetscreen.widgets.Widget;
 
 import java.io.File;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-// The Android DashboardController: builds the dashboard, runs the single 1 s heartbeat, owns settings
-// transactions and the layout editor. Wide screens get the 1920 × 720 dashboard scaled to fit (its widget
-// canvas stretched to the screen); phones get the same cards in a scrolling list.
+// The phone remote's DashboardController: builds the dashboard, runs the single 1 s heartbeat, asks the PC for
+// the state of the cards on screen and sends their commands, and owns the phone's settings and layout editor.
+// Wide screens get the 1920 × 720 dashboard scaled to fit (its widget canvas stretched to the screen); phones get
+// the same cards in a scrolling list.
 public final class Dashboard {
     private static final double LIST_GAP = 16;
     public final MainActivity activity;
     public AppSettings settings;
-    public final FocusTimer focus = new FocusTimer(new FocusTimer.Clock() { @Override public long millis() { return SystemClock.elapsedRealtime(); } });
-    public final MediaSessions media;
-    public final AudioControl audio;
-    public final SystemReader system;
-    public final SpotifyService spotify;
-    public final Launcher launcher;
+    public final Pc pc;
     public final Images images = new Images();
     public final LayoutEditor editor = new LayoutEditor();
     private final File settingsFile;
-    private final SharedPreferences state;
     private final Map<String, Widget> widgets = new LinkedHashMap<String, Widget>();
 
     private FrameLayout root;
@@ -68,7 +60,7 @@ public final class Dashboard {
     private WidgetCanvas canvas;
     private Ui ui;
     private float scale = 1;
-    private boolean listMode, started;
+    private boolean listMode, started, refreshNow, offlineShown, askedToPair;
     private int builtWidth = -1, builtHeight = -1;
     private TextView clockTime, clockPeriod, clockDay, clockDate, statusLine, displayStatus, quietButton, undoButton, redoButton;
     private View clockPeriodView, mainActions, editToolbar, widgetsPanel;
@@ -81,26 +73,21 @@ public final class Dashboard {
     public Dashboard(MainActivity activity) {
         this.activity = activity;
         settingsFile = new File(activity.getFilesDir(), "settings.xml");
-        state = activity.getSharedPreferences("state", Context.MODE_PRIVATE);
         String[] warning = new String[1];
         settings = AppSettings.load(settingsFile, warning);
-        media = new MediaSessions(activity);
-        audio = new AudioControl(activity);
-        system = new SystemReader(activity);
-        spotify = new SpotifyService(activity);
-        launcher = new Launcher(activity);
-        focus.restore(state.getString("focus", null));
+        pc = new Pc(activity);
         widgets.put("Focus", new FocusWidget(this));
         widgets.put("Media", new MediaWidget(this));
         widgets.put("Shortcuts", new QuickLaunchWidget(this));
-        widgets.put("Mixer", new SoundWidget(this));
+        widgets.put("Mixer", new MixerWidget(this));
         widgets.put("System", new SystemWidget(this));
         widgets.put("Weather", new WeatherWidget(this));
         widgets.put("Spotify", new SpotifyWidget(this));
+        widgets.put("Soundboard", new SoundboardWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
-        if (warning[0] != null) notify(warning[0], true);
-        else if (spotify.startupWarning != null) notify(spotify.startupWarning);
+        if (warning[0] != null) say(warning[0], true);
+        else if (pc.startupWarning != null) say(pc.startupWarning, true);
     }
 
     public void attach(FrameLayout root) {
@@ -120,14 +107,71 @@ public final class Dashboard {
     public Ui ui() { return ui; }
     public boolean listMode() { return listMode; }
     public boolean editing() { return editor.editing(); }
-    public SpotifyWidget spotifyWidget() { return (SpotifyWidget) widgets.get("Spotify"); }
-    public WeatherWidget weatherWidget() { return (WeatherWidget) widgets.get("Weather"); }
 
-    // Whether a widget is on screen and should poll: the app is in front, the widget is shown, and Spotify
-    // pauses while the layout is edited (as on Windows).
+    // Whether a widget is on screen and should poll: the app is in front, the widget is shown, and Spotify and
+    // the soundboard pause while the layout is edited (as on Windows).
     public boolean isActive(String id) {
         Widget widget = widgets.get(id);
-        return started && widget != null && widget.built() && editor.isVisible(id) && !(id.equals("Spotify") && editor.editing());
+        return started && widget != null && widget.built() && editor.isVisible(id) && !((id.equals("Spotify") || id.equals("Soundboard")) && editor.editing());
+    }
+
+    // ----- The PC -----
+
+    public PcState state() { return pc.state; }
+    public boolean online() { return pc.online(); }
+    public boolean quiet() { return pc.state != null && pc.state.quiet; }
+    public String offlineText() {
+        if (!pc.paired()) return "Pair this phone with your PC in Settings → PC.";
+        if (pc.unpaired) return "The PC no longer knows this phone. Pair it again in Settings → PC.";
+        if (pc.problem != null) return "Can't reach " + pc.name() + ".";
+        return "Connecting to " + pc.name() + "…";
+    }
+
+    // Asks the PC for the cards on screen; hidden cards aren't read on the PC either.
+    private void poll() {
+        List<String> parts = new ArrayList<String>();
+        for (Widget widget : widgets.values()) if (isActive(widget.id) && !parts.contains(widget.part())) parts.add(widget.part());
+        pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } });
+    }
+
+    public void refreshSoon() { refreshNow = true; Async.MAIN.postDelayed(new Runnable() { @Override public void run() { if (started && refreshNow) { refreshNow = false; poll(); } } }, 250); }
+
+    private void stateChanged() {
+        if (pc.problem != null) { say(pc.problem, true); offlineShown = true; }
+        else if (offlineShown) { offlineShown = false; say("Connected to " + pc.name() + "."); }
+        updateClock(); updateQuiet();
+        for (Widget widget : widgets.values()) if (widget.built()) {
+            try { widget.stateChanged(); }
+            catch (Exception e) { /* One failing widget never stops the others. */ }
+        }
+        if (settingsPanel != null) settingsPanel.pcChanged();
+    }
+
+    // Sends a command to the PC; any problem shows in the status line, and the cards refresh right after.
+    public void command(Map<String, Object> body) { command(body, null); }
+    public void command(Map<String, Object> body, final String done) {
+        pc.command(body, new Async.Done<String>() {
+            @Override public void ok(String message) { if (message != null && !message.isEmpty()) say(message); else if (done != null) say(done); refreshSoon(); }
+        }, new Async.Failed() {
+            @Override public void error(Exception error) { say(Pc.message(error)); refreshSoon(); }
+        });
+    }
+
+    public void openUrl(String url) {
+        activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    // A card whose arrangement depends on the PC (System stats rows) is built again when that changes.
+    public void rebuildWidget(final String id) {
+        Async.MAIN.post(new Runnable() {
+            @Override public void run() { if (canvas != null && canvas.hasCard(id)) attachCard(id); else if (listMode) rebuild(); }
+        });
+    }
+
+    public static String deviceName() {
+        String model = Build.MODEL == null ? "Phone" : Build.MODEL;
+        String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER;
+        return maker.isEmpty() || model.toLowerCase(java.util.Locale.ROOT).startsWith(maker.toLowerCase(java.util.Locale.ROOT)) ? model : maker.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + maker.substring(1) + " " + model;
     }
 
     public void onStart() {
@@ -135,13 +179,12 @@ public final class Dashboard {
         Async.MAIN.removeCallbacks(heartbeat);
         Async.MAIN.post(heartbeat);
         for (Widget widget : widgets.values()) if (widget.built()) widget.render();
-        if (settingsPanel != null) settingsPanel.resumed();
+        if (pc.paired()) poll();
     }
 
     public void onStop() {
         started = false;
         Async.MAIN.removeCallbacks(heartbeat);
-        state.edit().putString("focus", focus.save()).apply();
     }
 
     private final Runnable heartbeat = new Runnable() {
@@ -156,15 +199,17 @@ public final class Dashboard {
         ticks++;
         updateClock();
         if (ticks >= statusClearsAt && !editor.editing()) { setStatus(""); statusClearsAt = Integer.MAX_VALUE; }
+        // The PC is asked every 2 s, or every 5 s in its Quiet mode, like the Windows refresh cadence.
+        if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll();
         for (Widget widget : widgets.values()) if (widget.built()) {
-            try { widget.tick(ticks, settings.quietMode); }
+            try { widget.tick(ticks, quiet()); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
         }
     }
 
     // Status messages clear after about ten seconds on the heartbeat. A sticky one stays until replaced.
-    public void notify(String text) { notify(text, false); }
-    public void notify(String text, boolean sticky) { setStatus(text); statusClearsAt = sticky ? Integer.MAX_VALUE : ticks + 10; }
+    public void say(String text) { say(text, false); }
+    public void say(String text, boolean sticky) { setStatus(text); statusClearsAt = sticky ? Integer.MAX_VALUE : ticks + 10; }
     private void setStatus(String text) { statusText = text == null ? "" : text; if (statusLine != null) statusLine.setText(statusText); }
 
     public AppSettings look() { return appearance != null ? appearance : settings; }
@@ -207,6 +252,9 @@ public final class Dashboard {
         updateQuiet();
         updateEditorChrome();
         if (settingsPanel != null) settingsPanel.dashboardRebuilt();
+        else askToPairIfNeeded();
+        // New cards ask the PC for their readings right away instead of waiting for the next beat.
+        if (pc.paired() && started) refreshSoon();
     }
 
     private View buildHeader(boolean stacked) {
@@ -358,9 +406,10 @@ public final class Dashboard {
     private void updateClock() {
         if (clockTime == null) return;
         LocalDateTime now = LocalDateTime.now();
-        clockTime.setText(Format.clockTime(now, settings.use24HourClock));
+        boolean use24 = pc.state != null && pc.state.use24;
+        clockTime.setText(Format.clockTime(now, use24));
         clockPeriod.setText(Format.clockPeriod(now));
-        clockPeriodView.setVisibility(settings.use24HourClock ? View.GONE : View.VISIBLE);
+        clockPeriodView.setVisibility(use24 ? View.GONE : View.VISIBLE);
         clockDay.setText(Format.clockDay(now));
         clockDate.setText(Format.clockDate(now));
     }
@@ -368,20 +417,17 @@ public final class Dashboard {
     // Quiet mode is a toggle: when on it takes the same selected look as the chosen Focus preset.
     private void updateQuiet() {
         if (quietButton == null) return;
-        ui.select(quietButton, settings.quietMode);
-        quietButton.setContentDescription(settings.quietMode ? "Quiet mode, on" : "Quiet mode, off");
+        ui.select(quietButton, quiet());
+        quietButton.setContentDescription(quiet() ? "Quiet mode, on" : "Quiet mode, off");
+        Ui.enable(quietButton, online());
     }
 
-    public void toggleQuiet() {
-        settings.quietMode = !settings.quietMode;
-        persist();
-        updateQuiet();
-        notify(settings.quietMode ? "Quiet mode on. Updates are slower." : "Quiet mode off.");
-    }
+    // Quiet mode belongs to the PC: it slows the PC's updates and the phone's readings alike.
+    public void toggleQuiet() { command(Json.map("action", "quiet.toggle"), quiet() ? "Quiet mode off." : "Quiet mode on. Updates are slower."); }
 
     public void persist() {
         try { AppSettings.save(settingsFile, settings); }
-        catch (Exception e) { notify("Settings couldn't be saved on this device. Try again.", true); }
+        catch (Exception e) { say("Settings couldn't be saved on this device. Try again.", true); }
     }
 
     // ----- Layout editor -----
@@ -391,7 +437,7 @@ public final class Dashboard {
         editor.begin();
     }
 
-    private void cancelEdit() { closeWidgetsPanel(); editor.cancel(); notify("Layout changes discarded."); }
+    private void cancelEdit() { closeWidgetsPanel(); editor.cancel(); say("Layout changes discarded."); }
 
     private void saveEdit() {
         closeWidgetsPanel();
@@ -399,7 +445,7 @@ public final class Dashboard {
         settings.snapWidgets = editor.snap();
         editor.accept();
         persist();
-        notify(editor.hasOverlaps() ? "Layout saved. Some widgets overlap." : "Layout saved.");
+        say(editor.hasOverlaps() ? "Layout saved. Some widgets overlap." : "Layout saved.");
     }
 
     public void onBack(Runnable fallback) {
@@ -438,7 +484,7 @@ public final class Dashboard {
         if (id.equals("System") && !editor.isVisible("System") && editor.isEnabled("System")) info += " · Turn on readings in Settings to show system stats";
         else if (!editor.isEnabled(id)) info += " · Hidden · Turn it on under Widgets to bring it back";
         if (editor.hasOverlaps()) info += " · Widgets overlap";
-        notify(info, true);
+        say(info, true);
         if (displayStatus != null) displayStatus.setText("DRAG A CARD TO MOVE · DRAG A CORNER TO RESIZE · BACK CANCELS");
         if (widgetsPanel != null) refreshWidgetsPanel();
     }
@@ -502,12 +548,11 @@ public final class Dashboard {
     // Saves the Settings draft: everything except Spotify account actions, which apply right away.
     // The layout can't be edited while Settings is open, so the draft's layout only differs by the widgets
     // shown or hidden under Settings → Widgets.
-    public void applySettings(AppSettings draft, boolean locationChanged) {
+    public void applySettings(AppSettings draft) {
         settings = draft;
         persist();
         editor.apply(settings);
         appearance = null;
-        if (locationChanged) weatherWidget().locationChanged();
         rebuild();
     }
 
@@ -518,68 +563,16 @@ public final class Dashboard {
         beginEdit();
     }
 
-    public void saveSpotifyClientId(String id) { settings.spotifyClientId = id; persist(); }
-
-    public void spotifyAccountChanged() {
-        spotifyWidget().accountChanged();
-        if (settingsPanel != null) settingsPanel.spotifyChanged();
+    // The PC was paired, forgotten or changed in Settings → PC: start over with fresh readings.
+    public void pcChanged() {
+        offlineShown = false; setStatus("");
+        for (Widget widget : widgets.values()) if (widget.built()) widget.stateChanged();
+        if (pc.paired()) poll();
     }
 
-    public void handleSpotifyCallback(String uri) {
-        if (settingsPanel != null) settingsPanel.spotifyStatus("Spotify approved. Finishing the connection…");
-        spotify.completeSignIn(uri, new Async.Done<Void>() {
-            @Override public void ok(Void value) {
-                spotifyAccountChanged();
-                if (settingsPanel != null) settingsPanel.spotifyStatus("Connected and saved. Your account will restore when you reopen the app.");
-                else Dashboard.this.notify("Spotify is connected.");
-            }
-        }, new Async.Failed() {
-            @Override public void error(Exception error) {
-                String message = SpotifyService.message(error);
-                if (settingsPanel != null) { settingsPanel.spotifyStatus(message); settingsPanel.spotifyChanged(); }
-                else Dashboard.this.notify(message);
-            }
-        });
+    // First launch, or the PC forgot this phone: open Settings → PC once so pairing is the obvious next step.
+    public void askToPairIfNeeded() {
+        if (askedToPair || settingsPanel != null || editor.editing()) return;
+        if (!pc.paired()) { askedToPair = true; openSettings("PC"); }
     }
-
-    // ----- Quick Launch -----
-
-    public void runShortcut(final Deck.Shortcut shortcut) {
-        String error = Deck.validate(shortcut);
-        if (error != null) { notify(shortcut.label + ": " + error); return; }
-        if (Deck.needsConfirmation(shortcut)) {
-            new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Quick Launch")
-                .setMessage(shortcut.label + "\n\n" + Deck.describe(shortcut, launcher.appName(shortcut.target)) + "\n\nRun this action?")
-                .setPositiveButton("Run", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) { perform(shortcut); } })
-                .setNegativeButton("Cancel", null)
-                .show();
-            return;
-        }
-        perform(shortcut);
-    }
-
-    private void perform(Deck.Shortcut shortcut) {
-        try {
-            if ("Control".equals(shortcut.action)) {
-                switch (shortcut.target) {
-                    case "play": mediaWidget().command("toggle"); break;
-                    case "previous": mediaWidget().command("previous"); break;
-                    case "next": mediaWidget().command("next"); break;
-                    case "mute": audio.toggleMute(); refreshSound(); break;
-                    case "volume-up": audio.step(true); refreshSound(); break;
-                    case "volume-down": audio.step(false); refreshSound(); break;
-                    case "focus": focus.toggle(); widgets.get("Focus").render(); break;
-                    case "quiet": toggleQuiet(); break;
-                    case "sound": AudioControl.openSoundSettings(activity); break;
-                }
-            } else {
-                launcher.open(activity, shortcut);
-                notify("Opened " + shortcut.label);
-            }
-        } catch (Exception e) { notify(shortcut.label + ": " + (e.getMessage() == null ? "Couldn't run this button." : e.getMessage())); }
-    }
-
-    private MediaWidget mediaWidget() { return (MediaWidget) widgets.get("Media"); }
-    private void refreshSound() { ((SoundWidget) widgets.get("Mixer")).refresh(); }
 }

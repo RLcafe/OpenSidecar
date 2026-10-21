@@ -78,20 +78,28 @@ namespace WidgetScreen
             }
         }
 
+        // The addresses a phone can use. Adapters with a gateway (the home network) come first; virtual adapters and
+        // self-assigned 169.254 addresses are only shown when there's nothing better.
         public static List<string> LocalAddresses()
         {
-            var result = new List<string>();
+            var routed = new List<string>(); var other = new List<string>();
             try
             {
                 foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
                 {
                     if (adapter.OperationalStatus != OperationalStatus.Up || adapter.NetworkInterfaceType == NetworkInterfaceType.Loopback || adapter.NetworkInterfaceType == NetworkInterfaceType.Tunnel) continue;
-                    foreach (var address in adapter.GetIPProperties().UnicastAddresses)
-                        if (address.Address.AddressFamily == AddressFamily.InterNetwork && IsLocal(address.Address)) result.Add(address.Address.ToString());
+                    var properties = adapter.GetIPProperties();
+                    bool gateway = properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any));
+                    foreach (var address in properties.UnicastAddresses)
+                    {
+                        if (address.Address.AddressFamily != AddressFamily.InterNetwork || !IsLocal(address.Address) || IPAddress.IsLoopback(address.Address)) continue;
+                        bool selfAssigned = address.Address.GetAddressBytes()[0] == 169;
+                        (gateway && !selfAssigned ? routed : other).Add(address.Address.ToString());
+                    }
                 }
             }
             catch (NetworkInformationException) { }
-            return result.Distinct().ToList();
+            return (routed.Count > 0 ? routed : other.Where(a => !a.StartsWith("169.254.")).DefaultIfEmpty(other.FirstOrDefault()).Where(a => a != null)).Distinct().ToList();
         }
 
         // Phones on the home network only: private, link-local and loopback addresses.
@@ -322,7 +330,8 @@ namespace WidgetScreen
                 case "deck.run":
                     {
                         int index = (int)Num(body, "index");
-                        if (index < 0 || index >= settings.Shortcuts.Count) throw new InvalidOperationException("That button changed on the PC. Try again.");
+                        string label = Str(body, "label");
+                        if (index < 0 || index >= settings.Shortcuts.Count || (label != null && label != settings.Shortcuts[index].Label)) throw new InvalidOperationException("That button changed on the PC. Try again.");
                         string error = await RunDeckActionAsync(settings.Shortcuts[index], Flag(body, "confirmed"));
                         if (error != null) throw new InvalidOperationException(error);
                         return Done(null);
@@ -377,6 +386,8 @@ namespace WidgetScreen
                     case "like": await spotifyService.SetLikedAsync(Str(body, "uri"), Flag(body, "liked")); return Done(null);
                     case "playCollection": await spotifyService.PlayInCollectionAsync(Str(body, "uri"), (int)Num(body, "position")); return Done(null);
                     case "playTrack": await spotifyService.PlayTrackAsync(Str(body, "uri")); return Done(null);
+                    // No active Spotify device: open Spotify on the PC so the phone can retry, as the PC widget does.
+                    case "open": Launcher.Open("spotify:"); return Done(null);
                     default: throw new ArgumentException("Unknown Spotify request. Update Widget Screen on the phone or the PC.");
                 }
             }

@@ -83,5 +83,7 @@ if ($Test) {
     $testList = "$testWork\sources.txt"
     $testSources | ForEach-Object { '"' + $_.Replace('\', '/') + '"' } | Set-Content -LiteralPath $testList -Encoding ascii
     Invoke-Tool $javac @('-nowarn', '-encoding', 'UTF-8', '-d', $testWork, "@$testList") 'Test compilation'
-    Invoke-Tool $java @('-cp', $testWork, 'com.alialyami.widgetscreen.tests.AndroidTests') 'Tests'
+    # The Windows checks (build.ps1 -Test) save a real answer from the phone link; the phone must read it.
+    $sample = Join-Path $projectRoot 'artifacts\tests\remote-state-sample.json'
+    Invoke-Tool $java @("-Dwidgetscreen.sample=$sample", '-cp', $testWork, 'com.alialyami.widgetscreen.tests.AndroidTests') 'Tests'
 }

@@ -130,6 +130,11 @@ public final class Glyphs {
             case "album": circle(s, 12, 12, 9); circle(f, 12, 12, 2.2f); break;
             case "output": round(s, 5, 3, 19, 21, 2.5f); circle(s, 12, 14.5f, 3.5f); circle(f, 12, 7, 1.2f); break;
             case "up": poly(s, false, 6, 14, 12, 8, 18, 14); break;
+            case "microphone": round(s, 9, 3, 15, 14, 3); s.addArc(new RectF(5.5f, 6.5f, 18.5f, 17.5f), 0, 180); line(s, 12, 17.5f, 12, 21); line(s, 8.5f, 21, 15.5f, 21); break;
+            case "keyboard":
+                round(s, 2.5f, 6, 21.5f, 18, 2); line(s, 7, 14.5f, 17, 14.5f);
+                for (int i = 0; i < 5; i++) circle(f, 6 + i * 3, 10, 0.9f);
+                break;
             case "down": poly(s, false, 6, 10, 12, 16, 18, 10); break;
             default: round(s, 4, 4, 10.5f, 10.5f, 1.5f); round(s, 13.5f, 4, 20, 10.5f, 1.5f); round(s, 4, 13.5f, 10.5f, 20, 1.5f); round(s, 13.5f, 13.5f, 20, 20, 1.5f); break;
         }

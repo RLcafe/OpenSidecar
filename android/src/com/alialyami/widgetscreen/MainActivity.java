@@ -1,10 +1,8 @@
 package com.alialyami.widgetscreen;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Insets;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.DisplayCutout;
@@ -18,8 +16,7 @@ import android.widget.FrameLayout;
 import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.Theme;
 
-// Startup and the window: edge-to-edge, optional hidden system bars, keep-awake, back handling and the
-// Spotify sign-in callback (widgetscreen://spotify-callback).
+// Startup and the window: edge-to-edge, optional hidden system bars, keep-awake and back handling.
 public final class MainActivity extends Activity {
     private Dashboard dashboard;
     private FrameLayout root;
@@ -45,7 +42,6 @@ public final class MainActivity extends Activity {
         hideBars = dashboard.settings.hideSystemBars;
         applySystemBars();
         dashboard.attach(root);
-        handle(getIntent());
     }
 
     // Hidden bars appear over the dashboard when swiped in, so only the display cutout pads it then;
@@ -102,19 +98,6 @@ public final class MainActivity extends Activity {
 
     @Override protected void onStart() { super.onStart(); dashboard.onStart(); }
     @Override protected void onStop() { dashboard.onStop(); super.onStop(); }
-
-    @Override protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        handle(intent);
-    }
-
-    private void handle(Intent intent) {
-        Uri data = intent == null ? null : intent.getData();
-        if (data == null || !"widgetscreen".equals(data.getScheme())) return;
-        // Handle the callback once, even if the activity is shown again with the same intent.
-        setIntent(new Intent(this, MainActivity.class));
-        dashboard.handleSpotifyCallback(data.toString());
-    }
 
     @Override public void onBackPressed() {
         dashboard.onBack(new Runnable() { @Override public void run() { MainActivity.super.onBackPressed(); } });

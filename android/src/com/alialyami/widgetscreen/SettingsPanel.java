@@ -1,12 +1,6 @@
 package com.alialyami.widgetscreen;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
-import android.content.Intent;
-import android.provider.Settings;
-import android.text.Editable;
-import android.text.TextWatcher;
+import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -21,18 +15,13 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.alialyami.widgetscreen.core.AppSettings;
-import com.alialyami.widgetscreen.core.Deck;
-import com.alialyami.widgetscreen.core.Spotify;
+import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.Theme;
-import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.core.WidgetLayout;
 import com.alialyami.widgetscreen.integrations.Async;
-import com.alialyami.widgetscreen.integrations.Http;
-import com.alialyami.widgetscreen.integrations.Launcher;
-import com.alialyami.widgetscreen.integrations.SpotifyService;
+import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
 import com.alialyami.widgetscreen.views.FlowLayout;
-import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
 import java.util.ArrayList;
@@ -40,26 +29,23 @@ import java.util.List;
 import java.util.Locale;
 
 // Settings as an overlay on the dashboard, like the Windows panel (1440 × 672 at most, full screen on
-// phones). Tabs: Theme, Display, Widgets, Weather, Spotify, Quick Launch. Changes are a draft: appearance
-// previews live, Save keeps everything, Cancel restores. Spotify account actions apply right away.
+// phones). Tabs: Theme, Display and Widgets for this phone, and PC for pairing. Changes are a draft: appearance
+// previews live, Save keeps everything, Cancel restores. Pairing applies right away. Everything the widgets do
+// (Quick Launch buttons, weather city, Spotify, Discord) is set up in Settings on the PC.
 public final class SettingsPanel {
-    public static final String[] TABS = { "Theme", "Display", "Widgets", "Weather", "Spotify", "Quick Launch" };
+    public static final String[] TABS = { "Theme", "Display", "Widgets", "PC" };
 
     private final Dashboard dash;
     private final FrameLayout overlay;
     private final AppSettings draft;
     private Ui ui;
     private String tab;
-    private boolean wide, locationChanged;
-    private TextView status, spotifyStatus;
+    private boolean wide, finding, pairing;
+    private TextView status;
     private LinearLayout content;
     private ScrollView scroll;
-    private String spotifyMessage, weatherQuery = "", appFilter = "", statusText = "";
-    private List<Weather.Location> weatherResults;
-    private boolean weatherBusy;
-    private List<Launcher.App> apps;
-    private int selectedShortcut;
-    private EditText clientId;
+    private String statusText = "", pcAddress = "", pcCode = "", pcMessage;
+    private List<PcLink.Found> found;
 
     public SettingsPanel(Dashboard dash, String tab) {
         this.dash = dash;
@@ -196,9 +182,7 @@ public final class SettingsPanel {
         switch (tab) {
             case "Display": buildDisplay(); break;
             case "Widgets": buildWidgets(); break;
-            case "Weather": buildWeather(); break;
-            case "Spotify": buildSpotify(); break;
-            case "Quick Launch": buildQuickLaunch(); break;
+            case "PC": buildPc(); break;
             default: buildTheme(); break;
         }
     }
@@ -246,7 +230,7 @@ public final class SettingsPanel {
             }
         });
         add(right, scale, 4);
-        add(right, ui.check("Use a 24-hour clock", draft.use24HourClock, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.use24HourClock = checked; } }), 8);
+        add(right, note("The 24-hour clock follows the PC's setting."), 12);
     }
 
     // ----- Display -----
@@ -284,353 +268,110 @@ public final class SettingsPanel {
             }), 0);
         }
 
-        add(right, heading("System stats"), 0);
-        add(right, note("Choose the readings the System stats widget shows."), 10);
-        add(right, ui.check("Battery level", draft.showBattery, new CheckBox.Listener() { @Override public void changed(CheckBox b, boolean v) { draft.showBattery = v; } }), 8);
-        add(right, ui.check("Memory (RAM) usage", draft.showRam, new CheckBox.Listener() { @Override public void changed(CheckBox b, boolean v) { draft.showRam = v; } }), 0);
-        add(right, ui.check("Storage used", draft.showStorage, new CheckBox.Listener() { @Override public void changed(CheckBox b, boolean v) { draft.showStorage = v; } }), 0);
-        add(right, ui.check("Network speed", draft.showNetwork, new CheckBox.Listener() { @Override public void changed(CheckBox b, boolean v) { draft.showNetwork = v; } }), 0);
-        add(right, ui.check("Time since restart", draft.showUptime, new CheckBox.Listener() { @Override public void changed(CheckBox b, boolean v) { draft.showUptime = v; } }), 0);
-        add(right, note("Hidden readings stop updating. Turn them all off to hide the widget. Android doesn't let apps read CPU or GPU usage."), 8);
-
-        add(right, heading("Now Playing"), 24);
-        boolean allowed = dash.media.hasAccess();
-        add(right, note("Now Playing reads and controls what's playing through Android's notification access. " + (allowed ? "Access is allowed." : "Access isn't allowed yet.")), 10);
-        TextView access = ui.button(allowed ? "Notification access settings" : "Allow notification access", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                try { dash.activity.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
-                catch (Exception e) { setStatus("Open Android Settings → Notifications → Device & app notifications, then allow Widget Screen."); }
-            }
-        });
-        right.addView(access, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 12, 0, 0));
+        add(right, heading("On the PC"), 0);
+        add(right, note("The cards show and control your PC. Quick Launch buttons, System stats readings, the weather city, Spotify and Discord are set up in Settings on the PC, and the phone follows."), 10);
     }
 
-    // Coming back from Android's notification access screen updates the Widgets tab.
-    public void resumed() { if (tab.equals("Widgets") || tab.equals("Spotify")) build(); }
+    // ----- PC -----
 
-    // ----- Weather -----
+    public void pcChanged() { if (tab.equals("PC")) refreshPcStatus(); }
 
-    private void buildWeather() {
-        LinearLayout column = ui.column();
-        content.addView(column, ui.ll(wide ? ui.px(760) : Ui.MATCH, Ui.WRAP));
-        add(column, heading("Weather"), 0);
-        add(column, note("Show current conditions for one city. The Weather widget starts hidden; turn it on under Widgets or in Edit layout."), 10);
-        add(column, ui.smallText("City"), 16);
-        LinearLayout searchRow = ui.row();
-        final EditText city = ui.input(weatherQuery.isEmpty() ? draft.weatherLocation : weatherQuery, "City name");
-        city.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        city.setContentDescription("City");
-        city.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-            @Override public boolean onEditorAction(TextView v, int action, KeyEvent event) {
-                if (action == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) { searchCity(city.getText().toString()); return true; }
-                return false;
-            }
-        });
-        searchRow.addView(city, ui.ll(0, Ui.WRAP, 1));
-        TextView search = ui.button(weatherBusy ? "Searching…" : "Search", new View.OnClickListener() { @Override public void onClick(View v) { searchCity(city.getText().toString()); } });
-        Ui.enable(search, !weatherBusy);
-        searchRow.addView(search, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 8, 0, 0, 0));
-        add(column, searchRow, 6);
-        if (weatherResults != null) {
-            if (weatherResults.isEmpty()) add(column, note("No places found. Check the spelling or try a nearby city."), 10);
-            for (final Weather.Location location : weatherResults) {
-                TextView result = ui.button(location.name, new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        draft.weatherLocation = location.name; draft.latitude = location.latitude; draft.longitude = location.longitude;
-                        locationChanged = true; weatherResults = null; weatherQuery = "";
-                        build(); setStatus("Weather will show " + location.name + ". Save to keep it.");
-                    }
-                });
-                result.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-                add(column, result, 6);
-            }
-        }
-        add(column, ui.smallText(draft.weatherLocation.isEmpty() ? "Weather is off." : "Showing: " + draft.weatherLocation), 18);
-        TextView off = ui.button("Turn weather off", new View.OnClickListener() {
-            @Override public void onClick(View v) { draft.weatherLocation = ""; draft.latitude = draft.longitude = 0; locationChanged = true; build(); setStatus("Weather is off. Save to keep it."); }
-        });
-        Ui.enable(off, !draft.weatherLocation.isEmpty());
-        column.addView(off, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 10, 0, 0));
-        add(column, note("Search sends the city name to Open-Meteo. No account is needed. Once saved, weather updates every 15 minutes."), 14);
+    private TextView pcStatus;
+
+    private String pcStatusText() {
+        Pc pc = dash.pc;
+        if (pcMessage != null) return pcMessage;
+        if (!pc.paired()) return "Not paired yet. Follow the steps to connect this phone to your PC.";
+        if (pc.online()) return "Connected to " + pc.name() + " (" + pc.address() + ").";
+        return dash.offlineText();
     }
 
-    private void searchCity(final String query) {
-        weatherQuery = query;
-        final String url;
-        try { url = Weather.searchUrl(query); }
-        catch (IllegalStateException e) { setStatus(e.getMessage()); return; }
-        weatherBusy = true; build();
-        Async.run(new Async.Work<List<Weather.Location>>() {
-            @Override public List<Weather.Location> run() throws Exception { return Weather.parseLocations(Http.getText(url)); }
-        }, new Async.Done<List<Weather.Location>>() {
-            @Override public void ok(List<Weather.Location> found) { weatherBusy = false; weatherResults = found; if (tab.equals("Weather")) build(); }
-        }, new Async.Failed() {
-            @Override public void error(Exception error) { weatherBusy = false; if (tab.equals("Weather")) { build(); setStatus("Can't reach the weather service. Check your connection and try again."); } }
-        });
-    }
+    private void refreshPcStatus() { if (pcStatus != null) pcStatus.setText(pcStatusText()); }
 
-    // ----- Spotify -----
-
-    private String accountStatus() {
-        SpotifyService spotify = dash.spotify;
-        if (spotify.signingIn() && !spotify.connected()) return "Finish signing in in your browser, then return here.";
-        if (spotify.startupWarning != null) return spotify.startupWarning;
-        return spotify.connected() ? spotify.canControl() ? "Connected. Your login is saved on this device." : "Connected. Reconnect once to enable playback." : "Not connected. Save your Client ID, then connect.";
-    }
-
-    public void spotifyStatus(String message) { spotifyMessage = message; if (spotifyStatus != null) spotifyStatus.setText(message); }
-    public void spotifyChanged() { if (tab.equals("Spotify")) build(); }
-
-    private String saveClientId() {
-        String value = clientId.getText().toString().trim();
-        if (!Spotify.validClientId(value)) throw new IllegalStateException("Paste the 32-character Client ID from your Spotify Developer app.");
-        dash.saveSpotifyClientId(value);
-        draft.spotifyClientId = value;
-        return value;
-    }
-
-    private void buildSpotify() {
-        final SpotifyService spotify = dash.spotify;
+    private void buildPc() {
+        final Pc pc = dash.pc;
         LinearLayout[] c = columns();
         LinearLayout left = c[0], right = c[1];
-        add(left, heading("Connection"), 0);
-        spotifyStatus = Ui.wrap(ui.body(spotifyMessage != null ? spotifyMessage : accountStatus()), 4);
-        add(left, spotifyStatus, 10);
-        add(left, ui.smallText("Client ID from your Spotify developer app"), 16);
-        String saved = dash.settings.spotifyClientId.isEmpty() ? spotify.clientId() : dash.settings.spotifyClientId;
-        clientId = ui.input(saved, "32 characters");
-        clientId.setContentDescription("Spotify Client ID");
-        add(left, clientId, 6);
-        boolean signingIn = spotify.signingIn() && !spotify.connected();
-        FlowLayout actions = new FlowLayout(dash.activity, ui.px(8));
-        actions.addView(ui.button("Save Client ID", new View.OnClickListener() {
-            @Override public void onClick(View v) { try { saveClientId(); spotifyStatus("Client ID saved on this device."); } catch (IllegalStateException e) { spotifyStatus(e.getMessage()); } }
-        }));
-        actions.addView(ui.accentButton(spotify.connected() ? "Reconnect Spotify" : "Connect Spotify", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                try {
-                    String url = spotify.beginSignIn(saveClientId());
-                    spotifyMessage = "Finish signing in in your browser, then return here.";
-                    Launcher.openUrl(dash.activity, url);
+        add(left, heading("Your PC"), 0);
+        pcStatus = Ui.wrap(ui.body(pcStatusText()), 4);
+        add(left, pcStatus, 10);
+        if (pc.paired()) {
+            TextView forget = ui.button("Forget this PC", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try { pc.forget(); pcMessage = "Forgotten. Pair again to control a PC."; dash.pcChanged(); }
+                    catch (Exception e) { pcMessage = "Couldn't forget the PC. Try again."; }
                     build();
-                } catch (IllegalStateException e) { spotifyStatus(e.getMessage()); }
-            }
-        }));
-        TextView disconnect = ui.button("Disconnect", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                try { spotify.disconnect(); spotifyMessage = "Disconnected. Your Client ID is still saved."; dash.spotifyAccountChanged(); }
-                catch (Exception e) { spotifyStatus("Could not clear the saved connection. Try again."); }
-            }
-        });
-        Ui.enable(disconnect, spotify.connected());
-        actions.addView(disconnect);
-        if (signingIn) actions.addView(ui.button("Cancel sign-in", new View.OnClickListener() {
-            @Override public void onClick(View v) { spotify.cancelSignIn(); spotifyMessage = "Sign-in cancelled. Your Client ID is saved; try connecting again."; build(); }
-        }));
-        for (int i = 0; i < actions.getChildCount(); i++) ((TextView) actions.getChildAt(i)).setMinHeight(ui.px(52));
-        add(left, actions, 10);
-        add(left, note("Account changes take effect right away; you don't need to save. Disconnecting keeps your Client ID. Your sign-in is encrypted on this device."), 12);
-
-        add(right, heading("First-time setup"), 0);
-        add(right, note("1.  Create a Web API app in Spotify for Developers and add your Spotify account to its users."), 10);
-        TextView developer = ui.button("Open Developer Dashboard", new View.OnClickListener() {
-            @Override public void onClick(View v) { try { Launcher.openUrl(dash.activity, "https://developer.spotify.com/dashboard"); } catch (Exception e) { spotifyStatus("Could not open your browser."); } }
-        });
-        right.addView(developer, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 8, 0, 0));
-        add(right, note("2.  Add this exact redirect address to the app:"), 14);
-        LinearLayout redirect = ui.row();
-        TextView address = ui.text(Spotify.REDIRECT_URI, ui.body(), ui.theme.accent);
-        address.setTextIsSelectable(true);
-        redirect.addView(address, ui.ll(0, Ui.WRAP, 1));
-        redirect.addView(ui.button("Copy", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                ClipboardManager clipboard = (ClipboardManager) dash.activity.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (clipboard != null) { clipboard.setPrimaryClip(ClipData.newPlainText("Redirect address", Spotify.REDIRECT_URI)); setStatus("Redirect address copied."); }
-            }
-        }), ui.ll(Ui.WRAP, ui.px(52)));
-        add(right, redirect, 6);
-        add(right, note("Using Widget Screen on Windows too? Add this next to the Windows address in the same app and reuse its Client ID."), 6);
-        add(right, note("3.  Paste the app's Client ID on the left and tap Connect Spotify. No client secret is needed."), 14);
-        add(right, note("Your browser asks you to allow access to your current song, recent albums, playlists, likes and playback. Playing songs from the widget needs Spotify Premium."), 12);
-    }
-
-    // ----- Quick Launch -----
-
-    private void buildQuickLaunch() {
-        final List<Deck.Shortcut> shortcuts = draft.shortcuts;
-        selectedShortcut = Math.max(-1, Math.min(shortcuts.size() - 1, selectedShortcut));
-        LinearLayout[] c = columns();
-        LinearLayout left = c[0], right = c[1];
-        LinearLayout titleRow = ui.row();
-        titleRow.addView(heading("Your buttons"), ui.ll(0, Ui.WRAP, 1));
-        titleRow.addView(ui.button("+ Add", new View.OnClickListener() {
-            @Override public void onClick(View v) { shortcuts.add(new Deck.Shortcut("New button", "App", "", "app")); selectedShortcut = shortcuts.size() - 1; build(); }
-        }), ui.ll(Ui.WRAP, ui.px(52)));
-        add(left, titleRow, 0);
-        if (shortcuts.isEmpty()) add(left, note("No buttons. The widget shows Add a button until you add one."), 10);
-        for (int i = 0; i < shortcuts.size(); i++) {
-            final int index = i;
-            Deck.Shortcut s = shortcuts.get(i);
-            LinearLayout row = ui.row();
-            row.setPadding(ui.px(12), ui.px(8), ui.px(12), ui.px(8));
-            row.setMinimumHeight(ui.px(60));
-            ui.select(row, i == selectedShortcut);
-            row.addView(new GlyphView(dash.activity, s.glyph, ui.theme.accent, ui.fpx(22)), ui.ll(ui.px(28), ui.px(28)));
-            LinearLayout text = ui.column();
-            text.addView(ui.body(s.label), ui.ll(Ui.MATCH, Ui.WRAP));
-            text.addView(ui.smallText(Deck.describe(s, "App".equals(s.action) && Deck.isPackageName(s.target) ? dash.launcher.appName(s.target) : null)), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 3, 0, 0));
-            row.addView(text, ui.margins(ui.ll(0, Ui.WRAP, 1), 12, 0, 0, 0));
-            row.setClickable(true);
-            row.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { selectedShortcut = index; build(); } });
-            add(left, row, 6);
-        }
-        if (selectedShortcut >= 0) {
-            LinearLayout order = ui.row();
-            order.addView(ui.iconButton("up", "Move up", 20, true, new View.OnClickListener() { @Override public void onClick(View v) { move(-1); } }), ui.margins(ui.ll(ui.px(56), ui.px(52)), 0, 0, 8, 0));
-            order.addView(ui.iconButton("down", "Move down", 20, true, new View.OnClickListener() { @Override public void onClick(View v) { move(1); } }), ui.margins(ui.ll(ui.px(56), ui.px(52)), 0, 0, 8, 0));
-            order.addView(ui.button("Remove", new View.OnClickListener() {
-                @Override public void onClick(View v) { shortcuts.remove(selectedShortcut); selectedShortcut = Math.min(selectedShortcut, shortcuts.size() - 1); build(); }
-            }), ui.ll(Ui.WRAP, ui.px(52)));
-            add(left, order, 10);
-        }
-        add(left, note("Extra buttons continue on more pages in the widget."), 10);
-
-        if (selectedShortcut < 0) { add(right, note("Tap + Add, then choose what the new button does."), 0); return; }
-        final Deck.Shortcut s = shortcuts.get(selectedShortcut);
-        add(right, ui.smallText("Button name"), 0);
-        final EditText name = ui.input(s.label, "Name");
-        name.setContentDescription("Button name");
-        name.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence t, int a, int b, int d) { }
-            @Override public void onTextChanged(CharSequence t, int a, int b, int d) { }
-            @Override public void afterTextChanged(Editable e) { s.label = e.toString(); }
-        });
-        add(right, name, 6);
-        add(right, ui.smallText("Icon"), 14);
-        FlowLayout icons = new FlowLayout(dash.activity, ui.px(6));
-        for (final Deck.Option icon : Deck.ICONS) {
-            GlyphView button = ui.iconButton(icon.id, icon.name, 22, true, new View.OnClickListener() { @Override public void onClick(View v) { s.glyph = icon.id; build(); } });
-            button.setMinimumWidth(ui.px(52)); button.setMinimumHeight(ui.px(52));
-            ui.select(button, icon.id.equals(s.glyph));
-            icons.addView(button);
-        }
-        add(right, icons, 6);
-        add(right, ui.smallText("Action"), 14);
-        String[] typeIds = new String[Deck.TYPES.length], typeNames = new String[Deck.TYPES.length];
-        for (int i = 0; i < Deck.TYPES.length; i++) { typeIds[i] = Deck.TYPES[i].id; typeNames[i] = Deck.TYPES[i].name; }
-        add(right, choices(typeIds, typeNames, s.action, new Choice() {
-            @Override public void chose(String value) { if (!value.equals(s.action)) { s.action = value; s.target = value.equals("Website") ? "https://" : ""; } build(); }
-        }), 6);
-
-        if (s.action.equals("Website")) {
-            add(right, ui.smallText("Website address"), 14);
-            EditText url = ui.input(s.target, "https://");
-            url.setContentDescription("Website address");
-            url.addTextChangedListener(new TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence t, int a, int b, int d) { }
-                @Override public void onTextChanged(CharSequence t, int a, int b, int d) { }
-                @Override public void afterTextChanged(Editable e) { s.target = e.toString().trim(); }
+                }
             });
-            add(right, url, 6);
-        } else if (s.action.equals("Control")) {
-            add(right, ui.smallText("Control"), 14);
-            for (final Deck.Option control : Deck.CONTROLS) {
-                TextView option = ui.button(control.name, new View.OnClickListener() { @Override public void onClick(View v) { s.target = control.id; if ("app".equals(s.glyph)) s.glyph = Deck.controlGlyph(control.id); build(); } });
+            left.addView(forget, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 10, 0, 0));
+        }
+        add(left, ui.smallText(pc.paired() ? "Pair again, or with another PC" : "Pair with your PC"), 22);
+        TextView find = ui.button(finding ? "Looking…" : "Find PCs on this Wi-Fi", new View.OnClickListener() { @Override public void onClick(View v) { findPcs(); } });
+        Ui.enable(find, !finding);
+        left.addView(find, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 8, 0, 0));
+        if (found != null) {
+            if (found.isEmpty()) add(left, note("No PC answered. Check that Widget Screen is open on the PC with phone control on, or type its address below."), 8);
+            for (final PcLink.Found pcFound : found) {
+                TextView option = ui.button(pcFound.name + "  ·  " + pcFound.host, new View.OnClickListener() {
+                    @Override public void onClick(View v) { pcAddress = pcFound.host + (pcFound.port == PcLink.PORT ? "" : ":" + pcFound.port); build(); }
+                });
                 option.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-                ui.select(option, control.id.equals(s.target));
-                add(right, option, 6);
+                ui.select(option, pcAddress.equals(pcFound.host) || pcAddress.equals(pcFound.host + ":" + pcFound.port));
+                add(left, option, 6);
             }
-        } else buildAppPicker(right, s);
-
-        add(right, ui.smallText("Or use a preset"), 18);
-        FlowLayout presets = new FlowLayout(dash.activity, ui.px(8));
-        for (final Deck.Shortcut preset : Deck.presets()) {
-            TextView button = ui.button(preset.label, new View.OnClickListener() {
-                @Override public void onClick(View v) { s.label = preset.label; s.action = preset.action; s.target = preset.target; s.glyph = preset.glyph; build(); }
-            });
-            button.setTextSize(TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
-            presets.addView(button);
         }
-        add(right, presets, 6);
-        add(right, ui.check("Ask before running this button", s.confirm, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { s.confirm = checked; } }), 12);
-        String error = Deck.validate(s);
-        if (error != null) { TextView problem = note(error); problem.setTextColor(Theme.WARNING); add(right, problem, 6); }
-    }
-
-    private void move(int direction) {
-        List<Deck.Shortcut> shortcuts = draft.shortcuts;
-        int target = selectedShortcut + direction;
-        if (selectedShortcut < 0 || target < 0 || target >= shortcuts.size()) return;
-        shortcuts.add(target, shortcuts.remove(selectedShortcut));
-        selectedShortcut = target;
-        build();
-    }
-
-    private void buildAppPicker(LinearLayout right, final Deck.Shortcut s) {
-        add(right, ui.smallText("Your default apps"), 14);
-        FlowLayout roles = new FlowLayout(dash.activity, ui.px(8));
-        for (final Deck.Option role : Deck.ROLES) {
-            TextView button = ui.button(role.name, new View.OnClickListener() {
-                @Override public void onClick(View v) { s.target = role.id; if ("app".equals(s.glyph)) s.glyph = Deck.roleGlyph(role.id); if (s.label.equals("New button")) s.label = role.name; build(); }
-            });
-            button.setTextSize(TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
-            ui.select(button, role.id.equals(s.target));
-            roles.addView(button);
-        }
-        add(right, roles, 6);
-        add(right, ui.smallText("Installed app"), 14);
-        final EditText filter = ui.input(appFilter, "Filter the list by name");
-        filter.setContentDescription("Filter apps by name");
-        add(right, filter, 6);
-        final LinearLayout list = ui.column();
-        add(right, list, 6);
-        if (apps == null) {
-            add(list, note("Loading apps…"), 0);
-            Async.run(new Async.Work<List<Launcher.App>>() {
-                @Override public List<Launcher.App> run() { return dash.launcher.apps(); }
-            }, new Async.Done<List<Launcher.App>>() {
-                @Override public void ok(List<Launcher.App> found) { apps = found; if (tab.equals("Quick Launch")) build(); }
-            }, new Async.Failed() { @Override public void error(Exception e) { apps = new ArrayList<Launcher.App>(); } });
-            return;
-        }
-        filter.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence t, int a, int b, int d) { }
-            @Override public void onTextChanged(CharSequence t, int a, int b, int d) { }
-            @Override public void afterTextChanged(Editable e) { appFilter = e.toString(); fillApps(list, s); }
+        add(left, ui.smallText("PC address"), 16);
+        final EditText address = ui.input(pcAddress.isEmpty() ? pc.address() : pcAddress, "For example 192.168.1.20");
+        address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        address.setContentDescription("PC address");
+        add(left, address, 6);
+        add(left, ui.smallText("Pairing code from the PC"), 14);
+        final EditText code = ui.input(pcCode, "6 digits");
+        code.setInputType(InputType.TYPE_CLASS_NUMBER);
+        code.setContentDescription("Pairing code");
+        add(left, code, 6);
+        TextView pair = ui.accentButton(pairing ? "Pairing…" : "Pair", new View.OnClickListener() {
+            @Override public void onClick(View v) { pair(address.getText().toString(), code.getText().toString()); }
         });
-        fillApps(list, s);
+        Ui.enable(pair, !pairing);
+        left.addView(pair, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 12, 0, 0));
+
+        add(right, heading("How to pair"), 0);
+        add(right, note("1.  On the PC, open Widget Screen, then Settings → Phone, and turn on Let my phone control this PC."), 10);
+        add(right, note("2.  Tap Pair a phone on the PC. A six-digit code appears, with the PC's address."), 8);
+        add(right, note("3.  Here, tap Find PCs on this Wi-Fi and pick your PC, or type its address. Enter the code and tap Pair."), 8);
+        add(right, note("The phone and PC must be on the same Wi-Fi. If the phone can't find or reach the PC, allow Widget Screen on private networks when Windows asks, or in Windows Firewall."), 14);
+        add(right, note("Pairing applies right away; you don't need to save."), 8);
     }
 
-    private void fillApps(LinearLayout list, final Deck.Shortcut s) {
-        list.removeAllViews();
-        String needle = appFilter.trim().toLowerCase(Locale.getDefault());
-        int shown = 0;
-        for (final Launcher.App app : apps) {
-            if (!needle.isEmpty() && !app.label.toLowerCase(Locale.getDefault()).contains(needle)) continue;
-            if (++shown > 40) { add(list, note("Type in the filter to find more apps."), 4); break; }
-            TextView button = ui.button(app.label, new View.OnClickListener() {
-                @Override public void onClick(View v) { s.target = app.packageName; if (s.label.equals("New button") || s.label.trim().isEmpty()) s.label = app.label; build(); }
-            });
-            button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-            ui.select(button, app.packageName.equals(s.target));
-            add(list, button, 6);
-        }
-        if (shown == 0) add(list, note("No apps match."), 4);
+    private void findPcs() {
+        finding = true; build();
+        dash.pc.discover(new com.alialyami.widgetscreen.integrations.Async.Done<List<PcLink.Found>>() {
+            @Override public void ok(List<PcLink.Found> result) {
+                finding = false; found = result;
+                if (result.size() == 1) pcAddress = result.get(0).host + (result.get(0).port == PcLink.PORT ? "" : ":" + result.get(0).port);
+                if (tab.equals("PC")) build();
+            }
+        });
+    }
+
+    private void pair(String addressText, String codeText) {
+        pcAddress = addressText.trim(); pcCode = codeText.trim();
+        String[] parsed = PcLink.parseAddress(pcAddress);
+        if (parsed == null) { pcMessage = "Type the PC's address as shown in Settings → Phone on the PC, for example 192.168.1.20."; build(); return; }
+        if (!pcCode.replace(" ", "").matches("[0-9]{6}")) { pcMessage = "Enter the six-digit code shown on the PC."; build(); return; }
+        pairing = true; pcMessage = "Pairing with the PC…"; build();
+        dash.pc.pair(parsed[0], Integer.parseInt(parsed[1]), pcCode, Dashboard.deviceName(), new com.alialyami.widgetscreen.integrations.Async.Done<String>() {
+            @Override public void ok(String name) { pairing = false; pcCode = ""; pcMessage = "Paired with " + name + ". The dashboard now shows and controls it."; dash.pcChanged(); build(); }
+        }, new com.alialyami.widgetscreen.integrations.Async.Failed() {
+            @Override public void error(Exception error) { pairing = false; pcMessage = Pc.message(error); build(); }
+        });
     }
 
     // ----- Save and cancel -----
 
     private void save() {
-        for (int i = 0; i < draft.shortcuts.size(); i++) {
-            Deck.Shortcut s = draft.shortcuts.get(i);
-            String error = Deck.validate(s);
-            if (error != null) {
-                selectedShortcut = i; if (!tab.equals("Quick Launch")) { tab = "Quick Launch"; scroll = null; } build();
-                setStatus("“" + s.label + "”: " + error);
-                return;
-            }
-        }
-        dash.applySettings(draft, locationChanged);
+        dash.applySettings(draft);
         dash.settingsClosed();
     }
 

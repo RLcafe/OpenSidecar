@@ -1,10 +1,10 @@
 package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
-import com.alialyami.widgetscreen.core.Deck;
-import com.alialyami.widgetscreen.core.FocusTimer;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
+import com.alialyami.widgetscreen.core.PcLink;
+import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.core.StatsLayout;
 import com.alialyami.widgetscreen.core.Theme;
@@ -12,16 +12,26 @@ import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.core.WidgetLayout;
 import com.alialyami.widgetscreen.core.WidgetLayout.Box;
 import com.alialyami.widgetscreen.core.WidgetLayout.Placement;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-// Checks for the Android app's platform-independent core, run on the desktop JVM by
+// Checks for the phone app's platform-independent core, run on the desktop JVM by
 // scripts\build-android.ps1 -Test. Prints PASS/FAIL lines like the Windows test exe.
 public final class AndroidTests {
     private interface Action { void run() throws Exception; }
@@ -41,6 +51,44 @@ public final class AndroidTests {
 
     private static final String TRACK = "spotify:track:1234567890123456789012";
 
+    // A stand-in for the PC: answers like the Windows app's phone link and remembers what it was asked.
+    private static final class FakePc implements HttpHandler {
+        final List<String> requests = new ArrayList<String>();
+        final List<String> bodies = new ArrayList<String>();
+        final List<String> tokens = new ArrayList<String>();
+        HttpServer server;
+        int port() { return server.getAddress().getPort(); }
+        FakePc() throws Exception {
+            server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            server.createContext("/", this);
+            server.start();
+        }
+        @Override public void handle(HttpExchange exchange) {
+            try {
+                InputStream in = exchange.getRequestBody();
+                ByteArrayOutputStream body = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096]; int count;
+                while ((count = in.read(buffer)) != -1) body.write(buffer, 0, count);
+                String path = exchange.getRequestURI().toString(), text = new String(body.toByteArray(), StandardCharsets.UTF_8);
+                String auth = exchange.getRequestHeaders().getFirst("Authorization");
+                requests.add(exchange.getRequestMethod() + " " + path); bodies.add(text); tokens.add(auth == null ? "" : auth);
+                int status = 200; String reply;
+                if (path.equals("/hello")) reply = "{\"app\":\"Widget Screen\",\"name\":\"DESKTOP-1\",\"paired\":false}";
+                else if (path.equals("/pair")) {
+                    if (text.contains("\"123456\"")) reply = "{\"token\":\"tok\",\"name\":\"DESKTOP-1\"}";
+                    else { status = 403; reply = "{\"error\":\"That code doesn't match. Check the code on the PC.\"}"; }
+                } else if (!"Bearer tok".equals(auth)) { status = 401; reply = "{\"error\":\"This phone isn't paired with the PC anymore.\"}"; }
+                else if (path.startsWith("/state")) reply = "{\"name\":\"DESKTOP-1\",\"quiet\":true,\"use24\":false,\"focus\":{\"remainingMs\":60000,\"durationMs\":1500000,\"running\":true,\"progress\":0.96}}";
+                else if (path.equals("/spotify")) { status = 409; reply = "{\"error\":\"No active Spotify device.\",\"noDevice\":true}"; }
+                else reply = "{\"ok\":true,\"message\":\"Played Airhorn.\"}";
+                byte[] data = reply.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(status, data.length);
+                OutputStream out = exchange.getResponseBody(); out.write(data); out.close();
+            } catch (Exception e) { exchange.close(); }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         final File folder = Files.createTempDirectory("widget-screen-tests").toFile();
 
@@ -55,35 +103,26 @@ public final class AndroidTests {
             for (final String bad : new String[] { "", "{", "{\"a\":}", "[1,]x", "\"open", "nul", "{\"a\" 1}" }) throwsOn(new Action() { public void run() { Json.parse(bad); } }, "Accepted " + bad);
         } });
         check("JSON writes what it reads", new Action() { public void run() {
-            String text = Json.write(Json.map("context_uri", "spotify:album:x", "offset", Json.map("position", 3), "list", new Object[] { "a\"b", 1.5, false, null }));
-            ok(text.equals("{\"context_uri\":\"spotify:album:x\",\"offset\":{\"position\":3},\"list\":[\"a\\\"b\",1.5,false,null]}"), text);
+            String text = Json.write(Json.map("action", "deck.run", "index", 3, "list", new Object[] { "a\"b", 1.5, false, null }));
+            ok(text.equals("{\"action\":\"deck.run\",\"index\":3,\"list\":[\"a\\\"b\",1.5,false,null]}"), text);
             ok(Json.write(Json.parse(text)).equals(text), "Round trip changed the text.");
         } });
 
-        check("Default settings match the Windows defaults that apply", new Action() { public void run() {
+        check("Default settings match the Windows look", new Action() { public void run() {
             AppSettings s = new AppSettings();
-            ok(s.accent.equals("Lime") && s.theme.equals("Midnight") && s.cornerRadius == 20 && s.textScale == 1 && !s.use24HourClock && s.snapWidgets, "appearance");
-            ok(s.shortcuts.size() == 6 && s.widgetLayout == null && s.layoutMode.equals("Auto"), "deck or layout");
+            ok(s.accent.equals("Lime") && s.theme.equals("Midnight") && s.cornerRadius == 20 && s.textScale == 1 && s.snapWidgets, "appearance");
+            ok(s.widgetLayout == null && s.layoutMode.equals("Auto") && s.keepScreenOn && s.hideSystemBars, "layout or display");
         } });
         check("Settings save atomically and load back", new Action() { public void run() throws Exception {
             File file = new File(folder, "settings.xml");
             AppSettings s = new AppSettings();
-            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.use24HourClock = true; s.weatherLocation = "Riyadh, Saudi Arabia"; s.latitude = 24.7; s.longitude = 46.7;
-            s.shortcuts.get(0).label = "Müzik & <stuff>"; s.shortcuts.get(1).confirm = true;
-            s.widgetLayout = WidgetLayout.defaults(); s.widgetLayout[4].visible = true; s.widgetLayout[0].layer = 7;
+            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.layoutMode = "List"; s.keepScreenOn = false;
+            s.widgetLayout = WidgetLayout.defaults(); WidgetLayout.find(s.widgetLayout, "Soundboard").visible = true; s.widgetLayout[0].layer = 7;
             AppSettings.save(file, s);
             ok(!new File(folder, "settings.xml.tmp").exists(), "Temporary file left behind.");
             AppSettings loaded = AppSettings.load(file, null);
-            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.use24HourClock, "appearance");
-            ok(loaded.weatherLocation.equals("Riyadh, Saudi Arabia") && loaded.latitude == 24.7 && loaded.longitude == 46.7, "weather");
-            ok(loaded.shortcuts.get(0).label.equals("Müzik & <stuff>") && loaded.shortcuts.get(1).confirm, "shortcuts");
-            ok(WidgetLayout.find(loaded.widgetLayout, "System").visible && WidgetLayout.find(loaded.widgetLayout, "Focus").layer == 7, "layout");
-        } });
-        check("An intentionally empty deck stays empty", new Action() { public void run() throws Exception {
-            File file = new File(folder, "empty.xml");
-            AppSettings s = new AppSettings(); s.shortcuts.clear();
-            AppSettings.save(file, s);
-            ok(AppSettings.load(file, null).shortcuts.isEmpty(), "Defaults came back.");
+            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.layoutMode.equals("List") && !loaded.keepScreenOn, "settings");
+            ok(WidgetLayout.find(loaded.widgetLayout, "Soundboard").visible && WidgetLayout.find(loaded.widgetLayout, "Focus").layer == 7, "layout");
         } });
         check("Unreadable settings fall back to defaults with a warning and keep the file", new Action() { public void run() throws Exception {
             File file = new File(folder, "broken.xml");
@@ -94,16 +133,16 @@ public final class AndroidTests {
         } });
         check("Settings normalize out-of-range values", new Action() { public void run() {
             AppSettings s = new AppSettings();
-            s.textScale = 3; s.cornerRadius = -4; s.accent = "Pink"; s.theme = "Neon"; s.layoutMode = "Grid"; s.latitude = 200; s.weatherLocation = "Nowhere";
+            s.textScale = 3; s.cornerRadius = -4; s.accent = "Pink"; s.theme = "Neon"; s.layoutMode = "Grid";
             s.normalize();
-            ok(s.textScale == 1.15 && s.cornerRadius == 0 && s.accent.equals("Lime") && s.theme.equals("Midnight") && s.layoutMode.equals("Auto") && s.weatherLocation.isEmpty(), "Not normalized.");
+            ok(s.textScale == 1.15 && s.cornerRadius == 0 && s.accent.equals("Lime") && s.theme.equals("Midnight") && s.layoutMode.equals("Auto"), "Not normalized.");
         } });
 
-        check("Default layout is the Windows Spotify arrangement", new Action() { public void run() {
+        check("Default layout is the Windows default arrangement", new Action() { public void run() {
             Placement[] d = WidgetLayout.defaults();
             ok(WidgetLayout.find(d, "Focus").bounds().equals(new Box(0, 0, 320, 576)) && WidgetLayout.find(d, "Spotify").bounds().equals(new Box(1296, 0, 560, 576)), "geometry");
-            ok(!WidgetLayout.find(d, "System").visible && !WidgetLayout.find(d, "Weather").visible && WidgetLayout.find(d, "Mixer").visible, "visibility");
-            ok(WidgetLayout.find(d, "Soundboard") == null && d.length == WidgetLayout.IDS.length, "ids");
+            ok(!WidgetLayout.find(d, "System").visible && !WidgetLayout.find(d, "Weather").visible && !WidgetLayout.find(d, "Soundboard").visible && WidgetLayout.find(d, "Mixer").visible, "visibility");
+            ok(WidgetLayout.find(d, "Soundboard").bounds().equals(new Box(336, 326, 472, 250)) && d.length == WidgetLayout.IDS.length, "soundboard");
         } });
         check("Layouts normalize to the canvas and minimum sizes", new Action() { public void run() {
             Placement[] input = { new Placement("Focus", -50, 900, 10, 10, true), new Placement("Media", Double.NaN, 0, 5000, 5000, false) };
@@ -121,40 +160,14 @@ public final class AndroidTests {
             ok(WidgetLayout.transform("Focus", start, "NE", Double.NaN, 0, false) == start, "NaN");
         } });
 
-        check("Focus timer counts down, pauses, resumes and finishes", new Action() { public void run() {
-            final long[] now = { 1000 };
-            FocusTimer timer = new FocusTimer(new FocusTimer.Clock() { public long millis() { return now[0]; } });
-            ok(timer.remainingMs() == 25 * 60000L && Format.focus(timer.remainingMs()).equals("25:00") && Format.focusButton(timer.remainingMs(), false, 0).equals("Start focus"), "idle");
-            timer.toggle(); now[0] += 1500;
-            ok(Format.focus(timer.remainingMs()).equals("24:59") && timer.running() && Format.focusButton(timer.remainingMs(), true, timer.progress()).equals("Pause"), "running " + Format.focus(timer.remainingMs()));
-            timer.toggle(); now[0] += 60000;
-            ok(timer.remainingMs() == 25 * 60000L - 1500 && Format.focusStatus(timer.remainingMs(), false, timer.progress(), "x").equals("Paused") && Format.focusButton(timer.remainingMs(), false, timer.progress()).equals("Resume"), "paused");
-            timer.toggle(); now[0] += 30 * 60000L;
-            ok(timer.finishIfElapsed() && timer.remainingMs() == 0 && !timer.running() && Format.focusStatus(0, false, 1, "x").equals("Done. Take a break."), "finished");
-            timer.toggle();
-            ok(timer.running() && timer.remainingMs() == 25 * 60000L, "restarts after finishing");
-            timer.reset(500);
-            ok(timer.durationMinutes() == 180 && !timer.running(), "clamped");
-        } });
-        check("Focus timer restores a run, but not one from before a restart", new Action() { public void run() {
-            final long[] now = { 100000 };
-            FocusTimer.Clock clock = new FocusTimer.Clock() { public long millis() { return now[0]; } };
-            FocusTimer timer = new FocusTimer(clock);
-            timer.reset(50); timer.toggle(); now[0] += 60000;
-            FocusTimer restored = new FocusTimer(clock); restored.restore(timer.save());
-            ok(restored.running() && restored.durationMinutes() == 50 && restored.remainingMs() == 49 * 60000L, "restore");
-            now[0] = 10;
-            FocusTimer rebooted = new FocusTimer(clock); rebooted.restore(timer.save());
-            ok(!rebooted.running(), "A run from before a restart resumed.");
-            new FocusTimer(clock).restore("garbage");
-        } });
-
-        check("Clock and readings use the Windows formats", new Action() { public void run() {
+        check("Clock, focus and readings use the Windows formats", new Action() { public void run() {
             LocalDateTime t = LocalDateTime.of(2026, 10, 8, 14, 5);
             ok(Format.clockTime(t, false).equals("2:05") && Format.clockTime(t, true).equals("14:05") && Format.clockPeriod(t).equals("PM"), "time");
             ok(Format.clockDay(t).equals("THURSDAY") && Format.clockDate(t).equals("October 8") && Format.endsAt(t, false).equals("2:05 PM"), "date");
+            ok(Format.focus(25 * 60000L).equals("25:00") && Format.focus(25 * 60000L - 1500).equals("24:59") && Format.focusStatus(0, false, 1, "x").equals("Done. Take a break."), "focus");
+            ok(Format.focusButton(1000, false, 0.5).equals("Resume") && Format.focusButton(1000, true, 0.5).equals("Pause") && Format.focusButton(1500000, false, 0).equals("Start focus"), "focus button");
             ok(Format.mediaTime(185000).equals("3:05") && Format.rate(2048).equals("2 KB/s") && Format.rate(3 * 1048576).equals("3.0 MB/s"), "media and rate");
-            ok(Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L).equals("2d 3h 4m") && Format.gigabytes(1610612736L).equals("1.5"), "uptime and memory");
+            ok(Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L).equals("2d 3h 4m"), "uptime");
         } });
 
         check("Weather parses Open-Meteo responses and describes codes", new Action() { public void run() {
@@ -162,82 +175,69 @@ public final class AndroidTests {
             ok(w.temperature == 31.6 && w.code == 2 && Weather.describe(w.code).equals("Partly cloudy") && Weather.details(w).equals("Feels 33°C  ·  12 km/h"), "snapshot");
             throwsOn(new Action() { public void run() { Weather.parse("{\"current\":{\"temperature_2m\":1}}", 0); } }, "Incomplete weather accepted.");
             ok(Weather.describe(95).equals("Thunderstorms") && Weather.describe(50).equals("Conditions unavailable") && Weather.describe(45).equals("Foggy"), "codes");
-            List<Weather.Location> places = Weather.parseLocations("{\"results\":[{\"name\":\"Riyadh\",\"admin1\":\"Riyadh Region\",\"country\":\"Saudi Arabia\",\"latitude\":24.68,\"longitude\":46.72},{\"name\":\"Broken\"}]}");
-            ok(places.size() == 1 && places.get(0).name.equals("Riyadh, Riyadh Region, Saudi Arabia"), "places");
-            ok(Weather.searchUrl(" New York ").endsWith("name=New%20York"), Weather.searchUrl("New York"));
-            throwsOn(new Action() { public void run() { Weather.searchUrl("a"); } }, "One-letter search accepted.");
+            ok(Weather.forecastUrl(24.7, 46.7).contains("latitude=24.7&longitude=46.7"), "forecast address");
         } });
 
-        check("Spotify PKCE matches the RFC 7636 example", new Action() { public void run() {
-            ok(Spotify.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk").equals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"), "challenge");
-            ok(Spotify.validClientId("0123456789abcdef0123456789ABCDEF") && !Spotify.validClientId("0123") && !Spotify.validClientId("0123456789abcdef0123456789abcdeg"), "client id");
-        } });
-        check("Spotify authorize address carries the Android redirect and PKCE", new Action() { public void run() {
-            String url = Spotify.authorizeUrl("0123456789abcdef0123456789abcdef", "state1", "verifier1");
-            ok(url.contains("redirect_uri=widgetscreen%3A%2F%2Fspotify-callback") && url.contains("code_challenge=" + Spotify.challenge("verifier1")) && url.contains("state=state1") && url.contains("scope=user-read-currently-playing%20"), url);
-        } });
-        check("Spotify callbacks need the matching state", new Action() { public void run() {
-            String[] good = Spotify.readCallback("widgetscreen://spotify-callback?code=abc%2Fd&state=s1", "s1");
-            ok(good != null && good[0].equals("abc/d") && good[1] == null, "code");
-            String[] declined = Spotify.readCallback("widgetscreen://spotify-callback?error=access_denied&state=s1", "s1");
-            ok(declined != null && declined[0] == null && declined[1].equals("access_denied"), "declined");
-            ok(Spotify.readCallback("widgetscreen://spotify-callback?code=abc&state=other", "s1") == null && Spotify.readCallback("https://evil.example/?code=a&state=s1", "s1") == null && Spotify.readCallback("widgetscreen://spotify-callback?state=s1", "s1") == null, "forged");
-        } });
-        check("Spotify links and play requests match the Windows app", new Action() { public void run() {
+        check("Spotify links, covers and list wording match the Windows app", new Action() { public void run() {
             ok(Spotify.webUrl("spotify:track:../../../../dangerous") == null && Spotify.webUrl(TRACK).equals("https://open.spotify.com/track/1234567890123456789012"), "links");
-            ok(Spotify.playInCollectionBody("spotify:playlist:1234567890123456789012", 11).equals("{\"context_uri\":\"spotify:playlist:1234567890123456789012\",\"offset\":{\"position\":11}}"), "collection body");
-            ok(Spotify.playTrackBody(TRACK).equals("{\"uris\":[\"" + TRACK + "\"]}"), "track body");
-            throwsOn(new Action() { public void run() { Spotify.playInCollectionBody(TRACK, 0); } }, "A song accepted as a collection.");
-            throwsOn(new Action() { public void run() { Spotify.playTrackBody("spotify:album:1234567890123456789012"); } }, "An album accepted as a song.");
             ok(Spotify.isImageUrl("https://i.scdn.co/image/ab") && !Spotify.isImageUrl("http://i.scdn.co/image/ab") && !Spotify.isImageUrl("https://evil.example/x.scdn.co"), "images");
-        } });
-        check("Spotify items, playback and pages parse like the Windows app", new Action() { public void run() {
-            Spotify.Item episode = Spotify.parseItem(Json.parse("{\"uri\":\"spotify:episode:1234567890123456789012\",\"name\":\"Episode\",\"show\":{\"name\":\"Podcast\"}}"));
-            ok(episode != null && episode.subtitle.equals("Podcast") && episode.isEpisode(), "episode");
-            ok(Spotify.parseItem(Json.parse("{\"uri\":\"spotify:local:a:b:c:1\"}")) == null, "local track");
-            Spotify.Item song = Spotify.parseItem(Json.parse("{\"uri\":\"" + TRACK + "\",\"name\":\"Song\",\"artists\":[{\"name\":\"A\"},{\"name\":\"B\"}],\"album\":{\"uri\":\"spotify:album:1234567890123456789012\",\"images\":[{\"url\":\"https://i.scdn.co/big\"},{\"url\":\"https://i.scdn.co/small\"}]}}"));
-            ok(song.subtitle.equals("A, B") && song.imageUrl.equals("https://i.scdn.co/small") && song.albumUrl.endsWith("/album/1234567890123456789012"), "song");
-            Spotify.Playback playback = Spotify.parsePlayback(Json.parse("{\"is_playing\":true,\"progress_ms\":5000,\"item\":{\"uri\":\"" + TRACK + "\",\"duration_ms\":200000},\"actions\":{\"disallows\":{\"seeking\":true}}}"));
-            ok(playback.playing && !playback.canSeek && playback.positionMs == 5000 && playback.durationMs == 200000, "playback");
-            Spotify.Item playlist = new Spotify.Item(); playlist.uri = "spotify:playlist:1234567890123456789012";
-            Spotify.Page tracks = Spotify.parseTracks(playlist, Json.parse("{\"items\":[{\"item\":{\"uri\":\"spotify:local:x:y:z:1\"}},{\"track\":{\"uri\":\"" + TRACK + "\",\"name\":\"Second\"}}],\"next\":\"more\"}"), 20);
-            ok(tracks.items.size() == 1 && tracks.items.get(0).position == 21 && tracks.hasMore, "positions count hidden items");
-            ok(Spotify.tracksPath(playlist, 20).equals("playlists/1234567890123456789012/items?limit=10&offset=20"), "tracks path");
-            ok(Spotify.browsePath("Albums", null, 0, true).equals("me/player/recently-played?limit=50") && Spotify.browsePath("Search", "a b", 10, true).equals("search?type=track&limit=10&offset=10&q=a%20b"), "browse paths");
-        } });
-        check("Recent albums are distinct, newest first, ten per page", new Action() { public void run() {
-            StringBuilder items = new StringBuilder();
-            for (int i = 0; i < 30; i++) {
-                if (i > 0) items.append(',');
-                String id = String.format("%022d", i % 12);
-                items.append("{\"track\":{\"album\":{\"uri\":\"spotify:album:").append(id).append("\",\"name\":\"Album ").append(i % 12).append("\"}}}");
-            }
-            Object recent = Json.parse("{\"items\":[" + items + "]}");
-            Spotify.Page first = Spotify.recentAlbums(recent, 0), second = Spotify.recentAlbums(recent, 10);
-            ok(first.items.size() == 10 && first.hasMore && first.items.get(0).name.equals("Album 0") && second.items.size() == 2 && !second.hasMore, "pages");
-        } });
-        check("Spotify sessions survive a round trip", new Action() { public void run() {
-            Spotify.Session s = new Spotify.Session(); s.clientId = "c"; s.accessToken = "a"; s.refreshToken = "r"; s.scope = Spotify.SCOPES; s.expiresMs = 1234567890123L;
-            Spotify.Session back = Spotify.Session.fromJson(s.toJson());
-            ok(back.connected() && back.expiresMs == 1234567890123L && back.hasScope("user-modify-playback-state") && !Spotify.Session.cleared("c").connected(), "session");
-        } });
-        check("List statuses use the Windows wording", new Action() { public void run() {
             Spotify.Item album = new Spotify.Item(); album.uri = "spotify:album:1234567890123456789012";
             ok(Spotify.listStatus(0, "Albums", null, true, true).startsWith("No recent albums yet") && Spotify.listStatus(3, "Albums", album, true, true).equals("Tap a song to play it. The rest of the album follows."), "statuses");
         } });
+        check("Spotify items from the PC parse, and unsafe ones are dropped", new Action() { public void run() {
+            Spotify.Page page = PcState.page(Json.obj(Json.parse("{\"items\":[{\"uri\":\"" + TRACK + "\",\"name\":\"Song\",\"subtitle\":\"A, B\",\"imageUrl\":\"https://i.scdn.co/x\",\"position\":21},{\"uri\":\"spotify:local:a:b:c:1\"}],\"hasMore\":true}")));
+            ok(page.items.size() == 1 && page.items.get(0).position == 21 && page.items.get(0).subtitle.equals("A, B") && page.hasMore, "page");
+            Spotify.Playback playback = PcState.playback(Json.obj(Json.parse("{\"item\":{\"uri\":\"" + TRACK + "\",\"name\":\"Song\",\"position\":-1},\"playing\":true,\"positionMs\":5000,\"durationMs\":200000}")));
+            ok(playback.playing && playback.item.isTrack() && playback.positionMs == 5000, "playback");
+        } });
 
-        check("Quick Launch validates Android actions", new Action() { public void run() {
-            ok(Deck.validate(new Deck.Shortcut("Spotify", "App", "com.spotify.music", "music")) == null && Deck.validate(new Deck.Shortcut("Files", "App", "role:files", "folder")) == null, "apps");
-            ok(Deck.validate(new Deck.Shortcut("Web", "Website", "https://example.com", "globe")) == null && Deck.validate(new Deck.Shortcut("Web", "Website", "javascript:alert(1)", "globe")) != null, "websites");
-            ok(Deck.validate(new Deck.Shortcut("Play", "Control", "play", "play")) == null && Deck.validate(new Deck.Shortcut("Mic", "Control", "microphone", "volume")) != null, "controls");
-            ok(Deck.validate(new Deck.Shortcut("", "App", "com.x.y", "app")) != null && Deck.validate(new Deck.Shortcut("Files", "File", "C:\\x", "app")) != null && Deck.validate(new Deck.Shortcut("Bad", "App", "not a package", "app")) != null, "rejects");
-            for (Deck.Shortcut preset : Deck.presets()) ok(Deck.validate(preset) == null, "Preset invalid: " + preset.label);
-            ok(Deck.pageCount(0, 6) == 1 && Deck.pageCount(7, 6) == 2 && Deck.pageCount(6, 3) == 2, "pages");
+        check("PC addresses and discovery replies are read safely", new Action() { public void run() {
+            ok(Arrays.equals(PcLink.parseAddress(" 192.168.1.20 "), new String[] { "192.168.1.20", "43830" }) && Arrays.equals(PcLink.parseAddress("desktop-1.local:5000"), new String[] { "desktop-1.local", "5000" }), "addresses");
+            ok(PcLink.parseAddress("http://x/") == null && PcLink.parseAddress("1.2.3.4:99999") == null && PcLink.parseAddress("") == null && PcLink.parseAddress("a b") == null, "bad addresses");
+            PcLink.Found pc = PcLink.parseDiscovery("{\"app\":\"Widget Screen\",\"name\":\"DESKTOP-1\",\"port\":43830}", "192.168.1.20");
+            ok(pc != null && pc.name.equals("DESKTOP-1") && pc.port == 43830 && pc.host.equals("192.168.1.20"), "discovery");
+            ok(PcLink.parseDiscovery("{\"app\":\"Other\",\"port\":1}", "x") == null && PcLink.parseDiscovery("garbage", "x") == null, "foreign replies");
+        } });
+        check("The phone pairs, reads state and sends commands like the PC expects", new Action() { public void run() throws Exception {
+            FakePc fake = new FakePc();
+            try {
+                PcLink anonymous = new PcLink("127.0.0.1", fake.port(), null);
+                ok("DESKTOP-1".equals(Json.field(anonymous.hello(), "name")), "hello");
+                try { anonymous.pair("000000", "Pixel"); throw new AssertionError("Wrong code paired."); }
+                catch (PcLink.Failure f) { ok(f.code == 403 && f.getMessage().contains("doesn't match"), "wrong code message"); }
+                String token = anonymous.pair("123 456", "Pixel");
+                ok(token.equals("tok") && fake.bodies.get(fake.bodies.size() - 1).contains("\"code\":\"123456\""), "pair");
+                try { anonymous.state(Arrays.asList("focus")); throw new AssertionError("Unpaired state."); }
+                catch (PcLink.Failure f) { ok(f.unpaired(), "unpaired"); }
+                PcLink link = new PcLink("127.0.0.1", fake.port(), token);
+                PcState state = link.state(Arrays.asList("focus", "deck"));
+                ok(fake.requests.get(fake.requests.size() - 1).equals("GET /state?parts=focus,deck") && fake.tokens.get(fake.tokens.size() - 1).equals("Bearer tok"), "state request");
+                ok(state.quiet && state.focus.running && state.focus.durationMs == 1500000 && state.media == null, "state");
+                ok(link.command(Json.map("action", "discord.play", "id", "1")).equals("Played Airhorn.") && fake.bodies.get(fake.bodies.size() - 1).equals("{\"action\":\"discord.play\",\"id\":\"1\"}"), "command");
+                try { link.spotify(Json.map("op", "playTrack", "uri", TRACK)); throw new AssertionError("No device accepted."); }
+                catch (PcLink.Failure f) { ok(f.noDevice && f.code == 409, "no device"); }
+            } finally { fake.server.stop(0); }
+            try { new PcLink("127.0.0.1", 1, "tok").state(Arrays.asList("focus")); throw new AssertionError("Offline PC answered."); }
+            catch (PcLink.Failure f) { ok(f.offline() && f.getMessage().startsWith("Can't reach the PC"), "offline"); }
+        } });
+        check("The phone reads a real answer from the Windows app", new Action() { public void run() throws Exception {
+            String path = System.getProperty("widgetscreen.sample");
+            File sample = path == null ? null : new File(path);
+            if (sample == null || !sample.exists()) throw new AssertionError("No sample. Run scripts\\build.ps1 -Test first; it saves artifacts\\tests\\remote-state-sample.json.");
+            PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
+            ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
+            ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null, "every part");
+            if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
+            if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
+        } });
+        check("Quick Launch glyphs from the PC map to drawn icons", new Action() { public void run() {
+            ok(PcState.glyph("E8D6").equals("music") && PcState.glyph("e774").equals("globe") && PcState.glyph("E720").equals("microphone") && PcState.glyph("FFFF").equals("app") && PcState.glyph(null).equals("app"), "glyphs");
         } });
         check("System stats pick columns like the Windows layout", new Action() { public void run() {
-            ok(StatsLayout.bestColumns(400, 262, 356, 46, 5) == 1, "narrow card");
-            ok(StatsLayout.bestColumns(1100, 100, 356, 46, 5) == 3 && StatsLayout.bestColumns(1100, 200, 356, 46, 5) == 2, "wide card");
-            ok(StatsLayout.rowWidth(1100, 200, 344, 12, 46, 5, 3) >= 344, "row width");
+            ok(StatsLayout.bestColumns(400, 262, 336, 46, 5) == 1, "narrow card");
+            ok(StatsLayout.bestColumns(1100, 100, 336, 46, 5) == 3 && StatsLayout.bestColumns(1100, 200, 336, 46, 5) == 2, "wide card");
+            ok(StatsLayout.rowWidth(1100, 200, 324, 12, 46, 5, 3) >= 324, "row width");
         } });
         check("Palettes and accents match the Windows resources", new Action() { public void run() {
             Theme midnight = Theme.of("Midnight", "Lime"), slate = Theme.of("Slate", "Glacier");

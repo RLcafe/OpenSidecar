@@ -73,7 +73,7 @@ public final class LayoutEditor {
     public boolean isVisible(String id) {
         if (current == null) return true;
         Placement p = WidgetLayout.find(current, id);
-        return p != null && p.visible && (!id.equals("System") || preferences == null || preferences.anyStats());
+        return p != null && p.visible;
     }
 
     public boolean isEnabled(String id) { Placement p = WidgetLayout.find(current, id); return p != null && p.visible; }

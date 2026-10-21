@@ -1,5 +1,7 @@
 # 007 — Android app
 
+> **Partly superseded by 008 (21 Oct 2026):** the Android app is now a remote for the PC. The build, packaging, layout and UI-kit decisions below still apply; the "Widgets on Android" table describes the first, standalone build and no longer matches the app.
+
 The user asked for an Android version of Widget Screen that builds an installable APK, with the Windows app left unchanged, and set a standing rule: future changes go into both versions.
 
 ## Decision
