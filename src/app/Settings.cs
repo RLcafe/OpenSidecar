@@ -37,7 +37,10 @@ namespace WidgetScreen
         public double MediaHeight { get; set; }
         public double SystemHeight { get; set; }
         public double MixerHeight { get; set; }
+        // The layout of the reference 1856 × 576 canvas (a 1920 × 720 screen), where it has always been.
         public WidgetPlacement[] WidgetLayout { get; set; }
+        // Layouts saved on screens of other shapes, one per canvas size (docs/design/any-screen-size.md).
+        public CanvasLayout[] CanvasLayouts { get; set; }
         public bool SnapWidgets { get; set; }
         public double TextScale { get; set; }
         public string Monitor { get; set; }
@@ -120,6 +123,19 @@ namespace WidgetScreen
             }
             if (Double.IsNaN(Latitude) || Double.IsInfinity(Latitude) || Double.IsNaN(Longitude) || Double.IsInfinity(Longitude) || Math.Abs(Latitude) > 90 || Math.Abs(Longitude) > 180) WeatherLocation = "";
             WeatherLocation = WeatherLocation ?? "";
+            if (CanvasLayouts != null)
+            {
+                var layouts = new List<CanvasLayout>();
+                foreach (var entry in CanvasLayouts)
+                {
+                    if (entry == null || entry.Widgets == null || !(entry.Width >= 64 && entry.Width <= 100000) || !(entry.Height >= 64 && entry.Height <= 100000)) continue;
+                    var key = WidgetScreen.WidgetLayout.Key(entry.Size);
+                    if (key == WidgetScreen.WidgetLayout.Reference) { if (WidgetLayout == null) WidgetLayout = entry.Widgets; continue; }
+                    if (layouts.Exists(c => c.Size == key)) continue;
+                    layouts.Add(new CanvasLayout { Width = key.Width, Height = key.Height, Widgets = WidgetScreen.WidgetLayout.Normalize(entry.Widgets, this, key) });
+                }
+                CanvasLayouts = layouts.Count == 0 ? null : layouts.ToArray();
+            }
             if (WidgetLayout != null) WidgetLayout = WidgetScreen.WidgetLayout.Normalize(WidgetLayout, this);
         }
 

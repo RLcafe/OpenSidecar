@@ -192,6 +192,7 @@
     <Style TargetType="ProgressBar"><Setter Property="Foreground" Value="{DynamicResource Accent}"/><Setter Property="Background" Value="{DynamicResource Track}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Height" Value="5"/></Style>
   </Window.Resources>
 
+  <!-- The dashboard is designed at the 1920 × 720 scale; DashboardController.Screen.cs gives this grid a logical size shaped like the screen. -->
   <Viewbox Stretch="Uniform">
     <Grid x:Name="Dashboard" Width="1920" Height="720" Background="{DynamicResource Page}">
       <Grid x:Name="DashboardContent" Margin="32,20,32,16">
@@ -256,7 +257,7 @@
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition Height="*" MinHeight="86"/><RowDefinition Height="48"/><RowDefinition Height="54"/><RowDefinition Height="26"/></Grid.RowDefinitions>
                 <DockPanel><TextBlock Text="NOW PLAYING" Style="{StaticResource Label}"/><TextBlock x:Name="MediaSource" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right" MaxWidth="220"/></DockPanel>
                 <Grid Grid.Row="1" Margin="0,12,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="116"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <Border Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
+                  <Border Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" MaxHeight="104" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="TrackTitle" Text="Nothing playing" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" MaxHeight="66" TextWrapping="Wrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackArtist" Text="Start music or a video in any app." FontSize="{DynamicResource SmallSize}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel>
                 </Grid>
                 <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><TextBlock x:Name="MediaPosition" Text="—:—" Style="{StaticResource Small}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/><Slider x:Name="MediaProgress" Grid.Column="1" VerticalAlignment="Center" Maximum="1" IsEnabled="False" AutomationProperties.Name="Seek current Windows media" ToolTip="Drag or tap to seek when your media app supports it."/><TextBlock x:Name="MediaDuration" Text="—:—" Grid.Column="2" Style="{StaticResource Small}" VerticalAlignment="Center" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/></Grid>
@@ -419,7 +420,7 @@
       </Grid>
 
       <Grid x:Name="SettingsOverlay" Visibility="Collapsed" Background="#E80C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
-        <Border Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
+        <Border x:Name="SettingsCard" Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
           <Border.Resources>
             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="52"/></Style>
             <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="MinHeight" Value="52"/></Style>

@@ -90,19 +90,17 @@ namespace WidgetScreen
             soundboard = new SoundboardWidget(window, discordService) { OpenSetup = OpenDiscordSettings };
             discordAccount = new DiscordAccount(window, discordService, () => { soundboard.AccountChanged(); soundboard.Tick(Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode); });
             mediaScrubber = new PlaybackScrubber(Control<Slider>("MediaProgress"), SeekMedia, value => Text("MediaPosition", FormatTime(TimeSpan.FromMilliseconds(value))));
-            if (settings.WidgetLayout == null && !settings.SwapSideWidgets && settings.ClockWidth == 1 && settings.MediaWidth == 3 && settings.MixerWidth == 3 && settings.SystemWidth == 2
-                && settings.ClockHeight == 246 && settings.MediaHeight == 326 && settings.MixerHeight == 576 && settings.SystemHeight == 326)
-                settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings);
             deckEditor = new DeckEditor(window, message => Text("SettingsStatus", message));
             deckHotkeys = new DeckHotkeys();
             BindActions();
             InitializeRemote();
-            ApplySettings(); UpdateFocus();
+            FitScreen(); ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
             levelTimer.Tick += (sender, e) => { if (audio != null && Showing) levels.Push(audio.Peak()); };
             window.Loaded += Loaded;
             window.PreviewKeyDown += KeyDown;
             window.StateChanged += (sender, e) => UpdateLevelTimer();
+            window.SizeChanged += (sender, e) => FitScreen();
             SystemEvents.DisplaySettingsChanged += DisplaysChanged;
         }
 
@@ -186,7 +184,7 @@ namespace WidgetScreen
         {
             if (!preview && settings.StartFullscreen && DisplayService.Fullscreen(window, settings.Monitor)) fullscreen = true;
             else DisplayService.Windowed(window);
-            UpdateDisplayStatus();
+            FitScreen(); UpdateDisplayStatus();
             UpdateClock(); UpdateFocus(); RefreshAudio(); RefreshSystem(); RefreshMedia(); RefreshWeather();
             clockTimer.Start(); UpdateLevelTimer();
             if (!Program.Rendering) ApplyRemote();
@@ -309,12 +307,13 @@ namespace WidgetScreen
         }
         private void SaveLayoutEdit()
         {
-            var previous = settings.WidgetLayout; bool previousSnap = settings.SnapWidgets;
-            settings.WidgetLayout = Editor.Export(); settings.SnapWidgets = Editor.Snap;
+            // The layout is saved for this canvas size only; other screen shapes keep their own.
+            var previous = settings.WidgetLayout; var previousOthers = settings.CanvasLayouts; bool previousSnap = settings.SnapWidgets;
+            WidgetLayout.Store(settings, Editor.CanvasSize, Editor.Export()); settings.SnapWidgets = Editor.Snap;
             try { SettingsStore.Save(settingsPath, settings); }
             catch (Exception e)
             {
-                settings.WidgetLayout = previous; settings.SnapWidgets = previousSnap;
+                settings.WidgetLayout = previous; settings.CanvasLayouts = previousOthers; settings.SnapWidgets = previousSnap;
                 Notify("Could not save layout: " + e.Message + ". Your changes are still in the editor."); return;
             }
             Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
@@ -745,6 +744,7 @@ namespace WidgetScreen
                 Monitor = monitor == null ? "" : monitor.Id, ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true,
                 Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true, SwapSideWidgets = settings.SwapSideWidgets,
                 WidgetLayout = settings.WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(settings.WidgetLayout), SnapWidgets = settings.SnapWidgets,
+                CanvasLayouts = settings.CanvasLayouts == null ? null : settings.CanvasLayouts.Select(c => c.Copy()).ToArray(),
                 ClockWidth = settings.ClockWidth, MediaWidth = settings.MediaWidth, MixerWidth = settings.MixerWidth, SystemWidth = settings.SystemWidth,
                 ClockHeight = settings.ClockHeight, MediaHeight = settings.MediaHeight, MixerHeight = settings.MixerHeight, SystemHeight = settings.SystemHeight,
                 QuietMode = settings.QuietMode, Shortcuts = shortcuts, WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name,
@@ -755,6 +755,7 @@ namespace WidgetScreen
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude;
             settings = candidate; CloseSettings(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
+            FitScreen();
             if (locationChanged) { weatherGeneration++; lastWeather = null; Text("WeatherTemperature", "—°"); Text("WeatherDetails", "Updating weather…"); RefreshWeather(); }
             Notify("Settings saved.");
         }
@@ -788,7 +789,7 @@ namespace WidgetScreen
             if (fullscreen) { DisplayService.Windowed(window); fullscreen = false; }
             else if (DisplayService.Fullscreen(window, settings.Monitor)) fullscreen = true;
             else Notify("Fullscreen needs a second display. Connect one, then try again.");
-            UpdateDisplayStatus();
+            FitScreen(); UpdateDisplayStatus();
         }
         private void UpdateDisplayStatus()
         {
@@ -824,9 +825,9 @@ namespace WidgetScreen
         {
             if (disposed) return;
             window.Dispatcher.BeginInvoke(new Action(() => {
-                if (disposed || !fullscreen) return;
-                if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Your second display was disconnected, so the dashboard moved to a window.", true); }
-                UpdateDisplayStatus();
+                if (disposed) return;
+                if (fullscreen && !DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Your second display was disconnected, so the dashboard moved to a window.", true); }
+                FitScreen(); UpdateDisplayStatus();
             }));
         }
         public void Dispose()

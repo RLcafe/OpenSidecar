@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -23,10 +23,13 @@ internal static class SmokeTests
                 return service.Connected && service.ClientId == new string('a', 32) && service.CanControl ? 0 : 1;
         }
         string directory = args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
+        // Dashboards in the checks are laid out for the 1920 × 720 reference screen, whatever monitors this PC has.
+        Program.ScreenSize = new System.Windows.Size(1920, 720);
         SpotifyTests.Run(directory, Check);
         DeckTests.Run(directory, Check);
         DiscordTests.Run(directory, Check);
         RemoteTests.Run(directory, Check);
+        ScreenSizeTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -200,7 +203,7 @@ internal static class SmokeTests
             Assert(warning == null && restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout[0].X == 104 && restored.WidgetLayout[0].Y == 32 && restored.WidgetLayout[0].Width == 400 && restored.WidgetLayout[1].Width == 410 && !restored.WidgetLayout[1].Visible, "Independent layout or visibility was lost.");
             restored.WidgetLayout = new[] { new WidgetPlacement { Id = "Focus", X = Double.NaN, Y = -900, Width = Double.PositiveInfinity, Height = -1 }, new WidgetPlacement { Id = "unknown" }, null };
             restored.Normalize();
-            Assert(restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout.All(p => p.X >= 0 && p.Y >= 0 && p.X + p.Width <= WidgetLayout.Width && p.Y + p.Height <= WidgetLayout.Height), "Malformed layout escaped the canvas or lost widgets.");
+            Assert(restored.WidgetLayout.Length == WidgetLayout.Ids.Length && restored.WidgetLayout.All(p => p.X >= 0 && p.Y >= 0 && p.X + p.Width <= WidgetLayout.ReferenceWidth && p.Y + p.Height <= WidgetLayout.ReferenceHeight), "Malformed layout escaped the canvas or lost widgets.");
         });
         Check("All four resize corners retain opposite anchors and screen bounds", () => {
             var start = new System.Windows.Rect(400, 80, 420, 360);
@@ -213,12 +216,12 @@ internal static class SmokeTests
                 var minimum = WidgetLayout.Transform("Focus", start, corner, corner.Contains("W") ? 10000 : -10000, corner.Contains("N") ? 10000 : -10000, false);
                 Assert(minimum.Width == WidgetLayout.Minimum("Focus").Width && minimum.Height == WidgetLayout.Minimum("Focus").Height, "Minimum touch size was crossed.");
                 var maximum = WidgetLayout.Transform("Focus", start, corner, corner.Contains("W") ? -10000 : 10000, corner.Contains("N") ? -10000 : 10000, false);
-                Assert(maximum.X >= 0 && maximum.Y >= 0 && maximum.Right <= WidgetLayout.Width && maximum.Bottom <= WidgetLayout.Height, "Resizing escaped screen.");
+                Assert(maximum.X >= 0 && maximum.Y >= 0 && maximum.Right <= WidgetLayout.ReferenceWidth && maximum.Bottom <= WidgetLayout.ReferenceHeight, "Resizing escaped screen.");
             }
             var moved = WidgetLayout.Transform("Focus", start, "", 13, 11, true);
             Assert(moved.X == 416 && moved.Y == 88 && moved.Size == start.Size, "Move snapping changed widget size or used wrong coordinates.");
             moved = WidgetLayout.Transform("Focus", start, "", -10000, 10000, false);
-            Assert(moved.X == 0 && moved.Bottom == WidgetLayout.Height, "Movement escaped screen.");
+            Assert(moved.X == 0 && moved.Bottom == WidgetLayout.ReferenceHeight, "Movement escaped screen.");
         });
         Check("Live editor transactions, undo/redo, hide/show, cancel and restart", () => {
             string path = Path.Combine(directory, "editor-transactions.xml"); SettingsStore.Save(path, new AppSettings());
@@ -333,7 +336,7 @@ internal static class SmokeTests
             Assert(!WidgetLayout.Ids.Contains("Clock"), "Clock is still a dashboard widget.");
             var settings = new AppSettings();
             var focus = WidgetLayout.SpotifyDefault(settings).First(p => p.Id == "Focus");
-            Assert(focus.X == 0 && focus.Y == 0 && focus.Height == WidgetLayout.Height, "New default does not give Focus the full column.");
+            Assert(focus.X == 0 && focus.Y == 0 && focus.Height == WidgetLayout.ReferenceHeight, "New default does not give Focus the full column.");
             var old = WidgetLayout.SpotifyDefault(settings).Where(p => p.Id != "Focus").Concat(new[] {
                 new WidgetPlacement { Id = "Clock", X = 0, Y = 0, Width = 320, Height = 230 },
                 new WidgetPlacement { Id = "Focus", X = 0, Y = 246, Width = 320, Height = 330 } }).ToArray();

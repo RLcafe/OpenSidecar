@@ -43,8 +43,8 @@ import java.util.Map;
 
 // The phone remote's DashboardController: builds the dashboard, runs the single 1 s heartbeat, asks the PC for
 // the state of the cards on screen and sends their commands, and owns the phone's settings and layout editor.
-// Wide screens get the 1920 × 720 dashboard scaled to fit (its widget canvas stretched to the screen); phones get
-// the same cards in a scrolling list.
+// Sideways screens and upright tablets get the dashboard at the 1920 × 720 scale on a canvas shaped like the screen
+// (DashboardFit); upright phones get the same cards in a scrolling list.
 public final class Dashboard {
     private static final double LIST_GAP = 16;
     public final MainActivity activity;
@@ -60,6 +60,7 @@ public final class Dashboard {
     private FrameLayout logicalRoot;
     private WidgetCanvas canvas;
     private Ui ui;
+    private DashboardFit fit;
     private float scale = 1;
     private boolean listMode, started, refreshNow, offlineShown, askedToPair;
     private int builtWidth = -1, builtHeight = -1;
@@ -229,9 +230,12 @@ public final class Dashboard {
         ui = new Ui(activity, theme, look, 1f);
         activity.applyWindow(settings, theme);
         DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-        DashboardFit fit = DashboardFit.choose(width, height, metrics.density, settings.layoutMode);
+        fit = DashboardFit.choose(width, height, metrics.density, settings.layoutMode);
         listMode = fit.list;
         if (listMode && editor.editing()) editor.cancel();
+        // Each canvas shape has its own layout; the list follows the reference (1920 × 720) layout's widgets and order.
+        boolean discarded = listMode ? editor.setCanvas(WidgetLayout.REFERENCE_WIDTH, WidgetLayout.REFERENCE_HEIGHT) : editor.setCanvas(fit.canvasWidth(), fit.canvasHeight());
+        if (discarded) say("The screen changed shape, so the layout changes were discarded.");
         if (dashboardView != null) root.removeView(dashboardView);
         root.setBackgroundColor(theme.page);
         widgetsPanel = null;
@@ -257,7 +261,9 @@ public final class Dashboard {
         if (pc.paired() && started) refreshSoon();
     }
 
-    private View buildHeader(boolean stacked, boolean narrow) {
+    // stacked: the phone list's header (clock over the buttons, no editor). twoRows: an upright dashboard's header, the
+    // buttons or the edit toolbar on a second row under the clock. narrow: the toolbar drops its title.
+    private View buildHeader(boolean stacked, boolean twoRows, boolean narrow) {
         LinearLayout clock = ui.row();
         clock.setGravity(Gravity.CENTER_VERTICAL);
         clock.setContentDescription("Local time and date");
@@ -309,9 +315,13 @@ public final class Dashboard {
         FrameLayout.LayoutParams clockParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.TOP);
         clockParams.topMargin = ui.px(-8);
         header.addView(clock, clockParams);
-        header.addView(actions, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP));
+        int place = Gravity.END | (twoRows ? Gravity.BOTTOM : Gravity.TOP);
+        FrameLayout.LayoutParams actionParams = ui.frame(Ui.WRAP, Ui.WRAP, place);
+        if (twoRows) actionParams.bottomMargin = ui.px(16);
+        header.addView(actions, actionParams);
         editToolbar = buildEditToolbar(narrow);
-        FrameLayout.LayoutParams toolbarParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP);
+        FrameLayout.LayoutParams toolbarParams = ui.frame(Ui.WRAP, Ui.WRAP, place);
+        if (twoRows) toolbarParams.bottomMargin = ui.px(16);
         header.addView(editToolbar, toolbarParams);
         return header;
     }
@@ -342,12 +352,12 @@ public final class Dashboard {
         logicalRoot = new FrameLayout(activity);
         LinearLayout column = ui.column();
         column.setPadding(ui.px(32), ui.px(20), ui.px(32), ui.px(16));
-        column.addView(buildHeader(false, logicalWidth < 1800), ui.ll(Ui.MATCH, ui.px(72)));
+        column.addView(buildHeader(false, fit.stacked, logicalWidth < 1800), ui.ll(Ui.MATCH, ui.px(fit.headerHeight())));
         canvas = new WidgetCanvas(activity, ui, editor);
-        double canvasWidth = logicalWidth - DashboardFit.MARGIN_X, canvasHeight = logicalHeight - DashboardFit.CHROME_Y;
-        canvas.setFactors(canvasWidth / WidgetLayout.WIDTH, canvasHeight / WidgetLayout.HEIGHT, scale);
+        canvas.setScreenScale(scale);
         for (String id : WidgetLayout.IDS) if (editor.isVisible(id)) attachCard(id);
-        column.addView(canvas, ui.ll(Ui.MATCH, 0, 1));
+        column.addView(canvas, ui.ll(ui.px(fit.canvasWidth()), ui.px(fit.canvasHeight())));
+        column.addView(new View(activity), ui.ll(Ui.MATCH, 0, 1));
         FrameLayout footer = new FrameLayout(activity);
         statusLine = ui.smallText(statusText);
         footer.addView(statusLine, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.BOTTOM));
@@ -361,7 +371,7 @@ public final class Dashboard {
 
     private void attachCard(String id) {
         WidgetLayout.Box box = editor.bounds(id);
-        canvas.setCard(id, widgets.get(id).build(ui, box.width * canvas.fx(), box.height * canvas.fy()));
+        canvas.setCard(id, widgets.get(id).build(ui, box.width, box.height));
     }
 
     private static double listHeight(String id) {
@@ -382,7 +392,7 @@ public final class Dashboard {
         canvas = null;
         LinearLayout column = ui.column();
         column.setPadding(ui.px(LIST_GAP), ui.px(20), ui.px(LIST_GAP), ui.px(LIST_GAP));
-        column.addView(buildHeader(true, true), ui.ll(Ui.MATCH, Ui.WRAP));
+        column.addView(buildHeader(true, true, true), ui.ll(Ui.MATCH, Ui.WRAP));
         statusLine = Ui.wrap(ui.smallText(statusText), 3);
         column.addView(statusLine, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         displayStatus = null;
@@ -442,7 +452,8 @@ public final class Dashboard {
 
     private void saveEdit() {
         closeWidgetsPanel();
-        settings.widgetLayout = editor.export();
+        // Saved for this canvas size only; other screen shapes keep their own layouts.
+        settings.store(editor.canvasWidth(), editor.canvasHeight(), editor.export());
         settings.snapWidgets = editor.snap();
         editor.accept();
         persist();
@@ -463,7 +474,7 @@ public final class Dashboard {
             for (String id : WidgetLayout.IDS) {
                 boolean visible = editor.isVisible(id);
                 WidgetLayout.Box box = editor.bounds(id);
-                if (visible && !(canvas.hasCard(id) && widgets.get(id).builtAt(box.width * canvas.fx(), box.height * canvas.fy()))) attachCard(id);
+                if (visible && !(canvas.hasCard(id) && widgets.get(id).builtAt(box.width, box.height))) attachCard(id);
                 else if (!visible && canvas.hasCard(id)) { widgets.get(id).release(); canvas.removeCard(id); }
             }
         }
@@ -510,7 +521,7 @@ public final class Dashboard {
         panel.setElevation(0);
         panel.setTag("panel");
         FrameLayout.LayoutParams params = ui.frame(ui.px(380), Ui.WRAP, Gravity.END | Gravity.TOP);
-        params.topMargin = ui.px(20 + 72); params.rightMargin = ui.px(32 + 300);
+        params.topMargin = ui.px(20 + (fit == null ? DashboardFit.HEADER : fit.headerHeight())); params.rightMargin = ui.px(32 + 300);
         scrim.addView(panel, params);
         widgetsPanel = scrim;
         logicalRoot.addView(scrim, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));

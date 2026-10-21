@@ -38,6 +38,8 @@ public final class SettingsPanel {
     private final Dashboard dash;
     private final FrameLayout overlay;
     private final AppSettings draft;
+    // Widgets shown or hidden under Widgets, for the layout on screen now (each canvas shape has its own).
+    private WidgetLayout.Placement[] shown;
     private Ui ui;
     private String tab;
     private boolean wide, finding, pairing;
@@ -244,11 +246,11 @@ public final class SettingsPanel {
         add(left, ui.check("Hide the status and navigation bars", draft.hideSystemBars, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.hideSystemBars = checked; } }), 4);
         add(left, note("Swipe in from the edge to show them for a moment."), 4);
         add(left, ui.check("Keep the app sideways", draft.landscapeOnly, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.landscapeOnly = checked; } }), 12);
-        add(left, note("Sideways, the phone shows the same arrangement as the Windows dashboard."), 4);
+        add(left, note("Sideways, the phone shows the dashboard like the PC does, shaped to fit this screen."), 4);
 
         add(right, heading("Layout"), 0);
         add(right, choices(AppSettings.LAYOUT_MODES, new String[] { "Automatic", "Dashboard", "List" }, draft.layoutMode, new Choice() { @Override public void chose(String value) { draft.layoutMode = value; build(); } }), 12);
-        add(right, note("Automatic shows the Windows dashboard arrangement when the screen is sideways, and a scrolling list when it's upright. Dashboard always uses the Windows arrangement; List always stacks the widgets."), 10);
+        add(right, note("Automatic shows the dashboard when the screen is sideways or on an upright tablet, and a scrolling list on an upright phone. Dashboard always uses the dashboard; List always stacks the widgets. Each screen shape keeps its own layout."), 10);
     }
 
     // ----- Widgets -----
@@ -263,10 +265,10 @@ public final class SettingsPanel {
         left.addView(edit, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 14, 0, 0));
         add(left, note(dash.listMode() ? "The editor needs the dashboard layout. Turn the device sideways, or choose Dashboard under Display." : "Opening the editor closes Settings without saving other changes here."), 8);
         add(left, ui.smallText("Show on the dashboard"), 20);
-        if (draft.widgetLayout == null) draft.widgetLayout = WidgetLayout.normalize(dash.settings.layout());
+        if (shown == null) shown = dash.editor.export();
         for (final String id : WidgetLayout.IDS) {
-            add(left, ui.check(WidgetLayout.title(id), WidgetLayout.find(draft.widgetLayout, id).visible, new CheckBox.Listener() {
-                @Override public void changed(CheckBox box, boolean checked) { WidgetLayout.find(draft.widgetLayout, id).visible = checked; }
+            add(left, ui.check(WidgetLayout.title(id), WidgetLayout.find(shown, id).visible, new CheckBox.Listener() {
+                @Override public void changed(CheckBox box, boolean checked) { WidgetLayout.find(shown, id).visible = checked; }
             }), 0);
         }
 
@@ -373,6 +375,12 @@ public final class SettingsPanel {
     // ----- Save and cancel -----
 
     private void save() {
+        // A layout is only saved for this screen shape when the widgets shown here changed.
+        if (shown != null) {
+            WidgetLayout.Placement[] before = dash.editor.export();
+            for (WidgetLayout.Placement p : shown)
+                if (WidgetLayout.find(before, p.id).visible != p.visible) { draft.store(dash.editor.canvasWidth(), dash.editor.canvasHeight(), shown); break; }
+        }
         dash.applySettings(draft);
         dash.settingsClosed();
     }

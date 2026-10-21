@@ -20,8 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// The free widget canvas. Placements are in the 1856 × 576 design canvas; this view stretches them to its
-// own size (fx, fy). In Edit layout each card gets a chrome on top: an outline and four 48 × 48 corner
+// The free widget canvas. Placements are in design units on a canvas shaped like the screen (DashboardFit), which
+// ScaledHost scales to pixels. In Edit layout each card gets a chrome on top: an outline and four 48 × 48 corner
 // grips, and the whole card moves when dragged elsewhere.
 public final class WidgetCanvas extends ViewGroup {
     private final LayoutEditor editor;
@@ -29,7 +29,6 @@ public final class WidgetCanvas extends ViewGroup {
     private final Map<String, FrameLayout> hosts = new HashMap<String, FrameLayout>();
     private final Map<String, Chrome> chrome = new HashMap<String, Chrome>();
     private final List<View> order = new ArrayList<View>();
-    private double fx = 1, fy = 1;
     private float screenScale = 1;
 
     public WidgetCanvas(Context context, Ui ui, LayoutEditor editor) {
@@ -39,9 +38,7 @@ public final class WidgetCanvas extends ViewGroup {
         setClipChildren(true);
     }
 
-    public void setFactors(double fx, double fy, float screenScale) { this.fx = fx; this.fy = fy; this.screenScale = screenScale; }
-    public double fx() { return fx; }
-    public double fy() { return fy; }
+    public void setScreenScale(float screenScale) { this.screenScale = screenScale; }
 
     public void setCard(String id, View card) {
         FrameLayout host = hosts.get(id);
@@ -84,7 +81,7 @@ public final class WidgetCanvas extends ViewGroup {
         for (Map.Entry<String, FrameLayout> entry : hosts.entrySet()) {
             if (entry.getValue().getVisibility() == GONE) continue;
             Box b = editor.bounds(entry.getKey());
-            entry.getValue().measure(MeasureSpec.makeMeasureSpec((int) Math.round(b.width * fx), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((int) Math.round(b.height * fy), MeasureSpec.EXACTLY));
+            entry.getValue().measure(MeasureSpec.makeMeasureSpec((int) Math.round(b.width), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((int) Math.round(b.height), MeasureSpec.EXACTLY));
         }
         setMeasuredDimension(MeasureSpec.getSize(widthSpec), MeasureSpec.getSize(heightSpec));
     }
@@ -94,7 +91,7 @@ public final class WidgetCanvas extends ViewGroup {
             View host = entry.getValue();
             if (host.getVisibility() == GONE) continue;
             Box box = editor.bounds(entry.getKey());
-            int left = (int) Math.round(box.x * fx), top = (int) Math.round(box.y * fy);
+            int left = (int) Math.round(box.x), top = (int) Math.round(box.y);
             host.layout(left, top, left + host.getMeasuredWidth(), top + host.getMeasuredHeight());
         }
         order.clear();
@@ -167,12 +164,12 @@ public final class WidgetCanvas extends ViewGroup {
                     editor.startGesture(id, corner(event.getX(), event.getY()));
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    if (tracking) editor.continueGesture((event.getRawX() - downX) / (screenScale * fx), (event.getRawY() - downY) / (screenScale * fy));
+                    if (tracking) editor.continueGesture((event.getRawX() - downX) / screenScale, (event.getRawY() - downY) / screenScale);
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     if (tracking) {
-                        if (event.getActionMasked() == MotionEvent.ACTION_UP) editor.continueGesture((event.getRawX() - downX) / (screenScale * fx), (event.getRawY() - downY) / (screenScale * fy));
+                        if (event.getActionMasked() == MotionEvent.ACTION_UP) editor.continueGesture((event.getRawX() - downX) / screenScale, (event.getRawY() - downY) / screenScale);
                         tracking = false;
                         editor.endGesture();
                     }

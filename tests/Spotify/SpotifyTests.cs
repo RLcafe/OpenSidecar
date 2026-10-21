@@ -142,7 +142,7 @@ internal static class SpotifyTests
         check("Spotify layout keeps independent media widgets and can be cancelled", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
-                var window = (Window)System.Windows.Markup.XamlReader.Load(stream); var editor = new LayoutEditor(window); editor.Apply(new AppSettings());
+                var window = (Window)System.Windows.Markup.XamlReader.Load(stream); var editor = new LayoutEditor(window); editor.Apply(new AppSettings { WidgetLayout = WidgetLayout.Default(new AppSettings()) });
                 var original = editor.Bounds("Media"); editor.Begin(); editor.Reset();
                 Assert(editor.IsVisible("Spotify") && editor.IsVisible("Media") && editor.IsVisible("Focus") && editor.IsVisible("Shortcuts") && !editor.IsVisible("System") && !editor.IsVisible("Weather") && !editor.HasOverlaps(), "Spotify arrangement lost required widgets or overlaps.");
                 editor.Cancel(); Assert(editor.Bounds("Media") == original && !editor.IsVisible("Spotify"), "Layout preview changed saved layout.");

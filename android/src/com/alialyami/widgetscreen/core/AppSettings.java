@@ -8,8 +8,10 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 
 // The phone's own preferences: how the dashboard looks on this screen and which widgets it shows. Everything
@@ -28,10 +30,28 @@ public final class AppSettings {
     // Keep the app sideways, so the phone always shows the Windows dashboard arrangement.
     public boolean landscapeOnly;
     public String layoutMode = "Auto";
-    // Null until the layout is first saved; the default arrangement is used until then.
+    // The layout of the reference 1856 × 576 canvas; null until it is first saved.
     public WidgetLayout.Placement[] widgetLayout;
+    // Layouts saved on canvases of other shapes, keyed "WxH" (docs/design/any-screen-size.md).
+    public final Map<String, WidgetLayout.Placement[]> canvasLayouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
 
-    public WidgetLayout.Placement[] layout() { return widgetLayout == null ? WidgetLayout.defaults() : widgetLayout; }
+    // Every saved layout by canvas key, the reference one included.
+    public Map<String, WidgetLayout.Placement[]> savedLayouts() {
+        Map<String, WidgetLayout.Placement[]> all = new LinkedHashMap<String, WidgetLayout.Placement[]>();
+        if (widgetLayout != null) all.put(WidgetLayout.keyName(WidgetLayout.REFERENCE_WIDTH, WidgetLayout.REFERENCE_HEIGHT), widgetLayout);
+        all.putAll(canvasLayouts);
+        return all;
+    }
+
+    public WidgetLayout.Placement[] layoutFor(double canvasWidth, double canvasHeight) { return WidgetLayout.forCanvas(savedLayouts(), canvasWidth, canvasHeight); }
+
+    public boolean hasLayout(double canvasWidth, double canvasHeight) { return savedLayouts().containsKey(WidgetLayout.keyName(canvasWidth, canvasHeight)); }
+
+    // Saves a layout for one canvas size only; other shapes keep their own.
+    public void store(double canvasWidth, double canvasHeight, WidgetLayout.Placement[] layout) {
+        if (WidgetLayout.isReference(canvasWidth, canvasHeight)) widgetLayout = WidgetLayout.copy(layout);
+        else canvasLayouts.put(WidgetLayout.keyName(canvasWidth, canvasHeight), WidgetLayout.copy(layout));
+    }
 
     public AppSettings copy() { return fromProperties(toProperties()); }
 
@@ -41,7 +61,38 @@ public final class AppSettings {
         if (!Theme.contains(Theme.THEMES, theme)) theme = "Midnight";
         if (!Theme.contains(LAYOUT_MODES, layoutMode)) layoutMode = "Auto";
         cornerRadius = Double.isNaN(cornerRadius) || Double.isInfinite(cornerRadius) ? 20 : Math.max(0, Math.min(24, cornerRadius));
+        String reference = WidgetLayout.keyName(WidgetLayout.REFERENCE_WIDTH, WidgetLayout.REFERENCE_HEIGHT);
+        Map<String, WidgetLayout.Placement[]> layouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
+        for (Map.Entry<String, WidgetLayout.Placement[]> entry : canvasLayouts.entrySet()) {
+            double[] size = WidgetLayout.parseKey(entry.getKey());
+            if (size == null || entry.getValue() == null) continue;
+            String key = WidgetLayout.keyName(size[0], size[1]);
+            if (key.equals(reference)) { if (widgetLayout == null) widgetLayout = entry.getValue(); continue; }
+            if (!layouts.containsKey(key)) layouts.put(key, WidgetLayout.normalize(entry.getValue(), size[0], size[1]));
+        }
+        canvasLayouts.clear(); canvasLayouts.putAll(layouts);
         if (widgetLayout != null) widgetLayout = WidgetLayout.normalize(widgetLayout);
+    }
+
+    private static void putLayout(Properties p, String prefix, WidgetLayout.Placement[] layout) {
+        for (WidgetLayout.Placement w : layout)
+            p.setProperty(prefix + w.id, number(w.x) + "," + number(w.y) + "," + number(w.width) + "," + number(w.height) + "," + w.visible + "," + w.layer);
+    }
+
+    private static WidgetLayout.Placement[] readLayout(Properties p, String prefix) {
+        List<WidgetLayout.Placement> placements = new ArrayList<WidgetLayout.Placement>();
+        for (String id : WidgetLayout.IDS) {
+            String value = p.getProperty(prefix + id);
+            if (value == null) continue;
+            String[] parts = value.split(",");
+            if (parts.length < 5) continue;
+            try {
+                WidgetLayout.Placement placement = new WidgetLayout.Placement(id, Double.parseDouble(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3]), "true".equals(parts[4]));
+                if (parts.length > 5) placement.layer = Integer.parseInt(parts[5]);
+                placements.add(placement);
+            } catch (NumberFormatException ignored) { }
+        }
+        return placements.isEmpty() ? null : placements.toArray(new WidgetLayout.Placement[0]);
     }
 
     private static String number(double value) { return String.format(Locale.ROOT, "%s", value); }
@@ -55,8 +106,9 @@ public final class AppSettings {
         p.setProperty("KeepScreenOn", Boolean.toString(keepScreenOn)); p.setProperty("HideSystemBars", Boolean.toString(hideSystemBars));
         p.setProperty("LandscapeOnly", Boolean.toString(landscapeOnly));
         p.setProperty("LayoutMode", layoutMode);
-        if (widgetLayout != null) for (WidgetLayout.Placement w : widgetLayout)
-            p.setProperty("Layout." + w.id, number(w.x) + "," + number(w.y) + "," + number(w.width) + "," + number(w.height) + "," + w.visible + "," + w.layer);
+        // The reference layout keeps its old keys (Layout.Focus); other canvases add theirs (Layout.1480x552.Focus).
+        if (widgetLayout != null) putLayout(p, "Layout.", widgetLayout);
+        for (Map.Entry<String, WidgetLayout.Placement[]> entry : canvasLayouts.entrySet()) putLayout(p, "Layout." + entry.getKey() + ".", entry.getValue());
         return p;
     }
 
@@ -77,19 +129,13 @@ public final class AppSettings {
         s.keepScreenOn = readBool(p, "KeepScreenOn", s.keepScreenOn); s.hideSystemBars = readBool(p, "HideSystemBars", s.hideSystemBars);
         s.landscapeOnly = readBool(p, "LandscapeOnly", false);
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
-        List<WidgetLayout.Placement> placements = new ArrayList<WidgetLayout.Placement>();
-        for (String id : WidgetLayout.IDS) {
-            String value = p.getProperty("Layout." + id);
-            if (value == null) continue;
-            String[] parts = value.split(",");
-            if (parts.length < 5) continue;
-            try {
-                WidgetLayout.Placement placement = new WidgetLayout.Placement(id, Double.parseDouble(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3]), "true".equals(parts[4]));
-                if (parts.length > 5) placement.layer = Integer.parseInt(parts[5]);
-                placements.add(placement);
-            } catch (NumberFormatException ignored) { }
+        s.widgetLayout = readLayout(p, "Layout.");
+        for (String name : p.stringPropertyNames()) {
+            String[] parts = name.split("\\.");
+            if (parts.length != 3 || !parts[0].equals("Layout") || WidgetLayout.parseKey(parts[1]) == null || s.canvasLayouts.containsKey(parts[1])) continue;
+            WidgetLayout.Placement[] layout = readLayout(p, "Layout." + parts[1] + ".");
+            if (layout != null) s.canvasLayouts.put(parts[1], layout);
         }
-        if (!placements.isEmpty()) s.widgetLayout = placements.toArray(new WidgetLayout.Placement[0]);
         s.normalize();
         return s;
     }
