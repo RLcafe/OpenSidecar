@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml.Serialization;
@@ -45,6 +45,8 @@ namespace WidgetScreen
         public bool ShowLevels { get; set; }
         public bool Use24HourClock { get; set; }
         public bool SwapSideWidgets { get; set; }
+        // Phone remote (Settings → Phone). Off until the user turns it on.
+        public bool RemoteEnabled { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }

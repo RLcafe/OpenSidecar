@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,7 +15,7 @@ using Microsoft.Win32;
 
 namespace WidgetScreen
 {
-    public sealed class DashboardController : IDisposable
+    public sealed partial class DashboardController : IDisposable
     {
         private readonly Window window;
         private readonly string settingsPath;
@@ -24,6 +24,8 @@ namespace WidgetScreen
         private AudioService audio;
         private readonly SystemService system = new SystemService();
         private readonly MediaService media = new MediaService();
+        private readonly SpotifyService spotifyService;
+        private readonly DiscordService discordService;
         private readonly SpotifyWidget spotify;
         private readonly SpotifyAccount spotifyAccount;
         private readonly SoundboardWidget soundboard;
@@ -73,7 +75,7 @@ namespace WidgetScreen
             outputPicker = new OutputPicker(window);
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
-            var spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
+            spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
             spotify = new SpotifyWidget(window, spotifyService);
             if (warning == null && String.IsNullOrEmpty(settings.SpotifyClientId) && SpotifyService.ValidClientId(spotifyService.ClientId))
             {
@@ -84,7 +86,7 @@ namespace WidgetScreen
                 string previous = settings.SpotifyClientId; settings.SpotifyClientId = value;
                 try { SettingsStore.Save(settingsPath, settings); } catch { settings.SpotifyClientId = previous; throw; }
             }, () => { spotify.AccountChanged(); spotify.Tick(Editor.IsVisible("Spotify"), settings.QuietMode); });
-            var discordService = new DiscordService(SettingsStore.DiscordPath(settingsPath));
+            discordService = new DiscordService(SettingsStore.DiscordPath(settingsPath));
             soundboard = new SoundboardWidget(window, discordService) { OpenSetup = OpenDiscordSettings };
             discordAccount = new DiscordAccount(window, discordService, () => { soundboard.AccountChanged(); soundboard.Tick(Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode); });
             mediaScrubber = new PlaybackScrubber(Control<Slider>("MediaProgress"), SeekMedia, value => Text("MediaPosition", FormatTime(TimeSpan.FromMilliseconds(value))));
@@ -94,6 +96,7 @@ namespace WidgetScreen
             deckEditor = new DeckEditor(window, message => Text("SettingsStatus", message));
             deckHotkeys = new DeckHotkeys();
             BindActions();
+            InitializeRemote();
             ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
             levelTimer.Tick += (sender, e) => { if (audio != null && window.WindowState != WindowState.Minimized) levels.Push(audio.Peak()); };
@@ -186,12 +189,14 @@ namespace WidgetScreen
             UpdateDisplayStatus();
             UpdateClock(); UpdateFocus(); RefreshAudio(); RefreshSystem(); RefreshMedia(); RefreshWeather();
             clockTimer.Start(); UpdateLevelTimer();
+            if (!Program.Rendering) ApplyRemote();
             if (!String.IsNullOrEmpty(pendingMessage)) Notify(pendingMessage, true);
         }
 
         private void Tick(object sender, EventArgs e)
         {
             ticks++; UpdateClock(); UpdateFocus();
+            if (pairing.Code != null && Control<Grid>("SettingsOverlay").Visibility == Visibility.Visible) UpdateRemoteSettings();
             if (ticks >= statusClearsAt && !Editor.Editing) { Text("StatusMessage", ""); statusClearsAt = int.MaxValue; }
             spotify.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
             soundboard.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
@@ -385,12 +390,15 @@ namespace WidgetScreen
         }
         private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
         private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 6; }
-        private async void RunDeckAction(Shortcut shortcut)
+        // A phone that runs a button has already asked the user, so it passes confirmed.
+        private async void RunDeckAction(Shortcut shortcut) { await RunDeckActionAsync(shortcut, false); }
+        // Returns null on success, or the message the dashboard showed.
+        private async Task<string> RunDeckActionAsync(Shortcut shortcut, bool confirmed)
         {
             try
             {
                 string error = DeckActions.Validate(shortcut); if (error != null) throw new InvalidOperationException(error);
-                if (DeckActions.NeedsConfirmation(shortcut) && MessageBox.Show(window, shortcut.Label + "\n\n" + DeckActions.Describe(shortcut) + "\n\nRun this action?", "Quick Launch", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+                if (!confirmed && DeckActions.NeedsConfirmation(shortcut) && MessageBox.Show(window, shortcut.Label + "\n\n" + DeckActions.Describe(shortcut) + "\n\nRun this action?", "Quick Launch", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return null;
                 if (shortcut.Action == "Hotkey") { await deckHotkeys.SendAsync(shortcut.Target); if (!disposed) Notify("Sent " + shortcut.Target + " to your previous app."); }
                 else if (shortcut.Action == "Control")
                 {
@@ -409,8 +417,9 @@ namespace WidgetScreen
                     }
                 }
                 else { DeckActions.Open(shortcut); Notify("Opened " + shortcut.Label); }
+                return null;
             }
-            catch (Exception e) { if (!disposed) Notify(shortcut.Label + ": " + e.Message); }
+            catch (Exception e) { if (!disposed) Notify(shortcut.Label + ": " + e.Message); return shortcut.Label + ": " + e.Message; }
         }
         private void Launch(string target) { try { Launcher.Open(target); Notify("Opened " + target); } catch (Exception e) { Notify("Couldn't open shortcut: " + e.Message); } }
 
@@ -707,7 +716,7 @@ namespace WidgetScreen
             pendingLocation = String.IsNullOrWhiteSpace(settings.WeatherLocation) ? null : new WeatherLocation { Name = settings.WeatherLocation, Latitude = settings.Latitude, Longitude = settings.Longitude };
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
-            Text("SettingsStatus", "");
+            Text("SettingsStatus", ""); UpdateRemoteSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
             openingSettings = false; PreviewAppearance();
@@ -820,7 +829,7 @@ namespace WidgetScreen
         }
         public void Dispose()
         {
-            disposed = true; clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
+            disposed = true; DisposeRemote(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
             weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); if (audio != null) audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
