@@ -4,7 +4,21 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/any-screen` (stacked on `feature/android-app`; a MINOR bump when merged). Decision 010, `docs/design/any-screen-size.md`.
+Nothing yet.
+
+## 0.4.0 (21 Oct 2026)
+
+Merges `feature/android-app`, then `feature/any-screen`, which was stacked on it.
+
+From `feature/android-app` (decisions 007, 008 and 009, `docs/design/android-app.md`):
+
+- **Android app**: a native Android version in `android/`, built by `scripts\build-android.ps1` into an installable `WidgetScreen.apk` (no Gradle, no libraries, no WebView), with the same widgets, palettes and accents. Release folders include the APK when the Android SDK is installed.
+- **The phone is a remote for the PC**: it shows the PC's dashboard and every card controls the PC over home Wi-Fi: Focus, Now Playing, Quick Launch, the sound mixer with app outputs and the microphone, System stats, Weather, Spotify through the PC's connection and the Discord soundboard. The phone's own Settings are Theme, Display, Widgets and PC (find the PC and pair with its code). Sideways screens and upright tablets get the dashboard, upright phones get the cards in a list, and Settings → Display can keep the app sideways.
+- **Settings → Phone** in the Windows app turns on the phone link for the local network (TCP 43830, UDP discovery on 43831), paired with a six-digit code. Paired phones are stored as token hashes in DPAPI-encrypted `remote-devices.dat`.
+- **Tray mode**: a Hide to tray button in the header, and the window moves to the tray by itself while a paired phone shows the dashboard (on by default in Settings → Phone). Windows only.
+- Fixed the phone showing no data right after pairing until the app restarted.
+
+From `feature/any-screen` (decision 010, `docs/design/any-screen-size.md`):
 
 - **Any screen size**: the dashboard keeps its 1920 × 720 design scale and lays itself out on a canvas shaped like the screen, so wider or taller second screens get more room, small screens keep readable text (the canvas may shrink to 80%), and narrow ones stack the header. The 1920 × 720 screen looks exactly as before. Layouts are saved per screen shape; a new shape stretches the closest saved layout, or arranges the page's widgets for it. Upright tablets get the dashboard; upright phones keep the list.
 - **Layout pages**: up to eight named pages, each with its own widgets and layouts. Switch with the arrows in the header or a sideways swipe; add, rename, reorder and delete pages in Edit layout. The page shown is shared with the phone.
