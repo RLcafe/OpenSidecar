@@ -30,6 +30,12 @@ public final class WidgetCanvas extends ViewGroup {
     private final Map<String, Chrome> chrome = new HashMap<String, Chrome>();
     private final List<View> order = new ArrayList<View>();
     private float screenScale = 1;
+    // A quick sideways swipe on the dashboard switches pages (not while editing; sliders keep their own drags).
+    public interface Swipe { void swiped(int direction); }
+    private Swipe swipe;
+    private float swipeX, swipeY;
+    private long swipeAt;
+    private boolean swiping;
 
     public WidgetCanvas(Context context, Ui ui, LayoutEditor editor) {
         super(context);
@@ -39,6 +45,32 @@ public final class WidgetCanvas extends ViewGroup {
     }
 
     public void setScreenScale(float screenScale) { this.screenScale = screenScale; }
+    public void setSwipe(Swipe swipe) { this.swipe = swipe; }
+
+    @Override public boolean onInterceptTouchEvent(MotionEvent event) {
+        if (swipe == null || editor.editing()) return false;
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                swipeX = event.getX(); swipeY = event.getY(); swipeAt = event.getEventTime(); swiping = false;
+                return false;
+            case MotionEvent.ACTION_MOVE:
+                float dx = event.getX() - swipeX, dy = event.getY() - swipeY;
+                if (Math.abs(dx) > 40 * screenScale && Math.abs(dx) > 2 * Math.abs(dy)) { swiping = true; return true; }
+                return false;
+        }
+        return false;
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent event) {
+        if (!swiping) return false;
+        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+            float dx = event.getX() - swipeX;
+            swiping = false;
+            // At least 160 design units, like the PC, within 0.8 s.
+            if (Math.abs(dx) >= 160 * screenScale && event.getEventTime() - swipeAt < 800) swipe.swiped(dx < 0 ? 1 : -1);
+        } else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) swiping = false;
+        return true;
+    }
 
     public void setCard(String id, View card) {
         FrameLayout host = hosts.get(id);

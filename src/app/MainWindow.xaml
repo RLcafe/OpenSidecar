@@ -209,6 +209,15 @@
               <TextBlock x:Name="ClockDate" Text="October 8" FontSize="{DynamicResource TitleSize}" Margin="0,1,0,0"/>
             </StackPanel>
           </StackPanel>
+          <!-- Layout pages: shown when there is more than one. Swiping the dashboard sideways also switches pages. -->
+          <StackPanel x:Name="PageSwitcher" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Layout pages">
+            <Button x:Name="PreviousPageButton" Content="&#xE76B;" Style="{StaticResource IconButton}" ToolTip="Previous page" AutomationProperties.Name="Previous page"/>
+            <StackPanel VerticalAlignment="Center" Margin="14,0" MinWidth="120" MaxWidth="260">
+              <TextBlock x:Name="PageNameText" Text="Main" HorizontalAlignment="Center"/>
+              <TextBlock x:Name="PageCountText" Text="1 of 1" Style="{StaticResource Caption}" HorizontalAlignment="Center"/>
+            </StackPanel>
+            <Button x:Name="NextPageButton" Content="&#xE76C;" Style="{StaticResource IconButton}" ToolTip="Next page" AutomationProperties.Name="Next page"/>
+          </StackPanel>
           <StackPanel x:Name="MainActions" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button x:Name="EditLayoutButton" Content="Edit layout" Margin="0,0,10,0" ToolTip="Move and resize widgets directly on the dashboard."/>
             <Button x:Name="QuietButton" Content="Quiet mode" Margin="0,0,10,0" ToolTip="Pause output levels and slow down updates, for example while gaming." AutomationProperties.Name="Quiet mode, off"/>

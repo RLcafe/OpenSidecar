@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.core;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,8 +49,30 @@ public final class PcState {
         public final List<Sound> sounds = new ArrayList<Sound>();
     }
 
-    public String name = "", version = "";
+    // The PC's layout pages (docs/design/any-screen-size.md): the page it shows, every page's name, the current page's
+    // layouts saved per canvas size ("WxH" keys) and the layout on the PC's own screen. The phone mirrors them.
+    public static final class Layout {
+        public int page;
+        public final List<String> pages = new ArrayList<String>();
+        public boolean snap, editing;
+        public double canvasWidth, canvasHeight;
+        public WidgetLayout.Placement[] shown;
+        public final Map<String, WidgetLayout.Placement[]> layouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
+        public String pageName() { return page >= 0 && page < pages.size() ? pages.get(page) : ""; }
+        // Every layout the phone can stretch from: the saved ones, and the PC screen's own when that size isn't saved.
+        public Map<String, WidgetLayout.Placement[]> sources() {
+            Map<String, WidgetLayout.Placement[]> all = new LinkedHashMap<String, WidgetLayout.Placement[]>(layouts);
+            if (shown != null && canvasWidth >= 64 && canvasHeight >= 64) {
+                String key = WidgetLayout.keyName(canvasWidth, canvasHeight);
+                if (!all.containsKey(key)) all.put(key, shown);
+            }
+            return all;
+        }
+    }
+
+    public String name = "", version = "", layoutVersion = "";
     public boolean quiet, use24;
+    public Layout layout;
     public Focus focus;
     public Media media;
     public Audio audio;
@@ -66,7 +89,8 @@ public final class PcState {
     public static PcState parse(Map<String, Object> root) {
         PcState state = new PcState();
         state.name = text(root, "name"); state.version = text(root, "version");
-        state.quiet = flag(root, "quiet"); state.use24 = flag(root, "use24");
+        state.quiet = flag(root, "quiet"); state.use24 = flag(root, "use24"); state.layoutVersion = text(root, "layoutVersion");
+        if (Json.has(root, "layout")) state.layout = parseLayout(Json.obj(Json.value(root, "layout")));
         if (Json.has(root, "focus")) {
             Map<String, Object> f = Json.obj(Json.value(root, "focus"));
             Focus focus = new Focus();
@@ -142,6 +166,46 @@ public final class PcState {
             state.discord = parseDiscord(d);
         }
         return state;
+    }
+
+    public static WidgetLayout.Placement[] placements(List<Object> items) {
+        List<WidgetLayout.Placement> result = new ArrayList<WidgetLayout.Placement>();
+        for (Object item : items) {
+            Map<String, Object> w = Json.obj(item);
+            String id = Json.field(w, "id");
+            if (id == null || !java.util.Arrays.asList(WidgetLayout.IDS).contains(id)) continue;
+            WidgetLayout.Placement p = new WidgetLayout.Placement(id, Json.number(w, "x"), Json.number(w, "y"), Json.number(w, "width"), Json.number(w, "height"), flag(w, "visible"));
+            p.layer = (int) Json.number(w, "layer");
+            if (WidgetLayout.find(result.toArray(new WidgetLayout.Placement[0]), id) == null) result.add(p);
+        }
+        // A widget the PC didn't mention isn't on its page.
+        for (String id : WidgetLayout.IDS)
+            if (WidgetLayout.find(result.toArray(new WidgetLayout.Placement[0]), id) == null) result.add(new WidgetLayout.Placement(id, 0, 0, 0, 0, false));
+        return result.toArray(new WidgetLayout.Placement[0]);
+    }
+
+    public static Layout parseLayout(Map<String, Object> l) {
+        Layout layout = new Layout();
+        for (Object name : Json.array(l, "pages")) layout.pages.add(name instanceof String ? (String) name : "");
+        layout.page = Math.max(0, Math.min(Math.max(0, layout.pages.size() - 1), (int) Json.number(l, "page")));
+        layout.snap = flag(l, "snap"); layout.editing = flag(l, "editing");
+        Map<String, Object> canvas = Json.obj(Json.value(l, "canvas"));
+        layout.canvasWidth = Json.number(canvas, "width"); layout.canvasHeight = Json.number(canvas, "height");
+        if (Json.has(l, "shown")) layout.shown = placements(Json.array(l, "shown"));
+        for (Object item : Json.array(l, "layouts")) {
+            Map<String, Object> c = Json.obj(item);
+            double width = Json.number(c, "width"), height = Json.number(c, "height");
+            if (WidgetLayout.parseKey(WidgetLayout.keyName(width, height)) == null) continue;
+            layout.layouts.put(WidgetLayout.keyName(width, height), placements(Json.array(c, "widgets")));
+        }
+        return layout;
+    }
+
+    public static List<Map<String, Object>> json(WidgetLayout.Placement[] layout) {
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
+        for (WidgetLayout.Placement p : layout)
+            result.add(Json.map("id", p.id, "x", p.x, "y", p.y, "width", p.width, "height", p.height, "visible", p.visible, "layer", p.layer));
+        return result;
     }
 
     public static Discord parseDiscord(Map<String, Object> d) {

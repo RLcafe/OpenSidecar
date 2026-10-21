@@ -375,13 +375,13 @@ public final class SettingsPanel {
     // ----- Save and cancel -----
 
     private void save() {
-        // A layout is only saved for this screen shape when the widgets shown here changed.
+        dash.applySettings(draft);
+        // The widgets shown belong to the PC's page: a change is saved there, for every screen.
         if (shown != null) {
             WidgetLayout.Placement[] before = dash.editor.export();
             for (WidgetLayout.Placement p : shown)
-                if (WidgetLayout.find(before, p.id).visible != p.visible) { draft.store(dash.editor.canvasWidth(), dash.editor.canvasHeight(), shown); break; }
+                if (WidgetLayout.find(before, p.id).visible != p.visible) { dash.saveLayout(shown, dash.editor.canvasWidth(), dash.editor.canvasHeight(), "Widgets saved on the PC."); break; }
         }
-        dash.applySettings(draft);
         dash.settingsClosed();
     }
 

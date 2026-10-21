@@ -30,8 +30,13 @@ public final class AppSettings {
     // Keep the app sideways, so the phone always shows the Windows dashboard arrangement.
     public boolean landscapeOnly;
     public String layoutMode = "Auto";
-    // The layout of the reference 1856 × 576 canvas; null until it is first saved.
+    // The phone mirrors the PC's layout (docs/design/any-screen-size.md). These hold the last one the PC sent, so the
+    // dashboard keeps its arrangement while the PC is away: the current page's layouts per canvas size (the reference
+    // 1856 × 576 one in widgetLayout), the page names, the page shown and the canvas of the PC's own screen.
     public WidgetLayout.Placement[] widgetLayout;
+    public final List<String> pages = new ArrayList<String>();
+    public int page;
+    public double pcCanvasWidth = WidgetLayout.REFERENCE_WIDTH, pcCanvasHeight = WidgetLayout.REFERENCE_HEIGHT;
     // Layouts saved on canvases of other shapes, keyed "WxH" (docs/design/any-screen-size.md).
     public final Map<String, WidgetLayout.Placement[]> canvasLayouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
 
@@ -47,11 +52,32 @@ public final class AppSettings {
 
     public boolean hasLayout(double canvasWidth, double canvasHeight) { return savedLayouts().containsKey(WidgetLayout.keyName(canvasWidth, canvasHeight)); }
 
-    // Saves a layout for one canvas size only; other shapes keep their own.
+    // Saves a layout for one canvas size only; other shapes keep their own. A page shows the same widgets on every
+    // screen, so its layouts for other sizes take this one's shown and hidden widgets (as on the PC).
     public void store(double canvasWidth, double canvasHeight, WidgetLayout.Placement[] layout) {
+        if (widgetLayout != null) widgetLayout = follow(widgetLayout, layout);
+        for (Map.Entry<String, WidgetLayout.Placement[]> entry : canvasLayouts.entrySet()) entry.setValue(follow(entry.getValue(), layout));
         if (WidgetLayout.isReference(canvasWidth, canvasHeight)) widgetLayout = WidgetLayout.copy(layout);
         else canvasLayouts.put(WidgetLayout.keyName(canvasWidth, canvasHeight), WidgetLayout.copy(layout));
     }
+
+    private static WidgetLayout.Placement[] follow(WidgetLayout.Placement[] other, WidgetLayout.Placement[] layout) {
+        WidgetLayout.Placement[] result = WidgetLayout.copy(other);
+        for (WidgetLayout.Placement p : result) { WidgetLayout.Placement match = WidgetLayout.find(layout, p.id); if (match != null) p.visible = match.visible; }
+        return result;
+    }
+
+    // Takes the layout the PC sent: its current page's layouts replace the cached ones.
+    public void mirror(PcState.Layout layout) {
+        widgetLayout = null; canvasLayouts.clear();
+        canvasLayouts.putAll(layout.sources());
+        pages.clear(); pages.addAll(layout.pages);
+        page = layout.page; snapWidgets = layout.snap;
+        if (layout.canvasWidth >= 64 && layout.canvasHeight >= 64) { pcCanvasWidth = WidgetLayout.key(layout.canvasWidth); pcCanvasHeight = WidgetLayout.key(layout.canvasHeight); }
+        normalize();
+    }
+
+    public String pageName() { return page >= 0 && page < pages.size() ? pages.get(page) : "Main"; }
 
     public AppSettings copy() { return fromProperties(toProperties()); }
 
@@ -71,6 +97,9 @@ public final class AppSettings {
             if (!layouts.containsKey(key)) layouts.put(key, WidgetLayout.normalize(entry.getValue(), size[0], size[1]));
         }
         canvasLayouts.clear(); canvasLayouts.putAll(layouts);
+        if (pages.isEmpty()) pages.add("Main");
+        page = Math.max(0, Math.min(pages.size() - 1, page));
+        if (WidgetLayout.parseKey(WidgetLayout.keyName(pcCanvasWidth, pcCanvasHeight)) == null) { pcCanvasWidth = WidgetLayout.REFERENCE_WIDTH; pcCanvasHeight = WidgetLayout.REFERENCE_HEIGHT; }
         if (widgetLayout != null) widgetLayout = WidgetLayout.normalize(widgetLayout);
     }
 
@@ -108,6 +137,9 @@ public final class AppSettings {
         p.setProperty("LayoutMode", layoutMode);
         // The reference layout keeps its old keys (Layout.Focus); other canvases add theirs (Layout.1480x552.Focus).
         if (widgetLayout != null) putLayout(p, "Layout.", widgetLayout);
+        for (int i = 0; i < pages.size(); i++) p.setProperty("Page." + i, pages.get(i));
+        p.setProperty("CurrentPage", Integer.toString(page));
+        p.setProperty("PcCanvas", WidgetLayout.keyName(pcCanvasWidth, pcCanvasHeight));
         for (Map.Entry<String, WidgetLayout.Placement[]> entry : canvasLayouts.entrySet()) putLayout(p, "Layout." + entry.getKey() + ".", entry.getValue());
         return p;
     }
@@ -130,6 +162,10 @@ public final class AppSettings {
         s.landscapeOnly = readBool(p, "LandscapeOnly", false);
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         s.widgetLayout = readLayout(p, "Layout.");
+        for (int i = 0; p.getProperty("Page." + i) != null && i < 8; i++) s.pages.add(p.getProperty("Page." + i));
+        s.page = (int) readNumber(p, "CurrentPage", 0);
+        double[] pcCanvas = WidgetLayout.parseKey(p.getProperty("PcCanvas"));
+        if (pcCanvas != null) { s.pcCanvasWidth = pcCanvas[0]; s.pcCanvasHeight = pcCanvas[1]; }
         for (String name : p.stringPropertyNames()) {
             String[] parts = name.split("\\.");
             if (parts.length != 3 || !parts[0].equals("Layout") || WidgetLayout.parseKey(parts[1]) == null || s.canvasLayouts.containsKey(parts[1])) continue;

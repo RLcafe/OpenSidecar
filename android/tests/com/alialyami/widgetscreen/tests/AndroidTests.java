@@ -247,6 +247,37 @@ public final class AndroidTests {
             ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null, "every part");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
+            // The Windows checks add a page, rename it Play and move it first, so the PC shows Main, the second page.
+            ok(state.layout != null && !state.layoutVersion.isEmpty() && state.layout.pages.equals(Arrays.asList("Play", "Main")) && state.layout.page == 1 && state.layout.pageName().equals("Main"), "layout pages");
+            ok(state.layout.shown != null && state.layout.shown.length == WidgetLayout.IDS.length && state.layout.canvasWidth == 1856 && state.layout.sources().containsKey("1856x576"), "PC screen layout");
+            AppSettings mirrored = new AppSettings();
+            mirrored.mirror(state.layout);
+            ok(mirrored.page == 1 && mirrored.pages.size() == 2 && mirrored.pcCanvasWidth == 1856, "mirrored pages");
+            Placement[] phone = mirrored.layoutFor(1480, 552);
+            ok(WidgetLayout.fits(phone, 1480, 552) && !overlaps(phone), "the PC layout on a sideways phone");
+        } });
+        check("The phone mirrors the PC layout: stretched, listed in reading order, pages kept offline", new Action() { public void run() {
+            Map<String, Object> answer = Json.obj(Json.parse("{\"layoutVersion\":\"abc\",\"layout\":{\"page\":1,\"pages\":[\"Main\",\"Stats\"],\"snap\":false,\"editing\":false,"
+                + "\"canvas\":{\"width\":1856,\"height\":576},\"shown\":[{\"id\":\"System\",\"x\":0,\"y\":0,\"width\":920,\"height\":576,\"visible\":true,\"layer\":0},"
+                + "{\"id\":\"Weather\",\"x\":936,\"y\":0,\"width\":920,\"height\":576,\"visible\":true,\"layer\":2},{\"id\":\"Nope\",\"x\":0,\"y\":0,\"width\":1,\"height\":1,\"visible\":true}],"
+                + "\"layouts\":[{\"width\":1000,\"height\":1560,\"widgets\":[{\"id\":\"Weather\",\"x\":0,\"y\":0,\"width\":1000,\"height\":700,\"visible\":true,\"layer\":0}]}]}}"));
+            PcState state = PcState.parse(answer);
+            ok(state.layoutVersion.equals("abc") && state.layout.page == 1 && !state.layout.snap && state.layout.shown.length == WidgetLayout.IDS.length && !WidgetLayout.find(state.layout.shown, "Mixer").visible && WidgetLayout.find(state.layout.shown, "Weather").layer == 2, "parse");
+            AppSettings s = new AppSettings();
+            s.mirror(state.layout);
+            Placement[] phone = s.layoutFor(1480, 552);
+            ok(WidgetLayout.find(phone, "System").visible && WidgetLayout.find(phone, "Weather").visible && !WidgetLayout.find(phone, "Mixer").visible, "the phone shows the PC's widgets");
+            ok(WidgetLayout.find(phone, "Weather").x == Math.round(936 * 1480 / 1856.0), "stretched from the PC screen");
+            ok(WidgetLayout.find(s.layoutFor(1000, 1560), "Weather").height == 700, "a saved shape is used as is");
+            ok(WidgetLayout.readingOrder(s.layoutFor(s.pcCanvasWidth, s.pcCanvasHeight)).equals(Arrays.asList("System", "Weather")), "list order and widgets follow the PC");
+            AppSettings back = AppSettings.fromProperties(s.toProperties());
+            ok(back.pages.equals(Arrays.asList("Main", "Stats")) && back.page == 1 && !back.snapWidgets && WidgetLayout.find(back.layoutFor(1480, 552), "System").visible, "kept for offline use");
+            Placement[] edited = back.layoutFor(1480, 552);
+            WidgetLayout.find(edited, "Mixer").visible = true;
+            back.store(1480, 552, edited);
+            ok(WidgetLayout.find(back.canvasLayouts.get("1000x1560"), "Mixer").visible, "showing a widget shows it on the page's other shapes");
+            List<Map<String, Object>> sent = PcState.json(edited);
+            ok(sent.size() == WidgetLayout.IDS.length && "Focus".equals(sent.get(0).get("id")), "layout sent to the PC");
         } });
         check("Quick Launch glyphs from the PC map to drawn icons", new Action() { public void run() {
             ok(PcState.glyph("E8D6").equals("music") && PcState.glyph("e774").equals("globe") && PcState.glyph("E720").equals("microphone") && PcState.glyph("FFFF").equals("app") && PcState.glyph(null).equals("app"), "glyphs");
@@ -301,12 +332,14 @@ public final class AndroidTests {
                 DashboardFit fit = DashboardFit.choose(screens[i][0], screens[i][1], densities[i], "Dashboard");
                 double w = fit.canvasWidth(), h = fit.canvasHeight();
                 Placement[] layout = WidgetLayout.defaults(w, h);
-                String name = screens[i][0] + "x" + screens[i][1] + " (" + WidgetLayout.templateFor(w, h) + ", " + w + " x " + h + ")";
+                String name = screens[i][0] + "x" + screens[i][1] + " (" + w + " x " + h + ")";
                 ok(layout.length == WidgetLayout.IDS.length && inside(layout, w, h), "escapes on " + name);
                 if (screens[i][1] < screens[i][0] || Math.min(screens[i][0], screens[i][1]) / densities[i] >= 600)
                     ok(WidgetLayout.fits(layout, w, h) && !overlaps(layout), "squeezed or overlapping on " + name);
             }
-            ok(WidgetLayout.templateFor(2496, 576).equals("Columns") && WidgetLayout.templateFor(1000, 1560).equals("Tall"), "templates");
+            Placement[] wide = WidgetLayout.arrange(2496, 576);
+            for (Placement p : wide) if (p.visible && !p.id.equals("Shortcuts")) ok(p.y == 0, "a wide canvas should get columns");
+            ok(!overlaps(WidgetLayout.normalize(WidgetLayout.arrange(1000, 1560, java.util.Arrays.asList(WidgetLayout.IDS)), 1000, 1560)), "every widget on an upright tablet");
             double[] shares = WidgetLayout.distribute(100, new double[] { 1, 1 }, new double[] { 70, 10 });
             ok(shares[0] == 70 && shares[1] == 30, "distribution");
         } });

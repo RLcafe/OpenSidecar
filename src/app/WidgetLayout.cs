@@ -32,6 +32,19 @@ namespace WidgetScreen
         public CanvasLayout Copy() { return new CanvasLayout { Width = Width, Height = Height, Widgets = Widgets == null ? null : WidgetLayout.Copy(Widgets) }; }
     }
 
+    // One page of the dashboard: its name and its layouts per canvas size (see WidgetLayout.Pages).
+    public sealed class LayoutPage
+    {
+        public string Name { get; set; }
+        public WidgetPlacement[] WidgetLayout { get; set; }
+        public CanvasLayout[] CanvasLayouts { get; set; }
+        public LayoutPage Copy()
+        {
+            return new LayoutPage { Name = Name, WidgetLayout = WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(WidgetLayout),
+                CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray() };
+        }
+    }
+
     public static class WidgetLayout
     {
         // The canvas of the 1920 × 720 reference screen. Other screens get a canvas shaped like them (ScreenFit).
@@ -150,7 +163,7 @@ namespace WidgetScreen
         public static WidgetPlacement[] Normalize(WidgetPlacement[] layout, AppSettings settings, Size canvas)
         {
             canvas = Key(canvas);
-            return canvas == Reference ? Normalize(layout, settings) : Normalize(layout, Arrange(canvas), canvas);
+            return canvas == Reference ? Normalize(layout, settings) : Normalize(layout, Arrange(canvas, DefaultShown), canvas);
         }
         // Every known widget gets exactly one placement, inside the canvas and at least its minimum size.
         private static WidgetPlacement[] Normalize(WidgetPlacement[] layout, WidgetPlacement[] defaults, Size canvas)
@@ -171,7 +184,90 @@ namespace WidgetScreen
             return result.ToArray();
         }
 
-        // ----- Layouts per canvas size (docs/design/any-screen-size.md) -----
+        // ----- Pages (docs/design/any-screen-size.md) -----
+
+        // A dashboard has up to eight pages. The first page lives in AppSettings.PageName, WidgetLayout and
+        // CanvasLayouts, where older versions read it; the others in AppSettings.MorePages.
+        public const int MaxPages = 8;
+        public static List<LayoutPage> Pages(AppSettings s)
+        {
+            var pages = new List<LayoutPage> { new LayoutPage { Name = s.PageName, WidgetLayout = s.WidgetLayout, CanvasLayouts = s.CanvasLayouts } };
+            if (s.MorePages != null) pages.AddRange(s.MorePages.Where(p => p != null));
+            return pages;
+        }
+        public static void SetPages(AppSettings s, List<LayoutPage> pages)
+        {
+            s.PageName = pages[0].Name; s.WidgetLayout = pages[0].WidgetLayout; s.CanvasLayouts = pages[0].CanvasLayouts;
+            s.MorePages = pages.Count > 1 ? pages.Skip(1).ToArray() : null;
+            s.CurrentPage = Math.Max(0, Math.Min(pages.Count - 1, s.CurrentPage));
+        }
+        public static int PageCount(AppSettings s) { return 1 + (s.MorePages == null ? 0 : s.MorePages.Count(p => p != null)); }
+        public static int CurrentPage(AppSettings s) { return Math.Max(0, Math.Min(PageCount(s) - 1, s.CurrentPage)); }
+        public static LayoutPage Page(AppSettings s, int index) { var pages = Pages(s); return pages[Math.Max(0, Math.Min(pages.Count - 1, index))]; }
+        public static string PageName(string name, int index)
+        {
+            name = (name ?? "").Trim();
+            if (name.Length > 24) name = name.Substring(0, 24).Trim();
+            return name.Length == 0 ? (index == 0 ? "Main" : "Page " + (index + 1)) : name;
+        }
+        // Adds a page after the current one with the default arrangement and shows it. Returns its index, or -1 when full.
+        public static int AddPage(AppSettings s, string name)
+        {
+            var pages = Pages(s);
+            if (pages.Count >= MaxPages) return -1;
+            int index = CurrentPage(s) + 1;
+            pages.Insert(index, new LayoutPage { Name = PageName(name, pages.Count) });
+            SetPages(s, pages); s.CurrentPage = index;
+            return index;
+        }
+        public static void RenamePage(AppSettings s, int index, string name)
+        {
+            var pages = Pages(s);
+            if (index < 0 || index >= pages.Count) throw new ArgumentException("That page doesn't exist.");
+            pages[index].Name = PageName(name, index); SetPages(s, pages);
+        }
+        // The last page can't be deleted. The page before it is shown next.
+        public static bool DeletePage(AppSettings s, int index)
+        {
+            var pages = Pages(s);
+            if (pages.Count <= 1 || index < 0 || index >= pages.Count) return false;
+            pages.RemoveAt(index);
+            if (s.CurrentPage >= index && s.CurrentPage > 0) s.CurrentPage--;
+            SetPages(s, pages);
+            return true;
+        }
+        // Moves a page; the page shown stays the same page.
+        public static void MovePage(AppSettings s, int from, int to)
+        {
+            var pages = Pages(s);
+            if (from < 0 || from >= pages.Count) return;
+            to = Math.Max(0, Math.Min(pages.Count - 1, to));
+            if (from == to) return;
+            var shown = pages[CurrentPage(s)];
+            var page = pages[from]; pages.RemoveAt(from); pages.Insert(to, page);
+            s.CurrentPage = pages.IndexOf(shown); SetPages(s, pages);
+        }
+        // Cleans one page's layouts: invalid canvas entries go, duplicates of a size keep the first.
+        public static void NormalizePage(LayoutPage page, AppSettings s, int index)
+        {
+            page.Name = PageName(page.Name, index);
+            if (page.CanvasLayouts != null)
+            {
+                var layouts = new List<CanvasLayout>();
+                foreach (var entry in page.CanvasLayouts)
+                {
+                    if (entry == null || entry.Widgets == null || !(entry.Width >= 64 && entry.Width <= 100000) || !(entry.Height >= 64 && entry.Height <= 100000)) continue;
+                    var key = Key(entry.Size);
+                    if (key == Reference) { if (page.WidgetLayout == null) page.WidgetLayout = entry.Widgets; continue; }
+                    if (layouts.Exists(c => c.Size == key)) continue;
+                    layouts.Add(new CanvasLayout { Width = key.Width, Height = key.Height, Widgets = Normalize(entry.Widgets, s, key) });
+                }
+                page.CanvasLayouts = layouts.Count == 0 ? null : layouts.ToArray();
+            }
+            if (page.WidgetLayout != null) page.WidgetLayout = Normalize(page.WidgetLayout, s);
+        }
+
+        // ----- Layouts per canvas size -----
 
         // Settings from before free layouts (swapped sides or custom column sizes) keep their column arrangement as the
         // reference canvas default; everyone else gets the Spotify arrangement there.
@@ -180,47 +276,74 @@ namespace WidgetScreen
             return s.SwapSideWidgets || s.ClockWidth != 1 || s.MediaWidth != 3 || s.MixerWidth != 3 || s.SystemWidth != 2
                 || s.ClockHeight != 246 || s.MediaHeight != 326 || s.MixerHeight != 576 || s.SystemHeight != 326;
         }
-        public static IEnumerable<CanvasLayout> SavedLayouts(AppSettings settings)
+        public static IEnumerable<CanvasLayout> SavedLayouts(LayoutPage page)
         {
-            if (settings.WidgetLayout != null) yield return new CanvasLayout { Width = ReferenceWidth, Height = ReferenceHeight, Widgets = settings.WidgetLayout };
-            if (settings.CanvasLayouts != null) foreach (var entry in settings.CanvasLayouts) if (entry != null && entry.Widgets != null) yield return entry;
+            if (page.WidgetLayout != null) yield return new CanvasLayout { Width = ReferenceWidth, Height = ReferenceHeight, Widgets = page.WidgetLayout };
+            if (page.CanvasLayouts != null) foreach (var entry in page.CanvasLayouts) if (entry != null && entry.Widgets != null) yield return entry;
         }
-        public static WidgetPlacement[] Saved(AppSettings settings, Size canvas)
+        public static WidgetPlacement[] Saved(LayoutPage page, Size canvas)
         {
             Size key = Key(canvas);
-            var entry = SavedLayouts(settings).FirstOrDefault(c => c.Size == key);
+            var entry = SavedLayouts(page).FirstOrDefault(c => c.Size == key);
             return entry == null ? null : entry.Widgets;
         }
-        public static void Store(AppSettings settings, Size canvas, WidgetPlacement[] layout)
+        public static WidgetPlacement[] Saved(AppSettings settings, Size canvas) { return Saved(Page(settings, CurrentPage(settings)), canvas); }
+        public static void Store(AppSettings settings, Size canvas, WidgetPlacement[] layout) { Store(settings, CurrentPage(settings), canvas, layout); }
+        // Saves a layout for one canvas size of a page. Which widgets a page shows is the same on every screen, so the
+        // page's layouts for other sizes take the new layout's shown and hidden widgets.
+        public static void Store(AppSettings settings, int index, Size canvas, WidgetPlacement[] layout)
         {
-            Size key = Key(canvas);
-            if (key == Reference) { settings.WidgetLayout = Copy(layout); return; }
-            var others = (settings.CanvasLayouts ?? new CanvasLayout[0]).Where(c => c != null && c.Size != key).ToList();
-            others.Add(new CanvasLayout { Width = key.Width, Height = key.Height, Widgets = Copy(layout) });
-            settings.CanvasLayouts = others.ToArray();
+            var pages = Pages(settings);
+            if (index < 0 || index >= pages.Count) throw new ArgumentException("That page doesn't exist.");
+            var page = pages[index]; Size key = Key(canvas);
+            Func<WidgetPlacement[], WidgetPlacement[]> follow = other => other.Select(p => {
+                var q = p.Copy(); var match = layout.FirstOrDefault(w => w != null && w.Id == p.Id);
+                if (match != null) q.Visible = match.Visible;
+                return q;
+            }).ToArray();
+            if (page.WidgetLayout != null) page.WidgetLayout = follow(page.WidgetLayout);
+            var others = (page.CanvasLayouts ?? new CanvasLayout[0]).Where(c => c != null && c.Size != key && c.Widgets != null)
+                .Select(c => new CanvasLayout { Width = c.Width, Height = c.Height, Widgets = follow(c.Widgets) }).ToList();
+            if (key == Reference) page.WidgetLayout = Copy(layout);
+            else others.Add(new CanvasLayout { Width = key.Width, Height = key.Height, Widgets = Copy(layout) });
+            page.CanvasLayouts = others.Count == 0 ? null : others.ToArray();
+            SetPages(settings, pages);
         }
-        // The layout for a canvas: the one saved for its size; otherwise the saved layout of the closest shape that
-        // stretches to it without squeezing a shown widget under its minimum; otherwise the default arrangement.
-        public static WidgetPlacement[] ForCanvas(AppSettings settings, Size canvas)
+        public static WidgetPlacement[] ForCanvas(AppSettings settings, Size canvas) { return ForCanvas(settings, CurrentPage(settings), canvas); }
+        // The layout of a page for a canvas: the one saved for its size; otherwise the saved layout of the closest shape
+        // that stretches to it without squeezing a shown widget under its minimum; otherwise the page's widgets arranged
+        // for this canvas.
+        public static WidgetPlacement[] ForCanvas(AppSettings settings, int index, Size canvas)
         {
+            var page = Page(settings, index);
             canvas = Key(canvas);
-            var saved = Saved(settings, canvas);
+            var saved = Saved(page, canvas);
             if (saved != null) return Normalize(saved, settings, canvas);
-            WidgetPlacement[] best = null; double distance = Double.MaxValue;
-            foreach (var entry in SavedLayouts(settings))
+            WidgetPlacement[] best = null, nearest = null; double distance = Double.MaxValue, nearestDistance = Double.MaxValue;
+            foreach (var entry in SavedLayouts(page))
             {
-                var stretched = Stretch(Normalize(entry.Widgets, settings, entry.Size), entry.Size, canvas);
-                if (!Fits(stretched, canvas)) continue;
+                var source = Normalize(entry.Widgets, settings, entry.Size);
                 double d = Math.Abs(Math.Log(entry.Width / entry.Height / (canvas.Width / canvas.Height)));
-                if (d < distance) { distance = d; best = stretched; }
+                if (d < nearestDistance) { nearestDistance = d; nearest = source; }
+                var stretched = Stretch(source, entry.Size, canvas);
+                if (Fits(stretched, canvas) && d < distance) { distance = d; best = stretched; }
             }
-            return best != null ? Normalize(best, settings, canvas) : DefaultFor(settings, canvas);
+            if (best != null) return Normalize(best, settings, canvas);
+            if (nearest == null) return DefaultFor(settings, canvas);
+            var shown = ReadingOrder(nearest);
+            if (shown.SequenceEqual(DefaultShown) && canvas == Reference) return DefaultFor(settings, canvas);
+            return Normalize(Arrange(canvas, shown), settings, canvas);
         }
         public static WidgetPlacement[] DefaultFor(AppSettings settings, Size canvas)
         {
             canvas = Key(canvas);
             if (canvas == Reference) return Normalize(LegacyColumns(settings) ? null : SpotifyDefault(settings), settings);
-            return Normalize(Arrange(canvas), settings, canvas);
+            return Normalize(Arrange(canvas, DefaultShown), settings, canvas);
+        }
+        // Shown widgets left to right, then top to bottom: the order of the phone's list and of new arrangements.
+        public static string[] ReadingOrder(WidgetPlacement[] layout)
+        {
+            return layout.Where(p => p != null && p.Visible).OrderBy(p => p.X).ThenBy(p => p.Y).Select(p => p.Id).ToArray();
         }
         // Scales positions and sizes from one canvas to another, rounded to whole units.
         public static WidgetPlacement[] Stretch(WidgetPlacement[] layout, Size from, Size to)
@@ -244,33 +367,83 @@ namespace WidgetScreen
             return true;
         }
 
-        // ----- Default arrangements for any canvas -----
+        // ----- Arrangements for any canvas -----
 
-        // A template is a tree of rows and columns of widgets. Weights are the reference sizes, so the Columns
-        // template on the reference canvas gives exactly the Spotify default arrangement.
-        private sealed class Node { public string Id; public bool Across; public double Weight; public Node[] Children; }
-        private static Node Leaf(string id, double weight) { return new Node { Id = id, Weight = weight }; }
-        private static Node Row(double weight, params Node[] children) { return new Node { Across = true, Weight = weight, Children = children }; }
-        private static Node Column(double weight, params Node[] children) { return new Node { Weight = weight, Children = children }; }
-        private sealed class Template { public string Name; public double Aspect; public Node Root; }
-        // Wide canvases get columns, squarer ones three columns or two rows of cards, upright ones rows.
-        private static readonly Template[] Templates = {
-            new Template { Name = "Columns", Aspect = 3.2, Root = Row(1, Leaf("Focus", 320), Column(472, Leaf("Media", 310), Leaf("Shortcuts", 250)), Leaf("Mixer", 456), Leaf("Spotify", 560)) },
-            new Template { Name = "Three columns", Aspect = 2.0, Root = Row(1, Column(472, Leaf("Focus", 330), Leaf("Media", 310)), Column(456, Leaf("Mixer", 460), Leaf("Shortcuts", 250)), Leaf("Spotify", 560)) },
-            new Template { Name = "Two rows", Aspect = 1.4, Root = Column(1, Row(330, Leaf("Focus", 320), Leaf("Media", 472), Leaf("Shortcuts", 472)), Row(560, Leaf("Mixer", 456), Leaf("Spotify", 560))) },
-            new Template { Name = "Tall", Aspect = 0.65, Root = Column(1, Row(330, Leaf("Focus", 320), Leaf("Media", 472)), Leaf("Shortcuts", 250), Row(560, Leaf("Mixer", 456), Leaf("Spotify", 560))) },
-            new Template { Name = "Narrow", Aspect = 0.4, Root = Column(1, Row(330, Leaf("Focus", 320), Leaf("Media", 472)), Leaf("Shortcuts", 250), Leaf("Mixer", 480), Leaf("Spotify", 560)) }
-        };
-        private static Size MinimumOf(Node node, Size canvas)
+        public static readonly string[] DefaultShown = { "Focus", "Media", "Shortcuts", "Mixer", "Spotify" };
+        // The size each card is happiest at, from the reference default; arrangements stay close to these.
+        public static Size Preferred(string id)
         {
-            if (node.Id != null) return Minimum(node.Id, canvas);
-            double along = Gap * (node.Children.Length - 1), across = 0;
-            foreach (var child in node.Children)
-            {
-                Size m = MinimumOf(child, canvas);
-                along += node.Across ? m.Width : m.Height; across = Math.Max(across, node.Across ? m.Height : m.Width);
+            switch (id) {
+                case "Focus": return new Size(320, 400);
+                case "Mixer": return new Size(456, 576);
+                case "Spotify": return new Size(560, 576);
+                case "Shortcuts": case "Weather": case "Soundboard": return new Size(472, 250);
+                default: return new Size(472, 310);
             }
-            return node.Across ? new Size(along, across) : new Size(across, along);
+        }
+        // Arranges the shown widgets, in order, as columns of stacked cards or as rows of cards side by side, and picks
+        // the split that fits the canvas and keeps every card closest to its preferred size (growing counts half as
+        // much as shrinking). Hidden widgets wait in the top left corner at their minimum size.
+        public static WidgetPlacement[] Arrange(Size canvas, IList<string> shown)
+        {
+            shown = shown.Where(id => Ids.Contains(id)).Distinct().ToList();
+            Dictionary<string, Rect> best = null; double bestScore = Double.MaxValue;
+            int n = shown.Count;
+            for (int across = 0; across < 2 && n > 0; across++)
+                for (int mask = 0; mask < 1 << Math.Max(0, n - 1); mask++)
+                {
+                    var groups = new List<List<string>> { new List<string>() };
+                    for (int i = 0; i < n; i++) { groups[groups.Count - 1].Add(shown[i]); if (i < n - 1 && (mask & 1 << i) != 0) groups.Add(new List<string>()); }
+                    double overflow;
+                    var rects = LayGroups(groups, across == 1, canvas, out overflow);
+                    double score = overflow > 0 ? 1000 + overflow : rects.Sum(r => Strain(r.Value.Width, Preferred(r.Key).Width) + Strain(r.Value.Height, Preferred(r.Key).Height));
+                    if (score < bestScore - 1e-9) { bestScore = score; best = rects; }
+                }
+            return Ids.Select(id => {
+                Rect r; var minimum = Minimum(id, canvas);
+                bool visible = best != null && best.TryGetValue(id, out r);
+                if (!visible) r = new Rect(0, 0, minimum.Width, minimum.Height);
+                else r = best[id];
+                return new WidgetPlacement { Id = id, X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Visible = visible };
+            }).ToArray();
+        }
+        private static double Strain(double actual, double preferred) { double r = actual / preferred; return r >= 1 ? 0.5 * Math.Log(r) : -Math.Log(Math.Max(r, 1e-6)); }
+        // Columns (across false): groups side by side, each group's cards stacked. Rows (across true): groups stacked,
+        // each group's cards side by side.
+        private static Dictionary<string, Rect> LayGroups(List<List<string>> groups, bool across, Size canvas, out double overflow)
+        {
+            Func<string, Size> min = id => Minimum(id, canvas);
+            Func<Size, double> outer = s => across ? s.Height : s.Width, inner = s => across ? s.Width : s.Height;
+            double outerLength = across ? canvas.Height : canvas.Width, innerLength = across ? canvas.Width : canvas.Height;
+            var outerMin = groups.Select(g => g.Max(id => outer(min(id)))).ToArray();
+            var outerWeight = groups.Select(g => g.Max(id => outer(Preferred(id)))).ToArray();
+            overflow = Math.Max(0, outerMin.Sum() + Gap * (groups.Count - 1) - outerLength);
+            foreach (var g in groups) overflow += Math.Max(0, g.Sum(id => inner(min(id))) + Gap * (g.Count - 1) - innerLength);
+            var result = new Dictionary<string, Rect>();
+            var outerEdges = Edges(0, outerLength, Distribute(outerLength - Gap * (groups.Count - 1), outerWeight, outerMin));
+            for (int i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                var innerEdges = Edges(0, innerLength, Distribute(innerLength - Gap * (g.Count - 1), g.Select(id => inner(Preferred(id))).ToArray(), g.Select(id => inner(min(id))).ToArray()));
+                for (int j = 0; j < g.Count; j++)
+                {
+                    double o = outerEdges[i].Item1, os = outerEdges[i].Item2 - o, n = innerEdges[j].Item1, ns = innerEdges[j].Item2 - n;
+                    result[g[j]] = across ? new Rect(n, o, ns, os) : new Rect(o, n, os, ns);
+                }
+            }
+            return result;
+        }
+        // Whole-unit edges for sizes laid one after another with gaps; the last ends at the end unless it overflows.
+        private static Tuple<double, double>[] Edges(double start, double end, double[] sizes)
+        {
+            var edges = new Tuple<double, double>[sizes.Length]; double position = start;
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                double from = Math.Round(position), to = Math.Round(position + sizes[i]);
+                if (i == sizes.Length - 1 && to <= end + 0.5) to = end;
+                edges[i] = Tuple.Create(from, to); position += sizes[i] + Gap;
+            }
+            return edges;
         }
         // Shares a length between children by weight; a child that would get less than its minimum gets its minimum.
         public static double[] Distribute(double length, double[] weights, double[] minimums)
@@ -287,49 +460,6 @@ namespace WidgetScreen
                 }
             }
             return sizes;
-        }
-        private static void Lay(Node node, Rect area, Size canvas, Dictionary<string, Rect> result)
-        {
-            if (node.Id != null) { result[node.Id] = area; return; }
-            int n = node.Children.Length;
-            double start = node.Across ? area.X : area.Y, end = start + (node.Across ? area.Width : area.Height);
-            var sizes = Distribute(end - start - Gap * (n - 1), node.Children.Select(c => c.Weight).ToArray(),
-                node.Children.Select(c => { var m = MinimumOf(c, canvas); return node.Across ? m.Width : m.Height; }).ToArray());
-            double position = start;
-            for (int i = 0; i < n; i++)
-            {
-                // Edges round to whole units; the last child ends exactly at the area's edge unless it overflows.
-                double from = Math.Round(position), to = Math.Round(position + sizes[i]);
-                if (i == n - 1 && to <= end + 0.5) to = end;
-                Lay(node.Children[i], node.Across ? new Rect(from, area.Y, to - from, area.Height) : new Rect(area.X, from, area.Width, to - from), canvas, result);
-                position += sizes[i] + Gap;
-            }
-        }
-        // The template that fits the canvas and is closest to its shape; if none fits, the one that overflows least.
-        public static string TemplateFor(Size canvas) { return Choose(Key(canvas)).Name; }
-        private static Template Choose(Size canvas)
-        {
-            double aspect = canvas.Width / canvas.Height, bestScore = Double.MaxValue;
-            Template best = Templates[0];
-            foreach (var template in Templates)
-            {
-                Size m = MinimumOf(template.Root, canvas);
-                double overflow = Math.Max(0, m.Width - canvas.Width) + Math.Max(0, m.Height - canvas.Height);
-                double score = overflow > 0 ? 1000 + overflow : Math.Abs(Math.Log(aspect / template.Aspect));
-                if (score < bestScore) { bestScore = score; best = template; }
-            }
-            return best;
-        }
-        // The default widgets (Focus, Now Playing, Quick Launch, the mixer and Spotify) arranged for the canvas.
-        // Hidden widgets wait where they are most likely wanted: System stats over Now Playing, Weather and the
-        // soundboard over Quick Launch.
-        public static WidgetPlacement[] Arrange(Size canvas)
-        {
-            var rects = new Dictionary<string, Rect>();
-            Lay(Choose(canvas).Root, new Rect(0, 0, canvas.Width, canvas.Height), canvas, rects);
-            rects["System"] = rects["Media"]; rects["Weather"] = rects["Shortcuts"]; rects["Soundboard"] = rects["Shortcuts"];
-            return Ids.Select(id => new WidgetPlacement { Id = id, X = rects[id].X, Y = rects[id].Y, Width = rects[id].Width, Height = rects[id].Height,
-                Visible = id != "System" && id != "Weather" && id != "Soundboard" }).ToArray();
         }
 
         private static double Snap(double value, bool enabled) { return enabled ? Math.Round(value / 8) * 8 : value; }

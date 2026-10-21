@@ -156,17 +156,23 @@ public final class WidgetLayout {
         canvasWidth = key(canvasWidth); canvasHeight = key(canvasHeight);
         Placement[] exact = saved.get(keyName(canvasWidth, canvasHeight));
         if (exact != null) return normalize(exact, canvasWidth, canvasHeight);
-        Placement[] best = null;
-        double distance = Double.MAX_VALUE;
+        Placement[] best = null, nearest = null;
+        double distance = Double.MAX_VALUE, nearestDistance = Double.MAX_VALUE;
         for (Map.Entry<String, Placement[]> entry : saved.entrySet()) {
             double[] size = parseKey(entry.getKey());
             if (size == null || entry.getValue() == null) continue;
-            Placement[] stretched = stretch(normalize(entry.getValue(), size[0], size[1]), size[0], size[1], canvasWidth, canvasHeight);
-            if (!fits(stretched, canvasWidth, canvasHeight)) continue;
+            Placement[] source = normalize(entry.getValue(), size[0], size[1]);
             double d = Math.abs(Math.log(size[0] / size[1] / (canvasWidth / canvasHeight)));
-            if (d < distance) { distance = d; best = stretched; }
+            if (d < nearestDistance) { nearestDistance = d; nearest = source; }
+            Placement[] stretched = stretch(source, size[0], size[1], canvasWidth, canvasHeight);
+            if (fits(stretched, canvasWidth, canvasHeight) && d < distance) { distance = d; best = stretched; }
         }
-        return best != null ? normalize(best, canvasWidth, canvasHeight) : defaults(canvasWidth, canvasHeight);
+        if (best != null) return normalize(best, canvasWidth, canvasHeight);
+        if (nearest == null) return defaults(canvasWidth, canvasHeight);
+        // Nothing stretches well: the page's shown widgets, arranged afresh for this canvas.
+        List<String> shown = readingOrder(nearest);
+        if (shown.equals(java.util.Arrays.asList(DEFAULT_SHOWN)) && isReference(canvasWidth, canvasHeight)) return defaults(canvasWidth, canvasHeight);
+        return normalize(arrange(canvasWidth, canvasHeight, shown), canvasWidth, canvasHeight);
     }
 
     public static String keyName(double canvasWidth, double canvasHeight) { return (long) key(canvasWidth) + "x" + (long) key(canvasHeight); }
@@ -204,36 +210,119 @@ public final class WidgetLayout {
         return true;
     }
 
-    // ----- Default arrangements for any canvas (the same templates as WidgetLayout.cs) -----
+    // ----- Arrangements for any canvas (the same rule as WidgetLayout.cs) -----
 
-    private static final class Node {
-        final String id; final boolean across; final double weight; final Node[] children;
-        Node(String id, boolean across, double weight, Node[] children) { this.id = id; this.across = across; this.weight = weight; this.children = children; }
-    }
-    private static Node leaf(String id, double weight) { return new Node(id, false, weight, null); }
-    private static Node row(double weight, Node... children) { return new Node(null, true, weight, children); }
-    private static Node column(double weight, Node... children) { return new Node(null, false, weight, children); }
-    private static final class Template {
-        final String name; final double aspect; final Node root;
-        Template(String name, double aspect, Node root) { this.name = name; this.aspect = aspect; this.root = root; }
-    }
-    // Wide canvases get columns, squarer ones three columns or two rows of cards, upright ones rows.
-    private static final Template[] TEMPLATES = {
-        new Template("Columns", 3.2, row(1, leaf("Focus", 320), column(472, leaf("Media", 310), leaf("Shortcuts", 250)), leaf("Mixer", 456), leaf("Spotify", 560))),
-        new Template("Three columns", 2.0, row(1, column(472, leaf("Focus", 330), leaf("Media", 310)), column(456, leaf("Mixer", 460), leaf("Shortcuts", 250)), leaf("Spotify", 560))),
-        new Template("Two rows", 1.4, column(1, row(330, leaf("Focus", 320), leaf("Media", 472), leaf("Shortcuts", 472)), row(560, leaf("Mixer", 456), leaf("Spotify", 560)))),
-        new Template("Tall", 0.65, column(1, row(330, leaf("Focus", 320), leaf("Media", 472)), leaf("Shortcuts", 250), row(560, leaf("Mixer", 456), leaf("Spotify", 560)))),
-        new Template("Narrow", 0.4, column(1, row(330, leaf("Focus", 320), leaf("Media", 472)), leaf("Shortcuts", 250), leaf("Mixer", 480), leaf("Spotify", 560)))
-    };
+    public static final String[] DEFAULT_SHOWN = { "Focus", "Media", "Shortcuts", "Mixer", "Spotify" };
 
-    private static double[] minimumOf(Node node, double canvasWidth, double canvasHeight) {
-        if (node.id != null) return minimum(node.id, canvasWidth, canvasHeight);
-        double along = GAP * (node.children.length - 1), across = 0;
-        for (Node child : node.children) {
-            double[] m = minimumOf(child, canvasWidth, canvasHeight);
-            along += node.across ? m[0] : m[1]; across = Math.max(across, node.across ? m[1] : m[0]);
+    // The size each card is happiest at, from the reference default; arrangements stay close to these.
+    public static double[] preferred(String id) {
+        switch (id) {
+            case "Focus": return new double[] { 320, 400 };
+            case "Mixer": return new double[] { 456, 576 };
+            case "Spotify": return new double[] { 560, 576 };
+            case "Shortcuts": case "Weather": case "Soundboard": return new double[] { 472, 250 };
+            default: return new double[] { 472, 310 };
         }
-        return node.across ? new double[] { along, across } : new double[] { across, along };
+    }
+
+    // Shown widgets left to right, then top to bottom: the order of the phone's list and of new arrangements.
+    public static List<String> readingOrder(Placement[] layout) {
+        List<Placement> shown = new ArrayList<Placement>();
+        for (Placement p : layout) if (p != null && p.visible) shown.add(p);
+        java.util.Collections.sort(shown, new java.util.Comparator<Placement>() {
+            @Override public int compare(Placement a, Placement b) { return a.x != b.x ? Double.compare(a.x, b.x) : Double.compare(a.y, b.y); }
+        });
+        List<String> ids = new ArrayList<String>();
+        for (Placement p : shown) ids.add(p.id);
+        return ids;
+    }
+
+    // Arranges the shown widgets, in order, as columns of stacked cards or as rows of cards side by side, and picks
+    // the split that fits the canvas and keeps every card closest to its preferred size (growing counts half as much
+    // as shrinking). Hidden widgets wait in the top left corner at their minimum size.
+    public static Placement[] arrange(double canvasWidth, double canvasHeight, List<String> wanted) {
+        List<String> shown = new ArrayList<String>();
+        for (String id : wanted) if (java.util.Arrays.asList(IDS).contains(id) && !shown.contains(id)) shown.add(id);
+        Map<String, Box> best = null;
+        double bestScore = Double.MAX_VALUE;
+        int n = shown.size();
+        for (int across = 0; across < 2 && n > 0; across++)
+            for (int mask = 0; mask < 1 << Math.max(0, n - 1); mask++) {
+                List<List<String>> groups = new ArrayList<List<String>>();
+                groups.add(new ArrayList<String>());
+                for (int i = 0; i < n; i++) {
+                    groups.get(groups.size() - 1).add(shown.get(i));
+                    if (i < n - 1 && (mask & 1 << i) != 0) groups.add(new ArrayList<String>());
+                }
+                double[] overflow = new double[1];
+                Map<String, Box> boxes = layGroups(groups, across == 1, canvasWidth, canvasHeight, overflow);
+                double score = 0;
+                if (overflow[0] > 0) score = 1000 + overflow[0];
+                else for (Map.Entry<String, Box> e : boxes.entrySet()) {
+                    double[] pref = preferred(e.getKey());
+                    score += strain(e.getValue().width, pref[0]) + strain(e.getValue().height, pref[1]);
+                }
+                if (score < bestScore - 1e-9) { bestScore = score; best = boxes; }
+            }
+        Placement[] result = new Placement[IDS.length];
+        for (int i = 0; i < IDS.length; i++) {
+            Box b = best == null ? null : best.get(IDS[i]);
+            double[] min = minimum(IDS[i], canvasWidth, canvasHeight);
+            result[i] = b == null ? new Placement(IDS[i], 0, 0, min[0], min[1], false) : new Placement(IDS[i], b.x, b.y, b.width, b.height, true);
+        }
+        return result;
+    }
+
+    public static Placement[] arrange(double canvasWidth, double canvasHeight) { return arrange(canvasWidth, canvasHeight, java.util.Arrays.asList(DEFAULT_SHOWN)); }
+
+    private static double strain(double actual, double preferred) { double r = actual / preferred; return r >= 1 ? 0.5 * Math.log(r) : -Math.log(Math.max(r, 1e-6)); }
+
+    // Columns (across false): groups side by side, each group's cards stacked. Rows (across true): groups stacked, each
+    // group's cards side by side.
+    private static Map<String, Box> layGroups(List<List<String>> groups, boolean across, double canvasWidth, double canvasHeight, double[] overflow) {
+        int o = across ? 1 : 0, in = across ? 0 : 1;
+        double outerLength = across ? canvasHeight : canvasWidth, innerLength = across ? canvasWidth : canvasHeight;
+        int count = groups.size();
+        double[] outerMin = new double[count], outerWeight = new double[count];
+        double outerSum = GAP * (count - 1);
+        overflow[0] = 0;
+        for (int i = 0; i < count; i++) {
+            double innerSum = GAP * (groups.get(i).size() - 1);
+            for (String id : groups.get(i)) {
+                double[] min = minimum(id, canvasWidth, canvasHeight);
+                outerMin[i] = Math.max(outerMin[i], min[o]); outerWeight[i] = Math.max(outerWeight[i], preferred(id)[o]);
+                innerSum += min[in];
+            }
+            outerSum += outerMin[i];
+            overflow[0] += Math.max(0, innerSum - innerLength);
+        }
+        overflow[0] += Math.max(0, outerSum - outerLength);
+        Map<String, Box> result = new HashMap<String, Box>();
+        double[][] outerEdges = edges(outerLength, distribute(outerLength - GAP * (count - 1), outerWeight, outerMin));
+        for (int i = 0; i < count; i++) {
+            List<String> g = groups.get(i);
+            double[] weights = new double[g.size()], mins = new double[g.size()];
+            for (int j = 0; j < g.size(); j++) { weights[j] = preferred(g.get(j))[in]; mins[j] = minimum(g.get(j), canvasWidth, canvasHeight)[in]; }
+            double[][] innerEdges = edges(innerLength, distribute(innerLength - GAP * (g.size() - 1), weights, mins));
+            for (int j = 0; j < g.size(); j++) {
+                double os = outerEdges[i][0], ol = outerEdges[i][1] - os, ns = innerEdges[j][0], nl = innerEdges[j][1] - ns;
+                result.put(g.get(j), across ? new Box(ns, os, nl, ol) : new Box(os, ns, ol, nl));
+            }
+        }
+        return result;
+    }
+
+    // Whole-unit edges for sizes laid one after another with gaps; the last ends at the end unless it overflows.
+    private static double[][] edges(double end, double[] sizes) {
+        double[][] result = new double[sizes.length][];
+        double position = 0;
+        for (int i = 0; i < sizes.length; i++) {
+            double from = Math.round(position), to = Math.round(position + sizes[i]);
+            if (i == sizes.length - 1 && to <= end + 0.5) to = end;
+            result[i] = new double[] { from, to };
+            position += sizes[i] + GAP;
+        }
+        return result;
     }
 
     // Shares a length between children by weight; a child that would get less than its minimum gets its minimum.
@@ -251,57 +340,6 @@ public final class WidgetLayout {
             }
         }
         return sizes;
-    }
-
-    private static void lay(Node node, Box area, double canvasWidth, double canvasHeight, Map<String, Box> result) {
-        if (node.id != null) { result.put(node.id, area); return; }
-        int n = node.children.length;
-        double start = node.across ? area.x : area.y, end = start + (node.across ? area.width : area.height);
-        double[] weights = new double[n], minimums = new double[n];
-        for (int i = 0; i < n; i++) {
-            weights[i] = node.children[i].weight;
-            double[] m = minimumOf(node.children[i], canvasWidth, canvasHeight);
-            minimums[i] = node.across ? m[0] : m[1];
-        }
-        double[] sizes = distribute(end - start - GAP * (n - 1), weights, minimums);
-        double position = start;
-        for (int i = 0; i < n; i++) {
-            // Edges round to whole units; the last child ends exactly at the area's edge unless it overflows.
-            double from = Math.round(position), to = Math.round(position + sizes[i]);
-            if (i == n - 1 && to <= end + 0.5) to = end;
-            lay(node.children[i], node.across ? new Box(from, area.y, to - from, area.height) : new Box(area.x, from, area.width, to - from), canvasWidth, canvasHeight, result);
-            position += sizes[i] + GAP;
-        }
-    }
-
-    // The template that fits the canvas and is closest to its shape; if none fits, the one that overflows least.
-    public static String templateFor(double canvasWidth, double canvasHeight) { return choose(key(canvasWidth), key(canvasHeight)).name; }
-
-    private static Template choose(double canvasWidth, double canvasHeight) {
-        double aspect = canvasWidth / canvasHeight, bestScore = Double.MAX_VALUE;
-        Template best = TEMPLATES[0];
-        for (Template template : TEMPLATES) {
-            double[] m = minimumOf(template.root, canvasWidth, canvasHeight);
-            double overflow = Math.max(0, m[0] - canvasWidth) + Math.max(0, m[1] - canvasHeight);
-            double score = overflow > 0 ? 1000 + overflow : Math.abs(Math.log(aspect / template.aspect));
-            if (score < bestScore) { bestScore = score; best = template; }
-        }
-        return best;
-    }
-
-    // The default widgets (Focus, Now Playing, Quick Launch, the mixer and Spotify) arranged for the canvas. Hidden
-    // widgets wait where they are most likely wanted: System stats over Now Playing, Weather and the soundboard over
-    // Quick Launch.
-    public static Placement[] arrange(double canvasWidth, double canvasHeight) {
-        Map<String, Box> boxes = new HashMap<String, Box>();
-        lay(choose(canvasWidth, canvasHeight).root, new Box(0, 0, canvasWidth, canvasHeight), canvasWidth, canvasHeight, boxes);
-        boxes.put("System", boxes.get("Media")); boxes.put("Weather", boxes.get("Shortcuts")); boxes.put("Soundboard", boxes.get("Shortcuts"));
-        Placement[] result = new Placement[IDS.length];
-        for (int i = 0; i < IDS.length; i++) {
-            Box b = boxes.get(IDS[i]);
-            result[i] = new Placement(IDS[i], b.x, b.y, b.width, b.height, !IDS[i].equals("System") && !IDS[i].equals("Weather") && !IDS[i].equals("Soundboard"));
-        }
-        return result;
     }
 
     private static double snap(double value, boolean enabled) { return enabled ? Math.round(value / 8) * 8 : value; }

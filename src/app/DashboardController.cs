@@ -94,6 +94,7 @@ namespace WidgetScreen
             deckHotkeys = new DeckHotkeys();
             BindActions();
             InitializeRemote();
+            InitializePages();
             FitScreen(); ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
             levelTimer.Tick += (sender, e) => { if (audio != null && Showing) levels.Push(audio.Peak()); };
@@ -351,6 +352,7 @@ namespace WidgetScreen
                 Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : tallFocus ? 84 : 54;
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
+                UpdatePages();
                 var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
                 city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
                 city.MaxHeight = compactWeather ? 28 : 58;

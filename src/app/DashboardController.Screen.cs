@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -38,7 +38,7 @@ namespace WidgetScreen
             fit = next;
             var dashboard = Control<Grid>("Dashboard"); dashboard.Width = fit.LogicalWidth; dashboard.Height = fit.LogicalHeight;
             Control<Grid>("DashboardContent").RowDefinitions[0].Height = new GridLength(fit.HeaderHeight);
-            foreach (string name in new[] { "MainActions", "EditToolbar" })
+            foreach (string name in new[] { "MainActions", "EditToolbar", "PageSwitcher" })
             {
                 var element = Control<FrameworkElement>(name);
                 Grid.SetColumn(element, fit.Stacked ? 0 : 1); Grid.SetColumnSpan(element, fit.Stacked ? 2 : 1);

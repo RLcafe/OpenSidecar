@@ -26,6 +26,7 @@ internal static class ScreenSizeTests
         return layout.All(p => p.X >= 0 && p.Y >= 0 && p.X + p.Width <= canvas.Width + 1e-9 && p.Y + p.Height <= canvas.Height + 1e-9);
     }
     private static Size Canvas(ScreenFit fit) { return new Size(fit.CanvasWidth, fit.CanvasHeight); }
+    private static string Describe(WidgetPlacement[] layout) { return String.Join("; ", layout.Where(p => p.Visible).Select(p => p.Id + " " + p.X + "," + p.Y + " " + p.Width + "x" + p.Height)); }
 
     public static void Run(string directory, Action<string, Action> check)
     {
@@ -70,17 +71,20 @@ internal static class ScreenSizeTests
             Assert(moved.Right == 2496 && moved.Bottom == 576, "Moving stopped at the reference canvas instead of this one.");
         });
         check("Default arrangement fits every screen shape without overlaps", () => {
-            Assert(WidgetLayout.Arrange(WidgetLayout.Reference).Select(p => p.Visible ? p.Bounds : Rect.Empty).Where(r => !r.IsEmpty).SequenceEqual(
+            Assert(WidgetLayout.Arrange(WidgetLayout.Reference, WidgetLayout.DefaultShown).Select(p => p.Visible ? p.Bounds : Rect.Empty).Where(r => !r.IsEmpty).SequenceEqual(
                 WidgetLayout.SpotifyDefault(new AppSettings()).Where(p => p.Visible).Select(p => p.Bounds)), "Columns on the reference canvas must be the Spotify default.");
             foreach (var screen in new[] { new Size(1920, 720), new Size(2560, 720), new Size(1920, 1080), new Size(1280, 800), new Size(1024, 600), new Size(1080, 1920), new Size(2560, 1080), new Size(1280, 1024), new Size(800, 1280) })
             {
                 var fit = ScreenFit.For(screen.Width, screen.Height, 1, 1800); var canvas = Canvas(fit);
                 var layout = WidgetLayout.DefaultFor(new AppSettings(), canvas);
-                Assert(layout.Length == WidgetLayout.Ids.Length && Inside(layout, canvas) && WidgetLayout.Fits(layout, canvas), "Default escapes or squeezes on " + screen + " (" + WidgetLayout.TemplateFor(canvas) + ")");
-                Assert(!Overlaps(layout), "Default overlaps on " + screen + " (" + WidgetLayout.TemplateFor(canvas) + ")");
+                Assert(layout.Length == WidgetLayout.Ids.Length && Inside(layout, canvas) && WidgetLayout.Fits(layout, canvas), "Default escapes or squeezes on " + screen + ": " + Describe(layout));
+                Assert(!Overlaps(layout), "Default overlaps on " + screen + ": " + Describe(layout));
                 Assert(new[] { "Focus", "Media", "Shortcuts", "Mixer", "Spotify" }.All(id => layout.First(p => p.Id == id).Visible) && !layout.First(p => p.Id == "System").Visible, "Default widget set changed on " + screen);
             }
-            Assert(WidgetLayout.TemplateFor(new Size(2496, 576)) == "Columns" && WidgetLayout.TemplateFor(new Size(1000, 1560)) == "Tall", "Wide canvases get columns and upright ones rows.");
+            var wide = WidgetLayout.Arrange(new Size(2496, 576), WidgetLayout.DefaultShown);
+            Assert(wide.Where(p => p.Visible && p.Id != "Shortcuts").All(p => p.Y == 0), "A wide canvas should get columns: " + Describe(wide));
+            var upright = WidgetLayout.Normalize(WidgetLayout.Arrange(new Size(1000, 1560), WidgetLayout.DefaultShown), new AppSettings(), new Size(1000, 1560));
+            Assert(!Overlaps(upright) && WidgetLayout.Fits(upright, new Size(1000, 1560)) && upright.Where(p => p.Visible).Max(p => p.Y) > 0, "An upright canvas should stack cards: " + Describe(upright));
             var shares = WidgetLayout.Distribute(100, new double[] { 1, 1 }, new double[] { 70, 10 });
             Assert(shares[0] == 70 && shares[1] == 30, "Distribution ignored a minimum.");
         });
@@ -115,10 +119,60 @@ internal static class ScreenSizeTests
             Assert(WidgetLayout.Fits(WidgetLayout.Stretch(settings.WidgetLayout, WidgetLayout.Reference, phone), phone) && WidgetLayout.ForCanvas(settings, phone).First(p => p.Id == "System").Visible, "A compact sideways canvas should stretch the saved layout like the old phone canvas did.");
             var upright = new Size(1000, 1560);
             var tall = WidgetLayout.ForCanvas(settings, upright);
-            Assert(!tall.First(p => p.Id == "System").Visible && tall.First(p => p.Id == "Spotify").Visible && !Overlaps(tall), "An upright canvas should not squeeze a wide layout; it gets the default.");
+            Assert(tall.First(p => p.Id == "System").Visible && !tall.First(p => p.Id == "Spotify").Visible && !Overlaps(tall) && WidgetLayout.Fits(tall, upright), "An upright canvas should not squeeze a wide layout; it arranges the page's widgets afresh: " + Describe(tall));
             var squarer = new Size(1856, 1200);
             WidgetLayout.Store(settings, new Size(1856, 936), WidgetLayout.DefaultFor(new AppSettings(), new Size(1856, 936)));
             Assert(WidgetLayout.ForCanvas(settings, squarer).First(p => p.Id == "Focus").Bounds == WidgetLayout.Stretch(WidgetLayout.Saved(settings, new Size(1856, 936)), new Size(1856, 936), squarer).First(p => p.Id == "Focus").Bounds, "The closest shape was not the one stretched.");
+        });
+        check("Any set of shown widgets is arranged without overlaps on every shape", () => {
+            var sets = new[] { new[] { "Mixer" }, new[] { "Focus", "Mixer", "System", "Weather" }, WidgetLayout.Ids, new[] { "Spotify", "Soundboard", "Shortcuts" } };
+            foreach (var canvas in new[] { new Size(1856, 576), new Size(2496, 576), new Size(1856, 936), new Size(1480, 552), new Size(1000, 1560), new Size(1480, 696) })
+                foreach (var shown in sets)
+                {
+                    var layout = WidgetLayout.Normalize(WidgetLayout.Arrange(canvas, shown), new AppSettings(), canvas);
+                    Assert(Inside(layout, canvas) && layout.Count(p => p.Visible) == shown.Length && layout.Where(p => !shown.Contains(p.Id)).All(p => !p.Visible), "Arrangement escapes or shows the wrong widgets on " + canvas);
+                    if (shown.Length < WidgetLayout.Ids.Length || canvas.Width * canvas.Height > 1500000) Assert(!Overlaps(layout), "Arrangement overlaps on " + canvas + ": " + Describe(layout));
+                }
+        });
+        check("Pages: old settings are one page; add, rename, move and delete keep the page shown", () => {
+            string path = Path.Combine(directory, "pages.xml"), warning;
+            File.WriteAllText(path, "<AppSettings><WidgetLayout><WidgetPlacement><Id>Focus</Id><X>40</X><Y>0</Y><Width>320</Width><Height>576</Height><Visible>true</Visible></WidgetPlacement></WidgetLayout></AppSettings>");
+            var s = SettingsStore.Load(path, out warning);
+            Assert(WidgetLayout.PageCount(s) == 1 && WidgetLayout.CurrentPage(s) == 0 && s.PageName == "Main" && s.MorePages == null && WidgetLayout.ForCanvas(s, WidgetLayout.Reference).First(p => p.Id == "Focus").X == 40, "Old settings did not become one page.");
+            Assert(WidgetLayout.AddPage(s, "  Gaming  ") == 1 && WidgetLayout.CurrentPage(s) == 1 && WidgetLayout.Page(s, 1).Name == "Gaming", "Add page.");
+            Assert(WidgetLayout.ForCanvas(s, WidgetLayout.Reference).First(p => p.Id == "Focus").X == 0, "A new page should start from the default arrangement.");
+            var gaming = WidgetLayout.ForCanvas(s, WidgetLayout.Reference); gaming.First(p => p.Id == "Spotify").Visible = false; gaming.First(p => p.Id == "System").Visible = true;
+            WidgetLayout.Store(s, WidgetLayout.Reference, gaming);
+            WidgetLayout.Store(s, 1, new Size(1856, 936), WidgetLayout.DefaultFor(new AppSettings(), new Size(1856, 936)));
+            Assert(WidgetLayout.Saved(WidgetLayout.Page(s, 1), WidgetLayout.Reference).First(p => p.Id == "Spotify").Visible, "Saving one shape did not carry the page's shown widgets to its other shapes.");
+            Assert(WidgetLayout.ForCanvas(s, 0, WidgetLayout.Reference).First(p => p.Id == "Focus").X == 40, "Another page changed the first page.");
+            WidgetLayout.RenamePage(s, 1, new string('x', 40)); Assert(WidgetLayout.Page(s, 1).Name.Length == 24, "Long names are cut to 24.");
+            WidgetLayout.AddPage(s, ""); Assert(WidgetLayout.Page(s, 2).Name == "Page 3" && WidgetLayout.CurrentPage(s) == 2, "Unnamed page.");
+            WidgetLayout.MovePage(s, 2, 0); Assert(WidgetLayout.Page(s, 0).Name == "Page 3" && WidgetLayout.CurrentPage(s) == 0 && s.WidgetLayout == null, "Moving a page to the front.");
+            SettingsStore.Save(path, s); var back = SettingsStore.Load(path, out warning);
+            Assert(warning == null && WidgetLayout.PageCount(back) == 3 && WidgetLayout.Page(back, 1).Name == "Main" && WidgetLayout.ForCanvas(back, 1, WidgetLayout.Reference).First(p => p.Id == "Focus").X == 40 && WidgetLayout.CurrentPage(back) == 0, "Pages did not survive a save.");
+            Assert(WidgetLayout.DeletePage(back, 0) && WidgetLayout.DeletePage(back, 0) && !WidgetLayout.DeletePage(back, 0) && WidgetLayout.PageCount(back) == 1, "The last page must stay.");
+            for (int i = 0; i < 10; i++) WidgetLayout.AddPage(back, "More");
+            Assert(WidgetLayout.PageCount(back) == WidgetLayout.MaxPages && WidgetLayout.AddPage(back, "Too many") == -1, "Page limit.");
+            back.CurrentPage = 99; back.Normalize(); Assert(back.CurrentPage == WidgetLayout.MaxPages - 1, "Current page out of range.");
+        });
+        check("Switching pages shows that page's widgets and stops the others", () => {
+            string path = Path.Combine(directory, "page-switch.xml");
+            var s = new AppSettings(); WidgetLayout.AddPage(s, "Stats");
+            var stats = WidgetLayout.ForCanvas(s, WidgetLayout.Reference); foreach (var p in stats) p.Visible = p.Id == "System" || p.Id == "Weather";
+            WidgetLayout.Store(s, WidgetLayout.Reference, stats); s.CurrentPage = 0; SettingsStore.Save(path, s);
+            var window = Window();
+            using (var controller = new DashboardController(window, path, true))
+            {
+                Assert(controller.Editor.IsVisible("Mixer") && !controller.Editor.IsVisible("Weather"), "First page.");
+                Assert(((FrameworkElement)window.FindName("PageSwitcher")).Visibility == Visibility.Visible && ((System.Windows.Controls.TextBlock)window.FindName("PageCountText")).Text == "1 of 2", "Page switcher.");
+                ((System.Windows.Controls.Button)window.FindName("NextPageButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert(!controller.Editor.IsVisible("Mixer") && controller.Editor.IsVisible("Weather") && ((System.Windows.Controls.TextBlock)window.FindName("PageNameText")).Text == "Stats", "Next page did not show the second page's widgets.");
+                string warning; Assert(SettingsStore.Load(path, out warning).CurrentPage == 1, "The page shown was not saved.");
+                Assert(!controller.ShowPage(2) && !((System.Windows.Controls.Button)window.FindName("NextPageButton")).IsEnabled, "Paging past the last page.");
+                controller.Editor.Begin(); Assert(!controller.ShowPage(0), "Pages switched during an edit."); controller.Editor.Cancel();
+            }
+            window.Close();
         });
         check("Dashboard takes the screen's shape, edits and saves the layout for that canvas only", () => {
             string path = Path.Combine(directory, "screen-shape.xml"); SettingsStore.Save(path, new AppSettings());
@@ -140,7 +194,7 @@ internal static class ScreenSizeTests
                     Assert(saved.WidgetLayout == null && saved.CanvasLayouts != null && saved.CanvasLayouts.Length == 1 && saved.CanvasLayouts[0].Widgets.First(p => p.Id == "Focus").X == moved.X, "Layout was not saved for the 1856 x 936 canvas.");
                     controller.Editor.Begin(); controller.Editor.TransformSelected("", 8, 0, false);
                     Assert(controller.Editor.SetCanvas(WidgetLayout.Reference) && !controller.Editor.Editing, "A screen change should end the edit.");
-                    Assert(controller.Editor.Bounds("Focus") == WidgetLayout.SpotifyDefault(new AppSettings()).First(p => p.Id == "Focus").Bounds, "The reference canvas did not keep its own default.");
+                    Assert(controller.Editor.Bounds("Focus") == WidgetLayout.ForCanvas(SettingsStore.Load(path, out warning), WidgetLayout.Reference).First(p => p.Id == "Focus").Bounds && WidgetLayout.Saved(SettingsStore.Load(path, out warning), WidgetLayout.Reference) == null, "The reference canvas should follow the rules for an unsaved shape.");
                 }
                 window.Close();
             }
