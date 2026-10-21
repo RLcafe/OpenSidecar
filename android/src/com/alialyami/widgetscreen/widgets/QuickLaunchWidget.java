@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.views.GlyphView;
@@ -29,7 +30,6 @@ public final class QuickLaunchWidget extends Widget {
 
     @Override public String part() { return "deck"; }
 
-    private boolean compact() { return height < 240; }
 
     @Override protected View create() {
         shown = null;
@@ -62,7 +62,7 @@ public final class QuickLaunchWidget extends Widget {
         PcState state = dash.state();
         List<PcState.Button> buttons = state == null || !dash.online() ? null : state.deck;
         // Rebuild the buttons only when they changed; the PC answers every couple of seconds.
-        String signature = buttons == null ? "offline" : signature(buttons) + "|" + page;
+        String signature = buttons == null ? "offline" : signature(buttons) + "|" + page + "|" + width + "x" + height;
         if (signature.equals(shown)) return;
         shown = signature;
         grid.removeAllViews();
@@ -73,18 +73,23 @@ public final class QuickLaunchWidget extends Widget {
             return;
         }
         empty.setVisibility(View.GONE);
-        boolean compact = compact();
-        int pageSize = compact ? 3 : 6, pages = Math.max(1, (buttons.size() + pageSize - 1) / pageSize);
+        // As many buttons as the card holds, like the Soundboard (CardSizing, as on the PC): the card less its padding
+        // and header.
+        double areaWidth = Math.max(0, width - 42), areaHeight = Math.max(0, height - 90);
+        int[] shape = CardSizing.deckGrid(areaWidth, areaHeight, buttons.size());
+        int columns = shape[0], rows = shape[1];
+        boolean compact = rows == 1;
+        double cellWidth = areaWidth / columns, cellHeight = areaHeight / rows;
+        int pageSize = columns * rows, pages = Math.max(1, (buttons.size() + pageSize - 1) / pageSize);
         page = Math.max(0, Math.min(pages - 1, page));
         pager.setVisibility(pages > 1 ? View.VISIBLE : View.GONE);
         Ui.enable(previousPage, page > 0); Ui.enable(nextPage, page < pages - 1);
         pageLabel.setText((page + 1) + "/" + pages);
-        int rows = compact ? 1 : 2;
         for (int r = 0; r < rows; r++) {
             LinearLayout row = ui.row();
-            for (int c = 0; c < 3; c++) {
-                int index = page * pageSize + r * 3 + c;
-                View cell = index < buttons.size() ? button(buttons.get(index), index, compact) : new View(ui.context);
+            for (int c = 0; c < columns; c++) {
+                int index = page * pageSize + r * columns + c;
+                View cell = index < buttons.size() ? button(buttons.get(index), index, compact, cellWidth, cellHeight) : new View(ui.context);
                 LinearLayout.LayoutParams params = ui.ll(0, Ui.MATCH, 1);
                 params.setMargins(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
                 row.addView(cell, params);
@@ -99,16 +104,17 @@ public final class QuickLaunchWidget extends Widget {
         return out.toString();
     }
 
-    private View button(final PcState.Button shortcut, final int index, boolean compact) {
+    private View button(final PcState.Button shortcut, final int index, boolean compact, double cellWidth, double cellHeight) {
+        double glyph = CardSizing.deckGlyph(cellHeight, compact);
         LinearLayout button = compact ? ui.row() : ui.column();
         button.setGravity(Gravity.CENTER);
         button.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(8));
         button.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
         button.setMinimumHeight(ui.px(48));
-        button.addView(new GlyphView(ui.context, shortcut.glyph, ui.theme.accent, ui.fpx(compact ? 18 : 24)), ui.ll(ui.px(compact ? 22 : 28), ui.px(compact ? 22 : 28)));
+        button.addView(new GlyphView(ui.context, shortcut.glyph, ui.theme.accent, ui.fpx(glyph)), ui.ll(ui.px(glyph + 4), ui.px(glyph + 4)));
         TextView name = ui.text(shortcut.label, (compact ? 14 : 15) * ui.textScale, ui.theme.text);
         name.setGravity(Gravity.CENTER);
-        name.setMaxWidth(ui.px(compact ? 70 : 138));
+        name.setMaxWidth(ui.px(Math.max(40, compact ? cellWidth - glyph - 40 : cellWidth - 24)));
         button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
         button.setContentDescription(shortcut.label);
         button.setClickable(true);

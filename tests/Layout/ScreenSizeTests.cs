@@ -212,6 +212,26 @@ internal static class ScreenSizeTests
             }
             window.Close();
         });
+        check("Cards size their content: Quick Launch fills its card, Focus, cover and temperature grow", () => {
+            Assert(CardSizing.DeckGrid(430, 160).SequenceEqual(new[] { 3, 2 }) && CardSizing.DeckGrid(378, 100).SequenceEqual(new[] { 3, 1 }) && CardSizing.FocusTime(320, 576) == 84 && CardSizing.MediaArt(472, 310) == 104 && CardSizing.WeatherTemperature(472, 250) == 54 && CardSizing.SpotifyColumns(752) == 2, "The reference card sizes changed.");
+            string path = Path.Combine(directory, "card-sizing.xml");
+            var s = new AppSettings { Shortcuts = Enumerable.Range(1, 20).Select(i => new Shortcut { Label = "B" + i, Action = "Website", Target = "https://example.com/" + i, Glyph = "\uE774" }).ToList() };
+            s.WidgetLayout = WidgetLayout.SpotifyDefault(s);
+            WidgetLayout.SetBounds(s.WidgetLayout.First(p => p.Id == "Shortcuts"), new Rect(336, 0, 944, 576));
+            foreach (var p in s.WidgetLayout) if (p.Id == "Media" || p.Id == "Mixer") p.Visible = false;
+            WidgetLayout.SetBounds(s.WidgetLayout.First(p => p.Id == "Focus"), new Rect(0, 0, 320, 576));
+            SettingsStore.Save(path, s);
+            var window = Window();
+            using (var controller = new DashboardController(window, path, true))
+            {
+                var dashboard = (FrameworkElement)window.FindName("Dashboard"); dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                var grid = (System.Windows.Controls.Primitives.UniformGrid)window.FindName("ShortcutGrid");
+                Assert(grid.Columns * grid.Rows >= 20 && grid.Columns * grid.Rows < 24 && grid.Children.Count == 20, "A big Quick Launch card should hold more buttons: " + grid.Columns + " x " + grid.Rows);
+                foreach (System.Windows.Controls.Button button in grid.Children) Assert(button.ActualWidth >= 48 && button.ActualHeight >= 48, "A deck button is under 48.");
+                Assert(((System.Windows.Controls.TextBlock)window.FindName("FocusTime")).FontSize == 84, "Focus countdown on the reference card.");
+            }
+            window.Close();
+        });
         check("Dashboard takes the screen's shape, edits and saves the layout for that canvas only", () => {
             string path = Path.Combine(directory, "screen-shape.xml"); SettingsStore.Save(path, new AppSettings());
             var previous = Program.ScreenSize;

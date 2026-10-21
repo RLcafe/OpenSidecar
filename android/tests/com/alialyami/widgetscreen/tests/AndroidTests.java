@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
@@ -369,6 +370,17 @@ public final class AndroidTests {
             ok(WidgetLayout.find(s.layoutFor(1856, 1200), "Focus").x == 8, "picked the wrong saved layout");
             Placement[] wide = s.layoutFor(2496, 576);
             ok(WidgetLayout.find(wide, "Mixer").x == Math.round(824 * 2496 / 1856.0) && !overlaps(wide), "wide stretch");
+        } });
+        check("Cards size their content like the PC: deck grid, countdown, cover, temperature, Spotify columns", new Action() { public void run() {
+            int[] reference = CardSizing.deckGrid(472 - 42, 250 - 90), compact = CardSizing.deckGrid(420 - 42, 190 - 90), big = CardSizing.deckGrid(681 - 42, 328 - 90);
+            ok(reference[0] == 3 && reference[1] == 2 && compact[0] == 3 && compact[1] == 1 && big[0] * big[1] > 6, "deck " + big[0] + "x" + big[1]);
+            int[] six = CardSizing.deckGrid(640 - 42, 360 - 90, 6), many = CardSizing.deckGrid(640 - 42, 360 - 90, 40);
+            ok(six[0] * six[1] == 6 && many[0] == 4 && many[1] == 3, "six buttons fill a big card " + six[0] + "x" + six[1]);
+            ok(CardSizing.deckGlyph(80, false) == 24 && CardSizing.deckGlyph(100, true) == 18 && CardSizing.deckGlyph(400, false) == 44, "glyphs");
+            ok(CardSizing.focusTime(320, 576) == 84 && CardSizing.focusTime(296, 300) == 42 && CardSizing.focusTime(600, 900) > 84, "countdown");
+            ok(CardSizing.mediaArt(472, 310) == 104 && CardSizing.mediaArt(600, 500) > 104 && CardSizing.mediaArt(2000, 2000) == 220, "cover");
+            ok(CardSizing.weatherTemperature(472, 250) == 54 && CardSizing.weatherTemperature(360, 220) >= 40, "temperature");
+            ok(CardSizing.spotifyColumns(560) == 1 && CardSizing.spotifyColumns(752) == 2 && CardSizing.spotifyColumns(3000) == 3, "Spotify");
         } });
         check("Palettes and accents match the Windows resources", new Action() { public void run() {
             Theme midnight = Theme.of("Midnight", "Lime"), slate = Theme.of("Slate", "Glacier");

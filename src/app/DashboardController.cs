@@ -44,7 +44,8 @@ namespace WidgetScreen
         private readonly DeckHotkeys deckHotkeys;
         private int deckPage;
         public LayoutEditor Editor { get; private set; }
-        private bool syncingEditor, shortcutsCompact;
+        private bool syncingEditor;
+        private string deckShape = "";
         private int selectedFocusPreset = -1;
         private bool openingSettings, systemBusy;
         private bool updatingAudio, audioAvailable, mediaBusy, mediaCommandBusy, weatherBusy, disposed, fullscreen;
@@ -332,9 +333,14 @@ namespace WidgetScreen
                     Notify(info, true);
                     Text("DisplayStatus", "ARROWS MOVE · SHIFT+ARROWS RESIZE · ESC CANCELS");
                 }
-                if (shortcutsCompact != (Editor.Bounds("Shortcuts").Height < 240)) BuildShortcuts();
-                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320, tallFocus = focusBounds.Height >= 440 && focusBounds.Width >= 296;
-                Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : tallFocus ? 84 : 54;
+                if (deckShape != DeckShape()) BuildShortcuts();
+                // Card contents follow their card's size (CardSizing).
+                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320;
+                Control<TextBlock>("FocusTime").FontSize = CardSizing.FocusTime(focusBounds.Width, focusBounds.Height);
+                var mediaBounds = Editor.Bounds("Media"); double art = CardSizing.MediaArt(mediaBounds.Width, mediaBounds.Height);
+                Control<ColumnDefinition>("MediaArtColumn").Width = new GridLength(art + 12); Control<Border>("MediaArtBox").MaxHeight = art;
+                var weatherBounds = Editor.Bounds("Weather"); double temperature = CardSizing.WeatherTemperature(weatherBounds.Width, weatherBounds.Height);
+                Control<TextBlock>("WeatherTemperature").FontSize = temperature; Control<ColumnDefinition>("WeatherTemperatureColumn").Width = new GridLength(temperature * 2);
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
                 UpdatePages();
@@ -355,11 +361,15 @@ namespace WidgetScreen
         private void BuildShortcuts()
         {
             var grid = Control<System.Windows.Controls.Primitives.UniformGrid>("ShortcutGrid"); grid.Children.Clear();
-            shortcutsCompact = Editor.Bounds("Shortcuts").Height < 240;
-            int pageSize = shortcutsCompact ? 3 : 6;
+            // As many buttons as the card holds, like the Soundboard (CardSizing.DeckGrid).
+            deckShape = DeckShape();
+            var area = DeckArea(); int[] shape = CardSizing.DeckGrid(area.Width, area.Height, settings.Shortcuts.Count);
+            int pageSize = shape[0] * shape[1];
+            bool beside = shape[1] == 1;
+            double cellWidth = area.Width / shape[0], cellHeight = area.Height / shape[1];
             int pages = Math.Max(1, (settings.Shortcuts.Count + pageSize - 1) / pageSize);
             deckPage = Math.Max(0, Math.Min(pages - 1, deckPage));
-            grid.Rows = shortcutsCompact ? 1 : 2;
+            grid.Columns = shape[0]; grid.Rows = shape[1];
             Control<StackPanel>("DeckPages").Visibility = pages > 1 ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("DeckPrevious").IsEnabled = deckPage > 0; Control<Button>("DeckNext").IsEnabled = deckPage < pages - 1;
             Text("DeckPageLabel", (deckPage + 1) + "/" + pages);
@@ -367,15 +377,18 @@ namespace WidgetScreen
             foreach (var shortcut in settings.Shortcuts.Skip(deckPage * pageSize).Take(pageSize))
             {
                 var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target) };
-                bool compact = shortcutsCompact;
+                bool compact = beside; double glyphSize = CardSizing.DeckGlyph(cellHeight, beside);
                 var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Orientation = compact ? Orientation.Horizontal : Orientation.Vertical };
-                var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = compact ? 18 : 24, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = glyphSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); content.Children.Add(glyph);
-                var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = compact ? 70 : 138, TextTrimming = TextTrimming.CharacterEllipsis };
+                var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = Math.Max(40, compact ? cellWidth - glyphSize - 40 : cellWidth - 24), TextTrimming = TextTrimming.CharacterEllipsis };
                 content.Children.Add(name); button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
             }
         }
+        // The button grid: the Quick Launch card less its 20-unit padding, border and 48-unit header.
+        private Size DeckArea() { var b = Editor.Bounds("Shortcuts"); return new Size(Math.Max(0, b.Width - 42), Math.Max(0, b.Height - 90)); }
+        private string DeckShape() { var a = DeckArea(); var s = CardSizing.DeckGrid(a.Width, a.Height, settings.Shortcuts.Count); return s[0] + "x" + s[1] + "|" + Math.Round(a.Width) + "x" + Math.Round(a.Height); }
         private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
         private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 6; }
         // A phone that runs a button has already asked the user, so it passes confirmed.

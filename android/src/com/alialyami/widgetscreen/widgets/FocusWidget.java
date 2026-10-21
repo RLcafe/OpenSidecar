@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
@@ -30,14 +31,15 @@ public final class FocusWidget extends Widget {
     @Override public String part() { return "focus"; }
 
     @Override protected View create() {
-        boolean compact = height < 320, tall = height >= 440 && width >= 296;
+        boolean compact = height < 320;
         selectedPreset = -1;
         LinearLayout column = ui.column();
         column.addView(ui.label("FOCUS TIMER"), ui.ll(Ui.MATCH, Ui.WRAP));
 
         LinearLayout middle = ui.column();
         middle.setGravity(Gravity.CENTER_VERTICAL);
-        time = Ui.tabular(ui.text("25:00", compact ? 42 : tall ? 84 : 54, ui.theme.text));
+        // The countdown grows with the card (CardSizing, as on the PC).
+        time = Ui.tabular(ui.text("25:00", (float) CardSizing.focusTime(width, height), ui.theme.text));
         time.setTypeface(Ui.LIGHT); time.setGravity(Gravity.CENTER);
         middle.addView(time, ui.ll(Ui.MATCH, Ui.WRAP));
         status = Ui.wrap(ui.smallText(""), 2);
