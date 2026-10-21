@@ -5,6 +5,7 @@ import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
+import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.core.StatsLayout;
@@ -208,6 +209,12 @@ public final class AndroidTests {
                 catch (PcLink.Failure f) { ok(f.code == 403 && f.getMessage().contains("doesn't match"), "wrong code message"); }
                 String token = anonymous.pair("123 456", "Pixel");
                 ok(token.equals("tok") && fake.bodies.get(fake.bodies.size() - 1).contains("\"code\":\"123456\""), "pair");
+                // The pairing the phone keeps must be usable straight away, not only after a restart.
+                PcPairing pairing = PcPairing.pair("127.0.0.1", fake.port(), "123456", "Pixel");
+                ok(pairing.paired() && pairing.token.equals("tok") && pairing.name.equals("DESKTOP-1"), "pairing not usable");
+                ok(pairing.link().state(Arrays.asList("focus")).focus != null, "a fresh pairing couldn't read the PC");
+                PcPairing restored = PcPairing.fromJson(pairing.toJson());
+                ok(restored.paired() && restored.token.equals("tok") && restored.port == fake.port() && !PcPairing.none().paired(), "pairing round trip");
                 try { anonymous.state(Arrays.asList("focus")); throw new AssertionError("Unpaired state."); }
                 catch (PcLink.Failure f) { ok(f.unpaired(), "unpaired"); }
                 PcLink link = new PcLink("127.0.0.1", fake.port(), token);

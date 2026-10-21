@@ -5,6 +5,7 @@ import android.os.SystemClock;
 
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
+import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.PcState;
 
 import java.io.File;
@@ -20,8 +21,7 @@ public final class Pc {
     private final File file;
     private final ExecutorService poller = Executors.newSingleThreadExecutor(Async.threads("pc-state"));
     private final ExecutorService sender = Executors.newSingleThreadExecutor(Async.threads("pc-command"));
-    private String host, token, name = "";
-    private int port = PcLink.PORT;
+    private PcPairing pairing = PcPairing.none();
     private int generation;
     private boolean polling;
     public PcState state;
@@ -36,42 +36,35 @@ public final class Pc {
         file = new File(context.getFilesDir(), "pc-link.dat");
         try {
             String json = SecureStore.read(file);
-            if (json != null) {
-                Map<String, Object> saved = Json.obj(Json.parse(json));
-                host = Json.field(saved, "host"); token = Json.field(saved, "token");
-                name = Json.field(saved, "name") == null ? "" : Json.field(saved, "name");
-                port = Json.has(saved, "port") ? (int) Json.number(saved, "port") : PcLink.PORT;
-            }
+            if (json != null) pairing = PcPairing.fromJson(json);
         } catch (Exception e) { startupWarning = "The PC pairing could not be restored. Pair again in Settings → PC."; }
     }
 
-    public boolean paired() { return host != null && token != null; }
-    public String name() { return name.isEmpty() ? (host == null ? "your PC" : host) : name; }
-    public String address() { return host == null ? "" : host + (port == PcLink.PORT ? "" : ":" + port); }
+    public boolean paired() { return pairing.paired(); }
+    public String name() { return !pairing.name.isEmpty() ? pairing.name : pairing.host == null ? "your PC" : pairing.host; }
+    public String address() { return pairing.host == null ? "" : pairing.host + (pairing.port == PcLink.PORT ? "" : ":" + pairing.port); }
     public boolean online() { return paired() && problem == null && state != null; }
-    private PcLink link() { return new PcLink(host, port, token); }
+    private PcLink link() { return pairing.link(); }
 
     // Pairs with the code the PC shows, then remembers the PC.
-    public void pair(final String pcHost, final int pcPort, final String code, final String device, Async.Done<String> done, Async.Failed failed) {
-        Async.run(sender, new Async.Work<String>() {
-            @Override public String run() throws Exception {
-                PcLink fresh = new PcLink(pcHost, pcPort, null);
-                String pcName = Json.field(fresh.hello(), "name");
-                String newToken = fresh.pair(code, device);
-                SecureStore.write(file, Json.write(Json.map("host", pcHost, "port", pcPort, "token", newToken, "name", pcName == null ? "" : pcName)));
-                return pcName == null ? pcHost : pcName;
+    public void pair(final String pcHost, final int pcPort, final String code, final String device, final Async.Done<String> done, Async.Failed failed) {
+        Async.run(sender, new Async.Work<PcPairing>() {
+            @Override public PcPairing run() throws Exception {
+                PcPairing paired = PcPairing.pair(pcHost, pcPort, code, device);
+                SecureStore.write(file, paired.toJson());
+                return paired;
             }
-        }, new Async.Done<String>() {
-            @Override public void ok(String pcName) {
-                host = pcHost; port = pcPort; name = pcName; problem = null; unpaired = false; state = null; generation++;
-                done.ok(pcName);
+        }, new Async.Done<PcPairing>() {
+            @Override public void ok(PcPairing paired) {
+                pairing = paired; problem = null; unpaired = false; state = null; polling = false; generation++;
+                done.ok(paired.name);
             }
         }, failed);
     }
 
     public void forget() throws Exception {
         SecureStore.write(file, "{}");
-        host = null; token = null; name = ""; state = null; problem = null; unpaired = false; generation++;
+        pairing = PcPairing.none(); state = null; problem = null; unpaired = false; generation++;
     }
 
     public void discover(Async.Done<List<PcLink.Found>> done) {
