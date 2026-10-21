@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/discord-soundboard` was merged as v0.3.0.
+| `feature/android-app` | Android app as a phone remote for the PC (decisions 007, 008), plus Settings → Phone in the Windows app | `0247453` (v0.3.0) | Ready for review | `.worktrees\android-app` | `.worktrees\android-app\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
@@ -24,14 +24,14 @@ None yet.
   git worktree add ".worktrees\<name>" -b feature/<name> main
   ```
 
-- Build and test inside the worktree. The scripts resolve paths from their own folder, so the build lands in `.worktrees\<name>\artifacts\app\WidgetScreen.exe` and never locks the main app. `build.ps1` only compiles `src\` and `tests\`, so the worktrees under `.worktrees\` never leak into the main build.
+- Build and test inside the worktree. The scripts resolve paths from their own folder, so the builds land in `.worktrees\<name>\artifacts\app\WidgetScreen.exe` and `.worktrees\<name>\artifacts\android\WidgetScreen.apk` and never lock the main app. `build.ps1` only compiles `src\` and `tests\`, so the worktrees under `.worktrees\` never leak into the main build.
 - Add a row to the table above when the branch is created, and keep its status and test build path current.
 - A branch build uses your real preferences unless you start it with `--settings <path>`.
 
 ## After a merge
 
 1. From the main folder, on `main`: `git merge --no-ff <branch>`.
-2. Run `scripts\build.ps1 -Test` on `main` and confirm every check passes.
+2. Run `scripts\build.ps1 -Test` and `scripts\build-android.ps1 -Test` on `main` and confirm every check passes.
 3. Pick the new version (see [Versions](#versions)), move the branch's changes into a new section of [CHANGELOG.md](CHANGELOG.md), and remove its row here. Commit that, then tag it: `git tag -a vX.Y.Z -m "<one-line summary>"`.
 4. Remove the worktree with `git worktree remove ".worktrees\<name>"`. Its `artifacts\` goes with it. If git refuses because of untracked files, look at them first, then use `--force` only if nothing in them is worth keeping.
 5. Delete any build of the branch made from the main folder, such as `artifacts\<name>`.
@@ -41,7 +41,7 @@ None yet.
 
 ## Releases
 
-The copy you actually use lives in `releases\vX.Y.Z\` inside this folder (git-ignored), never in `artifacts\` and never next to `Widget screen`. Each release folder is self-contained: `WidgetScreen.exe`, `WidgetScreen.exe.config` and a `release.txt` naming the version and commit. Settings and the Spotify session stay in `%LOCALAPPDATA%\WidgetScreen\`, so every build shares them.
+The copy you actually use lives in `releases\vX.Y.Z\` inside this folder (git-ignored), never in `artifacts\` and never next to `Widget screen`. Each release folder is self-contained: `WidgetScreen.exe`, `WidgetScreen.exe.config`, `WidgetScreen.apk` (from v0.4.0, when the Android SDK is installed) and a `release.txt` naming the version and commit. Settings and the Spotify session stay in `%LOCALAPPDATA%\WidgetScreen\`, so every build shares them.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -UpdateShortcut

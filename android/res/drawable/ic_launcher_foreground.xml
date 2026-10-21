@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Windows logo (scripts\make-icon.ps1) on Android's 108 dp adaptive grid: Focus in Lime beside
+     Now Playing over Quick Launch, and the mixer. The 32-unit grid is 72 dp wide and centered. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#BAF28B" android:pathData="M32.625,33.75 H39.375 A3.375,3.375 0 0 1 42.75,37.125 V70.875 A3.375,3.375 0 0 1 39.375,74.25 H32.625 A3.375,3.375 0 0 1 29.25,70.875 V37.125 A3.375,3.375 0 0 1 32.625,33.75 Z" />
+    <path android:fillColor="#465061" android:pathData="M50.625,33.75 H57.375 A3.375,3.375 0 0 1 60.75,37.125 V48.375 A3.375,3.375 0 0 1 57.375,51.75 H50.625 A3.375,3.375 0 0 1 47.25,48.375 V37.125 A3.375,3.375 0 0 1 50.625,33.75 Z" />
+    <path android:fillColor="#465061" android:pathData="M50.625,56.25 H57.375 A3.375,3.375 0 0 1 60.75,59.625 V70.875 A3.375,3.375 0 0 1 57.375,74.25 H50.625 A3.375,3.375 0 0 1 47.25,70.875 V59.625 A3.375,3.375 0 0 1 50.625,56.25 Z" />
+    <path android:fillColor="#465061" android:pathData="M68.625,33.75 H75.375 A3.375,3.375 0 0 1 78.75,37.125 V70.875 A3.375,3.375 0 0 1 75.375,74.25 H68.625 A3.375,3.375 0 0 1 65.25,70.875 V37.125 A3.375,3.375 0 0 1 68.625,33.75 Z" />
+</vector>

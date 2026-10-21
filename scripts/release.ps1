@@ -26,6 +26,14 @@ try {
         & (Join-Path $buildCheckout 'scripts\build.ps1') -Test
         New-Item -ItemType Directory -Path $releasePath -Force | Out-Null
         Copy-Item -Path (Join-Path $buildCheckout 'artifacts\app\*') -Destination $releasePath
+        # The Android app (tags from v0.4.0 on) ships next to the exe when the Android SDK is installed.
+        $androidScript = Join-Path $buildCheckout 'scripts\build-android.ps1'
+        if (Test-Path -LiteralPath $androidScript) {
+            try {
+                & $androidScript -Test
+                Copy-Item -LiteralPath (Join-Path $buildCheckout 'artifacts\android\WidgetScreen.apk') -Destination $releasePath
+            } catch { Write-Warning "The Android app was not built for this release: $($_.Exception.Message)" }
+        }
     } finally {
         git worktree remove --force $buildCheckout
         git worktree prune
@@ -37,6 +45,7 @@ try {
     "Commit: $commit"
     "Built: $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
     'Settings: %LOCALAPPDATA%\WidgetScreen\settings.xml (shared with every build)'
+    $(if (Test-Path -LiteralPath (Join-Path $releasePath 'WidgetScreen.apk')) { 'Android: WidgetScreen.apk, to install on a phone or tablet (docs\design\android-app.md)' })
 ) | Set-Content -LiteralPath (Join-Path $releasePath 'release.txt') -Encoding utf8
 Write-Output "Release: $releasePath\WidgetScreen.exe"
 

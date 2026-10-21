@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -12,6 +12,9 @@ namespace WidgetScreen
 {
     public static class Program
     {
+        // Render runs capture the window and exit; they never open the phone link.
+        public static bool Rendering { get; private set; }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -25,6 +28,7 @@ namespace WidgetScreen
                 using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WidgetScreen.MainWindow.xaml")) window = (Window)XamlReader.Load(stream);
                 string settingsPath = Argument(args, "--settings") ?? SettingsStore.DefaultPath;
                 string renderPath = Argument(args, "--render");
+                Rendering = renderPath != null;
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))
                 {
                     if (renderPath != null)

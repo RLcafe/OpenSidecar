@@ -212,6 +212,7 @@
             <Button x:Name="EditLayoutButton" Content="Edit layout" Margin="0,0,10,0" ToolTip="Move and resize widgets directly on the dashboard."/>
             <Button x:Name="QuietButton" Content="Quiet mode" Margin="0,0,10,0" ToolTip="Pause output levels and slow down updates, for example while gaming." AutomationProperties.Name="Quiet mode, off"/>
             <Button x:Name="FullscreenButton" Content="Second screen" Margin="0,0,10,0" ToolTip="Show the dashboard fullscreen on your second display. F11 switches; Escape returns to a window."/>
+            <Button x:Name="TrayButton" Content="Hide to tray" Margin="0,0,10,0" ToolTip="Hide Widget Screen from the taskbar. Its icon stays in the notification area; click it to bring the dashboard back."/>
             <Button x:Name="SettingsButton" Margin="0,0,24,0" ToolTip="Settings" AutomationProperties.Name="Settings"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBlock Text="Settings" VerticalAlignment="Center"/></StackPanel></Button>
             <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource IconButton}" Background="Transparent" BorderBrush="{DynamicResource Raised}" ToolTip="Close Widget Screen" AutomationProperties.Name="Close Widget Screen"/>
           </StackPanel>
@@ -608,6 +609,31 @@
                     <TextBox Text="http://127.0.0.1" IsReadOnly="True" Margin="0,8,0,16" AutomationProperties.Name="Discord redirect address"/>
                     <TextBlock Text="3.  Paste both on the left and tap Connect Discord. Discord asks you once to authorize the app." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="4.  Turn on the Soundboard widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Phone">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Phone remote" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="Use the Widget Screen app on your Android phone to see this dashboard and control this PC over your home Wi-Fi." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="RemoteEnabledChoice" Content="Let my phone control this PC"/>
+                    <CheckBox x:Name="RemoteTrayChoice" Content="Move to the tray while my phone shows the dashboard" ToolTip="Hides Widget Screen from the taskbar while a paired phone is connected, and brings it back a minute after the phone stops."/>
+                    <TextBlock x:Name="RemoteStatus" Text="" TextWrapping="Wrap" Margin="0,8,0,12" FontSize="{DynamicResource BodySize}"/>
+                    <WrapPanel><Button x:Name="RemotePairButton" Content="Pair a phone" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="RemoteForgetButton" Content="Forget paired phones" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock x:Name="RemoteDevicesText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+                    <TextBlock Text="Changes here take effect right away. Only phones on your local network can connect, and only after pairing with a code from this screen. The connection isn't encrypted, so use it on a Wi-Fi you trust." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
+                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Pairing" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="1.  Install Widget Screen on your phone and join the same Wi-Fi as this PC." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="2.  Tap Pair a phone. On the phone, pick this PC (or type the address below) and enter the code." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="PC address" Style="{StaticResource Small}"/>
+                    <TextBox x:Name="RemoteAddress" IsReadOnly="True" Margin="0,8,0,12" AutomationProperties.Name="PC address for the phone"/>
+                    <TextBlock Text="Pairing code" Style="{StaticResource Small}"/>
+                    <TextBlock x:Name="RemoteCode" Text="—" FontSize="54" FontWeight="Light" FontFamily="Segoe UI Light" Typography.NumeralAlignment="Tabular" AutomationProperties.Name="Pairing code"/>
+                    <TextBlock x:Name="RemoteCodeHint" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock Text="3.  If Windows asks whether Widget Screen may use private networks, allow it. Otherwise the phone can't reach this PC." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                 </Grid>
               </TabItem>
