@@ -7,7 +7,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
 | `feature/android-app` | Android app as a phone remote for the PC (decisions 007, 008), plus Settings → Phone in the Windows app | `0247453` (v0.3.0) | Ready for review | `.worktrees\android-app` | `.worktrees\android-app\artifacts\android\WidgetScreen.apk` |
-| `feature/any-screen` | Any screen size on both apps (decision 010): canvas shaped like the screen, layouts per canvas shape, upright tablets; the phone mirrors the PC layout; layout pages; list editor on Windows; widgets size to their cards. **Stacked on `feature/android-app`: merge that first, then this.** | `0c0a0fc` (feature/android-app) + main `00306c1` | In progress | `.worktrees\any-screen` | `.worktrees\any-screen\artifacts\app\WidgetScreen.exe`, `.worktrees\any-screen\artifacts\android\WidgetScreen.apk` |
+| `feature/any-screen` | Any screen size on both apps (decision 010): canvas shaped like the screen, layouts per canvas shape, upright tablets; the phone mirrors the PC layout; layout pages; list editor on Windows; widgets size to their cards. **Stacked on `feature/android-app`: merge that first, then this.** | `0c0a0fc` (feature/android-app) + main `00306c1` | Ready for review | `.worktrees\any-screen` | `.worktrees\any-screen\artifacts\app\WidgetScreen.exe`, `.worktrees\any-screen\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

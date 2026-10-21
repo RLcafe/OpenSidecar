@@ -31,6 +31,7 @@ Set up on the PC, not the phone: Quick Launch buttons, the weather city, Spotify
 
 - **Dashboard** (any screen held sideways, or chosen in Settings → Display): the Windows arrangement, with the header clock, Edit layout, Quiet mode and Settings. On phones the widget canvas may shrink to 80% in each direction so text and buttons stay as large as possible (`core/DashboardFit.java`); cards keep their places and proportions. Edit layout works as on Windows (on narrow screens its toolbar drops the title). Back cancels.
 - **List** (upright screens, or chosen in Settings → Display): the shown cards stacked in the dashboard's reading order. Sliders take the finger directly, so drag elsewhere to scroll.
+- Since decision 010 (`docs/design/any-screen-size.md`) the canvas is shaped like the screen instead of stretched, upright tablets get the dashboard too, and the layout and pages are mirrored from the PC.
 - **Keep the app sideways** in Settings → Display locks the app to landscape, so the phone always shows the Windows arrangement.
 
 ## When something's wrong
