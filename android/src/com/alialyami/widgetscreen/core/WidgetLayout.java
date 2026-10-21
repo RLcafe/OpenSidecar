@@ -1,9 +1,18 @@
 package com.alialyami.widgetscreen.core;
 
-// The free widget canvas from the Windows app (WidgetLayout.cs): 1856 × 576 design units, minimum
-// sizes, an optional 8-unit snap. Android stretches this canvas to fill the screen.
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+// The free widget canvas from the Windows app (WidgetLayout.cs): placements in design units, minimum sizes and an
+// optional 8-unit snap. The canvas is shaped like the screen (DashboardFit) and layouts are kept per canvas size; the
+// 1856 × 576 canvas of a 1920 × 720 screen is the reference (docs/design/any-screen-size.md).
 public final class WidgetLayout {
-    public static final double WIDTH = 1856, HEIGHT = 576;
+    public static final double REFERENCE_WIDTH = 1856, REFERENCE_HEIGHT = 576;
+    private static final double GAP = 16;
+    // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
+    private static final double MINIMUM_SHRINK = 0.78;
     // The same widgets as the Windows dashboard, which the phone mirrors.
     public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
 
@@ -59,6 +68,25 @@ public final class WidgetLayout {
         }
     }
 
+    // On a canvas smaller than the reference (80% at least, see DashboardFit) minimum sizes shrink with it, so widgets
+    // keep their places and proportions and only free space inside the cards gets smaller. Upright canvases compare
+    // with the upright reference canvas (656 × 1712).
+    public static double[] compact(double canvasWidth, double canvasHeight) {
+        boolean upright = canvasHeight > canvasWidth;
+        double width = upright ? 720 - DashboardFit.MARGIN_X : REFERENCE_WIDTH;
+        double height = upright ? 1920 - DashboardFit.MARGIN_Y - DashboardFit.STACKED_HEADER - DashboardFit.FOOTER : REFERENCE_HEIGHT;
+        return new double[] { Math.max(MINIMUM_SHRINK, Math.min(1, canvasWidth / width)), Math.max(MINIMUM_SHRINK, Math.min(1, canvasHeight / height)) };
+    }
+
+    public static double[] minimum(String id, double canvasWidth, double canvasHeight) {
+        double[] m = minimum(id), k = compact(canvasWidth, canvasHeight);
+        return new double[] { Math.min(canvasWidth, Math.round(m[0] * k[0])), Math.min(canvasHeight, Math.round(m[1] * k[1])) };
+    }
+
+    // Layouts are kept per canvas size, rounded down to the 8-unit snap grid.
+    public static double key(double size) { return Math.max(8, Math.floor(size / 8) * 8); }
+    public static boolean isReference(double canvasWidth, double canvasHeight) { return key(canvasWidth) == REFERENCE_WIDTH && key(canvasHeight) == REFERENCE_HEIGHT; }
+
     // The Windows default (its Spotify arrangement): Focus in the left column, Now Playing over Quick Launch,
     // the mixer, then Spotify. System stats, Weather and the Soundboard start hidden.
     public static Placement[] defaults() {
@@ -74,6 +102,13 @@ public final class WidgetLayout {
         };
     }
 
+    // The default arrangement for a canvas: the Windows default on the reference canvas, a template elsewhere.
+    public static Placement[] defaults(double canvasWidth, double canvasHeight) {
+        canvasWidth = key(canvasWidth); canvasHeight = key(canvasHeight);
+        if (isReference(canvasWidth, canvasHeight)) return normalize(defaults());
+        return normalize(arrange(canvasWidth, canvasHeight), canvasWidth, canvasHeight);
+    }
+
     public static Placement[] copy(Placement[] layout) {
         Placement[] result = new Placement[layout.length];
         for (int i = 0; i < layout.length; i++) result[i] = layout[i].copy();
@@ -87,38 +122,243 @@ public final class WidgetLayout {
 
     private static double finite(double value, double fallback) { return Double.isNaN(value) || Double.isInfinite(value) ? fallback : value; }
 
+    public static Placement[] normalize(Placement[] layout) { return normalize(layout, defaults(), REFERENCE_WIDTH, REFERENCE_HEIGHT); }
+
+    public static Placement[] normalize(Placement[] layout, double canvasWidth, double canvasHeight) {
+        canvasWidth = key(canvasWidth); canvasHeight = key(canvasHeight);
+        return isReference(canvasWidth, canvasHeight) ? normalize(layout) : normalize(layout, arrange(canvasWidth, canvasHeight), canvasWidth, canvasHeight);
+    }
+
     // Every known widget gets exactly one placement, inside the canvas and at least its minimum size.
-    public static Placement[] normalize(Placement[] layout) {
-        Placement[] defaults = defaults();
+    private static Placement[] normalize(Placement[] layout, Placement[] defaults, double canvasWidth, double canvasHeight) {
         Placement[] result = new Placement[defaults.length];
         for (int i = 0; i < defaults.length; i++) {
             Placement fallback = defaults[i];
             Placement supplied = find(layout, fallback.id);
             Placement p = supplied == null ? fallback.copy() : supplied.copy();
-            double[] min = minimum(p.id);
-            p.width = Math.max(min[0], Math.min(WIDTH, finite(p.width, fallback.width)));
-            p.height = Math.max(min[1], Math.min(HEIGHT, finite(p.height, fallback.height)));
-            p.x = Math.max(0, Math.min(WIDTH - p.width, finite(p.x, fallback.x)));
-            p.y = Math.max(0, Math.min(HEIGHT - p.height, finite(p.y, fallback.y)));
+            double[] min = minimum(p.id, canvasWidth, canvasHeight);
+            p.width = Math.max(min[0], Math.min(canvasWidth, finite(p.width, fallback.width)));
+            p.height = Math.max(min[1], Math.min(canvasHeight, finite(p.height, fallback.height)));
+            p.x = Math.max(0, Math.min(canvasWidth - p.width, finite(p.x, fallback.x)));
+            p.y = Math.max(0, Math.min(canvasHeight - p.height, finite(p.y, fallback.y)));
             p.layer = Math.max(0, Math.min(1000000, p.layer));
             result[i] = p;
         }
         return result;
     }
 
+    // ----- Layouts per canvas size -----
+
+    // The layout for a canvas: the one saved for its size; otherwise the saved layout of the closest shape that
+    // stretches to it without squeezing a shown widget under its minimum; otherwise the default arrangement.
+    // saved maps "WxH" canvas keys (see keyName) to layouts.
+    public static Placement[] forCanvas(Map<String, Placement[]> saved, double canvasWidth, double canvasHeight) {
+        canvasWidth = key(canvasWidth); canvasHeight = key(canvasHeight);
+        Placement[] exact = saved.get(keyName(canvasWidth, canvasHeight));
+        if (exact != null) return normalize(exact, canvasWidth, canvasHeight);
+        Placement[] best = null, nearest = null;
+        double distance = Double.MAX_VALUE, nearestDistance = Double.MAX_VALUE;
+        for (Map.Entry<String, Placement[]> entry : saved.entrySet()) {
+            double[] size = parseKey(entry.getKey());
+            if (size == null || entry.getValue() == null) continue;
+            Placement[] source = normalize(entry.getValue(), size[0], size[1]);
+            double d = Math.abs(Math.log(size[0] / size[1] / (canvasWidth / canvasHeight)));
+            if (d < nearestDistance) { nearestDistance = d; nearest = source; }
+            Placement[] stretched = stretch(source, size[0], size[1], canvasWidth, canvasHeight);
+            if (fits(stretched, canvasWidth, canvasHeight) && d < distance) { distance = d; best = stretched; }
+        }
+        if (best != null) return normalize(best, canvasWidth, canvasHeight);
+        if (nearest == null) return defaults(canvasWidth, canvasHeight);
+        // Nothing stretches well: the page's shown widgets, arranged afresh for this canvas.
+        List<String> shown = readingOrder(nearest);
+        if (shown.equals(java.util.Arrays.asList(DEFAULT_SHOWN)) && isReference(canvasWidth, canvasHeight)) return defaults(canvasWidth, canvasHeight);
+        return normalize(arrange(canvasWidth, canvasHeight, shown), canvasWidth, canvasHeight);
+    }
+
+    public static String keyName(double canvasWidth, double canvasHeight) { return (long) key(canvasWidth) + "x" + (long) key(canvasHeight); }
+
+    public static double[] parseKey(String name) {
+        String[] parts = name == null ? new String[0] : name.split("x");
+        if (parts.length != 2) return null;
+        try {
+            double width = Long.parseLong(parts[0]), height = Long.parseLong(parts[1]);
+            return width >= 64 && height >= 64 && width <= 100000 && height <= 100000 ? new double[] { key(width), key(height) } : null;
+        } catch (NumberFormatException e) { return null; }
+    }
+
+    // Scales positions and sizes from one canvas to another, rounded to whole units.
+    public static Placement[] stretch(Placement[] layout, double fromWidth, double fromHeight, double toWidth, double toHeight) {
+        double fx = toWidth / fromWidth, fy = toHeight / fromHeight;
+        List<Placement> result = new ArrayList<Placement>();
+        for (Placement p : layout) {
+            if (p == null) continue;
+            Placement q = p.copy();
+            double left = Math.round(p.x * fx), top = Math.round(p.y * fy);
+            q.x = left; q.y = top; q.width = Math.round((p.x + p.width) * fx) - left; q.height = Math.round((p.y + p.height) * fy) - top;
+            result.add(q);
+        }
+        return result.toArray(new Placement[0]);
+    }
+
+    // Whether every shown widget keeps its minimum size on the canvas.
+    public static boolean fits(Placement[] layout, double canvasWidth, double canvasHeight) {
+        for (Placement p : layout) {
+            if (p == null || !p.visible) continue;
+            double[] min = minimum(p.id, canvasWidth, canvasHeight);
+            if (p.width < min[0] - 1 || p.height < min[1] - 1) return false;
+        }
+        return true;
+    }
+
+    // ----- Arrangements for any canvas (the same rule as WidgetLayout.cs) -----
+
+    public static final String[] DEFAULT_SHOWN = { "Focus", "Media", "Shortcuts", "Mixer", "Spotify" };
+
+    // The size each card is happiest at, from the reference default; arrangements stay close to these.
+    public static double[] preferred(String id) {
+        switch (id) {
+            case "Focus": return new double[] { 320, 400 };
+            case "Mixer": return new double[] { 456, 576 };
+            case "Spotify": return new double[] { 560, 576 };
+            case "Shortcuts": case "Weather": case "Soundboard": return new double[] { 472, 250 };
+            default: return new double[] { 472, 310 };
+        }
+    }
+
+    // Shown widgets left to right, then top to bottom: the order of the phone's list and of new arrangements.
+    public static List<String> readingOrder(Placement[] layout) {
+        List<Placement> shown = new ArrayList<Placement>();
+        for (Placement p : layout) if (p != null && p.visible) shown.add(p);
+        java.util.Collections.sort(shown, new java.util.Comparator<Placement>() {
+            @Override public int compare(Placement a, Placement b) { return a.x != b.x ? Double.compare(a.x, b.x) : Double.compare(a.y, b.y); }
+        });
+        List<String> ids = new ArrayList<String>();
+        for (Placement p : shown) ids.add(p.id);
+        return ids;
+    }
+
+    // Arranges the shown widgets, in order, as columns of stacked cards or as rows of cards side by side, and picks
+    // the split that fits the canvas and keeps every card closest to its preferred size (growing counts half as much
+    // as shrinking). Hidden widgets wait in the top left corner at their minimum size.
+    public static Placement[] arrange(double canvasWidth, double canvasHeight, List<String> wanted) {
+        List<String> shown = new ArrayList<String>();
+        for (String id : wanted) if (java.util.Arrays.asList(IDS).contains(id) && !shown.contains(id)) shown.add(id);
+        Map<String, Box> best = null;
+        double bestScore = Double.MAX_VALUE;
+        int n = shown.size();
+        for (int across = 0; across < 2 && n > 0; across++)
+            for (int mask = 0; mask < 1 << Math.max(0, n - 1); mask++) {
+                List<List<String>> groups = new ArrayList<List<String>>();
+                groups.add(new ArrayList<String>());
+                for (int i = 0; i < n; i++) {
+                    groups.get(groups.size() - 1).add(shown.get(i));
+                    if (i < n - 1 && (mask & 1 << i) != 0) groups.add(new ArrayList<String>());
+                }
+                double[] overflow = new double[1];
+                Map<String, Box> boxes = layGroups(groups, across == 1, canvasWidth, canvasHeight, overflow);
+                double score = 0;
+                if (overflow[0] > 0) score = 1000 + overflow[0];
+                else for (Map.Entry<String, Box> e : boxes.entrySet()) {
+                    double[] pref = preferred(e.getKey());
+                    score += strain(e.getValue().width, pref[0]) + strain(e.getValue().height, pref[1]);
+                }
+                if (score < bestScore - 1e-9) { bestScore = score; best = boxes; }
+            }
+        Placement[] result = new Placement[IDS.length];
+        for (int i = 0; i < IDS.length; i++) {
+            Box b = best == null ? null : best.get(IDS[i]);
+            double[] min = minimum(IDS[i], canvasWidth, canvasHeight);
+            result[i] = b == null ? new Placement(IDS[i], 0, 0, min[0], min[1], false) : new Placement(IDS[i], b.x, b.y, b.width, b.height, true);
+        }
+        return result;
+    }
+
+    public static Placement[] arrange(double canvasWidth, double canvasHeight) { return arrange(canvasWidth, canvasHeight, java.util.Arrays.asList(DEFAULT_SHOWN)); }
+
+    private static double strain(double actual, double preferred) { double r = actual / preferred; return r >= 1 ? 0.5 * Math.log(r) : -Math.log(Math.max(r, 1e-6)); }
+
+    // Columns (across false): groups side by side, each group's cards stacked. Rows (across true): groups stacked, each
+    // group's cards side by side.
+    private static Map<String, Box> layGroups(List<List<String>> groups, boolean across, double canvasWidth, double canvasHeight, double[] overflow) {
+        int o = across ? 1 : 0, in = across ? 0 : 1;
+        double outerLength = across ? canvasHeight : canvasWidth, innerLength = across ? canvasWidth : canvasHeight;
+        int count = groups.size();
+        double[] outerMin = new double[count], outerWeight = new double[count];
+        double outerSum = GAP * (count - 1);
+        overflow[0] = 0;
+        for (int i = 0; i < count; i++) {
+            double innerSum = GAP * (groups.get(i).size() - 1);
+            for (String id : groups.get(i)) {
+                double[] min = minimum(id, canvasWidth, canvasHeight);
+                outerMin[i] = Math.max(outerMin[i], min[o]); outerWeight[i] = Math.max(outerWeight[i], preferred(id)[o]);
+                innerSum += min[in];
+            }
+            outerSum += outerMin[i];
+            overflow[0] += Math.max(0, innerSum - innerLength);
+        }
+        overflow[0] += Math.max(0, outerSum - outerLength);
+        Map<String, Box> result = new HashMap<String, Box>();
+        double[][] outerEdges = edges(outerLength, distribute(outerLength - GAP * (count - 1), outerWeight, outerMin));
+        for (int i = 0; i < count; i++) {
+            List<String> g = groups.get(i);
+            double[] weights = new double[g.size()], mins = new double[g.size()];
+            for (int j = 0; j < g.size(); j++) { weights[j] = preferred(g.get(j))[in]; mins[j] = minimum(g.get(j), canvasWidth, canvasHeight)[in]; }
+            double[][] innerEdges = edges(innerLength, distribute(innerLength - GAP * (g.size() - 1), weights, mins));
+            for (int j = 0; j < g.size(); j++) {
+                double os = outerEdges[i][0], ol = outerEdges[i][1] - os, ns = innerEdges[j][0], nl = innerEdges[j][1] - ns;
+                result.put(g.get(j), across ? new Box(ns, os, nl, ol) : new Box(os, ns, ol, nl));
+            }
+        }
+        return result;
+    }
+
+    // Whole-unit edges for sizes laid one after another with gaps; the last ends at the end unless it overflows.
+    private static double[][] edges(double end, double[] sizes) {
+        double[][] result = new double[sizes.length][];
+        double position = 0;
+        for (int i = 0; i < sizes.length; i++) {
+            double from = Math.round(position), to = Math.round(position + sizes[i]);
+            if (i == sizes.length - 1 && to <= end + 0.5) to = end;
+            result[i] = new double[] { from, to };
+            position += sizes[i] + GAP;
+        }
+        return result;
+    }
+
+    // Shares a length between children by weight; a child that would get less than its minimum gets its minimum.
+    public static double[] distribute(double length, double[] weights, double[] minimums) {
+        int n = weights.length;
+        double[] sizes = new double[n];
+        boolean[] atMinimum = new boolean[n];
+        for (boolean changed = true; changed;) {
+            changed = false;
+            double rest = length, weight = 0;
+            for (int i = 0; i < n; i++) if (atMinimum[i]) rest -= minimums[i]; else weight += weights[i];
+            for (int i = 0; i < n; i++) {
+                sizes[i] = atMinimum[i] ? minimums[i] : weight > 0 ? Math.max(0, rest) * weights[i] / weight : 0;
+                if (!atMinimum[i] && sizes[i] < minimums[i]) { atMinimum[i] = true; changed = true; }
+            }
+        }
+        return sizes;
+    }
+
     private static double snap(double value, boolean enabled) { return enabled ? Math.round(value / 8) * 8 : value; }
 
-    // Moves (corner null or empty) or resizes from one of the corners "NW", "NE", "SW", "SE".
     public static Box transform(String id, Box start, String corner, double dx, double dy, boolean snap) {
+        return transform(id, start, corner, dx, dy, snap, REFERENCE_WIDTH, REFERENCE_HEIGHT);
+    }
+
+    // Moves (corner null or empty) or resizes from one of the corners "NW", "NE", "SW", "SE".
+    public static Box transform(String id, Box start, String corner, double dx, double dy, boolean snap, double canvasWidth, double canvasHeight) {
         if (Double.isNaN(dx) || Double.isInfinite(dx) || Double.isNaN(dy) || Double.isInfinite(dy)) return start;
-        double[] min = minimum(id);
+        double[] min = minimum(id, canvasWidth, canvasHeight);
         double left = start.x, right = start.right(), top = start.y, bottom = start.bottom();
         if (corner == null || corner.isEmpty())
-            return new Box(Math.max(0, Math.min(WIDTH - start.width, snap(left + dx, snap))), Math.max(0, Math.min(HEIGHT - start.height, snap(top + dy, snap))), start.width, start.height);
+            return new Box(Math.max(0, Math.min(canvasWidth - start.width, snap(left + dx, snap))), Math.max(0, Math.min(canvasHeight - start.height, snap(top + dy, snap))), start.width, start.height);
         if (corner.contains("W")) left = Math.max(0, Math.min(right - min[0], snap(left + dx, snap)));
-        if (corner.contains("E")) right = Math.min(WIDTH, Math.max(left + min[0], snap(right + dx, snap)));
+        if (corner.contains("E")) right = Math.min(canvasWidth, Math.max(left + min[0], snap(right + dx, snap)));
         if (corner.contains("N")) top = Math.max(0, Math.min(bottom - min[1], snap(top + dy, snap)));
-        if (corner.contains("S")) bottom = Math.min(HEIGHT, Math.max(top + min[1], snap(bottom + dy, snap)));
+        if (corner.contains("S")) bottom = Math.min(canvasHeight, Math.max(top + min[1], snap(bottom + dy, snap)));
         return new Box(left, top, right - left, bottom - top);
     }
 

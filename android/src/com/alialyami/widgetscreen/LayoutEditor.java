@@ -16,6 +16,8 @@ public final class LayoutEditor {
     private final List<Placement[]> undo = new ArrayList<Placement[]>(), redo = new ArrayList<Placement[]>();
     private Placement[] saved, current, gestureBefore;
     private AppSettings preferences;
+    // The canvas the dashboard has on this screen (DashboardFit); layouts are kept per canvas size.
+    private double canvasWidth = WidgetLayout.REFERENCE_WIDTH, canvasHeight = WidgetLayout.REFERENCE_HEIGHT;
     private String gestureId, gestureCorner, selected = "Focus";
     private Box gestureBounds;
     private int gestureLayer;
@@ -30,6 +32,8 @@ public final class LayoutEditor {
     public boolean canRedo() { return !redo.isEmpty(); }
     public boolean gestureActive() { return gestureId != null; }
     public Placement[] placements() { return current; }
+    public double canvasWidth() { return canvasWidth; }
+    public double canvasHeight() { return canvasHeight; }
 
     private void changed(boolean structure) { if (listener != null) listener.changed(structure); }
 
@@ -37,8 +41,20 @@ public final class LayoutEditor {
         preferences = settings;
         if (editing) return;
         snap = settings.snapWidgets;
-        current = WidgetLayout.normalize(settings.layout());
+        current = settings.layoutFor(canvasWidth, canvasHeight);
         saved = WidgetLayout.copy(current);
+    }
+
+    // A new screen shape ends an edit in progress (its changes belonged to the old canvas) and loads the layout for
+    // the new canvas. Returns true when an edit was discarded.
+    public boolean setCanvas(double width, double height) {
+        width = WidgetLayout.key(width); height = WidgetLayout.key(height);
+        if (width == canvasWidth && height == canvasHeight && current != null) return false;
+        boolean discarded = editing;
+        if (editing) { gestureId = null; editing = false; undo.clear(); redo.clear(); }
+        canvasWidth = width; canvasHeight = height;
+        if (preferences != null) apply(preferences);
+        return discarded;
     }
 
     public void begin() {
@@ -111,7 +127,7 @@ public final class LayoutEditor {
 
     public void reset() {
         if (!editing || gestureActive()) return;
-        remember(export()); current = WidgetLayout.defaults();
+        remember(export()); current = WidgetLayout.defaults(canvasWidth, canvasHeight);
         changed(true);
     }
 
@@ -144,7 +160,7 @@ public final class LayoutEditor {
         if (!gestureMoved && Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
         gestureMoved = true;
         Placement p = WidgetLayout.find(current, gestureId);
-        Box next = WidgetLayout.transform(p.id, gestureBounds, gestureCorner, dx, dy, snap);
+        Box next = WidgetLayout.transform(p.id, gestureBounds, gestureCorner, dx, dy, snap, canvasWidth, canvasHeight);
         p.layer = next.equals(gestureBounds) ? WidgetLayout.find(gestureBefore, p.id).layer : gestureLayer;
         p.setBounds(next);
         changed(false);

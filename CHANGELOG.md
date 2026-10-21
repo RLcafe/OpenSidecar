@@ -4,7 +4,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/any-screen` (stacked on `feature/android-app`; a MINOR bump when merged). Decision 010, `docs/design/any-screen-size.md`.
+
+- **Any screen size**: the dashboard keeps its 1920 × 720 design scale and lays itself out on a canvas shaped like the screen, so wider or taller second screens get more room, small screens keep readable text (the canvas may shrink to 80%), and narrow ones stack the header. The 1920 × 720 screen looks exactly as before. Layouts are saved per screen shape; a new shape stretches the closest saved layout, or arranges the page's widgets for it. Upright tablets get the dashboard; upright phones keep the list.
+- **Layout pages**: up to eight named pages, each with its own widgets and layouts. Switch with the arrows in the header or a sideways swipe; add, rename, reorder and delete pages in Edit layout. The page shown is shared with the phone.
+- **The phone mirrors the PC**: the phone shows the PC's layout and page, stretched to its screen, lists the PC's cards in order when upright, and saves its own Edit layout changes to the PC. The phone link gained a layout section and page commands.
+- **Edit layout on Windows** uses the phone's list: a check mark per widget and the pages, instead of the widget dropdown.
+- **Cards size their content**: Quick Launch fits as many buttons as its card holds (and grows them when they all fit), Focus, the Now Playing cover and the Weather temperature grow with their cards, and Spotify shows two or three columns on wide cards.
+- `--render-size WxH` and `tests\screen-size-renders.ps1` render the dashboard for other screens.
 
 ## 0.3.0 (20 Oct 2026)
 

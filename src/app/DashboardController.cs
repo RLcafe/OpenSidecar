@@ -44,13 +44,9 @@ namespace WidgetScreen
         private readonly DeckHotkeys deckHotkeys;
         private int deckPage;
         public LayoutEditor Editor { get; private set; }
-        private bool syncingEditor, shortcutsCompact;
+        private bool syncingEditor;
+        private string deckShape = "";
         private int selectedFocusPreset = -1;
-        private sealed class WidgetOption
-        {
-            public string Id;
-            public override string ToString() { return WidgetLayout.Title(Id); }
-        }
         private bool openingSettings, systemBusy;
         private bool updatingAudio, audioAvailable, mediaBusy, mediaCommandBusy, weatherBusy, disposed, fullscreen;
         private int ticks, weatherGeneration, settingsGeneration, statusClearsAt;
@@ -90,19 +86,18 @@ namespace WidgetScreen
             soundboard = new SoundboardWidget(window, discordService) { OpenSetup = OpenDiscordSettings };
             discordAccount = new DiscordAccount(window, discordService, () => { soundboard.AccountChanged(); soundboard.Tick(Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode); });
             mediaScrubber = new PlaybackScrubber(Control<Slider>("MediaProgress"), SeekMedia, value => Text("MediaPosition", FormatTime(TimeSpan.FromMilliseconds(value))));
-            if (settings.WidgetLayout == null && !settings.SwapSideWidgets && settings.ClockWidth == 1 && settings.MediaWidth == 3 && settings.MixerWidth == 3 && settings.SystemWidth == 2
-                && settings.ClockHeight == 246 && settings.MediaHeight == 326 && settings.MixerHeight == 576 && settings.SystemHeight == 326)
-                settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings);
             deckEditor = new DeckEditor(window, message => Text("SettingsStatus", message));
             deckHotkeys = new DeckHotkeys();
             BindActions();
             InitializeRemote();
-            ApplySettings(); UpdateFocus();
+            InitializePages();
+            FitScreen(); ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
             levelTimer.Tick += (sender, e) => { if (audio != null && Showing) levels.Push(audio.Peak()); };
             window.Loaded += Loaded;
             window.PreviewKeyDown += KeyDown;
             window.StateChanged += (sender, e) => UpdateLevelTimer();
+            window.SizeChanged += (sender, e) => FitScreen();
             SystemEvents.DisplaySettingsChanged += DisplaysChanged;
         }
 
@@ -134,15 +129,7 @@ namespace WidgetScreen
             Button("ResetLayoutButton", () => Editor.Reset());
             Button("CancelLayoutButton", CancelLayoutEdit);
             Button("SaveLayoutButton", SaveLayoutEdit);
-            Control<ComboBox>("EditWidgetChoice").ItemsSource = WidgetLayout.Ids.Select(id => new WidgetOption { Id = id }).ToArray();
-            Control<ComboBox>("EditWidgetChoice").SelectionChanged += (sender, e) => {
-                if (syncingEditor || !Editor.Editing) return;
-                var selected = Control<ComboBox>("EditWidgetChoice").SelectedItem as WidgetOption;
-                if (selected != null) Editor.Select(selected.Id);
-            };
-            Control<CheckBox>("VisibleWidgetChoice").Click += (sender, e) => {
-                if (!syncingEditor && Editor.Editing) Editor.SetVisible(Editor.SelectedId, Control<CheckBox>("VisibleWidgetChoice").IsChecked == true);
-            };
+            InitializeEditPanel();
             Control<CheckBox>("SnapLayoutChoice").Click += (sender, e) => Editor.Snap = Control<CheckBox>("SnapLayoutChoice").IsChecked == true;
             Button("CancelSettings", CloseSettings);
             Button("CancelSettingsFooter", CloseSettings);
@@ -186,7 +173,7 @@ namespace WidgetScreen
         {
             if (!preview && settings.StartFullscreen && DisplayService.Fullscreen(window, settings.Monitor)) fullscreen = true;
             else DisplayService.Windowed(window);
-            UpdateDisplayStatus();
+            FitScreen(); UpdateDisplayStatus();
             UpdateClock(); UpdateFocus(); RefreshAudio(); RefreshSystem(); RefreshMedia(); RefreshWeather();
             clockTimer.Start(); UpdateLevelTimer();
             if (!Program.Rendering) ApplyRemote();
@@ -304,20 +291,21 @@ namespace WidgetScreen
         }
         private void CancelLayoutEdit()
         {
-            Editor.Cancel(); UpdateLevelTimer(); UpdateDisplayStatus();
+            CloseEditPanel(); Editor.Cancel(); UpdateLevelTimer(); UpdateDisplayStatus();
             Notify("Layout changes discarded."); Control<Button>("EditLayoutButton").Focus();
         }
         private void SaveLayoutEdit()
         {
-            var previous = settings.WidgetLayout; bool previousSnap = settings.SnapWidgets;
-            settings.WidgetLayout = Editor.Export(); settings.SnapWidgets = Editor.Snap;
+            // The layout is saved for this canvas size of the page shown; other screen shapes keep their own.
+            var previous = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); bool previousSnap = settings.SnapWidgets;
+            WidgetLayout.Store(settings, Editor.CanvasSize, Editor.Export()); settings.SnapWidgets = Editor.Snap;
             try { SettingsStore.Save(settingsPath, settings); }
             catch (Exception e)
             {
-                settings.WidgetLayout = previous; settings.SnapWidgets = previousSnap;
+                WidgetLayout.SetPages(settings, previous); settings.SnapWidgets = previousSnap;
                 Notify("Could not save layout: " + e.Message + ". Your changes are still in the editor."); return;
             }
-            Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
+            CloseEditPanel(); Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
             if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); }
             Notify("Layout saved."); Control<Button>("EditLayoutButton").Focus();
         }
@@ -336,9 +324,7 @@ namespace WidgetScreen
                     Control<Button>("UndoLayoutButton").IsEnabled = Editor.CanUndo && !Editor.GestureActive;
                     Control<Button>("RedoLayoutButton").IsEnabled = Editor.CanRedo && !Editor.GestureActive;
                     Control<CheckBox>("SnapLayoutChoice").IsChecked = Editor.Snap;
-                    var choices = Control<ComboBox>("EditWidgetChoice");
-                    choices.SelectedItem = choices.Items.Cast<WidgetOption>().FirstOrDefault(p => p.Id == Editor.SelectedId);
-                    Control<CheckBox>("VisibleWidgetChoice").IsChecked = Editor.IsEnabled(Editor.SelectedId);
+                    UpdateEditPanel();
                     var bounds = Editor.Bounds(Editor.SelectedId);
                     string info = WidgetLayout.Title(Editor.SelectedId) + " · " + Math.Round(bounds.Width) + " × " + Math.Round(bounds.Height) + " · X " + Math.Round(bounds.X) + ", Y " + Math.Round(bounds.Y);
                     if (Editor.SelectedId == "System" && !Editor.IsVisible("System") && Editor.IsEnabled("System")) info += " · Enable metrics in Settings to show system stats";
@@ -347,11 +333,17 @@ namespace WidgetScreen
                     Notify(info, true);
                     Text("DisplayStatus", "ARROWS MOVE · SHIFT+ARROWS RESIZE · ESC CANCELS");
                 }
-                if (shortcutsCompact != (Editor.Bounds("Shortcuts").Height < 240)) BuildShortcuts();
-                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320, tallFocus = focusBounds.Height >= 440 && focusBounds.Width >= 296;
-                Control<TextBlock>("FocusTime").FontSize = compactFocus ? 42 : tallFocus ? 84 : 54;
+                if (deckShape != DeckShape()) BuildShortcuts();
+                // Card contents follow their card's size (CardSizing).
+                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320;
+                Control<TextBlock>("FocusTime").FontSize = CardSizing.FocusTime(focusBounds.Width, focusBounds.Height);
+                var mediaBounds = Editor.Bounds("Media"); double art = CardSizing.MediaArt(mediaBounds.Width, mediaBounds.Height);
+                Control<ColumnDefinition>("MediaArtColumn").Width = new GridLength(art + 12); Control<Border>("MediaArtBox").MaxHeight = art;
+                var weatherBounds = Editor.Bounds("Weather"); double temperature = CardSizing.WeatherTemperature(weatherBounds.Width, weatherBounds.Height);
+                Control<TextBlock>("WeatherTemperature").FontSize = temperature; Control<ColumnDefinition>("WeatherTemperatureColumn").Width = new GridLength(temperature * 2);
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
+                UpdatePages();
                 var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
                 city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
                 city.MaxHeight = compactWeather ? 28 : 58;
@@ -369,11 +361,15 @@ namespace WidgetScreen
         private void BuildShortcuts()
         {
             var grid = Control<System.Windows.Controls.Primitives.UniformGrid>("ShortcutGrid"); grid.Children.Clear();
-            shortcutsCompact = Editor.Bounds("Shortcuts").Height < 240;
-            int pageSize = shortcutsCompact ? 3 : 6;
+            // As many buttons as the card holds, like the Soundboard (CardSizing.DeckGrid).
+            deckShape = DeckShape();
+            var area = DeckArea(); int[] shape = CardSizing.DeckGrid(area.Width, area.Height, settings.Shortcuts.Count);
+            int pageSize = shape[0] * shape[1];
+            bool beside = shape[1] == 1;
+            double cellWidth = area.Width / shape[0], cellHeight = area.Height / shape[1];
             int pages = Math.Max(1, (settings.Shortcuts.Count + pageSize - 1) / pageSize);
             deckPage = Math.Max(0, Math.Min(pages - 1, deckPage));
-            grid.Rows = shortcutsCompact ? 1 : 2;
+            grid.Columns = shape[0]; grid.Rows = shape[1];
             Control<StackPanel>("DeckPages").Visibility = pages > 1 ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("DeckPrevious").IsEnabled = deckPage > 0; Control<Button>("DeckNext").IsEnabled = deckPage < pages - 1;
             Text("DeckPageLabel", (deckPage + 1) + "/" + pages);
@@ -381,15 +377,18 @@ namespace WidgetScreen
             foreach (var shortcut in settings.Shortcuts.Skip(deckPage * pageSize).Take(pageSize))
             {
                 var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target) };
-                bool compact = shortcutsCompact;
+                bool compact = beside; double glyphSize = CardSizing.DeckGlyph(cellHeight, beside);
                 var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Orientation = compact ? Orientation.Horizontal : Orientation.Vertical };
-                var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = compact ? 18 : 24, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = glyphSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); content.Children.Add(glyph);
-                var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = compact ? 70 : 138, TextTrimming = TextTrimming.CharacterEllipsis };
+                var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = Math.Max(40, compact ? cellWidth - glyphSize - 40 : cellWidth - 24), TextTrimming = TextTrimming.CharacterEllipsis };
                 content.Children.Add(name); button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
             }
         }
+        // The button grid: the Quick Launch card less its 20-unit padding, border and 48-unit header.
+        private Size DeckArea() { var b = Editor.Bounds("Shortcuts"); return new Size(Math.Max(0, b.Width - 42), Math.Max(0, b.Height - 90)); }
+        private string DeckShape() { var a = DeckArea(); var s = CardSizing.DeckGrid(a.Width, a.Height, settings.Shortcuts.Count); return s[0] + "x" + s[1] + "|" + Math.Round(a.Width) + "x" + Math.Round(a.Height); }
         private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
         private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 6; }
         // A phone that runs a button has already asked the user, so it passes confirmed.
@@ -745,6 +744,7 @@ namespace WidgetScreen
                 Monitor = monitor == null ? "" : monitor.Id, ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true,
                 Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true, SwapSideWidgets = settings.SwapSideWidgets,
                 WidgetLayout = settings.WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(settings.WidgetLayout), SnapWidgets = settings.SnapWidgets,
+                CanvasLayouts = settings.CanvasLayouts == null ? null : settings.CanvasLayouts.Select(c => c.Copy()).ToArray(),
                 ClockWidth = settings.ClockWidth, MediaWidth = settings.MediaWidth, MixerWidth = settings.MixerWidth, SystemWidth = settings.SystemWidth,
                 ClockHeight = settings.ClockHeight, MediaHeight = settings.MediaHeight, MixerHeight = settings.MixerHeight, SystemHeight = settings.SystemHeight,
                 QuietMode = settings.QuietMode, Shortcuts = shortcuts, WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name,
@@ -755,6 +755,7 @@ namespace WidgetScreen
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude;
             settings = candidate; CloseSettings(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
+            FitScreen();
             if (locationChanged) { weatherGeneration++; lastWeather = null; Text("WeatherTemperature", "—°"); Text("WeatherDetails", "Updating weather…"); RefreshWeather(); }
             Notify("Settings saved.");
         }
@@ -788,7 +789,7 @@ namespace WidgetScreen
             if (fullscreen) { DisplayService.Windowed(window); fullscreen = false; }
             else if (DisplayService.Fullscreen(window, settings.Monitor)) fullscreen = true;
             else Notify("Fullscreen needs a second display. Connect one, then try again.");
-            UpdateDisplayStatus();
+            FitScreen(); UpdateDisplayStatus();
         }
         private void UpdateDisplayStatus()
         {
@@ -799,7 +800,7 @@ namespace WidgetScreen
         {
             if (Editor.Editing)
             {
-                if (e.Key == Key.Escape) { CancelLayoutEdit(); e.Handled = true; return; }
+                if (e.Key == Key.Escape) { if (editPanelOpen) CloseEditPanel(); else CancelLayoutEdit(); e.Handled = true; return; }
                 if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && (e.Key == Key.Z || e.Key == Key.Y))
                 {
                     if (e.Key == Key.Y || (Keyboard.Modifiers & ModifierKeys.Shift) != 0) Editor.Redo(); else Editor.Undo();
@@ -808,7 +809,7 @@ namespace WidgetScreen
                 if (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Up || e.Key == Key.Down)
                 {
                     // Keep dropdown navigation intact; arrows on a widget move it, Shift+arrows resize it.
-                    if (Keyboard.FocusedElement is ComboBox || Control<ComboBox>("EditWidgetChoice").IsKeyboardFocusWithin) return;
+                    if (Keyboard.FocusedElement is ComboBox || Keyboard.FocusedElement is TextBox) return;
                     double step = (Keyboard.Modifiers & ModifierKeys.Control) != 0 ? 1 : 8;
                     Editor.TransformSelected((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? "SE" : "", e.Key == Key.Left ? -step : e.Key == Key.Right ? step : 0, e.Key == Key.Up ? -step : e.Key == Key.Down ? step : 0, false);
                     e.Handled = true; return;
@@ -824,9 +825,9 @@ namespace WidgetScreen
         {
             if (disposed) return;
             window.Dispatcher.BeginInvoke(new Action(() => {
-                if (disposed || !fullscreen) return;
-                if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Your second display was disconnected, so the dashboard moved to a window.", true); }
-                UpdateDisplayStatus();
+                if (disposed) return;
+                if (fullscreen && !DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; Notify("Your second display was disconnected, so the dashboard moved to a window.", true); }
+                FitScreen(); UpdateDisplayStatus();
             }));
         }
         public void Dispose()

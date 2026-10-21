@@ -43,8 +43,8 @@ import java.util.Map;
 
 // The phone remote's DashboardController: builds the dashboard, runs the single 1 s heartbeat, asks the PC for
 // the state of the cards on screen and sends their commands, and owns the phone's settings and layout editor.
-// Wide screens get the 1920 × 720 dashboard scaled to fit (its widget canvas stretched to the screen); phones get
-// the same cards in a scrolling list.
+// Sideways screens and upright tablets get the dashboard at the 1920 × 720 scale on a canvas shaped like the screen
+// (DashboardFit); upright phones get the same cards in a scrolling list.
 public final class Dashboard {
     private static final double LIST_GAP = 16;
     public final MainActivity activity;
@@ -60,7 +60,14 @@ public final class Dashboard {
     private FrameLayout logicalRoot;
     private WidgetCanvas canvas;
     private Ui ui;
+    private DashboardFit fit;
     private float scale = 1;
+    // The version of the PC layout the dashboard shows; empty asks the PC for its layout on the next reading.
+    private String mirroredVersion = "";
+    private boolean editAfterMirror;
+    private View pageSwitcher;
+    private TextView pageName, pageCount;
+    private View previousPage, nextPage;
     private boolean listMode, started, refreshNow, offlineShown, askedToPair;
     private int builtWidth = -1, builtHeight = -1;
     private TextView clockTime, clockPeriod, clockDay, clockDate, statusLine, displayStatus, quietButton, undoButton, redoButton;
@@ -132,6 +139,7 @@ public final class Dashboard {
     private void poll() {
         List<String> parts = new ArrayList<String>();
         for (Widget widget : widgets.values()) if (isActive(widget.id) && !parts.contains(widget.part())) parts.add(widget.part());
+        if (mirroredVersion.isEmpty() || (pc.state != null && !pc.state.layoutVersion.equals(mirroredVersion))) parts.add("layout");
         pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } });
     }
 
@@ -141,6 +149,7 @@ public final class Dashboard {
         if (pc.problem != null) { say(pc.problem, true); offlineShown = true; }
         else if (offlineShown) { offlineShown = false; say("Connected to " + pc.name() + "."); }
         updateClock(); updateQuiet();
+        if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.stateChanged(); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -229,9 +238,12 @@ public final class Dashboard {
         ui = new Ui(activity, theme, look, 1f);
         activity.applyWindow(settings, theme);
         DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-        DashboardFit fit = DashboardFit.choose(width, height, metrics.density, settings.layoutMode);
+        fit = DashboardFit.choose(width, height, metrics.density, settings.layoutMode);
         listMode = fit.list;
         if (listMode && editor.editing()) editor.cancel();
+        // Each canvas shape has its own layout; the list shows the PC screen's layout in reading order.
+        boolean discarded = listMode ? editor.setCanvas(settings.pcCanvasWidth, settings.pcCanvasHeight) : editor.setCanvas(fit.canvasWidth(), fit.canvasHeight());
+        if (discarded) say("The screen changed shape, so the layout changes were discarded.");
         if (dashboardView != null) root.removeView(dashboardView);
         root.setBackgroundColor(theme.page);
         widgetsPanel = null;
@@ -250,6 +262,7 @@ public final class Dashboard {
         root.addView(dashboardView, 0, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         updateClock();
         updateQuiet();
+        updatePages();
         updateEditorChrome();
         if (settingsPanel != null) settingsPanel.dashboardRebuilt();
         else askToPairIfNeeded();
@@ -257,7 +270,9 @@ public final class Dashboard {
         if (pc.paired() && started) refreshSoon();
     }
 
-    private View buildHeader(boolean stacked, boolean narrow) {
+    // stacked: the phone list's header (clock over the buttons, no editor). twoRows: an upright dashboard's header, the
+    // buttons or the edit toolbar on a second row under the clock. narrow: the toolbar drops its title.
+    private View buildHeader(boolean stacked, boolean twoRows, boolean narrow) {
         LinearLayout clock = ui.row();
         clock.setGravity(Gravity.CENTER_VERTICAL);
         clock.setContentDescription("Local time and date");
@@ -295,10 +310,12 @@ public final class Dashboard {
         settingsButton.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { openSettings(null); } });
         actions.addView(settingsButton, ui.ll(Ui.WRAP, Ui.WRAP));
         mainActions = actions;
+        pageSwitcher = buildPageSwitcher();
 
         if (stacked) {
             LinearLayout header = ui.column();
             header.addView(clock, ui.ll(Ui.WRAP, Ui.WRAP));
+            header.addView(pageSwitcher, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0));
             LinearLayout.LayoutParams params = ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0);
             params.gravity = Gravity.END;
             header.addView(actions, params);
@@ -309,11 +326,84 @@ public final class Dashboard {
         FrameLayout.LayoutParams clockParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.TOP);
         clockParams.topMargin = ui.px(-8);
         header.addView(clock, clockParams);
-        header.addView(actions, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP));
+        // Beside the clock in the middle of the header, or under the clock when the header has two rows.
+        FrameLayout.LayoutParams pageParams = ui.frame(Ui.WRAP, Ui.WRAP, twoRows ? Gravity.START | Gravity.BOTTOM : Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        if (twoRows) pageParams.bottomMargin = ui.px(16);
+        header.addView(pageSwitcher, pageParams);
+        int place = Gravity.END | (twoRows ? Gravity.BOTTOM : Gravity.TOP);
+        FrameLayout.LayoutParams actionParams = ui.frame(Ui.WRAP, Ui.WRAP, place);
+        if (twoRows) actionParams.bottomMargin = ui.px(16);
+        header.addView(actions, actionParams);
         editToolbar = buildEditToolbar(narrow);
-        FrameLayout.LayoutParams toolbarParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP);
+        FrameLayout.LayoutParams toolbarParams = ui.frame(Ui.WRAP, Ui.WRAP, place);
+        if (twoRows) toolbarParams.bottomMargin = ui.px(16);
         header.addView(editToolbar, toolbarParams);
         return header;
+    }
+
+    // Layout pages, as on the PC: previous, the page's name and position, next. Shown when the PC has more than one page.
+    private View buildPageSwitcher() {
+        LinearLayout row = ui.row();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setContentDescription("Layout pages");
+        previousPage = ui.iconButton("chevron-left", "Previous page", 22, true, new View.OnClickListener() { @Override public void onClick(View v) { showPage(settings.page - 1); } });
+        row.addView(previousPage, ui.ll(ui.px(48), ui.px(48)));
+        LinearLayout label = ui.column();
+        label.setGravity(Gravity.CENTER_HORIZONTAL);
+        pageName = ui.body(settings.pageName());
+        pageName.setMaxWidth(ui.px(260)); pageName.setSingleLine(true); pageName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        label.addView(pageName, ui.ll(Ui.WRAP, Ui.WRAP));
+        pageCount = ui.caption("");
+        label.addView(pageCount, ui.ll(Ui.WRAP, Ui.WRAP));
+        label.setMinimumWidth(ui.px(120));
+        row.addView(label, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 14, 0, 14, 0));
+        nextPage = ui.iconButton("chevron-right", "Next page", 22, true, new View.OnClickListener() { @Override public void onClick(View v) { showPage(settings.page + 1); } });
+        row.addView(nextPage, ui.ll(ui.px(48), ui.px(48)));
+        return row;
+    }
+
+    private void updatePages() {
+        if (pageSwitcher == null) return;
+        int count = settings.pages.size();
+        pageSwitcher.setVisibility(count > 1 && !editor.editing() ? View.VISIBLE : View.GONE);
+        pageName.setText(settings.pageName());
+        pageCount.setText((settings.page + 1) + " of " + count);
+        Ui.enable(previousPage, settings.page > 0);
+        Ui.enable(nextPage, settings.page < count - 1);
+    }
+
+    // The page shown is the PC's: switching here switches the PC, and the PC's layout for that page follows.
+    public void showPage(int index) {
+        if (editor.editing() || index < 0 || index >= settings.pages.size() || index == settings.page) return;
+        layoutCommand(Json.map("action", "page.show", "index", index, "page", settings.pages.get(index)), null);
+    }
+
+    // Page and layout changes go to the PC; the phone then reads the PC's layout again.
+    private void layoutCommand(Map<String, Object> body, final String done) {
+        pc.command(body, new Async.Done<String>() {
+            @Override public void ok(String message) { if (message != null && !message.isEmpty()) say(message); else if (done != null) say(done); mirroredVersion = ""; refreshSoon(); }
+        }, new Async.Failed() {
+            @Override public void error(Exception error) { say(Pc.message(error), true); mirroredVersion = ""; refreshSoon(); }
+        });
+    }
+
+    // Saves a layout for this phone's canvas on the PC's current page (Edit layout, Settings → Widgets).
+    public void saveLayout(WidgetLayout.Placement[] layout, double canvasWidth, double canvasHeight, String done) {
+        settings.store(canvasWidth, canvasHeight, layout);
+        persist();
+        layoutCommand(Json.map("action", "layout.save", "index", settings.page, "page", settings.pageName(), "width", canvasWidth, "height", canvasHeight, "widgets", PcState.json(layout)), done);
+    }
+
+    // The PC sent its layout: show it, unless an edit is open (the edit saves to the PC and the layout is read again).
+    private void mirror(PcState.Layout layout, String version) {
+        if (version.equals(mirroredVersion) || editor.editing()) return;
+        mirroredVersion = version;
+        settings.mirror(layout);
+        persist();
+        editor.apply(settings);
+        if (listMode) rebuild();
+        else { editorChanged(true); updatePages(); }
+        if (editAfterMirror) { editAfterMirror = false; beginEdit(); }
     }
 
     // On narrow (phone) dashboards the toolbar drops its title so it doesn't run into the clock.
@@ -342,12 +432,13 @@ public final class Dashboard {
         logicalRoot = new FrameLayout(activity);
         LinearLayout column = ui.column();
         column.setPadding(ui.px(32), ui.px(20), ui.px(32), ui.px(16));
-        column.addView(buildHeader(false, logicalWidth < 1800), ui.ll(Ui.MATCH, ui.px(72)));
+        column.addView(buildHeader(false, fit.stacked, logicalWidth < 1800), ui.ll(Ui.MATCH, ui.px(fit.headerHeight())));
         canvas = new WidgetCanvas(activity, ui, editor);
-        double canvasWidth = logicalWidth - DashboardFit.MARGIN_X, canvasHeight = logicalHeight - DashboardFit.CHROME_Y;
-        canvas.setFactors(canvasWidth / WidgetLayout.WIDTH, canvasHeight / WidgetLayout.HEIGHT, scale);
+        canvas.setScreenScale(scale);
+        canvas.setSwipe(new WidgetCanvas.Swipe() { @Override public void swiped(int direction) { showPage(settings.page + direction); } });
         for (String id : WidgetLayout.IDS) if (editor.isVisible(id)) attachCard(id);
-        column.addView(canvas, ui.ll(Ui.MATCH, 0, 1));
+        column.addView(canvas, ui.ll(ui.px(fit.canvasWidth()), ui.px(fit.canvasHeight())));
+        column.addView(new View(activity), ui.ll(Ui.MATCH, 0, 1));
         FrameLayout footer = new FrameLayout(activity);
         statusLine = ui.smallText(statusText);
         footer.addView(statusLine, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.BOTTOM));
@@ -361,7 +452,7 @@ public final class Dashboard {
 
     private void attachCard(String id) {
         WidgetLayout.Box box = editor.bounds(id);
-        canvas.setCard(id, widgets.get(id).build(ui, box.width * canvas.fx(), box.height * canvas.fy()));
+        canvas.setCard(id, widgets.get(id).build(ui, box.width, box.height));
     }
 
     private static double listHeight(String id) {
@@ -382,7 +473,7 @@ public final class Dashboard {
         canvas = null;
         LinearLayout column = ui.column();
         column.setPadding(ui.px(LIST_GAP), ui.px(20), ui.px(LIST_GAP), ui.px(LIST_GAP));
-        column.addView(buildHeader(true, true), ui.ll(Ui.MATCH, Ui.WRAP));
+        column.addView(buildHeader(true, true, true), ui.ll(Ui.MATCH, Ui.WRAP));
         statusLine = Ui.wrap(ui.smallText(statusText), 3);
         column.addView(statusLine, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         displayStatus = null;
@@ -435,18 +526,23 @@ public final class Dashboard {
 
     private void beginEdit() {
         if (listMode || canvas == null) return;
+        if (!online()) { say("Connect to " + pc.name() + " to edit its layout. The phone shows the PC's layout."); return; }
+        if (pc.state != null && pc.state.layout != null && pc.state.layout.editing) { say("The layout is being edited on the PC. Try again once it's saved there."); return; }
         editor.begin();
+        updatePages();
     }
 
-    private void cancelEdit() { closeWidgetsPanel(); editor.cancel(); say("Layout changes discarded."); }
+    private void cancelEdit() { closeWidgetsPanel(); editor.cancel(); updatePages(); say("Layout changes discarded."); }
 
     private void saveEdit() {
         closeWidgetsPanel();
-        settings.widgetLayout = editor.export();
+        // Saved for this canvas size only; other screen shapes keep their own layouts.
         settings.snapWidgets = editor.snap();
+        WidgetLayout.Placement[] layout = editor.export();
+        boolean overlaps = editor.hasOverlaps();
         editor.accept();
-        persist();
-        say(editor.hasOverlaps() ? "Layout saved. Some widgets overlap." : "Layout saved.");
+        updatePages();
+        saveLayout(layout, editor.canvasWidth(), editor.canvasHeight(), overlaps ? "Layout saved on the PC. Some widgets overlap." : "Layout saved on the PC.");
     }
 
     public void onBack(Runnable fallback) {
@@ -463,7 +559,7 @@ public final class Dashboard {
             for (String id : WidgetLayout.IDS) {
                 boolean visible = editor.isVisible(id);
                 WidgetLayout.Box box = editor.bounds(id);
-                if (visible && !(canvas.hasCard(id) && widgets.get(id).builtAt(box.width * canvas.fx(), box.height * canvas.fy()))) attachCard(id);
+                if (visible && !(canvas.hasCard(id) && widgets.get(id).builtAt(box.width, box.height))) attachCard(id);
                 else if (!visible && canvas.hasCard(id)) { widgets.get(id).release(); canvas.removeCard(id); }
             }
         }
@@ -497,21 +593,25 @@ public final class Dashboard {
         widgetsPanel = null;
     }
 
-    // Show or hide each widget while editing: the Windows editor's widget list and "Show widget" box.
+    // The editor's list (the same on the PC): a check mark per widget to show or hide it (tapping a name selects it),
+    // and the pages: rename the one shown, open, move or delete any, add a new one.
     private void openWidgetsPanel() {
         if (logicalRoot == null) return;
         FrameLayout scrim = new FrameLayout(activity);
         scrim.setClickable(true);
         scrim.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { closeWidgetsPanel(); } });
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setBackground(ui.shape(ui.theme.raised, ui.theme.controlBorder, 1, 16));
+        scroll.setVerticalScrollBarEnabled(false);
         LinearLayout panel = ui.column();
-        panel.setBackground(ui.shape(ui.theme.raised, ui.theme.controlBorder, 1, 16));
         panel.setPadding(ui.px(16), ui.px(12), ui.px(16), ui.px(12));
         panel.setClickable(true);
-        panel.setElevation(0);
         panel.setTag("panel");
-        FrameLayout.LayoutParams params = ui.frame(ui.px(380), Ui.WRAP, Gravity.END | Gravity.TOP);
-        params.topMargin = ui.px(20 + 72); params.rightMargin = ui.px(32 + 300);
-        scrim.addView(panel, params);
+        scroll.addView(panel, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
+        FrameLayout.LayoutParams params = ui.frame(ui.px(440), Ui.WRAP, Gravity.END | Gravity.TOP);
+        params.topMargin = ui.px(20 + (fit == null ? DashboardFit.HEADER : fit.headerHeight())); params.rightMargin = ui.px(32 + 300);
+        params.bottomMargin = ui.px(16 + DashboardFit.FOOTER);
+        scrim.addView(scroll, params);
         widgetsPanel = scrim;
         logicalRoot.addView(scrim, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         refreshWidgetsPanel();
@@ -525,8 +625,69 @@ public final class Dashboard {
             CheckBox box = ui.check(WidgetLayout.title(id), editor.isEnabled(id), new CheckBox.Listener() {
                 @Override public void changed(CheckBox b, boolean checked) { editor.setVisible(id, checked); if (checked) editor.select(id); }
             });
+            if (id.equals(editor.selected())) box.setBackground(ui.shape(ui.theme.selected, ui.theme.accent, 1, 10));
             panel.addView(box, ui.ll(Ui.MATCH, Ui.WRAP));
         }
+        panel.addView(ui.label("PAGES"), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 20, 0, 8));
+        panel.addView(ui.smallText("Page actions save your layout changes first."), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 0, 0, 8));
+        LinearLayout rename = ui.row();
+        rename.setGravity(Gravity.CENTER_VERTICAL);
+        final android.widget.EditText name = ui.input(settings.pageName(), "Page name");
+        name.setSingleLine(true);
+        rename.addView(name, ui.ll(0, ui.px(52), 1));
+        rename.addView(ui.button("Rename", new View.OnClickListener() { @Override public void onClick(View v) {
+            pageAction(Json.map("action", "page.rename", "index", settings.page, "page", settings.pageName(), "name", name.getText().toString()));
+        } }), ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 8, 0, 0, 0));
+        panel.addView(rename, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 8));
+        for (int i = 0; i < settings.pages.size(); i++) {
+            final int index = i;
+            LinearLayout row = ui.row();
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView open = ui.button(settings.pages.get(i), new View.OnClickListener() { @Override public void onClick(View v) {
+                if (index != settings.page) pageAction(Json.map("action", "page.show", "index", index, "page", settings.pages.get(index)));
+            } });
+            open.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            open.setSingleLine(true); open.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            ui.select(open, i == settings.page);
+            open.setContentDescription(settings.pages.get(i) + (i == settings.page ? ", shown" : ", open this page"));
+            row.addView(open, ui.ll(0, ui.px(52), 1));
+            View up = ui.iconButton("chevron-up", "Move " + settings.pages.get(i) + " up", 20, false, new View.OnClickListener() { @Override public void onClick(View v) {
+                pageAction(Json.map("action", "page.move", "index", index, "page", settings.pages.get(index), "to", index - 1));
+            } });
+            Ui.enable(up, i > 0);
+            row.addView(up, ui.margins(ui.ll(ui.px(48), ui.px(48)), 4, 0, 0, 0));
+            View down = ui.iconButton("chevron-down", "Move " + settings.pages.get(i) + " down", 20, false, new View.OnClickListener() { @Override public void onClick(View v) {
+                pageAction(Json.map("action", "page.move", "index", index, "page", settings.pages.get(index), "to", index + 1));
+            } });
+            Ui.enable(down, i < settings.pages.size() - 1);
+            row.addView(down, ui.ll(ui.px(48), ui.px(48)));
+            View delete = ui.iconButton("close", "Delete " + settings.pages.get(i), 18, false, new View.OnClickListener() { @Override public void onClick(View v) {
+                confirmDelete(index);
+            } });
+            Ui.enable(delete, settings.pages.size() > 1);
+            row.addView(delete, ui.ll(ui.px(48), ui.px(48)));
+            panel.addView(row, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6));
+        }
+        TextView add = ui.button("Add page", new View.OnClickListener() { @Override public void onClick(View v) { pageAction(Json.map("action", "page.add")); } });
+        Ui.enable(add, settings.pages.size() < 8);
+        panel.addView(add, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 4, 0, 0));
+    }
+
+    // Deleting a page asks first: a second tap within a few seconds confirms.
+    private int deleteArmed = -1, deleteArmedAt;
+    private void confirmDelete(int index) {
+        if (deleteArmed == index && ticks - deleteArmedAt <= 5) { deleteArmed = -1; pageAction(Json.map("action", "page.delete", "index", index, "page", settings.pages.get(index))); return; }
+        deleteArmed = index; deleteArmedAt = ticks;
+        say("Tap delete again to delete " + settings.pages.get(index) + " and its layouts.", true);
+    }
+
+    // Page changes happen on the PC: unsaved layout changes are saved first, and the editor opens again on the page
+    // the PC shows next.
+    private void pageAction(Map<String, Object> body) {
+        closeWidgetsPanel();
+        if (editor.canUndo()) saveEdit(); else { editor.cancel(); updatePages(); }
+        editAfterMirror = true;
+        layoutCommand(body, null);
     }
 
     // ----- Settings -----

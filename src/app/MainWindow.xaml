@@ -192,6 +192,7 @@
     <Style TargetType="ProgressBar"><Setter Property="Foreground" Value="{DynamicResource Accent}"/><Setter Property="Background" Value="{DynamicResource Track}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Height" Value="5"/></Style>
   </Window.Resources>
 
+  <!-- The dashboard is designed at the 1920 × 720 scale; DashboardController.Screen.cs gives this grid a logical size shaped like the screen. -->
   <Viewbox Stretch="Uniform">
     <Grid x:Name="Dashboard" Width="1920" Height="720" Background="{DynamicResource Page}">
       <Grid x:Name="DashboardContent" Margin="32,20,32,16">
@@ -207,6 +208,15 @@
               <TextBlock x:Name="ClockDay" Text="THURSDAY" Style="{StaticResource Label}" Foreground="{DynamicResource Accent}"/>
               <TextBlock x:Name="ClockDate" Text="October 8" FontSize="{DynamicResource TitleSize}" Margin="0,1,0,0"/>
             </StackPanel>
+          </StackPanel>
+          <!-- Layout pages: shown when there is more than one. Swiping the dashboard sideways also switches pages. -->
+          <StackPanel x:Name="PageSwitcher" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Layout pages">
+            <Button x:Name="PreviousPageButton" Content="&#xE76B;" Style="{StaticResource IconButton}" ToolTip="Previous page" AutomationProperties.Name="Previous page"/>
+            <StackPanel VerticalAlignment="Center" Margin="14,0" MinWidth="120" MaxWidth="260">
+              <TextBlock x:Name="PageNameText" Text="Main" HorizontalAlignment="Center"/>
+              <TextBlock x:Name="PageCountText" Text="1 of 1" Style="{StaticResource Caption}" HorizontalAlignment="Center"/>
+            </StackPanel>
+            <Button x:Name="NextPageButton" Content="&#xE76C;" Style="{StaticResource IconButton}" ToolTip="Next page" AutomationProperties.Name="Next page"/>
           </StackPanel>
           <StackPanel x:Name="MainActions" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button x:Name="EditLayoutButton" Content="Edit layout" Margin="0,0,10,0" ToolTip="Move and resize widgets directly on the dashboard."/>
@@ -224,8 +234,7 @@
               <Button x:Name="RedoLayoutButton" Content="Redo" Margin="0,0,8,0" ToolTip="Redo a layout change (Ctrl+Y)."/>
               <Button x:Name="ResetLayoutButton" Content="Reset layout" Margin="0,0,18,0" ToolTip="Return every widget to the default arrangement. You can undo this."/>
               <CheckBox x:Name="SnapLayoutChoice" Content="Snap" Margin="0,0,18,0" ToolTip="Snap movement and resizing to an 8 pixel grid."/>
-              <ComboBox x:Name="EditWidgetChoice" Width="220" Margin="0,0,12,0" AutomationProperties.Name="Select widget to edit"/>
-              <CheckBox x:Name="VisibleWidgetChoice" Content="Show widget"/>
+              <Button x:Name="EditWidgetsButton" Content="Widgets" ToolTip="Show or hide widgets, and add, rename, order or delete pages." AutomationProperties.Name="Widgets and pages"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
               <Button x:Name="CancelLayoutButton" Content="Cancel" Margin="0,0,8,0"/>
@@ -241,7 +250,7 @@
             <Border x:Name="FocusCard" Style="{StaticResource Card}">
               <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <TextBlock Text="FOCUS TIMER" Style="{StaticResource Label}"/>
-                <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/></StackPanel>
+                <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/></StackPanel>
                 <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" FontSize="16" AutomationProperties.Name="5 minutes"/>
                 </Grid>
@@ -255,8 +264,8 @@
             <Border x:Name="MediaCard" Style="{StaticResource Card}" Margin="0,0,0,16">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition Height="*" MinHeight="86"/><RowDefinition Height="48"/><RowDefinition Height="54"/><RowDefinition Height="26"/></Grid.RowDefinitions>
                 <DockPanel><TextBlock Text="NOW PLAYING" Style="{StaticResource Label}"/><TextBlock x:Name="MediaSource" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right" MaxWidth="220"/></DockPanel>
-                <Grid Grid.Row="1" Margin="0,12,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="116"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <Border Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
+                <Grid Grid.Row="1" Margin="0,12,0,4"><Grid.ColumnDefinitions><ColumnDefinition x:Name="MediaArtColumn" Width="116"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <Border x:Name="MediaArtBox" Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" MaxHeight="104" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="TrackTitle" Text="Nothing playing" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" MaxHeight="66" TextWrapping="Wrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackArtist" Text="Start music or a video in any app." FontSize="{DynamicResource SmallSize}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel>
                 </Grid>
                 <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><TextBlock x:Name="MediaPosition" Text="—:—" Style="{StaticResource Small}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/><Slider x:Name="MediaProgress" Grid.Column="1" VerticalAlignment="Center" Maximum="1" IsEnabled="False" AutomationProperties.Name="Seek current Windows media" ToolTip="Drag or tap to seek when your media app supports it."/><TextBlock x:Name="MediaDuration" Text="—:—" Grid.Column="2" Style="{StaticResource Small}" VerticalAlignment="Center" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/></Grid>
@@ -298,7 +307,7 @@
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <DockPanel x:Name="SpotifySearchRow" Visibility="Collapsed" Margin="0,0,0,6"><Button x:Name="SpotifyFind" DockPanel.Dock="Right" Content="Find" Margin="8,0,0,0"/><TextBox x:Name="SpotifyQuery" MaxLength="200" AutomationProperties.Name="Song or artist to search"/></DockPanel>
                 <DockPanel x:Name="SpotifyCollectionRow" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,6"><Button x:Name="SpotifyBack" DockPanel.Dock="Left" Content="Back" Margin="0,0,8,0"/><Button x:Name="SpotifyOpenCollection" DockPanel.Dock="Right" Content="Open Spotify" FontSize="{DynamicResource SmallSize}" Padding="8,4"/><TextBlock x:Name="SpotifyCollectionTitle" TextTrimming="CharacterEllipsis" Style="{StaticResource Small}" VerticalAlignment="Center" Margin="4,0"/></DockPanel>
-                <ScrollViewer x:Name="SpotifyResultsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="SpotifyResults"/></ScrollViewer>
+                <ScrollViewer x:Name="SpotifyResultsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><UniformGrid x:Name="SpotifyResults" Columns="1" VerticalAlignment="Top" Margin="-3,0,-3,0"/></ScrollViewer>
                 <DockPanel x:Name="SpotifyPaging" Grid.Row="3" Margin="0,6,0,0" Visibility="Collapsed"><Button x:Name="SpotifyPageNext" DockPanel.Dock="Right" Content="Next" IsEnabled="False"/><Button x:Name="SpotifyPagePrevious" DockPanel.Dock="Left" Content="Previous" IsEnabled="False"/><TextBlock x:Name="SpotifyPageLabel" Style="{StaticResource Small}" TextAlignment="Center" VerticalAlignment="Center"/></DockPanel>
               </Grid>
               <Border x:Name="SpotifyNowStrip" Grid.Row="3" Background="{DynamicResource Raised}" CornerRadius="14" Padding="8" Margin="0,4,0,0">
@@ -407,7 +416,7 @@
             <Border x:Name="WeatherCard" Grid.Row="1" Style="{StaticResource Card}">
               <Grid><Grid.RowDefinitions><RowDefinition Height="26"/><RowDefinition/><RowDefinition Height="48"/><RowDefinition Height="20"/></Grid.RowDefinitions>
                 <DockPanel><TextBlock Text="WEATHER" Style="{StaticResource Label}"/><TextBlock x:Name="WeatherCondition" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center"/></DockPanel>
-                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock x:Name="WeatherTemperature" Text="—°" FontSize="54" FontWeight="Light" VerticalAlignment="Center"/><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="WeatherCity" Text="No city yet" FontSize="{DynamicResource BodySize}" TextWrapping="Wrap" MaxHeight="58" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="WeatherDetails" Text="Choose a city to see current conditions." Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" MaxHeight="46" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel></Grid>
+                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition x:Name="WeatherTemperatureColumn" Width="108"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock x:Name="WeatherTemperature" Text="—°" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" VerticalAlignment="Center"/><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="WeatherCity" Text="No city yet" FontSize="{DynamicResource BodySize}" TextWrapping="Wrap" MaxHeight="58" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="WeatherDetails" Text="Choose a city to see current conditions." Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" MaxHeight="46" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel></Grid>
                 <Button x:Name="WeatherButton" Grid.Row="2" Content="Choose city" MinHeight="48" FontSize="16" Padding="12,4"/>
                 <TextBlock x:Name="WeatherCredit" Grid.Row="3" Text="Weather data by Open-Meteo" Style="{StaticResource Caption}" VerticalAlignment="Bottom"/>
               </Grid>
@@ -418,8 +427,15 @@
         <DockPanel Grid.Row="2" VerticalAlignment="Bottom"><TextBlock x:Name="StatusMessage" Text="" Style="{StaticResource Small}" MaxWidth="1380"/><TextBlock x:Name="DisplayStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center"/></DockPanel>
       </Grid>
 
+      <!-- Edit layout's list, the same as the phone's: a check mark per widget and the layout pages. Tapping outside closes it. -->
+      <Grid x:Name="EditPanelLayer" Visibility="Collapsed" Background="Transparent">
+        <Border x:Name="EditPanel" Background="{DynamicResource Raised}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="16" Width="460" Padding="16,12" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,92,332,52">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" PanningMode="VerticalOnly"><StackPanel x:Name="EditPanelContent"/></ScrollViewer>
+        </Border>
+      </Grid>
+
       <Grid x:Name="SettingsOverlay" Visibility="Collapsed" Background="#E80C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
-        <Border Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
+        <Border x:Name="SettingsCard" Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
           <Border.Resources>
             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="52"/></Style>
             <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="MinHeight" Value="52"/></Style>

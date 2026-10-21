@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
@@ -50,7 +51,9 @@ public final class MediaWidget extends Widget {
         art = new ImageView(ui.context);
         art.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        content.addView(cover, ui.margins(ui.ll(ui.px(104), ui.px(104)), 0, 0, 12, 0));
+        // The cover grows with the card (CardSizing, as on the PC).
+        double size = CardSizing.mediaArt(width, height);
+        content.addView(cover, ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
         LinearLayout text = ui.column();
         title = Ui.wrap(ui.heading("Nothing playing"), 2);
         title.setTypeface(Ui.MEDIUM);

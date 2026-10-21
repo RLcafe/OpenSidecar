@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
@@ -49,6 +50,22 @@ public final class AndroidTests {
     private static void throwsOn(Action action, String message) {
         try { action.run(); } catch (Exception e) { return; }
         throw new AssertionError(message);
+    }
+
+    private static boolean overlaps(Placement[] layout) {
+        for (int i = 0; i < layout.length; i++)
+            for (int j = i + 1; j < layout.length; j++) {
+                Placement a = layout[i], b = layout[j];
+                if (!a.visible || !b.visible) continue;
+                double width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x), height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+                if (width > 1 && height > 1) return true;
+            }
+        return false;
+    }
+
+    private static boolean inside(Placement[] layout, double width, double height) {
+        for (Placement p : layout) if (p.x < 0 || p.y < 0 || p.x + p.width > width + 1e-9 || p.y + p.height > height + 1e-9) return false;
+        return true;
     }
 
     private static final String TRACK = "spotify:track:1234567890123456789012";
@@ -238,6 +255,37 @@ public final class AndroidTests {
             ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null, "every part");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
+            // The Windows checks add a page, rename it Play and move it first, so the PC shows Main, the second page.
+            ok(state.layout != null && !state.layoutVersion.isEmpty() && state.layout.pages.equals(Arrays.asList("Play", "Main")) && state.layout.page == 1 && state.layout.pageName().equals("Main"), "layout pages");
+            ok(state.layout.shown != null && state.layout.shown.length == WidgetLayout.IDS.length && state.layout.canvasWidth == 1856 && state.layout.sources().containsKey("1856x576"), "PC screen layout");
+            AppSettings mirrored = new AppSettings();
+            mirrored.mirror(state.layout);
+            ok(mirrored.page == 1 && mirrored.pages.size() == 2 && mirrored.pcCanvasWidth == 1856, "mirrored pages");
+            Placement[] phone = mirrored.layoutFor(1480, 552);
+            ok(WidgetLayout.fits(phone, 1480, 552) && !overlaps(phone), "the PC layout on a sideways phone");
+        } });
+        check("The phone mirrors the PC layout: stretched, listed in reading order, pages kept offline", new Action() { public void run() {
+            Map<String, Object> answer = Json.obj(Json.parse("{\"layoutVersion\":\"abc\",\"layout\":{\"page\":1,\"pages\":[\"Main\",\"Stats\"],\"snap\":false,\"editing\":false,"
+                + "\"canvas\":{\"width\":1856,\"height\":576},\"shown\":[{\"id\":\"System\",\"x\":0,\"y\":0,\"width\":920,\"height\":576,\"visible\":true,\"layer\":0},"
+                + "{\"id\":\"Weather\",\"x\":936,\"y\":0,\"width\":920,\"height\":576,\"visible\":true,\"layer\":2},{\"id\":\"Nope\",\"x\":0,\"y\":0,\"width\":1,\"height\":1,\"visible\":true}],"
+                + "\"layouts\":[{\"width\":1000,\"height\":1560,\"widgets\":[{\"id\":\"Weather\",\"x\":0,\"y\":0,\"width\":1000,\"height\":700,\"visible\":true,\"layer\":0}]}]}}"));
+            PcState state = PcState.parse(answer);
+            ok(state.layoutVersion.equals("abc") && state.layout.page == 1 && !state.layout.snap && state.layout.shown.length == WidgetLayout.IDS.length && !WidgetLayout.find(state.layout.shown, "Mixer").visible && WidgetLayout.find(state.layout.shown, "Weather").layer == 2, "parse");
+            AppSettings s = new AppSettings();
+            s.mirror(state.layout);
+            Placement[] phone = s.layoutFor(1480, 552);
+            ok(WidgetLayout.find(phone, "System").visible && WidgetLayout.find(phone, "Weather").visible && !WidgetLayout.find(phone, "Mixer").visible, "the phone shows the PC's widgets");
+            ok(WidgetLayout.find(phone, "Weather").x == Math.round(936 * 1480 / 1856.0), "stretched from the PC screen");
+            ok(WidgetLayout.find(s.layoutFor(1000, 1560), "Weather").height == 700, "a saved shape is used as is");
+            ok(WidgetLayout.readingOrder(s.layoutFor(s.pcCanvasWidth, s.pcCanvasHeight)).equals(Arrays.asList("System", "Weather")), "list order and widgets follow the PC");
+            AppSettings back = AppSettings.fromProperties(s.toProperties());
+            ok(back.pages.equals(Arrays.asList("Main", "Stats")) && back.page == 1 && !back.snapWidgets && WidgetLayout.find(back.layoutFor(1480, 552), "System").visible, "kept for offline use");
+            Placement[] edited = back.layoutFor(1480, 552);
+            WidgetLayout.find(edited, "Mixer").visible = true;
+            back.store(1480, 552, edited);
+            ok(WidgetLayout.find(back.canvasLayouts.get("1000x1560"), "Mixer").visible, "showing a widget shows it on the page's other shapes");
+            List<Map<String, Object>> sent = PcState.json(edited);
+            ok(sent.size() == WidgetLayout.IDS.length && "Focus".equals(sent.get(0).get("id")), "layout sent to the PC");
         } });
         check("Quick Launch glyphs from the PC map to drawn icons", new Action() { public void run() {
             ok(PcState.glyph("E8D6").equals("music") && PcState.glyph("e774").equals("globe") && PcState.glyph("E720").equals("microphone") && PcState.glyph("FFFF").equals("app") && PcState.glyph(null).equals("app"), "glyphs");
@@ -249,7 +297,7 @@ public final class AndroidTests {
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");
-            ok(!phone.list && phone.canvasWidth() >= 1856 * 0.8 - 1 && phone.canvasHeight() >= 576 * 0.8 - 1, "phone canvas " + phone.canvasWidth() + " x " + phone.canvasHeight());
+            ok(!phone.list && !phone.stacked && phone.canvasWidth() >= 1856 * 0.8 - 8 && phone.canvasHeight() >= 576 * 0.8 - 8, "phone canvas " + phone.canvasWidth() + " x " + phone.canvasHeight());
             ok(phone.scale / 2.625 > 0.55 && phone.scale > Math.min(2400 / 1920.0, 1080 / 720.0), "phone text not enlarged: " + phone.scale / 2.625);
             ok(phone.canvasWidth() / 1856 >= 0.79 && phone.canvasHeight() / 576 >= 0.79, "canvas shrank past 80%");
             DashboardFit bar = DashboardFit.choose(1920, 720, 1, "Auto");
@@ -257,6 +305,89 @@ public final class AndroidTests {
             ok(DashboardFit.choose(1080, 2400, 2.625, "Auto").list && !DashboardFit.choose(1080, 2400, 2.625, "Dashboard").list && DashboardFit.choose(2400, 1080, 2.625, "List").list, "modes");
             DashboardFit tablet = DashboardFit.choose(2560, 1600, 2, "Auto");
             ok(!tablet.list && tablet.canvasWidth() >= 1856 * 0.8 - 1 && tablet.scale / 2 <= 0.75 + 1e-9, "tablet");
+        } });
+        check("Upright tablets get a tall dashboard, upright phones the list", new Action() { public void run() {
+            DashboardFit tablet = DashboardFit.choose(1600, 2560, 2, "Auto");
+            ok(!tablet.list && tablet.stacked && tablet.canvasHeight() > tablet.canvasWidth(), "upright tablet " + tablet.canvasWidth() + " x " + tablet.canvasHeight());
+            ok(Math.abs(tablet.scale / 2 - 0.75) < 1e-9, "upright tablet text size " + tablet.scale / 2);
+            ok(DashboardFit.choose(1080, 2400, 2.625, "Auto").list && !DashboardFit.choose(1080, 2400, 2.625, "Dashboard").list, "upright phone");
+            DashboardFit forced = DashboardFit.choose(1080, 2400, 2.625, "Dashboard");
+            Placement[] layout = WidgetLayout.defaults(forced.canvasWidth(), forced.canvasHeight());
+            ok(inside(layout, forced.canvasWidth(), forced.canvasHeight()), "forced dashboard on an upright phone escapes its canvas");
+        } });
+        check("Screen fit matches the Windows rule and shapes the canvas like the screen", new Action() { public void run() {
+            DashboardFit wide = DashboardFit.fit(2560, 720, 1, 1800), hd = DashboardFit.fit(1920, 1080, 1, 1800), uhd = DashboardFit.fit(3840, 2160, 1, 1800);
+            ok(wide.scale == 1 && wide.canvasWidth() == 2496 && wide.canvasHeight() == 576, "2560 x 720");
+            ok(hd.scale == 1 && hd.canvasWidth() == 1856 && hd.canvasHeight() == 936, "1920 x 1080");
+            ok(uhd.scale == 2 && uhd.logicalWidth == 1920 && uhd.logicalHeight == 1080, "4K");
+            DashboardFit small = DashboardFit.fit(1280, 800, 1, 1800);
+            ok(Math.abs(small.scale - 0.75) < 1e-9 && small.stacked, "1280 x 800");
+            ok(WidgetLayout.key(1485.7) == 1480 && WidgetLayout.keyName(1485.7, 764.2).equals("1480x760") && WidgetLayout.isReference(1859, 579), "keys");
+        } });
+        check("Minimum sizes shrink to about 80% at most on compact canvases", new Action() { public void run() {
+            double[] reference = WidgetLayout.minimum("Spotify", 1856, 576), phone = WidgetLayout.minimum("Spotify", 1480, 552), tiny = WidgetLayout.minimum("Spotify", 900, 400);
+            ok(reference[0] == 560 && reference[1] == 500 && phone[0] == 447 && phone[1] == 479 && tiny[0] == 437 && tiny[1] == 390, "minimums " + phone[0] + "," + phone[1]);
+            ok(WidgetLayout.transform("Spotify", new Box(0, 0, 600, 552), "SE", -1000, -1000, false, 1480, 552).equals(new Box(0, 0, 447, 479)), "resize minimum");
+            ok(WidgetLayout.transform("Focus", new Box(0, 0, 300, 300), "", 5000, 5000, false, 2496, 576).equals(new Box(2196, 276, 300, 300)), "move to this canvas's edge");
+        } });
+        check("Default arrangement fits phones and tablets both ways without overlaps", new Action() { public void run() {
+            Placement[] columns = WidgetLayout.arrange(1856, 576), reference = WidgetLayout.defaults();
+            for (String id : new String[] { "Focus", "Media", "Shortcuts", "Mixer", "Spotify" })
+                ok(WidgetLayout.find(columns, id).bounds().equals(WidgetLayout.find(reference, id).bounds()), "columns template is not the Windows default for " + id);
+            int[][] screens = { { 2400, 1080 }, { 1080, 2400 }, { 2560, 1600 }, { 1600, 2560 }, { 1920, 1200 }, { 1200, 1920 }, { 1280, 800 }, { 800, 1280 } };
+            double[] densities = { 2.625, 2.625, 2, 2, 1.5, 1.5, 1, 1 };
+            for (int i = 0; i < screens.length; i++) {
+                DashboardFit fit = DashboardFit.choose(screens[i][0], screens[i][1], densities[i], "Dashboard");
+                double w = fit.canvasWidth(), h = fit.canvasHeight();
+                Placement[] layout = WidgetLayout.defaults(w, h);
+                String name = screens[i][0] + "x" + screens[i][1] + " (" + w + " x " + h + ")";
+                ok(layout.length == WidgetLayout.IDS.length && inside(layout, w, h), "escapes on " + name);
+                if (screens[i][1] < screens[i][0] || Math.min(screens[i][0], screens[i][1]) / densities[i] >= 600)
+                    ok(WidgetLayout.fits(layout, w, h) && !overlaps(layout), "squeezed or overlapping on " + name);
+            }
+            Placement[] wide = WidgetLayout.arrange(2496, 576);
+            for (Placement p : wide) if (p.visible && !p.id.equals("Shortcuts")) ok(p.y == 0, "a wide canvas should get columns");
+            ok(!overlaps(WidgetLayout.normalize(WidgetLayout.arrange(1000, 1560, java.util.Arrays.asList(WidgetLayout.IDS)), 1000, 1560)), "every widget on an upright tablet");
+            double[] shares = WidgetLayout.distribute(100, new double[] { 1, 1 }, new double[] { 70, 10 });
+            ok(shares[0] == 70 && shares[1] == 30, "distribution");
+        } });
+        check("Old phone settings keep their layout and other shapes are saved apart", new Action() { public void run() {
+            java.util.Properties old = new java.util.Properties();
+            old.setProperty("Layout.Focus", "40.0,0.0,320.0,576.0,true,0");
+            AppSettings s = AppSettings.fromProperties(old);
+            ok(s.canvasLayouts.isEmpty() && WidgetLayout.find(s.widgetLayout, "Focus").x == 40, "old layout");
+            ok(WidgetLayout.find(s.layoutFor(1480, 552), "Focus").x == Math.round(40 * 1480 / 1856.0), "sideways phone stretches the saved layout like before");
+            Placement[] tall = s.layoutFor(1000, 1560);
+            ok(!overlaps(tall) && WidgetLayout.find(tall, "Spotify").visible, "upright tablet gets its default");
+            WidgetLayout.find(tall, "Focus").x = 64;
+            s.store(1000, 1560, tall);
+            AppSettings back = AppSettings.fromProperties(s.toProperties());
+            ok(WidgetLayout.find(back.widgetLayout, "Focus").x == 40 && back.canvasLayouts.size() == 1 && WidgetLayout.find(back.layoutFor(1000, 1560), "Focus").x == 64, "round trip");
+            ok(back.toProperties().getProperty("Layout.1000x1560.Focus") != null && back.toProperties().getProperty("Layout.Focus") != null, "property keys");
+            java.util.Properties odd = back.toProperties();
+            odd.setProperty("Layout.1856x576.Focus", "999,0,320,576,true,0"); odd.setProperty("Layout.12x5.Focus", "0,0,1,1,true,0"); odd.setProperty("Layout.x.Focus", "bad");
+            AppSettings cleaned = AppSettings.fromProperties(odd);
+            ok(cleaned.canvasLayouts.size() == 1 && WidgetLayout.find(cleaned.widgetLayout, "Focus").x == 40, "invalid or duplicate canvas layouts were kept");
+        } });
+        check("A new shape stretches the closest saved layout that fits", new Action() { public void run() {
+            AppSettings s = new AppSettings();
+            s.widgetLayout = WidgetLayout.defaults();
+            s.store(1856, 936, WidgetLayout.defaults(1856, 936));
+            WidgetLayout.find(s.canvasLayouts.get("1856x936"), "Focus").x = 8;
+            ok(WidgetLayout.find(s.layoutFor(1856, 1200), "Focus").x == 8, "picked the wrong saved layout");
+            Placement[] wide = s.layoutFor(2496, 576);
+            ok(WidgetLayout.find(wide, "Mixer").x == Math.round(824 * 2496 / 1856.0) && !overlaps(wide), "wide stretch");
+        } });
+        check("Cards size their content like the PC: deck grid, countdown, cover, temperature, Spotify columns", new Action() { public void run() {
+            int[] reference = CardSizing.deckGrid(472 - 42, 250 - 90), compact = CardSizing.deckGrid(420 - 42, 190 - 90), big = CardSizing.deckGrid(681 - 42, 328 - 90);
+            ok(reference[0] == 3 && reference[1] == 2 && compact[0] == 3 && compact[1] == 1 && big[0] * big[1] > 6, "deck " + big[0] + "x" + big[1]);
+            int[] six = CardSizing.deckGrid(640 - 42, 360 - 90, 6), many = CardSizing.deckGrid(640 - 42, 360 - 90, 40);
+            ok(six[0] * six[1] == 6 && many[0] == 4 && many[1] == 3, "six buttons fill a big card " + six[0] + "x" + six[1]);
+            ok(CardSizing.deckGlyph(80, false) == 24 && CardSizing.deckGlyph(100, true) == 18 && CardSizing.deckGlyph(400, false) == 44, "glyphs");
+            ok(CardSizing.focusTime(320, 576) == 84 && CardSizing.focusTime(296, 300) == 42 && CardSizing.focusTime(600, 900) > 84, "countdown");
+            ok(CardSizing.mediaArt(472, 310) == 104 && CardSizing.mediaArt(600, 500) > 104 && CardSizing.mediaArt(2000, 2000) == 220, "cover");
+            ok(CardSizing.weatherTemperature(472, 250) == 54 && CardSizing.weatherTemperature(360, 220) >= 40, "temperature");
+            ok(CardSizing.spotifyColumns(560) == 1 && CardSizing.spotifyColumns(752) == 2 && CardSizing.spotifyColumns(3000) == 3, "Spotify");
         } });
         check("Palettes and accents match the Windows resources", new Action() { public void run() {
             Theme midnight = Theme.of("Midnight", "Lime"), slate = Theme.of("Slate", "Glacier");

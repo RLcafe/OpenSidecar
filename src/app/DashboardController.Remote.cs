@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -231,7 +231,9 @@ namespace WidgetScreen
 
         private async Task<Dictionary<string, object>> RemoteState(string[] parts)
         {
-            var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock);
+            var layout = RemoteLayout();
+            var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock, "layoutVersion", RemoteLayoutVersion(layout));
+            if (parts.Contains("layout")) state["layout"] = layout;
             if (parts.Contains("focus"))
             {
                 focus.FinishIfElapsed();
@@ -386,6 +388,8 @@ namespace WidgetScreen
                         if (failure != null) throw new InvalidOperationException(SoundboardWidget.Message(failure));
                         return Done("Played " + sound.Name + ".");
                     }
+                case "page.show": case "layout.save": case "page.add": case "page.rename": case "page.delete": case "page.move":
+                    return RemotePages(Str(body, "action"), body);
                 default: throw new ArgumentException("Unknown command. Update Widget Screen on the phone or the PC.");
             }
         }

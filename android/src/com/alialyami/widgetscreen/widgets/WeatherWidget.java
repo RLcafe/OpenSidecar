@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.integrations.Async;
@@ -42,9 +43,11 @@ public final class WeatherWidget extends Widget {
         column.addView(header, ui.ll(Ui.MATCH, ui.px(26)));
 
         LinearLayout body = ui.row();
-        temperature = ui.text("—°", 54, ui.theme.text);
+        // The temperature grows with the card (CardSizing, as on the PC).
+        double size = CardSizing.weatherTemperature(width, height);
+        temperature = ui.text("—°", (float) size, ui.theme.text);
         temperature.setTypeface(Ui.LIGHT);
-        body.addView(temperature, ui.ll(ui.px(108), Ui.WRAP));
+        body.addView(temperature, ui.ll(ui.px(size * 2), Ui.WRAP));
         LinearLayout text = ui.column();
         city = Ui.wrap(ui.body("No city yet"), height < 250 ? 1 : 2);
         text.addView(city, ui.ll(Ui.MATCH, Ui.WRAP));

@@ -19,6 +19,7 @@ namespace WidgetScreen
         private readonly List<WidgetPlacement[]> undo = new List<WidgetPlacement[]>(), redo = new List<WidgetPlacement[]>();
         private WidgetPlacement[] saved, current, gestureBefore;
         private AppSettings preferences;
+        private Size canvasSize = WidgetLayout.Reference;
         private string gestureId, gestureCorner;
         private Rect gestureBounds;
         private Point gesturePoint;
@@ -32,11 +33,14 @@ namespace WidgetScreen
         public bool CanRedo { get { return redo.Count > 0; } }
         public bool GestureActive { get { return gestureId != null; } }
         public event Action Changed;
+        // The canvas the dashboard has on this screen (ScreenFit); layouts are kept per canvas size.
+        public Size CanvasSize { get { return canvasSize; } }
 
         public LayoutEditor(Window window)
         {
             var parent = (Grid)window.FindName("WidgetColumns");
-            canvas = new Canvas { Width = WidgetLayout.Width, Height = WidgetLayout.Height, ClipToBounds = true, Background = Brushes.Transparent };
+            canvas = new Canvas { Width = canvasSize.Width, Height = canvasSize.Height, ClipToBounds = true, Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             window.RegisterName("WidgetCanvas", canvas);
             foreach (string id in WidgetLayout.Ids)
             {
@@ -71,7 +75,7 @@ namespace WidgetScreen
                 hit.Child = grip; overlay.Children.Add(hit);
                 AutomationProperties.SetName(hit, "Resize " + WidgetLayout.Title(id) + " " + corner + " corner");
             }
-            // Coordinates come from the fixed design canvas, so pointer motion remains correct inside the scaled Viewbox.
+            // Coordinates come from the design canvas, so pointer motion remains correct inside the scaled Viewbox.
             overlay.PreviewMouseLeftButtonDown += (sender, e) => {
                 if (!Editing || GestureActive || gestureTouch != null) return;
                 StartGesture(id, FindCorner(e.OriginalSource), e.GetPosition(canvas));
@@ -118,8 +122,20 @@ namespace WidgetScreen
         {
             if (Editing) return;
             preferences = settings; Snap = settings.SnapWidgets;
-            current = WidgetLayout.Normalize(settings.WidgetLayout, settings); saved = WidgetLayout.Copy(current);
+            current = WidgetLayout.ForCanvas(settings, canvasSize); saved = WidgetLayout.Copy(current);
             Draw();
+        }
+        // A new screen shape ends an edit in progress (its changes belonged to the old canvas) and shows the layout
+        // for the new canvas. Returns true when an edit was discarded.
+        public bool SetCanvas(Size size)
+        {
+            size = WidgetLayout.Key(size);
+            if (size == canvasSize) return false;
+            bool discarded = Editing;
+            if (Editing) Cancel();
+            canvasSize = size; canvas.Width = size.Width; canvas.Height = size.Height;
+            if (preferences != null) Apply(preferences);
+            return discarded;
         }
         public void Begin()
         {
@@ -176,9 +192,9 @@ namespace WidgetScreen
         public void Reset()
         {
             if (!Editing || GestureActive) return;
-            Remember(Export()); current = WidgetLayout.SpotifyDefault(new AppSettings {
+            Remember(Export()); current = WidgetLayout.DefaultFor(new AppSettings {
                 ShowCpu = preferences.ShowCpu, ShowGpu = preferences.ShowGpu, ShowRam = preferences.ShowRam,
-                ShowNetwork = preferences.ShowNetwork, ShowUptime = preferences.ShowUptime }); Draw();
+                ShowNetwork = preferences.ShowNetwork, ShowUptime = preferences.ShowUptime }, canvasSize); Draw();
         }
         public void Undo()
         {
@@ -194,7 +210,7 @@ namespace WidgetScreen
         {
             if (!Editing || GestureActive || SelectedId == null) return;
             var p = current.First(w => w.Id == SelectedId);
-            Rect next = WidgetLayout.Transform(p.Id, p.Bounds, corner, dx, dy, snap);
+            Rect next = WidgetLayout.Transform(p.Id, p.Bounds, corner, dx, dy, snap, canvasSize);
             if (next == p.Bounds) return;
             Remember(Export()); p.Layer = current.Max(w => w.Layer) + 1; WidgetLayout.SetBounds(p, next); Draw();
         }
@@ -212,7 +228,7 @@ namespace WidgetScreen
             if (!gestureMoved && Math.Abs(dx) < 2 && Math.Abs(dy) < 2) return;
             gestureMoved = true;
             var p = current.First(w => w.Id == gestureId);
-            var next = WidgetLayout.Transform(p.Id, gestureBounds, gestureCorner, dx, dy, Snap);
+            var next = WidgetLayout.Transform(p.Id, gestureBounds, gestureCorner, dx, dy, Snap, canvasSize);
             p.Layer = next == gestureBounds ? gestureBefore.First(w => w.Id == p.Id).Layer : gestureLayer;
             WidgetLayout.SetBounds(p, next);
             Draw();

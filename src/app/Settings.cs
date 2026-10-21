@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml.Serialization;
 
 namespace WidgetScreen
@@ -37,7 +38,15 @@ namespace WidgetScreen
         public double MediaHeight { get; set; }
         public double SystemHeight { get; set; }
         public double MixerHeight { get; set; }
+        // The layout of the reference 1856 × 576 canvas (a 1920 × 720 screen), where it has always been.
         public WidgetPlacement[] WidgetLayout { get; set; }
+        // Layouts saved on screens of other shapes, one per canvas size (docs/design/any-screen-size.md).
+        public CanvasLayout[] CanvasLayouts { get; set; }
+        // Pages: the fields above are the first page, named PageName; MorePages hold the rest. CurrentPage is the page
+        // shown, on the PC and on a paired phone alike.
+        public string PageName { get; set; }
+        public LayoutPage[] MorePages { get; set; }
+        public int CurrentPage { get; set; }
         public bool SnapWidgets { get; set; }
         public double TextScale { get; set; }
         public string Monitor { get; set; }
@@ -120,7 +129,9 @@ namespace WidgetScreen
             }
             if (Double.IsNaN(Latitude) || Double.IsInfinity(Latitude) || Double.IsNaN(Longitude) || Double.IsInfinity(Longitude) || Math.Abs(Latitude) > 90 || Math.Abs(Longitude) > 180) WeatherLocation = "";
             WeatherLocation = WeatherLocation ?? "";
-            if (WidgetLayout != null) WidgetLayout = WidgetScreen.WidgetLayout.Normalize(WidgetLayout, this);
+            var pages = WidgetScreen.WidgetLayout.Pages(this).Take(WidgetScreen.WidgetLayout.MaxPages).ToList();
+            for (int i = 0; i < pages.Count; i++) WidgetScreen.WidgetLayout.NormalizePage(pages[i], this, i);
+            WidgetScreen.WidgetLayout.SetPages(this, pages);
         }
 
         private static double Clamp(double value, double min, double max, double fallback)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -142,7 +142,7 @@ internal static class SpotifyTests
         check("Spotify layout keeps independent media widgets and can be cancelled", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
-                var window = (Window)System.Windows.Markup.XamlReader.Load(stream); var editor = new LayoutEditor(window); editor.Apply(new AppSettings());
+                var window = (Window)System.Windows.Markup.XamlReader.Load(stream); var editor = new LayoutEditor(window); editor.Apply(new AppSettings { WidgetLayout = WidgetLayout.Default(new AppSettings()) });
                 var original = editor.Bounds("Media"); editor.Begin(); editor.Reset();
                 Assert(editor.IsVisible("Spotify") && editor.IsVisible("Media") && editor.IsVisible("Focus") && editor.IsVisible("Shortcuts") && !editor.IsVisible("System") && !editor.IsVisible("Weather") && !editor.HasOverlaps(), "Spotify arrangement lost required widgets or overlaps.");
                 editor.Cancel(); Assert(editor.Bounds("Media") == original && !editor.IsVisible("Spotify"), "Layout preview changed saved layout.");
@@ -228,7 +228,7 @@ internal static class SpotifyTests
                     {
                         ((Button)owner.FindName("SpotifySearch")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                         ((TextBox)owner.FindName("SpotifyQuery")).Text = "Found"; ((Button)owner.FindName("SpotifyFind")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
-                        var results = (StackPanel)owner.FindName("SpotifyResults"); Assert(results.Children.Count == 1, "Search result missing.");
+                        var results = (Panel)owner.FindName("SpotifyResults"); Assert(results.Children.Count == 1, "Search result missing.");
                         var row = (Button)results.Children[0];
                         // Never click a row that would open a link: that would launch the browser during tests.
                         Assert(System.Windows.Automation.AutomationProperties.GetName(row) == "Play Found - TEST FIXTURE", "Search result would open a link instead of playing.");
@@ -267,7 +267,7 @@ internal static class SpotifyTests
                     using (var widget = new SpotifyWidget(owner, new SpotifyService(Session(directory, "play-in-playlist", false), handler)))
                     {
                         ((Button)owner.FindName("SpotifyPlaylists")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
-                        var results = (StackPanel)owner.FindName("SpotifyResults");
+                        var results = (Panel)owner.FindName("SpotifyResults");
                         Assert(results.Children.Count == 1, "Playlist missing."); ((Button)results.Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
                         Assert(results.Children.Count == 2, "Playlist songs missing.");
                         var second = (Button)results.Children[1];
@@ -420,7 +420,7 @@ internal static class SpotifyTests
                             ((Button)owner.FindName("Spotify" + kind)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                             if (kind == "Search") { ((TextBox)owner.FindName("SpotifyQuery")).Text = "Sample"; ((Button)owner.FindName("SpotifyFind")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
                             Pump();
-                            Assert(((StackPanel)owner.FindName("SpotifyResults")).Children.Count == 1, "Inline results missing.");
+                            Assert(((Panel)owner.FindName("SpotifyResults")).Children.Count == 1, "Inline results missing.");
                             Assert(((Grid)owner.FindName("SpotifyLibraryView")).Visibility == Visibility.Visible && ((Grid)owner.FindName("SettingsOverlay")).Visibility != Visibility.Visible, "Browsing opened setup.");
                             Render(owner, directory, "spotify-" + kind.ToLowerInvariant() + "-fixture.png");
                         }

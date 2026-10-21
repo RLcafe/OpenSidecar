@@ -14,6 +14,8 @@ namespace WidgetScreen
     {
         // Render runs capture the window and exit; they never open the phone link.
         public static bool Rendering { get; private set; }
+        // A fixed screen size in pixels for renders (--render-size WxH, 1920 × 720 by default) and tests; null follows the real screens.
+        public static Size? ScreenSize { get; set; }
 
         [STAThread]
         public static int Main(string[] args)
@@ -29,6 +31,7 @@ namespace WidgetScreen
                 string settingsPath = Argument(args, "--settings") ?? SettingsStore.DefaultPath;
                 string renderPath = Argument(args, "--render");
                 Rendering = renderPath != null;
+                if (Rendering) ScreenSize = RenderSize(Argument(args, "--render-size"));
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))
                 {
                     if (renderPath != null)
@@ -45,6 +48,7 @@ namespace WidgetScreen
                                     controller.Editor.TransformSelected("SE", 48, 24, false);
                                     controller.Editor.SetVisible("Media", false);
                                 }
+                                if (args.Contains("--render-edit-panel")) controller.OpenEditPanel();
                             }
                             if (args.Contains("--render-settings"))
                             {
@@ -55,7 +59,9 @@ namespace WidgetScreen
                             }
                             var dashboard = (FrameworkElement)window.FindName("Dashboard");
                             dashboard.UpdateLayout();
-                            var bitmap = new RenderTargetBitmap(1920, 720, 96, 96, PixelFormats.Pbgra32);
+                            // The logical dashboard is drawn at the screen's pixel size, as the Viewbox would show it.
+                            Size size = ScreenSize.Value; double dpi = 96 * controller.Fit.Scale;
+                            var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, dpi, dpi, PixelFormats.Pbgra32);
                             bitmap.Render(dashboard);
                             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
                             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(renderPath)));
@@ -74,6 +80,13 @@ namespace WidgetScreen
                 if (!args.Contains("--render")) MessageBox.Show("Widget Screen could not start.\n\n" + e.GetBaseException().Message, "Widget Screen", MessageBoxButton.OK, MessageBoxImage.Error);
                 return 1;
             }
+        }
+        private static Size RenderSize(string value)
+        {
+            var parts = (value ?? "").ToLowerInvariant().Split('x');
+            int width, height;
+            if (parts.Length == 2 && Int32.TryParse(parts[0], out width) && Int32.TryParse(parts[1], out height) && width >= 320 && height >= 240 && width <= 8192 && height <= 8192) return new Size(width, height);
+            return new Size(1920, 720);
         }
         private static string Argument(string[] args, string name) { int index = Array.IndexOf(args, name); return index >= 0 && index + 1 < args.Length ? args[index + 1] : null; }
         internal static void Log(Exception error)

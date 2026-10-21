@@ -17,6 +17,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.integrations.Async;
 import com.alialyami.widgetscreen.integrations.Images;
@@ -257,7 +258,15 @@ public final class SpotifyWidget extends Widget {
         Ui.enable(pagePrevious, hasPrevious); Ui.enable(pageNext, hasNext);
         pageLabel.setText(page == null || page.items.isEmpty() ? "" : (offset + 1) + "–" + (offset + page.items.size()));
         if (page == null) return;
-        for (Spotify.Item item : page.items) results.addView(row(item), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6));
+        // Rows side by side on wide cards (CardSizing, as on the PC).
+        int columns = CardSizing.spotifyColumns(width);
+        LinearLayout line = null;
+        for (int i = 0; i < page.items.size(); i++) {
+            if (columns == 1) { results.addView(row(page.items.get(i)), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6)); continue; }
+            if (i % columns == 0) { line = ui.row(); results.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6)); }
+            line.addView(row(page.items.get(i)), ui.margins(ui.ll(0, Ui.WRAP, 1), i % columns == 0 ? 0 : 3, 0, i % columns == columns - 1 ? 0 : 3, 0));
+        }
+        if (line != null) for (int i = page.items.size() % columns; i > 0 && i < columns; i++) line.addView(new View(ui.context), ui.ll(0, 1, 1));
     }
 
     private void renderNow() {

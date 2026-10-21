@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -143,6 +144,33 @@ internal static class RemoteTests
                     Assert(Convert.ToDouble(((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["durationMs"]) == 3000000, "Focus preset not applied on the PC.");
                     Assert(post("/command", "{\"action\":\"focus.toggle\"}", token).Item1 == 200 && (bool)((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["running"], "Focus didn't start from the phone.");
                     Assert(post("/command", "{\"action\":\"deck.run\",\"index\":99}", token).Item1 == 409, "Missing deck button accepted.");
+
+                    string ignored;
+                    // Layout pages and mirroring: the phone reads the PC's pages and layouts, switches pages and saves its own shape.
+                    var layoutState = Json(get("/state?parts=layout", token).Item2);
+                    var layout = (Dictionary<string, object>)layoutState["layout"]; string version = (string)layoutState["layoutVersion"];
+                    Assert(((object[])layout["pages"]).Length == 1 && Convert.ToInt32(layout["page"]) == 0 && ((object[])layout["shown"]).Length == WidgetLayout.Ids.Length, "Layout section wrong.");
+                    Assert(!Json(get("/state?parts=focus", token).Item2).ContainsKey("layout") && (string)Json(get("/state?parts=focus", token).Item2)["layoutVersion"] == version, "Layout sent unasked, or its version moved without a change.");
+                    Assert(post("/command", "{\"action\":\"page.add\",\"name\":\"Gaming\"}", token).Item1 == 200, "Adding a page from the phone failed.");
+                    layoutState = Json(get("/state?parts=layout", token).Item2); layout = (Dictionary<string, object>)layoutState["layout"];
+                    Assert((string)layoutState["layoutVersion"] != version && ((object[])layout["pages"]).Length == 2 && Convert.ToInt32(layout["page"]) == 1 && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "The new page isn't shown on the PC.");
+                    Assert(post("/command", "{\"action\":\"page.show\",\"index\":0}", token).Item1 == 200 && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 0, "The phone couldn't switch the PC's page.");
+                    Assert(post("/command", "{\"action\":\"page.show\",\"index\":7}", token).Item1 == 409, "A missing page was accepted.");
+                    string phoneLayout = "{\"action\":\"layout.save\",\"index\":1,\"page\":\"Gaming\",\"width\":1480,\"height\":552,\"widgets\":[{\"id\":\"Focus\",\"x\":0,\"y\":0,\"width\":300,\"height\":552,\"visible\":true,\"layer\":0},{\"id\":\"Mixer\",\"x\":316,\"y\":0,\"width\":400,\"height\":552,\"visible\":true,\"layer\":0},{\"id\":\"Spotify\",\"x\":800,\"y\":0,\"width\":500,\"height\":552,\"visible\":false,\"layer\":0}]}";
+                    var savedLayout = post("/command", phoneLayout, token);
+                    Assert(savedLayout.Item1 == 200, "Saving the phone's layout failed: " + savedLayout.Item2);
+                    var afterSave = SettingsStore.Load(path, out ignored);
+                    var gaming = WidgetLayout.Page(afterSave, 1);
+                    Assert(gaming.CanvasLayouts != null && gaming.CanvasLayouts.Single().Size == new System.Windows.Size(1480, 552) && !WidgetLayout.Saved(gaming, new System.Windows.Size(1480, 552)).First(p => p.Id == "Spotify").Visible, "The phone's layout wasn't saved for its shape on that page.");
+                    Assert(WidgetLayout.Page(afterSave, 0).CanvasLayouts == null && WidgetLayout.CurrentPage(afterSave) == 0, "Saving another page's layout changed the page shown or the first page.");
+                    Assert(post("/command", phoneLayout.Replace("Gaming", "Renamed"), token).Item1 == 409, "A layout for a page that changed was accepted.");
+                    controller.Editor.Begin();
+                    Assert(post("/command", "{\"action\":\"page.show\",\"index\":1}", token).Item1 == 409, "Pages changed while the PC was editing.");
+                    controller.Editor.Cancel();
+                    Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
+                    Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,layout", token).Item2);
+                    Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");
                     // The PC answers 413 and closes without reading the rest, so the phone may see either the answer or a reset.

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -31,6 +31,8 @@ namespace WidgetScreen
         public SpotifyWidget(Window window, SpotifyService service)
         {
             this.window = window; this.service = service;
+            // Rows side by side on wide cards (CardSizing); the scroll area is the card less its 24-unit padding.
+            C<ScrollViewer>("SpotifyResultsScroll").SizeChanged += (s, e) => C<System.Windows.Controls.Primitives.UniformGrid>("SpotifyResults").Columns = CardSizing.SpotifyColumns(e.NewSize.Width + 48);
             C<Button>("SpotifyAlbums").Click += (s, e) => Select("Albums");
             C<Button>("SpotifyPlaylists").Click += (s, e) => Select("Playlists");
             C<Button>("SpotifySearch").Click += (s, e) => Select("Search");
@@ -59,7 +61,7 @@ namespace WidgetScreen
             foreach (string name in new[] { "SpotifyTabs", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyStatus", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
             C<FrameworkElement>("SpotifyEmpty").Visibility = Connected ? Visibility.Collapsed : Visibility.Visible;
             // The first list loads on the first visible tick: never from the constructor, and never while hidden.
-            C<StackPanel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();
+            C<Panel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();
         }
         private void Select(string selected, bool load = true)
         {
@@ -75,7 +77,7 @@ namespace WidgetScreen
                 button.BorderThickness = new Thickness(on ? 2 : 1);
                 AutomationProperties.SetName(button, tab + (on ? ", selected" : ""));
             }
-            C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
+            C<Panel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
             if (!Connected) { Status("Connect Spotify in Settings to use your library."); return; }
             if (selected == "Search") { Status("Type a song or artist, then tap Find."); C<TextBox>("SpotifyQuery").Focus(); }
             else if (load) LoadPage();
@@ -89,7 +91,7 @@ namespace WidgetScreen
         private async void LoadPage()
         {
             int version = ++browseGeneration;
-            C<StackPanel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
+            C<Panel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
             if (!Connected) { Status("Connect Spotify in Settings to use your library."); return; }
             if (kind == "Search" && String.IsNullOrWhiteSpace(searchQuery)) { Status("Type a song or artist to search for."); return; }
             Status("Loading from Spotify…");
@@ -97,7 +99,7 @@ namespace WidgetScreen
             {
                 var page = collection == null ? await service.BrowseAsync(kind, searchQuery, offset) : await service.TracksAsync(collection, offset);
                 if (disposed || version != browseGeneration) return;
-                foreach (var item in page.Items) C<StackPanel>("SpotifyResults").Children.Add(Row(item, version));
+                foreach (var item in page.Items) C<Panel>("SpotifyResults").Children.Add(Row(item, version));
                 C<ScrollViewer>("SpotifyResultsScroll").ScrollToTop();
                 Paging(offset > 0, page.HasMore); Text("SpotifyPageLabel", page.Items.Length == 0 ? "" : (offset + 1) + "–" + (offset + page.Items.Length));
                 string empty = kind == "Albums" && collection == null && service.CanReadRecent ? "No recent albums yet. Play an album in Spotify and it shows up here." : kind == "Search" && collection == null ? "No matches. Try a different spelling or fewer words." : "Nothing here yet. Save music in Spotify to see it here.";
@@ -125,7 +127,7 @@ namespace WidgetScreen
             var sub = new TextBlock { Text = item.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) };
             sub.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize"); sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); label.Children.Add(sub);
             layout.Children.Add(label);
-            var row = new Button { Content = layout, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(10, 8, 12, 8), Margin = new Thickness(0, 0, 0, 6), ToolTip = item.Name };
+            var row = new Button { Content = layout, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(10, 8, 12, 8), Margin = new Thickness(3, 0, 3, 6), ToolTip = item.Name };
             var selected = item; var parent = collection;
             bool playsInCollection = parent != null && selected.IsTrack && selected.Position >= 0 && service.CanControl;
             bool playsSearchResult = parent == null && selected.IsTrack && service.CanControl;
