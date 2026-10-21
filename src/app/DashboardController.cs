@@ -46,11 +46,6 @@ namespace WidgetScreen
         public LayoutEditor Editor { get; private set; }
         private bool syncingEditor, shortcutsCompact;
         private int selectedFocusPreset = -1;
-        private sealed class WidgetOption
-        {
-            public string Id;
-            public override string ToString() { return WidgetLayout.Title(Id); }
-        }
         private bool openingSettings, systemBusy;
         private bool updatingAudio, audioAvailable, mediaBusy, mediaCommandBusy, weatherBusy, disposed, fullscreen;
         private int ticks, weatherGeneration, settingsGeneration, statusClearsAt;
@@ -133,15 +128,7 @@ namespace WidgetScreen
             Button("ResetLayoutButton", () => Editor.Reset());
             Button("CancelLayoutButton", CancelLayoutEdit);
             Button("SaveLayoutButton", SaveLayoutEdit);
-            Control<ComboBox>("EditWidgetChoice").ItemsSource = WidgetLayout.Ids.Select(id => new WidgetOption { Id = id }).ToArray();
-            Control<ComboBox>("EditWidgetChoice").SelectionChanged += (sender, e) => {
-                if (syncingEditor || !Editor.Editing) return;
-                var selected = Control<ComboBox>("EditWidgetChoice").SelectedItem as WidgetOption;
-                if (selected != null) Editor.Select(selected.Id);
-            };
-            Control<CheckBox>("VisibleWidgetChoice").Click += (sender, e) => {
-                if (!syncingEditor && Editor.Editing) Editor.SetVisible(Editor.SelectedId, Control<CheckBox>("VisibleWidgetChoice").IsChecked == true);
-            };
+            InitializeEditPanel();
             Control<CheckBox>("SnapLayoutChoice").Click += (sender, e) => Editor.Snap = Control<CheckBox>("SnapLayoutChoice").IsChecked == true;
             Button("CancelSettings", CloseSettings);
             Button("CancelSettingsFooter", CloseSettings);
@@ -303,21 +290,21 @@ namespace WidgetScreen
         }
         private void CancelLayoutEdit()
         {
-            Editor.Cancel(); UpdateLevelTimer(); UpdateDisplayStatus();
+            CloseEditPanel(); Editor.Cancel(); UpdateLevelTimer(); UpdateDisplayStatus();
             Notify("Layout changes discarded."); Control<Button>("EditLayoutButton").Focus();
         }
         private void SaveLayoutEdit()
         {
-            // The layout is saved for this canvas size only; other screen shapes keep their own.
-            var previous = settings.WidgetLayout; var previousOthers = settings.CanvasLayouts; bool previousSnap = settings.SnapWidgets;
+            // The layout is saved for this canvas size of the page shown; other screen shapes keep their own.
+            var previous = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); bool previousSnap = settings.SnapWidgets;
             WidgetLayout.Store(settings, Editor.CanvasSize, Editor.Export()); settings.SnapWidgets = Editor.Snap;
             try { SettingsStore.Save(settingsPath, settings); }
             catch (Exception e)
             {
-                settings.WidgetLayout = previous; settings.CanvasLayouts = previousOthers; settings.SnapWidgets = previousSnap;
+                WidgetLayout.SetPages(settings, previous); settings.SnapWidgets = previousSnap;
                 Notify("Could not save layout: " + e.Message + ". Your changes are still in the editor."); return;
             }
-            Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
+            CloseEditPanel(); Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
             if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); }
             Notify("Layout saved."); Control<Button>("EditLayoutButton").Focus();
         }
@@ -336,9 +323,7 @@ namespace WidgetScreen
                     Control<Button>("UndoLayoutButton").IsEnabled = Editor.CanUndo && !Editor.GestureActive;
                     Control<Button>("RedoLayoutButton").IsEnabled = Editor.CanRedo && !Editor.GestureActive;
                     Control<CheckBox>("SnapLayoutChoice").IsChecked = Editor.Snap;
-                    var choices = Control<ComboBox>("EditWidgetChoice");
-                    choices.SelectedItem = choices.Items.Cast<WidgetOption>().FirstOrDefault(p => p.Id == Editor.SelectedId);
-                    Control<CheckBox>("VisibleWidgetChoice").IsChecked = Editor.IsEnabled(Editor.SelectedId);
+                    UpdateEditPanel();
                     var bounds = Editor.Bounds(Editor.SelectedId);
                     string info = WidgetLayout.Title(Editor.SelectedId) + " · " + Math.Round(bounds.Width) + " × " + Math.Round(bounds.Height) + " · X " + Math.Round(bounds.X) + ", Y " + Math.Round(bounds.Y);
                     if (Editor.SelectedId == "System" && !Editor.IsVisible("System") && Editor.IsEnabled("System")) info += " · Enable metrics in Settings to show system stats";
@@ -802,7 +787,7 @@ namespace WidgetScreen
         {
             if (Editor.Editing)
             {
-                if (e.Key == Key.Escape) { CancelLayoutEdit(); e.Handled = true; return; }
+                if (e.Key == Key.Escape) { if (editPanelOpen) CloseEditPanel(); else CancelLayoutEdit(); e.Handled = true; return; }
                 if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && (e.Key == Key.Z || e.Key == Key.Y))
                 {
                     if (e.Key == Key.Y || (Keyboard.Modifiers & ModifierKeys.Shift) != 0) Editor.Redo(); else Editor.Undo();
@@ -811,7 +796,7 @@ namespace WidgetScreen
                 if (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Up || e.Key == Key.Down)
                 {
                     // Keep dropdown navigation intact; arrows on a widget move it, Shift+arrows resize it.
-                    if (Keyboard.FocusedElement is ComboBox || Control<ComboBox>("EditWidgetChoice").IsKeyboardFocusWithin) return;
+                    if (Keyboard.FocusedElement is ComboBox || Keyboard.FocusedElement is TextBox) return;
                     double step = (Keyboard.Modifiers & ModifierKeys.Control) != 0 ? 1 : 8;
                     Editor.TransformSelected((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? "SE" : "", e.Key == Key.Left ? -step : e.Key == Key.Right ? step : 0, e.Key == Key.Up ? -step : e.Key == Key.Down ? step : 0, false);
                     e.Handled = true; return;

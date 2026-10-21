@@ -26,6 +26,7 @@ internal static class ScreenSizeTests
         return layout.All(p => p.X >= 0 && p.Y >= 0 && p.X + p.Width <= canvas.Width + 1e-9 && p.Y + p.Height <= canvas.Height + 1e-9);
     }
     private static Size Canvas(ScreenFit fit) { return new Size(fit.CanvasWidth, fit.CanvasHeight); }
+    private static AppSettings settingsOf(string path) { string warning; return SettingsStore.Load(path, out warning); }
     private static string Describe(WidgetPlacement[] layout) { return String.Join("; ", layout.Where(p => p.Visible).Select(p => p.Id + " " + p.X + "," + p.Y + " " + p.Width + "x" + p.Height)); }
 
     public static void Run(string directory, Action<string, Action> check)
@@ -171,6 +172,43 @@ internal static class ScreenSizeTests
                 string warning; Assert(SettingsStore.Load(path, out warning).CurrentPage == 1, "The page shown was not saved.");
                 Assert(!controller.ShowPage(2) && !((System.Windows.Controls.Button)window.FindName("NextPageButton")).IsEnabled, "Paging past the last page.");
                 controller.Editor.Begin(); Assert(!controller.ShowPage(0), "Pages switched during an edit."); controller.Editor.Cancel();
+            }
+            window.Close();
+        });
+        check("Edit layout's list shows and hides widgets and manages pages like the phone's", () => {
+            string path = Path.Combine(directory, "edit-panel.xml"); SettingsStore.Save(path, new AppSettings());
+            var window = Window();
+            using (var controller = new DashboardController(window, path, true))
+            {
+                Action<string> click = element => ((System.Windows.Controls.Button)window.FindName(element)).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                var content = (System.Windows.Controls.StackPanel)window.FindName("EditPanelContent");
+                Func<string, System.Windows.Controls.Button> button = text => content.Children.OfType<FrameworkElement>().SelectMany(e => e is System.Windows.Controls.Grid ? ((System.Windows.Controls.Grid)e).Children.OfType<FrameworkElement>() : new[] { e })
+                    .OfType<System.Windows.Controls.Button>().First(b => (b.Content is string ? (string)b.Content : b.Content is System.Windows.Controls.TextBlock ? ((System.Windows.Controls.TextBlock)b.Content).Text : "") == text);
+                Func<string, System.Windows.Controls.CheckBox> tick = title => content.Children.OfType<System.Windows.Controls.Border>().Select(b => b.Child).OfType<System.Windows.Controls.CheckBox>().First(c => (string)c.Content == title);
+                click("EditLayoutButton"); click("EditWidgetsButton");
+                Assert(controller.EditPanelOpen && ((FrameworkElement)window.FindName("EditPanelLayer")).Visibility == Visibility.Visible, "The list didn't open.");
+                Assert(tick("Sound mixer").IsChecked == true && tick("System stats").IsChecked == false && tick("Sound mixer").MinHeight >= 52, "Check marks don't match the layout, or rows are under 52.");
+                var mixer = tick("Sound mixer"); mixer.IsChecked = false; mixer.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert(!controller.Editor.IsVisible("Mixer") && controller.Editor.CanUndo, "Unchecking didn't hide the widget.");
+                var stats = tick("System stats"); stats.IsChecked = true; stats.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert(controller.Editor.IsEnabled("System") && controller.Editor.SelectedId == "System", "Checking didn't show and select the widget.");
+                button("Add page").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                string warning; var saved = SettingsStore.Load(path, out warning);
+                Assert(WidgetLayout.PageCount(saved) == 2 && WidgetLayout.CurrentPage(saved) == 1 && !WidgetLayout.ForCanvas(saved, 0, WidgetLayout.Reference).First(p => p.Id == "Mixer").Visible, "Adding a page didn't save the changes first or show the new page.");
+                Assert(controller.Editor.Editing && controller.EditPanelOpen && controller.Editor.IsVisible("Mixer") && !controller.Editor.CanUndo, "The editor didn't continue on the new page.");
+                var pageName = content.Children.OfType<System.Windows.Controls.Grid>().SelectMany(g => g.Children.OfType<System.Windows.Controls.TextBox>()).First();
+                pageName.Text = "Games"; button("Rename").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert(WidgetLayout.Page(SettingsStore.Load(path, out warning), 1).Name == "Games", "Rename.");
+                button("Main").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert(WidgetLayout.CurrentPage(settingsOf(path)) == 0 && controller.Editor.Editing && !controller.Editor.IsVisible("Mixer"), "Opening another page from the list.");
+                var deleteGames = content.Children.OfType<System.Windows.Controls.Grid>().Where(g => g.Children.OfType<System.Windows.Controls.Button>().Any(b => b.Content is System.Windows.Controls.TextBlock && ((System.Windows.Controls.TextBlock)b.Content).Text == "Games"))
+                    .SelectMany(g => g.Children.OfType<System.Windows.Controls.Button>()).Last();
+                deleteGames.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert(WidgetLayout.PageCount(settingsOf(path)) == 2, "Delete didn't ask first.");
+                deleteGames.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert(WidgetLayout.PageCount(settingsOf(path)) == 1, "Delete after confirming.");
+                click("EditWidgetsButton"); Assert(!controller.EditPanelOpen, "The Widgets button closes the list.");
+                click("CancelLayoutButton");
             }
             window.Close();
         });

@@ -48,6 +48,7 @@ namespace WidgetScreen
                                     controller.Editor.TransformSelected("SE", 48, 24, false);
                                     controller.Editor.SetVisible("Media", false);
                                 }
+                                if (args.Contains("--render-edit-panel")) controller.OpenEditPanel();
                             }
                             if (args.Contains("--render-settings"))
                             {
