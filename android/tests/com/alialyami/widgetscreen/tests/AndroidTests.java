@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
@@ -116,12 +117,12 @@ public final class AndroidTests {
         check("Settings save atomically and load back", new Action() { public void run() throws Exception {
             File file = new File(folder, "settings.xml");
             AppSettings s = new AppSettings();
-            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.layoutMode = "List"; s.keepScreenOn = false;
+            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.layoutMode = "List"; s.keepScreenOn = false; s.landscapeOnly = true;
             s.widgetLayout = WidgetLayout.defaults(); WidgetLayout.find(s.widgetLayout, "Soundboard").visible = true; s.widgetLayout[0].layer = 7;
             AppSettings.save(file, s);
             ok(!new File(folder, "settings.xml.tmp").exists(), "Temporary file left behind.");
             AppSettings loaded = AppSettings.load(file, null);
-            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.layoutMode.equals("List") && !loaded.keepScreenOn, "settings");
+            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.layoutMode.equals("List") && !loaded.keepScreenOn && loaded.landscapeOnly, "settings");
             ok(WidgetLayout.find(loaded.widgetLayout, "Soundboard").visible && WidgetLayout.find(loaded.widgetLayout, "Focus").layer == 7, "layout");
         } });
         check("Unreadable settings fall back to defaults with a warning and keep the file", new Action() { public void run() throws Exception {
@@ -238,6 +239,17 @@ public final class AndroidTests {
             ok(StatsLayout.bestColumns(400, 262, 336, 46, 5) == 1, "narrow card");
             ok(StatsLayout.bestColumns(1100, 100, 336, 46, 5) == 3 && StatsLayout.bestColumns(1100, 200, 336, 46, 5) == 2, "wide card");
             ok(StatsLayout.rowWidth(1100, 200, 324, 12, 46, 5, 3) >= 324, "row width");
+        } });
+        check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
+            DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");
+            ok(!phone.list && phone.canvasWidth() >= 1856 * 0.8 - 1 && phone.canvasHeight() >= 576 * 0.8 - 1, "phone canvas " + phone.canvasWidth() + " x " + phone.canvasHeight());
+            ok(phone.scale / 2.625 > 0.55 && phone.scale > Math.min(2400 / 1920.0, 1080 / 720.0), "phone text not enlarged: " + phone.scale / 2.625);
+            ok(phone.canvasWidth() / 1856 >= 0.79 && phone.canvasHeight() / 576 >= 0.79, "canvas shrank past 80%");
+            DashboardFit bar = DashboardFit.choose(1920, 720, 1, "Auto");
+            ok(!bar.list && bar.scale == 1 && bar.canvasWidth() == 1856 && bar.canvasHeight() == 576, "1920 x 720 isn't the Windows canvas");
+            ok(DashboardFit.choose(1080, 2400, 2.625, "Auto").list && !DashboardFit.choose(1080, 2400, 2.625, "Dashboard").list && DashboardFit.choose(2400, 1080, 2.625, "List").list, "modes");
+            DashboardFit tablet = DashboardFit.choose(2560, 1600, 2, "Auto");
+            ok(!tablet.list && tablet.canvasWidth() >= 1856 * 0.8 - 1 && tablet.scale / 2 <= 0.75 + 1e-9, "tablet");
         } });
         check("Palettes and accents match the Windows resources", new Action() { public void run() {
             Theme midnight = Theme.of("Midnight", "Lime"), slate = Theme.of("Slate", "Glacier");

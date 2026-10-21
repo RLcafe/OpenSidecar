@@ -25,6 +25,8 @@ public final class AppSettings {
     // Display: keep the screen awake while the dashboard is open, hide the status and navigation bars,
     // and whether to use the stretched dashboard canvas or a scrolling list (Auto picks by screen size).
     public boolean keepScreenOn = true, hideSystemBars = true;
+    // Keep the app sideways, so the phone always shows the Windows dashboard arrangement.
+    public boolean landscapeOnly;
     public String layoutMode = "Auto";
     // Null until the layout is first saved; the default arrangement is used until then.
     public WidgetLayout.Placement[] widgetLayout;
@@ -51,6 +53,7 @@ public final class AppSettings {
         p.setProperty("CornerRadius", number(cornerRadius)); p.setProperty("TextScale", number(textScale));
         p.setProperty("SnapWidgets", Boolean.toString(snapWidgets));
         p.setProperty("KeepScreenOn", Boolean.toString(keepScreenOn)); p.setProperty("HideSystemBars", Boolean.toString(hideSystemBars));
+        p.setProperty("LandscapeOnly", Boolean.toString(landscapeOnly));
         p.setProperty("LayoutMode", layoutMode);
         if (widgetLayout != null) for (WidgetLayout.Placement w : widgetLayout)
             p.setProperty("Layout." + w.id, number(w.x) + "," + number(w.y) + "," + number(w.width) + "," + number(w.height) + "," + w.visible + "," + w.layer);
@@ -72,6 +75,7 @@ public final class AppSettings {
         s.cornerRadius = readNumber(p, "CornerRadius", s.cornerRadius); s.textScale = readNumber(p, "TextScale", s.textScale);
         s.snapWidgets = readBool(p, "SnapWidgets", s.snapWidgets);
         s.keepScreenOn = readBool(p, "KeepScreenOn", s.keepScreenOn); s.hideSystemBars = readBool(p, "HideSystemBars", s.hideSystemBars);
+        s.landscapeOnly = readBool(p, "LandscapeOnly", false);
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         List<WidgetLayout.Placement> placements = new ArrayList<WidgetLayout.Placement>();
         for (String id : WidgetLayout.IDS) {

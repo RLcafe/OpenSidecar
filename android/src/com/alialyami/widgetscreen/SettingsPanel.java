@@ -243,10 +243,12 @@ public final class SettingsPanel {
         add(left, ui.check("Keep the screen on while Widget Screen is open", draft.keepScreenOn, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.keepScreenOn = checked; } }), 12);
         add(left, ui.check("Hide the status and navigation bars", draft.hideSystemBars, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.hideSystemBars = checked; } }), 4);
         add(left, note("Swipe in from the edge to show them for a moment."), 4);
+        add(left, ui.check("Keep the app sideways", draft.landscapeOnly, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.landscapeOnly = checked; } }), 12);
+        add(left, note("Sideways, the phone shows the same arrangement as the Windows dashboard."), 4);
 
         add(right, heading("Layout"), 0);
         add(right, choices(AppSettings.LAYOUT_MODES, new String[] { "Automatic", "Dashboard", "List" }, draft.layoutMode, new Choice() { @Override public void chose(String value) { draft.layoutMode = value; build(); } }), 12);
-        add(right, note("Automatic shows the full dashboard on wide screens, such as a tablet held sideways, and a scrolling list on phones. Dashboard keeps the 1920 × 720 arrangement on any screen; List stacks the widgets."), 10);
+        add(right, note("Automatic shows the Windows dashboard arrangement when the screen is sideways, and a scrolling list when it's upright. Dashboard always uses the Windows arrangement; List always stacks the widgets."), 10);
     }
 
     // ----- Widgets -----

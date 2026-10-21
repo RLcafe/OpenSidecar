@@ -12,6 +12,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
@@ -228,19 +229,18 @@ public final class Dashboard {
         ui = new Ui(activity, theme, look, 1f);
         activity.applyWindow(settings, theme);
         DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
-        float density = metrics.density, fit = Math.min(width / 1920f, height / 720f);
-        listMode = settings.layoutMode.equals("List") || (settings.layoutMode.equals("Auto") && !(width >= height && fit / density >= 0.6f));
+        DashboardFit fit = DashboardFit.choose(width, height, metrics.density, settings.layoutMode);
+        listMode = fit.list;
         if (listMode && editor.editing()) editor.cancel();
         if (dashboardView != null) root.removeView(dashboardView);
         root.setBackgroundColor(theme.page);
         widgetsPanel = null;
+        scale = (float) fit.scale;
         if (!listMode) {
-            scale = fit;
-            int logicalWidth = (int) Math.floor(width / scale), logicalHeight = (int) Math.floor(height / scale);
+            int logicalWidth = (int) fit.logicalWidth, logicalHeight = (int) fit.logicalHeight;
             dashboardView = new ScaledHost(activity, buildDashboard(logicalWidth, logicalHeight), scale, logicalWidth, logicalHeight, false);
         } else {
-            scale = density * Math.max(0.85f, Math.min(1f, width / density / 560f));
-            int logicalWidth = (int) Math.floor(width / scale);
+            int logicalWidth = (int) fit.logicalWidth;
             ScrollView scroll = new ScrollView(activity);
             scroll.setFillViewport(true);
             scroll.setVerticalScrollBarEnabled(false);
@@ -257,7 +257,7 @@ public final class Dashboard {
         if (pc.paired() && started) refreshSoon();
     }
 
-    private View buildHeader(boolean stacked) {
+    private View buildHeader(boolean stacked, boolean narrow) {
         LinearLayout clock = ui.row();
         clock.setGravity(Gravity.CENTER_VERTICAL);
         clock.setContentDescription("Local time and date");
@@ -310,20 +310,21 @@ public final class Dashboard {
         clockParams.topMargin = ui.px(-8);
         header.addView(clock, clockParams);
         header.addView(actions, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP));
-        editToolbar = buildEditToolbar();
+        editToolbar = buildEditToolbar(narrow);
         FrameLayout.LayoutParams toolbarParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.TOP);
         header.addView(editToolbar, toolbarParams);
         return header;
     }
 
-    private View buildEditToolbar() {
+    // On narrow (phone) dashboards the toolbar drops its title so it doesn't run into the clock.
+    private View buildEditToolbar(boolean narrow) {
         LinearLayout toolbar = ui.row();
         LinearLayout title = ui.column();
         TextView heading = ui.text("Edit layout", 25, ui.theme.text);
         heading.setTypeface(Ui.MEDIUM);
         title.addView(heading, ui.ll(Ui.WRAP, Ui.WRAP));
         title.addView(ui.smallText("Drag to move or resize"), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 2, 0, 0));
-        toolbar.addView(title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 32, 0));
+        if (!narrow) toolbar.addView(title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 32, 0));
         undoButton = ui.button("Undo", new View.OnClickListener() { @Override public void onClick(View v) { editor.undo(); } });
         toolbar.addView(undoButton, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 0));
         redoButton = ui.button("Redo", new View.OnClickListener() { @Override public void onClick(View v) { editor.redo(); } });
@@ -341,9 +342,9 @@ public final class Dashboard {
         logicalRoot = new FrameLayout(activity);
         LinearLayout column = ui.column();
         column.setPadding(ui.px(32), ui.px(20), ui.px(32), ui.px(16));
-        column.addView(buildHeader(false), ui.ll(Ui.MATCH, ui.px(72)));
+        column.addView(buildHeader(false, logicalWidth < 1800), ui.ll(Ui.MATCH, ui.px(72)));
         canvas = new WidgetCanvas(activity, ui, editor);
-        double canvasWidth = logicalWidth - 64, canvasHeight = logicalHeight - 20 - 16 - 72 - 36;
+        double canvasWidth = logicalWidth - DashboardFit.MARGIN_X, canvasHeight = logicalHeight - DashboardFit.CHROME_Y;
         canvas.setFactors(canvasWidth / WidgetLayout.WIDTH, canvasHeight / WidgetLayout.HEIGHT, scale);
         for (String id : WidgetLayout.IDS) if (editor.isVisible(id)) attachCard(id);
         column.addView(canvas, ui.ll(Ui.MATCH, 0, 1));
@@ -381,7 +382,7 @@ public final class Dashboard {
         canvas = null;
         LinearLayout column = ui.column();
         column.setPadding(ui.px(LIST_GAP), ui.px(20), ui.px(LIST_GAP), ui.px(LIST_GAP));
-        column.addView(buildHeader(true), ui.ll(Ui.MATCH, Ui.WRAP));
+        column.addView(buildHeader(true, true), ui.ll(Ui.MATCH, Ui.WRAP));
         statusLine = Ui.wrap(ui.smallText(statusText), 3);
         column.addView(statusLine, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         displayStatus = null;

@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen;
 
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.os.Build;
@@ -88,6 +89,8 @@ public final class MainActivity extends Activity {
         if (settings.keepScreenOn) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setBackgroundColor(theme.page);
+        int orientation = settings.landscapeOnly ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+        if (getRequestedOrientation() != orientation) setRequestedOrientation(orientation);
         if (hideBars != settings.hideSystemBars) { hideBars = settings.hideSystemBars; applySystemBars(); }
     }
 
