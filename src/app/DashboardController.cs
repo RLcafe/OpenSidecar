@@ -99,7 +99,7 @@ namespace WidgetScreen
             InitializeRemote();
             ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
-            levelTimer.Tick += (sender, e) => { if (audio != null && window.WindowState != WindowState.Minimized) levels.Push(audio.Peak()); };
+            levelTimer.Tick += (sender, e) => { if (audio != null && Showing) levels.Push(audio.Peak()); };
             window.Loaded += Loaded;
             window.PreviewKeyDown += KeyDown;
             window.StateChanged += (sender, e) => UpdateLevelTimer();
@@ -198,9 +198,11 @@ namespace WidgetScreen
             ticks++; UpdateClock(); UpdateFocus();
             if (pairing.Code != null && Control<Grid>("SettingsOverlay").Visibility == Visibility.Visible) UpdateRemoteSettings();
             if (ticks >= statusClearsAt && !Editor.Editing) { Text("StatusMessage", ""); statusClearsAt = int.MaxValue; }
-            spotify.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
-            soundboard.Tick(window.WindowState != WindowState.Minimized && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
-            if (window.WindowState == WindowState.Minimized) return;
+            UpdateTray();
+            spotify.Tick(Showing && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
+            soundboard.Tick(Showing && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
+            // Minimized or in the tray: the dashboard isn't visible, so it doesn't poll (a phone still gets answers).
+            if (!Showing) return;
             int interval = settings.QuietMode ? 5 : 2;
             if (ticks % interval == 0)
             {
@@ -359,7 +361,7 @@ namespace WidgetScreen
 
         private void UpdateLevelTimer()
         {
-            bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && window.WindowState != WindowState.Minimized;
+            bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && Showing;
             if (enabled) levelTimer.Start(); else { levelTimer.Stop(); levels.Clear(); }
             Text("LevelStatus", enabled || !settings.ShowLevels ? "" : !audioAvailable ? "OUTPUT LEVEL UNAVAILABLE" : Editor.Editing ? "OUTPUT LEVEL PAUSED WHILE EDITING" : settings.QuietMode ? "OUTPUT LEVEL PAUSED IN QUIET MODE" : "");
         }
@@ -829,7 +831,7 @@ namespace WidgetScreen
         }
         public void Dispose()
         {
-            disposed = true; DisposeRemote(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
+            disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
             weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); if (audio != null) audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());

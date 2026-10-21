@@ -30,6 +30,14 @@ namespace WidgetScreen
         private string remoteDiscordStatus = "";
         private DateTime remoteDiscordAt = DateTime.MinValue;
         private bool remoteDiscordBusy;
+        private TrayMode tray;
+        private DateTime lastPhoneSeen = DateTime.MinValue;
+        // The user brought the window back while the phone was connected; don't hide it again until the phone leaves.
+        private bool keepWindowWithPhone;
+        public TrayMode Tray { get { return tray; } }
+        public static readonly TimeSpan PhoneActiveFor = TimeSpan.FromSeconds(15), PhoneGoneAfter = TimeSpan.FromSeconds(60);
+        private bool PhoneActive { get { return remoteServer != null && DateTime.UtcNow - lastPhoneSeen < PhoneActiveFor; } }
+        private bool Showing { get { return window.WindowState != WindowState.Minimized && (tray == null || !tray.Hidden); } }
 
         // Port and discovery port can be overridden for tests; 0 picks any free port.
         public int RemotePort = RemoteServer.DefaultPort, RemoteDiscoveryPort = RemoteServer.DefaultDiscoveryPort;
@@ -40,6 +48,15 @@ namespace WidgetScreen
         private void InitializeRemote()
         {
             pairing = new RemotePairing(RemotePairing.StorePath(settingsPath));
+            tray = new TrayMode(window, () => window.Close());
+            tray.Changed += () => { if (!tray.Hidden && PhoneActive) keepWindowWithPhone = true; UpdateLevelTimer(); };
+            Button("TrayButton", () => { if (Editor.Editing || Control<Grid>("SettingsOverlay").Visibility == Visibility.Visible) return; tray.Hide(false); });
+            Control<CheckBox>("RemoteTrayChoice").Click += (sender, e) => {
+                bool previous = settings.HideToTrayWithPhone;
+                settings.HideToTrayWithPhone = Control<CheckBox>("RemoteTrayChoice").IsChecked == true;
+                try { SettingsStore.Save(settingsPath, settings); }
+                catch (Exception) { settings.HideToTrayWithPhone = previous; Control<CheckBox>("RemoteTrayChoice").IsChecked = previous; Text("RemoteStatus", "Couldn't save this choice. Check that your settings folder is writable."); }
+            };
             Button("RemotePairButton", () => {
                 if (!settings.RemoteEnabled) { SetRemoteEnabled(true); }
                 if (remoteServer == null) return;
@@ -112,10 +129,29 @@ namespace WidgetScreen
             return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254);
         }
 
+        // Automatic tray mode: hide while a paired phone is reading the dashboard, and come back a minute after it
+        // stops, unless the user brought the window back in the meantime or hid it with the button.
+        public void UpdateTray()
+        {
+            if (tray == null) return;
+            if (!PhoneActive)
+            {
+                keepWindowWithPhone = false;
+                if (tray.Hidden && tray.Automatic && DateTime.UtcNow - lastPhoneSeen > PhoneGoneAfter) { tray.Show(); Notify("Your phone disconnected, so the dashboard is back."); }
+                return;
+            }
+            if (settings.HideToTrayWithPhone && !tray.Hidden && !keepWindowWithPhone && !Editor.Editing && Control<Grid>("SettingsOverlay").Visibility != Visibility.Visible) tray.Hide(true);
+        }
+
+        // Called for every request from a paired phone that is showing the dashboard.
+        public void PhoneSeen() { PhoneSeenAt(DateTime.UtcNow); }
+        public void PhoneSeenAt(DateTime utc) { lastPhoneSeen = utc; }
+
         // Settings → Phone, refreshed when the tab opens and on the heartbeat while a code is shown.
         private void UpdateRemoteSettings()
         {
             Control<CheckBox>("RemoteEnabledChoice").IsChecked = settings.RemoteEnabled;
+            Control<CheckBox>("RemoteTrayChoice").IsChecked = settings.HideToTrayWithPhone;
             var addresses = LocalAddresses();
             Control<TextBox>("RemoteAddress").Text = addresses.Count == 0 ? "No network connection" : String.Join("   ", addresses.Select(a => a + ":" + (remoteServer == null ? RemotePort : remoteServer.Port)));
             string code = pairing.Code;
@@ -181,6 +217,7 @@ namespace WidgetScreen
             if (!pairing.Authorize(request.Token, out device)) return RemoteResponse.Error(401, "This phone isn't paired with the PC anymore. Pair it again in Settings → PC.");
             try
             {
+                if (request.Method == "GET" && request.Path == "/state") { PhoneSeen(); UpdateTray(); }
                 if (request.Method == "GET" && request.Path == "/state") return RemoteResponse.Json(200, await RemoteState((request.QueryValue("parts") ?? "").Split(',')));
                 if (request.Method == "GET" && request.Path == "/art") return RemoteArt();
                 if (request.Method == "POST" && request.Path == "/command") return await RemoteCommand(Body(request));

@@ -82,6 +82,7 @@ internal static class RemoteTests
                 using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
                 {
                     controller.RemoteAddress = IPAddress.Loopback; controller.RemotePort = 0; controller.RemoteDiscoveryPort = 0;
+                    controller.Tray.ShowTips = false;
                     controller.ApplyRemote();
                     Assert(controller.Remote != null, "The phone link didn't start.");
                     string root = "http://127.0.0.1:" + controller.Remote.Port;
@@ -125,6 +126,19 @@ internal static class RemoteTests
                     int art = get("/art", token).Item1;
                     Assert(art == 200 || art == 404, "Artwork request failed.");
 
+                    // A phone reading the dashboard moves the window to the tray; it comes back a minute after the phone stops.
+                    Assert(controller.Tray.Hidden && controller.Tray.Automatic && !window.ShowInTaskbar, "The phone didn't move the dashboard to the tray.");
+                    controller.Tray.Show();
+                    controller.UpdateTray();
+                    Assert(!controller.Tray.Hidden && window.ShowInTaskbar, "The window hid again after it was brought back while the phone was connected.");
+                    controller.PhoneSeenAt(DateTime.UtcNow - TimeSpan.FromMinutes(2)); controller.UpdateTray();
+                    controller.PhoneSeen(); controller.UpdateTray();
+                    Assert(controller.Tray.Hidden, "A reconnected phone didn't move the dashboard to the tray.");
+                    controller.PhoneSeenAt(DateTime.UtcNow - TimeSpan.FromMinutes(2)); controller.UpdateTray();
+                    Assert(!controller.Tray.Hidden && window.ShowInTaskbar, "The dashboard didn't come back after the phone left.");
+                    controller.Tray.Hide(false); controller.UpdateTray();
+                    Assert(controller.Tray.Hidden && !controller.Tray.Automatic, "Hide to tray didn't stay hidden.");
+                    controller.Tray.Show();
                     Assert(post("/command", "{\"action\":\"focus.preset\",\"minutes\":50}", token).Item1 == 200, "Focus preset failed.");
                     Assert(Convert.ToDouble(((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["durationMs"]) == 3000000, "Focus preset not applied on the PC.");
                     Assert(post("/command", "{\"action\":\"focus.toggle\"}", token).Item1 == 200 && (bool)((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["running"], "Focus didn't start from the phone.");

@@ -47,6 +47,8 @@ namespace WidgetScreen
         public bool SwapSideWidgets { get; set; }
         // Phone remote (Settings → Phone). Off until the user turns it on.
         public bool RemoteEnabled { get; set; }
+        // Move the dashboard to the tray while a paired phone shows it (Settings → Phone).
+        public bool HideToTrayWithPhone { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -76,6 +78,7 @@ namespace WidgetScreen
             TextScale = 1;
             ShowLevels = true;
             Use24HourClock = false;
+            HideToTrayWithPhone = true;
             Monitor = "";
             WeatherLocation = "";
             Shortcuts = DefaultShortcuts();
