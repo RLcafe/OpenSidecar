@@ -504,7 +504,8 @@ internal static class SmokeTests
                     Assert(new System.Windows.Documents.TextRange(label.ContentStart, label.ContentEnd).Text.Contains("Headphones"), "App on another output is not labelled with it.");
                     Assert(nameOf(outputOf((System.Windows.Controls.Grid)panel.Children[1])) == "Output for Discord: Speakers", "Default-output app button is wrong.");
                     update.Invoke(controller, new object[] { new System.Collections.Generic.List<AudioSession> { session("2", "Discord", "a", 6), session("3", "Spotify", "a", 5) } });
-                    Assert(panel.Children.Count == 2 && panel.Children[0] == spotifyRow && nameOf(outputOf(spotifyRow)) == "Output for Spotify: Speakers", "A moved app lost its place in the list.");
+                    // The row is reused for the moved app, and rows follow the reading's order.
+                    Assert(panel.Children.Count == 2 && panel.Children[1] == spotifyRow && nameOf(outputOf(spotifyRow)) == "Output for Spotify: Speakers", "A moved app lost its row, or rows ignore the reading's order.");
                     var master = (System.Windows.Controls.Button)window.FindName("OutputDeviceButton");
                     Assert(master.ActualHeight >= 48, "Master output button is shorter than 48.");
 
@@ -524,6 +525,23 @@ internal static class SmokeTests
                     Assert(!picker.IsOpen && chosen != null && chosen.Id == "b", "Choosing an output did not apply it.");
                 }
                 window.Close();
+            }
+        });
+        Check("Mixer orders playing apps first and System sounds last", () => {
+            Func<string, uint, bool, AudioSession> make = (id, pid, active) => new AudioSession { Id = id, Name = id, ProcessId = pid, Active = active };
+            var ordered = AudioService.Ordered(new System.Collections.Generic.List<AudioSession> { make("system", 0, false), make("idle-a", 1, false), make("playing-a", 2, true), make("idle-b", 3, false), make("playing-b", 4, true) }).Select(s => s.Id).ToArray();
+            Assert(String.Join(",", ordered) == "playing-a,playing-b,idle-a,idle-b,system", "Unexpected order: " + String.Join(",", ordered));
+        });
+        Check("Audio work runs on its own thread and caches output names", () => {
+            using (var worker = new AudioWorker())
+            {
+                var thread = worker.Run(a => Thread.CurrentThread.ManagedThreadId);
+                Assert(thread.Wait(5000) && thread.Result != Thread.CurrentThread.ManagedThreadId, "Audio ran on the calling thread.");
+                var read = worker.Run(a => a.Read());
+                Assert(read.Wait(10000) && read.Result.Volume >= 0 && read.Result.Volume <= 1, "Audio read through the worker failed.");
+                var again = worker.Run(a => a.Read());
+                Assert(again.Wait(10000) && again.Result.Devices.Count == read.Result.Devices.Count && again.Result.Devices.Select(d => d.Name).SequenceEqual(read.Result.Devices.Select(d => d.Name)), "Cached output names differ from the first read.");
+                Console.WriteLine("  Outputs through the worker: " + read.Result.Devices.Count + "; routing " + (read.Result.CanRouteApps ? "available" : "unavailable"));
             }
         });
         Check("Live audio read (does not change volume)", () => {

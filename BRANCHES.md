@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `fix/phone-link` was merged as v0.4.2.
+| `feature/mixer-events` | Audit branch 3: audio on its own thread with device notifications, cached names, shared snapshots for the phone, interface cache, layout version cache, level meter under the master slider | `88d186e` (v0.4.2) | In progress | `.worktrees\mixer-events` | `.worktrees\mixer-events\artifacts\app\WidgetScreen.exe`, `.worktrees\mixer-events\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

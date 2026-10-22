@@ -146,8 +146,8 @@ public final class MixerWidget extends Widget {
         lastSent = SystemClock.elapsedRealtime();
         for (Map.Entry<String, Float> entry : new ArrayList<Map.Entry<String, Float>>(pendingVolume.entrySet())) {
             double value = entry.getValue() / 100.0;
-            if (entry.getKey().isEmpty()) dash.command(Json.map("action", "audio.volume", "value", value));
-            else dash.command(Json.map("action", "audio.session.volume", "id", entry.getKey(), "value", value));
+            if (entry.getKey().isEmpty()) dash.commandQuietly(Json.map("action", "audio.volume", "value", value));
+            else dash.commandQuietly(Json.map("action", "audio.session.volume", "id", entry.getKey(), "value", value));
         }
         pendingVolume.clear();
     }

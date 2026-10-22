@@ -21,7 +21,16 @@ namespace WidgetScreen
         private readonly string settingsPath;
         private readonly bool preview;
         private AppSettings settings;
-        private AudioService audio;
+        // All audio COM work runs on the worker's thread (decision 011); the dashboard only awaits it.
+        private readonly AudioWorker audio = new AudioWorker();
+        private bool audioBusy, audioAgain, levelBusy;
+        // The last readings, shared between the dashboard and a phone's /state for a second so neither reads twice.
+        public static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(1);
+        private Task<AudioSnapshot> audioRead; private AudioSnapshot lastAudio; private DateTime lastAudioAt;
+        private Task<SystemSnapshot> systemRead; private SystemSnapshot lastSystem; private DateTime lastSystemAt; private string lastSystemFlags;
+        private Task<MediaSnapshot> mediaRead; private MediaSnapshot lastMedia; private DateTime lastMediaAt;
+        // Counts settings saves, so the phone's layout version only has to be recomputed when something was saved.
+        private int settingsVersion;
         private readonly SystemService system = new SystemService();
         private readonly MediaService media = new MediaService();
         private readonly SpotifyService spotifyService;
@@ -76,11 +85,11 @@ namespace WidgetScreen
             if (warning == null && String.IsNullOrEmpty(settings.SpotifyClientId) && SpotifyService.ValidClientId(spotifyService.ClientId))
             {
                 settings.SpotifyClientId = spotifyService.ClientId;
-                try { SettingsStore.Save(settingsPath, settings); } catch (Exception) { pendingMessage = "Could not save the Spotify Client ID. Check Settings."; }
+                try { SaveSettingsFile(settings); } catch (Exception) { pendingMessage = "Could not save the Spotify Client ID. Check Settings."; }
             }
             spotifyAccount = new SpotifyAccount(window, spotifyService, settings.SpotifyClientId, value => {
                 string previous = settings.SpotifyClientId; settings.SpotifyClientId = value;
-                try { SettingsStore.Save(settingsPath, settings); } catch { settings.SpotifyClientId = previous; throw; }
+                try { SaveSettingsFile(settings); } catch { settings.SpotifyClientId = previous; throw; }
             }, () => { spotify.AccountChanged(); spotify.Tick(Editor.IsVisible("Spotify"), settings.QuietMode); });
             discordService = new DiscordService(SettingsStore.DiscordPath(settingsPath));
             soundboard = new SoundboardWidget(window, discordService) { OpenSetup = OpenDiscordSettings };
@@ -93,7 +102,15 @@ namespace WidgetScreen
             InitializePages();
             FitScreen(); ApplySettings(); UpdateFocus();
             clockTimer.Tick += Tick;
-            levelTimer.Tick += (sender, e) => { if (audio != null && Showing) levels.Push(audio.Peak()); };
+            // An output appeared, left or became the default: read the mixer now instead of at the next beat.
+            audio.DevicesChanged += () => window.Dispatcher.BeginInvoke(new Action(() => { if (!disposed) RefreshAudio(true); }));
+            levelTimer.Tick += async (sender, e) => {
+                if (levelBusy || !Showing || disposed) return;
+                levelBusy = true;
+                try { float peak = await audio.Run(a => a.Peak()); if (!disposed) levels.Push(peak); }
+                catch (Exception) { }
+                finally { levelBusy = false; }
+            };
             window.Loaded += Loaded;
             window.PreviewKeyDown += KeyDown;
             window.StateChanged += (sender, e) => UpdateLevelTimer();
@@ -142,14 +159,14 @@ namespace WidgetScreen
             Button("FocusStart", () => { focus.Toggle(); UpdateFocus(); });
             Button("FocusReset", () => { focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); });
             Button("Focus25", () => SetFocus(25)); Button("Focus50", () => SetFocus(50)); Button("Focus5", () => SetFocus(5));
-            Button("MuteButton", () => AudioAction(() => audio.ToggleMute()));
-            Button("MicrophoneButton", () => AudioAction(() => audio.ToggleMicrophone()));
+            Button("MuteButton", () => AudioAction(a => a.ToggleMute()));
+            Button("MicrophoneButton", () => AudioAction(a => a.ToggleMicrophone()));
             Button("SoundSettingsButton", () => Launch("ms-settings:sound", "Windows sound settings"));
             Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
             SystemStatsLayout.Attach(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
-                if (!updatingAudio && audio != null) { AudioAction(() => audio.SetVolume(e.NewValue / 100), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
+                if (!updatingAudio) { double value = e.NewValue / 100; AudioAction(a => a.SetVolume(value), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
             };
             Button("PreviousButton", () => MediaCommand("previous")); Button("PlayButton", () => MediaCommand("toggle")); Button("NextButton", () => MediaCommand("next"));
             Button("WeatherButton", () => {
@@ -299,7 +316,7 @@ namespace WidgetScreen
             // The layout is saved for this canvas size of the page shown; other screen shapes keep their own.
             var previous = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); bool previousSnap = settings.SnapWidgets;
             WidgetLayout.Store(settings, Editor.CanvasSize, Editor.Export()); settings.SnapWidgets = Editor.Snap;
-            try { SettingsStore.Save(settingsPath, settings); }
+            try { SaveSettingsFile(settings); }
             catch (Exception e)
             {
                 WidgetLayout.SetPages(settings, previous); settings.SnapWidgets = previousSnap;
@@ -355,7 +372,10 @@ namespace WidgetScreen
         {
             bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && Showing;
             if (enabled) levelTimer.Start(); else { levelTimer.Stop(); levels.Clear(); }
-            Text("LevelStatus", enabled || !settings.ShowLevels ? "" : !audioAvailable ? "OUTPUT LEVEL UNAVAILABLE" : Editor.Editing ? "OUTPUT LEVEL PAUSED WHILE EDITING" : settings.QuietMode ? "OUTPUT LEVEL PAUSED IN QUIET MODE" : "");
+            // The meter's row shows while levels run, or to say they're unavailable; paused levels take no room.
+            bool unavailable = settings.ShowLevels && !audioAvailable && Editor.IsVisible("Mixer");
+            Control<RowDefinition>("LevelRow").Height = new GridLength(enabled || unavailable ? 28 : 0);
+            Text("LevelStatus", unavailable ? "OUTPUT LEVEL UNAVAILABLE" : "");
         }
 
         private void BuildShortcuts()
@@ -408,10 +428,10 @@ namespace WidgetScreen
                         case "play": MediaCommand("toggle"); break;
                         case "previous": MediaCommand("previous"); break;
                         case "next": MediaCommand("next"); break;
-                        case "mute": AudioAction(() => audio.ToggleMute()); break;
-                        case "microphone": AudioAction(() => audio.ToggleMicrophone()); break;
-                        case "volume-up": AudioAction(() => audio.SetVolume(audio.Read().Volume + .05)); break;
-                        case "volume-down": AudioAction(() => audio.SetVolume(audio.Read().Volume - .05)); break;
+                        case "mute": AudioAction(a => a.ToggleMute()); break;
+                        case "microphone": AudioAction(a => a.ToggleMicrophone()); break;
+                        case "volume-up": AudioAction(a => a.StepVolume(.05)); break;
+                        case "volume-down": AudioAction(a => a.StepVolume(-.05)); break;
                         case "focus": focus.Toggle(); UpdateFocus(); break;
                         case "quiet": settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist(); break;
                         case "sound": Launch("ms-settings:sound", "Windows sound settings"); break;
@@ -431,14 +451,32 @@ namespace WidgetScreen
             try { Notify("Something went wrong: " + error.GetBaseException().Message + " Details are in error.log next to settings.xml.", true); } catch (Exception) { }
         }
 
-        private void RefreshAudio()
+        // Reads the mixer on the audio thread and shows it. fresh skips the shared one-second snapshot (after a change).
+        // A read asked for while one is running happens right after it, so a change is never missed.
+        private async void RefreshAudio(bool fresh = false)
         {
-            if (!Editor.IsVisible("Mixer")) return;
+            if (disposed || !Editor.IsVisible("Mixer")) return;
+            if (audioBusy) { audioAgain = true; return; }
+            audioBusy = true;
+            try
+            {
+                AudioSnapshot snapshot;
+                try { snapshot = await ReadAudioAsync(fresh); } catch (Exception) { snapshot = null; }
+                if (disposed) return;
+                if (snapshot != null) ShowAudio(snapshot); else ShowAudioUnavailable();
+            }
+            finally
+            {
+                audioBusy = false;
+                if (!disposed) { UpdateLevelTimer(); if (audioAgain) { audioAgain = false; RefreshAudio(true); } }
+            }
+        }
+
+        private void ShowAudio(AudioSnapshot snapshot)
+        {
             updatingAudio = true;
             try
             {
-                if (audio == null) audio = new AudioService();
-                var snapshot = audio.Read();
                 audioAvailable = true;
                 Text("AudioDevice", snapshot.Device); Text("AudioStatus", "");
                 outputs = snapshot.Devices;
@@ -457,7 +495,13 @@ namespace WidgetScreen
                 Text("NoSessions", snapshot.SessionsAvailable ? "Apps show up here when they play sound." : "App volumes aren't available right now. Master volume still works.");
                 if (!snapshot.SessionsAvailable) Text("SessionCount", "UNAVAILABLE");
             }
-            catch (Exception)
+            finally { updatingAudio = false; }
+        }
+
+        private void ShowAudioUnavailable()
+        {
+            updatingAudio = true;
+            try
             {
                 audioAvailable = false;
                 Text("AudioStatus", "UNAVAILABLE"); Text("AudioDevice", "No audio output found"); Text("MasterPercent", "—");
@@ -468,7 +512,7 @@ namespace WidgetScreen
                 Text("SessionCount", "—");
                 Text("NoSessions", "Reconnect your speakers or headphones, or open Windows sound settings with the gear above. Retrying automatically.");
             }
-            finally { updatingAudio = false; UpdateLevelTimer(); }
+            finally { updatingAudio = false; }
         }
 
         private void UpdateSessions(List<AudioSession> sessions)
@@ -507,6 +551,12 @@ namespace WidgetScreen
                 AutomationProperties.SetName(row.Output, "Output for " + session.Name + ": " + deviceName);
             }
             foreach (var pair in stale) { panel.Children.Remove(pair.Value.Root); sessionRows.Remove(pair.Key); }
+            // Rows follow the reading's order (playing apps first, System sounds last) without being rebuilt.
+            for (int i = 0; i < sessions.Count; i++)
+            {
+                var root = sessionRows[sessions[i].Id].Root;
+                if (panel.Children.IndexOf(root) != i) { panel.Children.Remove(root); panel.Children.Insert(i, root); }
+            }
             Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString());
             Control<TextBlock>("NoSessions").Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -530,9 +580,9 @@ namespace WidgetScreen
             row.Label = new TextBlock { FontSize = 16 * settings.TextScale, TextTrimming = TextTrimming.CharacterEllipsis }; Grid.SetColumnSpan(row.Label, 2); row.Root.Children.Add(row.Label);
             row.Percent = new TextBlock { FontSize = 14 * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center }; row.Percent.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); Grid.SetColumn(row.Percent, 2); Grid.SetColumnSpan(row.Percent, 2); row.Root.Children.Add(row.Percent);
             row.Mute = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48 };
-            Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => AudioAction(() => audio.ToggleSessionMute(row.Session.Id));
+            Grid.SetRow(row.Mute, 1); row.Root.Children.Add(row.Mute); row.Mute.Click += (sender, e) => { string id = row.Session.Id; AudioAction(a => a.ToggleSessionMute(id)); };
             row.Slider = new Slider { Margin = new Thickness(10, 0, 0, 0) }; Grid.SetColumn(row.Slider, 1); Grid.SetColumnSpan(row.Slider, 2); Grid.SetRow(row.Slider, 1); row.Root.Children.Add(row.Slider); TouchSlider.Attach(row.Slider);
-            row.Slider.ValueChanged += (sender, e) => { if (!updatingAudio && audio != null) { AudioAction(() => audio.SetSessionVolume(row.Session.Id, e.NewValue / 100), false); row.Percent.Text = Math.Round(e.NewValue) + "%"; } };
+            row.Slider.ValueChanged += (sender, e) => { if (!updatingAudio) { string id = row.Session.Id; double value = e.NewValue / 100; AudioAction(a => a.SetSessionVolume(id, value), false); row.Percent.Text = Math.Round(e.NewValue) + "%"; } };
             row.Output = new Button { Style = (Style)window.Resources["IconButton"], BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 18, MinHeight = 48, Margin = new Thickness(4, 0, 0, 0) };
             Grid.SetRow(row.Output, 1); Grid.SetColumn(row.Output, 3); row.Root.Children.Add(row.Output); row.Output.Click += (sender, e) => OpenAppOutputs(row.Session);
             return row;
@@ -542,21 +592,26 @@ namespace WidgetScreen
 
         private void OpenMasterOutputs()
         {
-            if (audio == null || outputs.Count == 0) return;
+            if (outputs.Count == 0) return;
             var choices = outputs.Select(d => new OutputChoice { Id = d.Id, Label = d.Name, Selected = d.IsDefault }).ToList();
-            outputPicker.Show("MASTER OUTPUT", "Master volume", choices, true, "Apps set to Windows default follow this output.", choice => {
-                try { audio.SetDefaultOutput(choice.Id); Notify("Sound now plays on " + choice.Label + "."); }
-                catch (Exception) { Notify("Couldn't switch to " + choice.Label + ". Try again, or use the gear to open Windows sound settings."); }
-                RefreshAudio();
+            outputPicker.Show("MASTER OUTPUT", "Master volume", choices, true, "Apps set to Windows default follow this output.", async choice => {
+                try { await audio.Run(a => a.SetDefaultOutput(choice.Id)); if (!disposed) Notify("Sound now plays on " + choice.Label + "."); }
+                catch (Exception) { if (!disposed) Notify("Couldn't switch to " + choice.Label + ". Try again, or use the gear to open Windows sound settings."); }
+                if (!disposed) RefreshAudio(true);
             });
         }
 
-        private void OpenAppOutputs(AudioSession session)
+        private async void OpenAppOutputs(AudioSession session)
         {
-            if (audio == null || session == null || outputs.Count == 0) return;
-            bool system = session.ProcessId == 0, routable = !system && audio.CanRouteApps;
+            if (session == null || outputs.Count == 0) return;
+            bool system = session.ProcessId == 0, routable = false;
             string routed = null;
-            if (routable) { try { routed = audio.AppOutput(session.ProcessId); } catch (Exception) { routable = false; } }
+            if (!system)
+            {
+                try { var routing = await audio.Run(a => Tuple.Create(a.CanRouteApps, a.CanRouteApps ? a.AppOutput(session.ProcessId) : null)); routable = routing.Item1; routed = routing.Item2; }
+                catch (Exception) { routable = false; }
+                if (disposed) return;
+            }
             bool missing = routed != null && !outputs.Any(d => SameOutput(d.Id, routed));
             var master = outputs.FirstOrDefault(d => d.IsDefault);
             var choices = new List<OutputChoice> { new OutputChoice { Label = "Windows default", Detail = master == null ? null : "Same as master  ·  " + master.Name, Selected = routed == null } };
@@ -565,17 +620,58 @@ namespace WidgetScreen
                 : !routable ? "Windows didn't allow changing this app's output here. Use the gear to open Windows sound settings."
                 : missing ? "This app is set to an output that isn't connected. Choose another output or Windows default."
                 : "Windows remembers this for the app. Some apps switch only after they restart.";
-            outputPicker.Show("APP OUTPUT", session.Name, choices, routable, note, choice => {
-                try { audio.SetAppOutput(session.ProcessId, choice.Id); Notify(session.Name + (choice.Id == null ? " now follows the master output." : " now plays on " + choice.Label + ".")); }
-                catch (Exception) { Notify("Couldn't change the output for " + session.Name + ". Use the gear to open Windows sound settings."); }
-                RefreshAudio();
+            outputPicker.Show("APP OUTPUT", session.Name, choices, routable, note, async choice => {
+                try { await audio.Run(a => a.SetAppOutput(session.ProcessId, choice.Id)); if (!disposed) Notify(session.Name + (choice.Id == null ? " now follows the master output." : " now plays on " + choice.Label + ".")); }
+                catch (Exception) { if (!disposed) Notify("Couldn't change the output for " + session.Name + ". Use the gear to open Windows sound settings."); }
+                if (!disposed) RefreshAudio(true);
             });
         }
 
-        private void AudioAction(Action action, bool refresh = true)
+        // Runs a mixer change on the audio thread, then reads the mixer again so the dashboard and a phone see it.
+        private async void AudioAction(Action<AudioService> action, bool refresh = true)
         {
-            try { if (audio == null) audio = new AudioService(); action(); if (refresh) RefreshAudio(); }
-            catch (Exception) { Notify("The audio device changed or went away. Reconnecting…"); RefreshAudio(); }
+            try { await audio.Run(action); if (!disposed && refresh) RefreshAudio(true); }
+            catch (Exception) { if (!disposed) { Notify("The audio device changed or went away. Reconnecting…"); RefreshAudio(true); } }
+        }
+
+        // The last audio reading, shared with a phone's /state for a second; fresh reads again (after a change).
+        private Task<AudioSnapshot> ReadAudioAsync(bool fresh)
+        {
+            if (!fresh && lastAudio != null && DateTime.UtcNow - lastAudioAt < SnapshotLifetime) return Task.FromResult(lastAudio);
+            if (audioRead != null && !audioRead.IsCompleted) return audioRead;
+            audioRead = StoreAudio(audio.Run(a => a.Read()));
+            return audioRead;
+        }
+        private async Task<AudioSnapshot> StoreAudio(Task<AudioSnapshot> read)
+        {
+            try { var snapshot = await read; lastAudio = snapshot; lastAudioAt = DateTime.UtcNow; return snapshot; }
+            catch (Exception) { lastAudio = null; throw; }
+        }
+        private Task<SystemSnapshot> ReadSystemAsync(bool cpu, bool gpu, bool ram, bool network, bool uptime)
+        {
+            string flags = "" + cpu + gpu + ram + network + uptime;
+            if (lastSystem != null && flags == lastSystemFlags && DateTime.UtcNow - lastSystemAt < SnapshotLifetime) return Task.FromResult(lastSystem);
+            if (systemRead != null && !systemRead.IsCompleted && flags == lastSystemFlags) return systemRead;
+            lastSystemFlags = flags;
+            systemRead = StoreSystem(Task.Run(() => system.Read(cpu, gpu, ram, network, uptime)));
+            return systemRead;
+        }
+        private async Task<SystemSnapshot> StoreSystem(Task<SystemSnapshot> read)
+        {
+            try { var snapshot = await read; lastSystem = snapshot; lastSystemAt = DateTime.UtcNow; return snapshot; }
+            catch (Exception) { lastSystem = null; throw; }
+        }
+        private Task<MediaSnapshot> ReadMediaAsync(bool fresh)
+        {
+            if (!fresh && lastMedia != null && DateTime.UtcNow - lastMediaAt < SnapshotLifetime) return Task.FromResult(lastMedia);
+            if (mediaRead != null && !mediaRead.IsCompleted) return mediaRead;
+            mediaRead = StoreMedia(media.ReadAsync());
+            return mediaRead;
+        }
+        private async Task<MediaSnapshot> StoreMedia(Task<MediaSnapshot> read)
+        {
+            try { var snapshot = await read; lastMedia = snapshot; lastMediaAt = DateTime.UtcNow; return snapshot; }
+            catch (Exception) { lastMedia = null; throw; }
         }
 
         private async void RefreshSystem()
@@ -586,7 +682,7 @@ namespace WidgetScreen
             bool readStats = Editor.IsVisible("System");
             try
             {
-                var snapshot = await Task.Run(() => system.Read(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime));
+                var snapshot = await ReadSystemAsync(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime);
                 if (disposed || requested != settings) return;
                 Text("CpuValue", snapshot.CpuAvailable ? Math.Round(snapshot.Cpu) + "%" : "—"); Load("CpuValue", snapshot.CpuAvailable ? snapshot.Cpu : 0);
                 Text("SystemStatus", "");
@@ -621,13 +717,13 @@ namespace WidgetScreen
             Control<TextBlock>(name).SetResourceReference(TextBlock.ForegroundProperty, percent >= 90 ? "Warning" : "Text");
         }
 
-        private async void RefreshMedia()
+        private async void RefreshMedia(bool fresh = false)
         {
             if (disposed || !Editor.IsVisible("Media")) return;
             if (mediaBusy || mediaCommandBusy || mediaScrubber.Active) return; mediaBusy = true;
             try
             {
-                var snapshot = await media.ReadAsync(); if (disposed) return;
+                var snapshot = await ReadMediaAsync(fresh); if (disposed) return;
                 Text("TrackTitle", snapshot.Available ? snapshot.Title : "Nothing playing");
                 Text("TrackArtist", snapshot.Available ? (snapshot.Artist ?? "") : "Start music or a video in any app.");
                 string source = snapshot.Source ?? "";
@@ -662,7 +758,7 @@ namespace WidgetScreen
             Control<Button>("PlayButton").IsEnabled = false; Control<Button>("PreviousButton").IsEnabled = false; Control<Button>("NextButton").IsEnabled = false;
             try { if (!await media.CommandAsync(command)) Notify("The media app didn't respond to that control."); }
             catch (Exception) { Notify("Media controls aren't available. Check that your media app is open."); }
-            finally { mediaCommandBusy = false; if (!disposed) RefreshMedia(); }
+            finally { mediaCommandBusy = false; if (!disposed) RefreshMedia(true); }
         }
         private async void SeekMedia(string key, double position)
         {
@@ -758,7 +854,7 @@ namespace WidgetScreen
             candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
-            try { SettingsStore.Save(settingsPath, candidate); }
+            try { SaveSettingsFile(candidate); }
             catch (Exception e) { Text("SettingsStatus", "Could not save settings: " + e.Message); return; }
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude;
             settings = candidate; CloseSettings(); RefreshSystem();
@@ -791,7 +887,9 @@ namespace WidgetScreen
             finally { if (!disposed) { button.IsEnabled = true; button.Content = "Search"; } }
         }
 
-        private void Persist() { try { SettingsStore.Save(settingsPath, settings); } catch (Exception e) { Notify("Settings could not be saved: " + e.Message); } }
+        private void Persist() { try { SaveSettingsFile(settings); } catch (Exception e) { Notify("Settings could not be saved: " + e.Message); } }
+        // Every settings save goes through here, so the phone's layout version can tell that something changed.
+        private void SaveSettingsFile(AppSettings which) { SettingsStore.Save(settingsPath, which); settingsVersion++; }
         private void ToggleFullscreen()
         {
             if (fullscreen) { DisplayService.Windowed(window); fullscreen = false; }
@@ -841,7 +939,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); if (audio != null) audio.Dispose();
+            weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }

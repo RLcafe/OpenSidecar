@@ -54,7 +54,7 @@ namespace WidgetScreen
             if (index < 0 || index >= WidgetLayout.PageCount(settings) || index == WidgetLayout.CurrentPage(settings)) return false;
             int previous = settings.CurrentPage;
             settings.CurrentPage = index;
-            try { SettingsStore.Save(settingsPath, settings); }
+            try { SaveSettingsFile(settings); }
             catch (Exception e) { settings.CurrentPage = previous; Notify("Could not switch pages: " + e.Message); return false; }
             PagesChanged();
             return true;
@@ -80,7 +80,7 @@ namespace WidgetScreen
         private string ChangePages(Action change)
         {
             var before = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); int current = settings.CurrentPage;
-            try { change(); SettingsStore.Save(settingsPath, settings); }
+            try { change(); SaveSettingsFile(settings); }
             catch (Exception e)
             {
                 WidgetLayout.SetPages(settings, before); settings.CurrentPage = current;
@@ -107,12 +107,18 @@ namespace WidgetScreen
                 "layouts", WidgetLayout.SavedLayouts(page).Select(c => (object)D("width", c.Width, "height", c.Height, "widgets", RemoteWidgets(c.Widgets))).ToArray());
         }
 
-        // Changes whenever anything in the layout section does, so the phone only asks for it then (FNV-1a).
-        private string RemoteLayoutVersion(Dictionary<string, object> layout)
+        // Changes whenever anything in the layout section does, so the phone only asks for it then (FNV-1a over the
+        // section). The section is only built again when a settings save, the editor or the screen could have changed
+        // it, not on every poll.
+        private string layoutVersionKey, layoutVersion;
+        private string RemoteLayoutVersion()
         {
+            string key = settingsVersion + "|" + Editor.Editing + "|" + Editor.CanvasSize + "|" + settings.SnapWidgets;
+            if (key == layoutVersionKey && layoutVersion != null) return layoutVersion;
             uint hash = 2166136261;
-            foreach (char c in new JavaScriptSerializer().Serialize(layout)) { hash ^= c; hash *= 16777619; }
-            return hash.ToString("x8");
+            foreach (char c in new JavaScriptSerializer().Serialize(RemoteLayout())) { hash ^= c; hash *= 16777619; }
+            layoutVersionKey = key; layoutVersion = hash.ToString("x8");
+            return layoutVersion;
         }
 
         private static WidgetPlacement[] ParseWidgets(object value)
