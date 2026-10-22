@@ -26,6 +26,7 @@ namespace WidgetScreen
         public bool Muted;
         public bool? MicrophoneMuted;
         public bool SessionsAvailable = true;
+        public bool CanRouteApps;
         public List<AudioSession> Sessions = new List<AudioSession>();
         public List<AudioDevice> Devices = new List<AudioDevice>();
     }
@@ -44,8 +45,20 @@ namespace WidgetScreen
         private GetPersistedEndpoint getAppEndpoint;
         private const uint Context = 23;
         private const string PolicyPrefix = @"\\?\SWD#MMDEVAPI#", RenderInterface = "#{e6327cad-dcec-4949-ae8a-991e976a79d2}";
+        // Output names and form factors by id. Opening a property store is the slow part of a read, and names
+        // don't change; the cache is dropped when Windows reports a device change.
+        private readonly Dictionary<string, AudioDevice> knownDevices = new Dictionary<string, AudioDevice>(StringComparer.OrdinalIgnoreCase);
+        private Notifications notifications;
+        private volatile bool devicesChanged;
+        // Raised on a COM thread when an output appears, disappears, changes state or becomes the default.
+        public event Action DevicesChanged;
 
-        public AudioService() { enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator(); }
+        public AudioService()
+        {
+            enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            try { notifications = new Notifications(this); Check(enumerator.RegisterEndpointNotificationCallback(notifications)); }
+            catch (Exception) { notifications = null; /* Without notifications the 2 s poll still catches changes. */ }
+        }
         private static void Check(int result) { Marshal.ThrowExceptionForHR(result); }
         private static void Release(object value) { if (value != null && Marshal.IsComObject(value)) Marshal.ReleaseComObject(value); }
         private static bool Same(string first, string second) { return String.Equals(first, second, StringComparison.OrdinalIgnoreCase); }
@@ -82,11 +95,12 @@ namespace WidgetScreen
         {
             try
             {
+                if (devicesChanged) { devicesChanged = false; knownDevices.Clear(); Disconnect(); }
                 Connect();
                 var snapshot = new AudioSnapshot();
                 Check(endpoint.GetMasterVolumeLevelScalar(out snapshot.Volume));
                 Check(endpoint.GetMute(out snapshot.Muted));
-                snapshot.Device = FriendlyName(output); snapshot.DeviceId = deviceId;
+                snapshot.Device = Known(deviceId, output).Name; snapshot.DeviceId = deviceId;
                 try { WithMicrophone(volume => { bool muted; Check(volume.GetMute(out muted)); snapshot.MicrophoneMuted = muted; }); } catch (COMException) { } catch (UnauthorizedAccessException) { }
                 var found = new List<AudioSession>();
                 try { ReadSessions(output, deviceId, found); }
@@ -95,7 +109,8 @@ namespace WidgetScreen
                 try
                 {
                     VisitOutputs((id, device) => {
-                        snapshot.Devices.Add(new AudioDevice { Id = id, Name = id == deviceId ? snapshot.Device : FriendlyName(device), FormFactor = FormFactor(device), IsDefault = id == deviceId });
+                        var known = Known(id, device);
+                        snapshot.Devices.Add(new AudioDevice { Id = id, Name = known.Name, FormFactor = known.FormFactor, IsDefault = id == deviceId });
                         // Apps routed to another output keep their sessions on it. A failing output only hides its own apps.
                         if (id != deviceId && snapshot.SessionsAvailable)
                         {
@@ -104,14 +119,28 @@ namespace WidgetScreen
                     });
                 }
                 catch (COMException) { } catch (UnauthorizedAccessException) { }
-                if (!snapshot.Devices.Any(device => device.IsDefault)) snapshot.Devices.Insert(0, new AudioDevice { Id = deviceId, Name = snapshot.Device, FormFactor = FormFactor(output), IsDefault = true });
+                if (!snapshot.Devices.Any(device => device.IsDefault)) snapshot.Devices.Insert(0, new AudioDevice { Id = deviceId, Name = snapshot.Device, FormFactor = Known(deviceId, output).FormFactor, IsDefault = true });
                 var devices = new Dictionary<string, string>();
                 foreach (var session in found) devices[session.Id] = session.DeviceId;
                 sessionDevices = devices;
-                snapshot.Sessions = VisibleSessions(found, deviceId, AppOutput);
+                snapshot.Sessions = Ordered(VisibleSessions(found, deviceId, AppOutput));
+                snapshot.CanRouteApps = RoutingReady();
                 return snapshot;
             }
             catch (COMException) { Disconnect(); throw; }
+        }
+
+        private AudioDevice Known(string id, IMMDevice device)
+        {
+            AudioDevice known;
+            if (!knownDevices.TryGetValue(id, out known)) { known = new AudioDevice { Id = id, Name = FriendlyName(device), FormFactor = FormFactor(device) }; knownDevices[id] = known; }
+            return known;
+        }
+
+        // Apps that are playing first, then idle ones, System sounds last; otherwise in the order Windows lists them.
+        public static List<AudioSession> Ordered(IList<AudioSession> sessions)
+        {
+            return sessions.Where(s => s.ProcessId != 0 && s.Active).Concat(sessions.Where(s => s.ProcessId != 0 && !s.Active)).Concat(sessions.Where(s => s.ProcessId == 0)).ToList();
         }
 
         // Windows keeps an idle session on the old output after an app moves, and a System sounds session on every
@@ -148,6 +177,7 @@ namespace WidgetScreen
         }
 
         public void SetVolume(double value) { Connect(); Guid context = Guid.Empty; Check(endpoint.SetMasterVolumeLevelScalar((float)Math.Max(0, Math.Min(1, value)), ref context)); }
+        public void StepVolume(double delta) { Connect(); float level; Check(endpoint.GetMasterVolumeLevelScalar(out level)); SetVolume(level + delta); }
         public void ToggleMute() { Connect(); bool mute; Check(endpoint.GetMute(out mute)); Guid context = Guid.Empty; Check(endpoint.SetMute(!mute, ref context)); }
         public void ToggleMicrophone() { WithMicrophone(volume => { bool mute; Check(volume.GetMute(out mute)); Guid context = Guid.Empty; Check(volume.SetMute(!mute, ref context)); }); }
 
@@ -370,8 +400,38 @@ namespace WidgetScreen
         }
         public void Dispose()
         {
+            if (notifications != null && enumerator != null) { try { enumerator.UnregisterEndpointNotificationCallback(notifications); } catch (Exception) { } notifications = null; }
             Disconnect(); Release(enumerator); enumerator = null;
             if (policyFactory != IntPtr.Zero) { Marshal.Release(policyFactory); policyFactory = IntPtr.Zero; }
+        }
+
+        // Windows calls these on its own thread; they only flag the change and tell the owner.
+        [ComVisible(true)]
+        private sealed class Notifications : IMMNotificationClient
+        {
+            private readonly AudioService owner;
+            public Notifications(AudioService owner) { this.owner = owner; }
+            private void Changed()
+            {
+                owner.devicesChanged = true;
+                var handler = owner.DevicesChanged;
+                if (handler != null) { try { handler(); } catch (Exception) { } }
+            }
+            public int OnDeviceStateChanged(string id, uint state) { Changed(); return 0; }
+            public int OnDeviceAdded(string id) { Changed(); return 0; }
+            public int OnDeviceRemoved(string id) { Changed(); return 0; }
+            public int OnDefaultDeviceChanged(int flow, int role, string id) { if (flow == 0) Changed(); return 0; }
+            public int OnPropertyValueChanged(string id, PropertyKey key) { return 0; }
+        }
+
+        [ComImport, Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IMMNotificationClient
+        {
+            [PreserveSig] int OnDeviceStateChanged([MarshalAs(UnmanagedType.LPWStr)] string id, uint state);
+            [PreserveSig] int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)] string id);
+            [PreserveSig] int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)] string id);
+            [PreserveSig] int OnDefaultDeviceChanged(int flow, int role, [MarshalAs(UnmanagedType.LPWStr)] string id);
+            [PreserveSig] int OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)] string id, PropertyKey key);
         }
 
         [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant value);
@@ -393,8 +453,8 @@ namespace WidgetScreen
             [PreserveSig] int EnumAudioEndpoints(int flow, uint mask, out IMMDeviceCollection devices);
             [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
             [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
-            [PreserveSig] int RegisterEndpointNotificationCallback(IntPtr client);
-            [PreserveSig] int UnregisterEndpointNotificationCallback(IntPtr client);
+            [PreserveSig] int RegisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
+            [PreserveSig] int UnregisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
         }
         [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IMMDeviceCollection

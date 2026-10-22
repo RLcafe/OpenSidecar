@@ -28,6 +28,21 @@ namespace WidgetScreen
         private long lastReceived, lastSent;
         private DateTime lastNetwork = DateTime.MinValue;
         private string lastInterfaces = "";
+        // Enumerating adapters is slow on Windows (WMI behind it), so the list is kept for 30 s and dropped when
+        // Windows reports an address or availability change; the byte counters themselves are read live.
+        private NetworkInterface[] interfaces;
+        private DateTime interfacesAt = DateTime.MinValue;
+        private volatile bool interfacesStale = true;
+        private readonly NetworkAddressChangedEventHandler addressChanged;
+        private readonly NetworkAvailabilityChangedEventHandler availabilityChanged;
+        public static readonly TimeSpan InterfacesLifetime = TimeSpan.FromSeconds(30);
+
+        public SystemService()
+        {
+            addressChanged = (sender, e) => interfacesStale = true;
+            availabilityChanged = (sender, e) => interfacesStale = true;
+            try { NetworkChange.NetworkAddressChanged += addressChanged; NetworkChange.NetworkAvailabilityChanged += availabilityChanged; } catch (Exception) { }
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct MemoryStatus
@@ -75,7 +90,12 @@ namespace WidgetScreen
             {
             try
             {
-                var interfaces = NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel).OrderBy(n => n.Id).ToArray();
+                var now0 = DateTime.UtcNow;
+                if (interfaces == null || interfacesStale || now0 - interfacesAt > InterfacesLifetime)
+                {
+                    interfaces = NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel).OrderBy(n => n.Id).ToArray();
+                    interfacesAt = now0; interfacesStale = false;
+                }
                 string ids = String.Join(";", interfaces.Select(n => n.Id));
                 long received = 0, sent = 0;
                 foreach (var adapter in interfaces) { var stats = adapter.GetIPv4Statistics(); received += stats.BytesReceived; sent += stats.BytesSent; }
@@ -95,7 +115,11 @@ namespace WidgetScreen
             return snapshot;
         }
 
-        public void Dispose() { lock (gate) { disposed = true; gpu.Dispose(); } }
+        public void Dispose()
+        {
+            try { NetworkChange.NetworkAddressChanged -= addressChanged; NetworkChange.NetworkAvailabilityChanged -= availabilityChanged; } catch (Exception) { }
+            lock (gate) { disposed = true; gpu.Dispose(); }
+        }
 
         public static string FormatRate(double bytes)
         {

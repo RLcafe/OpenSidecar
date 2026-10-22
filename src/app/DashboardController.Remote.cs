@@ -55,7 +55,7 @@ namespace WidgetScreen
             Control<CheckBox>("RemoteTrayChoice").Click += (sender, e) => {
                 bool previous = settings.HideToTrayWithPhone;
                 settings.HideToTrayWithPhone = Control<CheckBox>("RemoteTrayChoice").IsChecked == true;
-                try { SettingsStore.Save(settingsPath, settings); }
+                try { SaveSettingsFile(settings); }
                 catch (Exception) { settings.HideToTrayWithPhone = previous; Control<CheckBox>("RemoteTrayChoice").IsChecked = previous; Text("RemoteStatus", "Couldn't save this choice. Check that your settings folder is writable."); }
             };
             Button("RemotePairButton", () => {
@@ -77,7 +77,7 @@ namespace WidgetScreen
         {
             bool previous = settings.RemoteEnabled;
             settings.RemoteEnabled = enabled;
-            try { SettingsStore.Save(settingsPath, settings); }
+            try { SaveSettingsFile(settings); }
             catch (Exception) { settings.RemoteEnabled = previous; Text("RemoteStatus", "Couldn't save this choice. Check that your settings folder is writable."); UpdateRemoteSettings(); return; }
             ApplyRemote();
             UpdateRemoteSettings();
@@ -289,9 +289,8 @@ namespace WidgetScreen
 
         private async Task<Dictionary<string, object>> RemoteState(string[] parts)
         {
-            var layout = RemoteLayout();
-            var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock, "layoutVersion", RemoteLayoutVersion(layout));
-            if (parts.Contains("layout")) state["layout"] = layout;
+            var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock, "layoutVersion", RemoteLayoutVersion());
+            if (parts.Contains("layout")) state["layout"] = RemoteLayout();
             if (parts.Contains("focus"))
             {
                 focus.FinishIfElapsed();
@@ -301,7 +300,7 @@ namespace WidgetScreen
             {
                 try
                 {
-                    var m = await media.ReadAsync(); remoteMedia = m;
+                    var m = await ReadMediaAsync(false); remoteMedia = m;
                     string source = m.Source ?? "";
                     state["media"] = D("available", m.Available, "playing", m.Playing, "canPlayPause", m.CanPlayPause, "canPrevious", m.CanPrevious, "canNext", m.CanNext, "canSeek", m.CanSeek,
                         "title", m.Title, "artist", m.Artist ?? "", "key", m.Key, "positionMs", m.Position.TotalMilliseconds, "durationMs", m.Duration.TotalMilliseconds, "art", m.Artwork != null,
@@ -313,10 +312,9 @@ namespace WidgetScreen
             {
                 try
                 {
-                    if (audio == null) audio = new AudioService();
-                    var snapshot = audio.Read();
+                    var snapshot = await ReadAudioAsync(false);
                     state["audio"] = D("available", true, "device", snapshot.Device, "deviceId", snapshot.DeviceId, "volume", snapshot.Volume, "muted", snapshot.Muted, "microphone", snapshot.MicrophoneMuted,
-                        "sessionsAvailable", snapshot.SessionsAvailable, "canRoute", audio.CanRouteApps,
+                        "sessionsAvailable", snapshot.SessionsAvailable, "canRoute", snapshot.CanRouteApps,
                         "devices", snapshot.Devices.Select(d => D("id", d.Id, "name", d.Name, "isDefault", d.IsDefault, "formFactor", d.FormFactor)).ToArray(),
                         "sessions", snapshot.Sessions.Select(s => D("id", s.Id, "name", s.Name, "deviceId", s.DeviceId, "processId", s.ProcessId, "volume", s.Volume, "muted", s.Muted)).ToArray());
                 }
@@ -327,7 +325,7 @@ namespace WidgetScreen
                 var wanted = settings;
                 try
                 {
-                    var s = await Task.Run(() => system.Read(wanted.ShowCpu, wanted.ShowGpu, wanted.ShowRam, wanted.ShowNetwork, wanted.ShowUptime));
+                    var s = await ReadSystemAsync(wanted.ShowCpu, wanted.ShowGpu, wanted.ShowRam, wanted.ShowNetwork, wanted.ShowUptime);
                     state["system"] = D("showCpu", wanted.ShowCpu, "showGpu", wanted.ShowGpu, "showRam", wanted.ShowRam, "showNetwork", wanted.ShowNetwork, "showUptime", wanted.ShowUptime,
                         "cpu", s.CpuAvailable ? (object)s.Cpu : null, "gpu", s.Gpu, "gpuStatus", s.GpuStatus ?? "Unavailable",
                         "memoryPercent", s.MemoryAvailable ? (object)s.MemoryPercent : null, "memoryUsedGB", s.UsedMemoryGB, "memoryTotalGB", s.TotalMemoryGB,
@@ -385,38 +383,37 @@ namespace WidgetScreen
             {
                 case "media.toggle": case "media.previous": case "media.next":
                     {
-                        await media.ReadAsync();
+                        await ReadMediaAsync(true);
                         bool sent = await media.CommandAsync(action.Substring(6));
-                        RefreshMedia();
+                        RefreshMedia(true);
                         if (!sent) throw new InvalidOperationException("Nothing on the PC is playing media to control.");
                         return Done(null);
                     }
                 case "media.seek":
                     {
-                        await media.ReadAsync();
+                        await ReadMediaAsync(true);
                         double positionMs = Required(body, "positionMs");
                         if (!await media.SeekAsync(Str(body, "key"), positionMs)) throw new InvalidOperationException("Couldn't jump there. The app may not allow it, or the song changed.");
                         return Done(null);
                     }
-                case "audio.volume": { double value = Required(body, "value"); RemoteAudio(() => audio.SetVolume(value)); return Done(null); }
-                case "audio.mute": RemoteAudio(() => audio.ToggleMute()); return Done(null);
-                case "audio.microphone": RemoteAudio(() => audio.ToggleMicrophone()); return Done(null);
-                case "audio.output": RemoteAudio(() => audio.SetDefaultOutput(Str(body, "id"))); return Done(null);
-                case "audio.session.volume": { double value = Required(body, "value"); RemoteAudio(() => audio.SetSessionVolume(Str(body, "id"), value)); return Done(null); }
-                case "audio.session.mute": RemoteAudio(() => audio.ToggleSessionMute(Str(body, "id"))); return Done(null);
+                case "audio.volume": { double value = Required(body, "value"); await RemoteAudio(a => a.SetVolume(value)); return Done(null); }
+                case "audio.mute": await RemoteAudio(a => a.ToggleMute()); return Done(null);
+                case "audio.microphone": await RemoteAudio(a => a.ToggleMicrophone()); return Done(null);
+                case "audio.output": { string id = Str(body, "id"); await RemoteAudio(a => a.SetDefaultOutput(id)); return Done(null); }
+                case "audio.session.volume": { double value = Required(body, "value"); string id = Str(body, "id"); await RemoteAudio(a => a.SetSessionVolume(id, value)); return Done(null); }
+                case "audio.session.mute": { string id = Str(body, "id"); await RemoteAudio(a => a.ToggleSessionMute(id)); return Done(null); }
                 case "audio.session.output":
                     {
-                        uint process = (uint)Required(body, "processId");
+                        uint process = (uint)Required(body, "processId"); string id = Str(body, "id");
                         if (process == 0) throw new InvalidOperationException("System sounds always play on the master output.");
-                        RemoteAudio(() => { if (!audio.CanRouteApps) throw new InvalidOperationException("Windows didn't allow changing this app's output."); audio.SetAppOutput(process, Str(body, "id")); });
+                        await RemoteAudio(a => { if (!a.CanRouteApps) throw new InvalidOperationException("Windows didn't allow changing this app's output."); a.SetAppOutput(process, id); });
                         return Done(null);
                     }
                 case "audio.session.routed":
                     {
                         uint process = (uint)Required(body, "processId");
-                        string routed = null;
-                        if (process != 0 && audio != null && audio.CanRouteApps) routed = audio.AppOutput(process);
-                        return RemoteResponse.Json(200, D("ok", true, "routed", routed, "canRoute", process != 0 && audio != null && audio.CanRouteApps));
+                        var routing = process == 0 ? Tuple.Create(false, (string)null) : await audio.Run(a => Tuple.Create(a.CanRouteApps, a.CanRouteApps ? a.AppOutput(process) : null));
+                        return RemoteResponse.Json(200, D("ok", true, "routed", routing.Item2, "canRoute", routing.Item1));
                     }
                 case "focus.toggle": focus.Toggle(); UpdateFocus(); return Done(null);
                 case "focus.reset": focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); return Done(null);
@@ -453,12 +450,12 @@ namespace WidgetScreen
             }
         }
 
-        private void RemoteAudio(Action action)
+        private async Task RemoteAudio(Action<AudioService> action)
         {
-            try { if (audio == null) audio = new AudioService(); action(); }
+            try { await audio.Run(action); }
             catch (InvalidOperationException) { throw; }
             catch (Exception) { throw new InvalidOperationException("The PC's audio device changed or went away. Try again."); }
-            finally { RefreshAudio(); }
+            finally { if (!disposed) RefreshAudio(true); }
         }
 
         private static Dictionary<string, object> Item(SpotifyItem item)

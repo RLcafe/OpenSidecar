@@ -171,6 +171,13 @@ public final class Dashboard {
         });
     }
 
+    // A slider move: the PC applies it and the next poll shows it; no extra reading, so rows don't flicker mid-drag.
+    public void commandQuietly(Map<String, Object> body) {
+        pc.command(body, new Async.Done<String>() { @Override public void ok(String message) { } }, new Async.Failed() {
+            @Override public void error(Exception error) { say(Pc.message(error)); refreshSoon(); }
+        });
+    }
+
     public void openUrl(String url) {
         activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }

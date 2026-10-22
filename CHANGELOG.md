@@ -4,7 +4,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/mixer-events` (audit branch 3, 22 Oct 2026; decision 011):
+
+- **The sound mixer no longer does its Windows audio work on the dashboard's thread.** Outputs and app sessions are read on a dedicated audio thread, output names are cached, and Windows' own device notifications trigger a read the moment an output appears, leaves or becomes the default, so a new headset shows up at once instead of at the next 2-second beat.
+- Apps in the mixer are listed playing first, idle next and System sounds last, on both apps.
+- The live output levels sit under the master slider, where the sound is, and the row disappears when levels are off or paused instead of showing a dotted line; silence draws nothing.
+- A phone and the dashboard share each audio, system and Now Playing reading for a second, so a connected phone no longer doubles the PC's work; the layout version the phone checks is only recomputed after a settings save, an edit or a screen change.
+- Network adapters are enumerated every 30 s (and when Windows reports a change) rather than on every System stats tick.
+- The phone no longer refreshes every card after each slider nudge, so mixer rows stop flickering mid-drag.
 
 ## 0.4.2 (22 Oct 2026)
 

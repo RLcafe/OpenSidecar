@@ -22,6 +22,8 @@ namespace WidgetScreen
             double step = ActualWidth / samples.Length;
             for (int i = 0; i < samples.Length; i++)
             {
+                // Silence draws nothing; a row of 2 px stubs read as a dotted divider.
+                if (samples[i] < 0.005) continue;
                 double height = 2 + Math.Sqrt(samples[i]) * Math.Max(0, ActualHeight - 2);
                 drawing.DrawRoundedRectangle(BarBrush, null, new Rect(i * step, (ActualHeight - height) / 2, Math.Max(1, step - 4), height), 2, 2);
             }
