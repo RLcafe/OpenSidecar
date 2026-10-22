@@ -139,9 +139,14 @@ public final class Dashboard {
 
     // Asks the PC for the cards on screen; hidden cards aren't read on the PC either. The layout section is only asked
     // for when the PC's version moved, and never while this phone is editing (the edit saves and reads it again).
+    // Sections a card wants beyond its own while something is open in it (Now Playing's volume panel asks for audio).
+    private final java.util.Set<String> extraParts = new java.util.LinkedHashSet<String>();
+    public void wantPart(String part, boolean want) { if (want ? extraParts.add(part) : extraParts.remove(part)) if (want) refreshSoon(); }
+
     private void poll(boolean force) {
         List<String> parts = new ArrayList<String>();
         for (Widget widget : widgets.values()) if (isActive(widget.id) && !parts.contains(widget.part())) parts.add(widget.part());
+        for (String part : extraParts) if (!parts.contains(part)) parts.add(part);
         if (!editor.editing() && (mirroredVersion.isEmpty() || (pc.state != null && !pc.state.layoutVersion.equals(mirroredVersion)))) parts.add("layout");
         pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } }, force);
     }

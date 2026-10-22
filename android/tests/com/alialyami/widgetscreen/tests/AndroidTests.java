@@ -252,7 +252,12 @@ public final class AndroidTests {
                 PcState state = link.state(Arrays.asList("focus", "deck"));
                 ok(fake.requests.get(fake.requests.size() - 1).equals("GET /state?parts=focus,deck") && fake.tokens.get(fake.tokens.size() - 1).equals("Bearer tok"), "state request");
                 ok(state.quiet && state.focus.running && state.focus.durationMs == 1500000 && state.media == null, "state");
-                ok(state.focus.finished && state.focus.chime && !state.focus.paused && state.focus.customMinutes == 45 && state.focus.sessionsToday == 2 && state.focus.minutesToday == 50, "focus finish, preset and session fields");
+                PcState.Audio mixer = new PcState.Audio();
+            PcState.Session system = new PcState.Session(); system.id = "sys"; system.name = "System sounds"; system.processId = 0; mixer.sessions.add(system);
+            PcState.Session spotify = new PcState.Session(); spotify.id = "s"; spotify.name = "Spotify"; spotify.processId = 5; mixer.sessions.add(spotify);
+            PcState.Session chrome = new PcState.Session(); chrome.id = "c"; chrome.name = "chrome"; chrome.processId = 6; mixer.sessions.add(chrome);
+            ok(mixer.sessionFor("Spotify") == spotify && mixer.sessionFor("Chrome") == chrome && mixer.sessionFor("VLC") == null && mixer.sessionFor("") == null, "playing app's mixer row");
+            ok(state.focus.finished && state.focus.chime && !state.focus.paused && state.focus.customMinutes == 45 && state.focus.sessionsToday == 2 && state.focus.minutesToday == 50, "focus finish, preset and session fields");
                 ok(link.command(Json.map("action", "discord.play", "id", "1")).equals("Played Airhorn.") && fake.bodies.get(fake.bodies.size() - 1).equals("{\"action\":\"discord.play\",\"id\":\"1\"}"), "command");
                 try { link.spotify(Json.map("op", "playTrack", "uri", TRACK)); throw new AssertionError("No device accepted."); }
                 catch (PcLink.Failure f) { ok(f.noDevice && f.code == 409, "no device"); }

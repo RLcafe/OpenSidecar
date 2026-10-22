@@ -303,10 +303,10 @@ namespace WidgetScreen
                 try
                 {
                     var m = await ReadMediaAsync(false); remoteMedia = m;
-                    string source = m.Source ?? "";
+                    string app = m.Available ? MediaService.SourceName(m.Source) : "";
                     state["media"] = D("available", m.Available, "playing", m.Playing, "canPlayPause", m.CanPlayPause, "canPrevious", m.CanPrevious, "canNext", m.CanNext, "canSeek", m.CanSeek,
                         "title", m.Title, "artist", m.Artist ?? "", "key", m.Key, "positionMs", m.Position.TotalMilliseconds, "durationMs", m.Duration.TotalMilliseconds, "art", m.Artwork != null,
-                        "source", !m.Available ? "" : source.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 ? "SPOTIFY" : source.IndexOf("chrome", StringComparison.OrdinalIgnoreCase) >= 0 ? "CHROME" : source.IndexOf("edge", StringComparison.OrdinalIgnoreCase) >= 0 ? "EDGE" : "");
+                        "source", app.ToUpperInvariant(), "app", app);
                 }
                 catch (Exception) { remoteMedia = null; state["media"] = D("error", true); }
             }

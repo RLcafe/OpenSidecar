@@ -16,7 +16,7 @@ public final class PcState {
 
     public static final class Media {
         public boolean error, available, playing, canPlayPause, canPrevious, canNext, canSeek, art;
-        public String title = "", artist = "", source = "", key = "";
+        public String title = "", artist = "", source = "", key = "", app = "";
         public double positionMs, durationMs;
     }
 
@@ -30,6 +30,17 @@ public final class PcState {
         public final List<Device> devices = new ArrayList<Device>();
         public final List<Session> sessions = new ArrayList<Session>();
         public Device find(String id) { for (Device d : devices) if (d.id != null && d.id.equalsIgnoreCase(id)) return d; return null; }
+        // The app's mixer row: its process name and the app's short name share a word (DashboardController.MatchSession).
+        public Session sessionFor(String appName) {
+            if (appName == null || appName.trim().isEmpty()) return null;
+            String wanted = appName.replace(" ", "").toLowerCase(java.util.Locale.ROOT);
+            for (Session s : sessions) {
+                if (s.processId == 0 || s.name == null || s.name.isEmpty()) continue;
+                String name = s.name.replace(" ", "").toLowerCase(java.util.Locale.ROOT);
+                if (name.contains(wanted) || wanted.contains(name)) return s;
+            }
+            return null;
+        }
     }
 
     public static final class System {
@@ -109,7 +120,7 @@ public final class PcState {
             Media media = new Media();
             media.error = flag(m, "error"); media.available = flag(m, "available"); media.playing = flag(m, "playing");
             media.canPlayPause = flag(m, "canPlayPause"); media.canPrevious = flag(m, "canPrevious"); media.canNext = flag(m, "canNext"); media.canSeek = flag(m, "canSeek");
-            media.art = flag(m, "art"); media.title = text(m, "title"); media.artist = text(m, "artist"); media.source = text(m, "source"); media.key = text(m, "key");
+            media.art = flag(m, "art"); media.title = text(m, "title"); media.artist = text(m, "artist"); media.source = text(m, "source"); media.key = text(m, "key"); media.app = text(m, "app");
             media.positionMs = Json.number(m, "positionMs"); media.durationMs = Json.number(m, "durationMs");
             state.media = media;
         }
