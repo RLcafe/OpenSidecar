@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/mixer-events` (audit branch 3, 22 Oct 2026; decision 011):
+Nothing yet.
+
+## 0.5.0 (22 Oct 2026)
+
+Merges `feature/mixer-events`, audit branch 3 (decision 011).
 
 - **The sound mixer no longer does its Windows audio work on the dashboard's thread.** Outputs and app sessions are read on a dedicated audio thread, output names are cached, and Windows' own device notifications trigger a read the moment an output appears, leaves or becomes the default, so a new headset shows up at once instead of at the next 2-second beat.
 - Apps in the mixer are listed playing first, idle next and System sounds last, on both apps.
