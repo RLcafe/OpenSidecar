@@ -94,6 +94,42 @@ namespace WidgetScreen
             return await Await(current.TryChangePlaybackPositionAsync(ticks));
         }
 
+        // A short name for the app behind a media session, from its AppUserModelId: "Spotify", "Chrome", "VLC", "Media
+        // Player"… Unknown ids are tidied (publisher hash and ".exe" dropped, last segment kept) rather than hidden.
+        public static string SourceName(string appUserModelId)
+        {
+            string id = (appUserModelId ?? "").Trim();
+            if (id.Length == 0) return "";
+            string lower = id.ToLowerInvariant();
+            if (lower.Contains("spotify")) return "Spotify";
+            if (lower.Contains("msedge") || lower.Contains("microsoftedge")) return "Edge";
+            if (lower.Contains("chrome")) return "Chrome";
+            if (lower.Contains("firefox") || lower.Contains("308046b0af4a39cb")) return "Firefox";
+            if (lower.Contains("brave")) return "Brave";
+            if (lower.Contains("opera")) return "Opera";
+            if (lower.Contains("vlc")) return "VLC";
+            if (lower.Contains("zunemusic") || lower.Contains("microsoft.media.player") || lower.Contains("mediaplayer")) return "Media Player";
+            if (lower.Contains("zunevideo")) return "Films & TV";
+            if (lower.Contains("youtubemusic") || lower.Contains("youtube music")) return "YouTube Music";
+            if (lower.Contains("tidal")) return "Tidal";
+            if (lower.Contains("deezer")) return "Deezer";
+            if (lower.Contains("applemusic") || lower.Contains("apple music") || lower.Contains("itunes")) return "Apple Music";
+            if (lower.Contains("foobar")) return "foobar2000";
+            if (lower.Contains("musicbee")) return "MusicBee";
+            if (lower.Contains("winamp")) return "Winamp";
+            if (lower.Contains("groove")) return "Groove";
+            if (lower.Contains("discord")) return "Discord";
+            if (lower.Contains("steam")) return "Steam";
+            // "Publisher.AppName_hash!App" → "AppName"; "C:\…\player.exe" or "player.exe" → "player".
+            string name = id;
+            int bang = name.IndexOf('!'); if (bang > 0) name = name.Substring(0, bang);
+            int underscore = name.LastIndexOf('_'); if (underscore > 0 && name.Length - underscore <= 14) name = name.Substring(0, underscore);
+            int slash = Math.Max(name.LastIndexOf('\\'), name.LastIndexOf('/')); if (slash >= 0) name = name.Substring(slash + 1);
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - 4);
+            int dot = name.LastIndexOf('.'); if (dot >= 0 && dot < name.Length - 1) name = name.Substring(dot + 1);
+            return name.Length > 24 ? name.Substring(0, 24) : name;
+        }
+
         // Bridge the OS's split WinMD contracts directly; no downloaded SDK projection is required.
         private static Task<T> Await<T>(Windows.Foundation.IAsyncOperation<T> operation)
         {

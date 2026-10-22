@@ -180,6 +180,14 @@ namespace WidgetScreen
                 if (!updatingAudio) { double value = e.NewValue / 100; AudioAction(a => a.SetVolume(value), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
             };
             Button("PreviousButton", () => MediaCommand("previous")); Button("PlayButton", () => MediaCommand("toggle")); Button("NextButton", () => MediaCommand("next"));
+            Button("MediaVolumeButton", OpenMediaVolume); Button("MediaVolumeClose", CloseMediaVolume);
+            TouchSlider.Attach(Control<Slider>("MediaVolumeChoice"));
+            Control<Slider>("MediaVolumeChoice").ValueChanged += (sender, e) => {
+                if (updatingAudio || Control<Border>("MediaVolumePanel").Visibility != Visibility.Visible) return;
+                Text("MediaVolumePercent", Math.Round(e.NewValue) + "%");
+                string id = mediaVolumeSession; double value = e.NewValue / 100;
+                AudioAction(a => { if (id == null) a.SetVolume(value); else a.SetSessionVolume(id, value); }, false);
+            };
             Button("WeatherButton", () => {
                 if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
                 {
@@ -225,6 +233,7 @@ namespace WidgetScreen
                 if (Editor.IsVisible("System") && (settings.ShowCpu || settings.ShowGpu || settings.ShowRam || settings.ShowNetwork || settings.ShowUptime)) RefreshSystem();
             }
             if (ticks % (settings.QuietMode ? 6 : 3) == 0) RefreshMedia();
+            else if (lastMedia != null && lastMedia.Playing && Editor.IsVisible("Media")) mediaScrubber.Advance(1000);
             if (!String.IsNullOrWhiteSpace(settings.WeatherLocation) && DateTime.UtcNow - lastWeatherAttempt >= TimeSpan.FromMinutes(15)) RefreshWeather();
         }
 
@@ -777,8 +786,8 @@ namespace WidgetScreen
                 var snapshot = await ReadMediaAsync(fresh); if (disposed) return;
                 Text("TrackTitle", snapshot.Available ? snapshot.Title : "Nothing playing");
                 Text("TrackArtist", snapshot.Available ? (snapshot.Artist ?? "") : "Start music or a video in any app.");
-                string source = snapshot.Source ?? "";
-                Text("MediaSource", !snapshot.Available ? "" : source.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0 ? "SPOTIFY" : source.IndexOf("chrome", StringComparison.OrdinalIgnoreCase) >= 0 ? "CHROME" : source.IndexOf("edge", StringComparison.OrdinalIgnoreCase) >= 0 ? "EDGE" : "");
+                Text("MediaSource", !snapshot.Available ? "" : MediaService.SourceName(snapshot.Source).ToUpperInvariant());
+                Control<Button>("MediaVolumeButton").IsEnabled = snapshot.Available;
                 Text("MediaPosition", snapshot.Available ? FormatTime(snapshot.Position) : "—:—");
                 Text("MediaDuration", snapshot.Duration > TimeSpan.Zero ? FormatTime(snapshot.Duration) : "—:—");
                 mediaScrubber.Update(snapshot.Key, snapshot.Position.TotalMilliseconds, snapshot.Duration.TotalMilliseconds, snapshot.CanSeek);
@@ -799,6 +808,7 @@ namespace WidgetScreen
                 mediaScrubber.Update(null, 0, 0, false); Control<Image>("AlbumArt").Source = null;
                 Text("MediaHint", "Retrying automatically.");
                 Control<Button>("PlayButton").IsEnabled = false; Control<Button>("PreviousButton").IsEnabled = false; Control<Button>("NextButton").IsEnabled = false;
+                Control<Button>("MediaVolumeButton").IsEnabled = false; CloseMediaVolume();
             }
             finally { mediaBusy = false; }
         }
@@ -820,6 +830,41 @@ namespace WidgetScreen
             finally { mediaCommandBusy = false; }
         }
         private static string FormatTime(TimeSpan time) { return ((int)time.TotalMinutes).ToString("0") + ":" + time.Seconds.ToString("00"); }
+
+        // The playing app's mixer row, one tap from the Now Playing card: a small panel with that app's slider (master
+        // volume when the app isn't in the mixer, or the mixer hasn't been read). Null means master.
+        private string mediaVolumeSession;
+        private async void OpenMediaVolume()
+        {
+            if (lastMedia == null || !lastMedia.Available) return;
+            AudioSnapshot snapshot = null;
+            try { snapshot = await ReadAudioAsync(false); } catch (Exception) { }
+            if (disposed || snapshot == null) { Text("MediaHint", "The mixer isn't available right now."); return; }
+            var session = MatchSession(snapshot.Sessions, MediaService.SourceName(lastMedia.Source));
+            mediaVolumeSession = session == null ? null : session.Id;
+            Text("MediaVolumeSubject", session == null ? "Master volume" : session.Name);
+            Text("MediaVolumeNote", session == null ? "This app isn't in the mixer yet, so this is the master volume." : "Only " + session.Name + ". Master volume stays where it is.");
+            updatingAudio = true;
+            try { Control<Slider>("MediaVolumeChoice").Value = (session == null ? snapshot.Volume : session.Volume) * 100; }
+            finally { updatingAudio = false; }
+            Text("MediaVolumePercent", Math.Round((session == null ? snapshot.Volume : session.Volume) * 100) + "%");
+            Control<Border>("MediaVolumePanel").Visibility = Visibility.Visible;
+            Control<Slider>("MediaVolumeChoice").Focus();
+        }
+        private void CloseMediaVolume() { Control<Border>("MediaVolumePanel").Visibility = Visibility.Collapsed; mediaVolumeSession = null; }
+        // The mixer session that belongs to the playing app: its process name and the app's short name share a word.
+        public static AudioSession MatchSession(IList<AudioSession> sessions, string appName)
+        {
+            if (String.IsNullOrWhiteSpace(appName)) return null;
+            string wanted = appName.Replace(" ", "").ToLowerInvariant();
+            foreach (var session in sessions)
+            {
+                if (session.ProcessId == 0 || String.IsNullOrEmpty(session.Name)) continue;
+                string name = session.Name.Replace(" ", "").ToLowerInvariant();
+                if (name.Contains(wanted) || wanted.Contains(name)) return session;
+            }
+            return null;
+        }
 
         // The "updated" time follows the clock's 12- or 24-hour choice.
         private void ShowWeatherCredit()

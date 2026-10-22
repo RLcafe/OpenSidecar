@@ -42,6 +42,14 @@ namespace WidgetScreen
             slider.IsEnabled = enabled && duration > 0 && key != null;
             if (!active) { slider.Maximum = Math.Max(1, duration); slider.SmallChange = 5000; slider.LargeChange = 15000; slider.Value = Math.Min(position, slider.Maximum); }
         }
+        // Between readings a playing song keeps moving here, a second at a time; the next reading corrects it.
+        public void Advance(double milliseconds)
+        {
+            if (active || key == null || duration <= 0) return;
+            position = Math.Min(duration, position + milliseconds);
+            slider.Value = Math.Min(position, slider.Maximum);
+            preview(position);
+        }
         public void Begin() { if (active || !slider.IsEnabled) return; active = true; gestureKey = key; }
         private void Move(double x) { slider.Value = TouchSlider.ValueAt(slider, x); }
         public void End(bool commit)

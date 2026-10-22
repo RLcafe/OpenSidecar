@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.widgets;
 
 import android.graphics.Bitmap;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -21,20 +22,24 @@ import com.alialyami.widgetscreen.integrations.Images;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
-// Now Playing on the PC: whatever Windows says is playing, with its controls, run on the PC.
+// Now Playing on the PC: whatever Windows says is playing, with its controls, run on the PC. The position keeps
+// moving between readings, and the playing app's volume is one tap away.
 public final class MediaWidget extends Widget {
-    private TextView source, title, artist, position, duration, hint;
+    private TextView source, title, artist, position, duration, hint, volumeSubject, volumeNote, volumePercent;
     private ImageView art;
-    private TouchSlider seek;
-    private GlyphView previous, next, play;
-    private String artKey = "", hintText = "";
+    private TouchSlider seek, volume;
+    private GlyphView previous, next, play, volumeButton;
+    private FrameLayout root, volumePanel;
+    private String artKey = "", hintText = "", volumeSession;
     private Bitmap artwork;
+    private long lastVolumeSent;
 
     public MediaWidget(Dashboard dash) { super("Media", dash); }
 
     @Override public String part() { return "media"; }
 
     @Override protected View create() {
+        volumePanel = null;
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
         header.addView(ui.label("NOW PLAYING"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -55,7 +60,8 @@ public final class MediaWidget extends Widget {
         double size = CardSizing.mediaArt(width, height);
         content.addView(cover, ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
         LinearLayout text = ui.column();
-        title = Ui.wrap(ui.heading("Nothing playing"), 2);
+        // One line for the title, as on the PC; the whole name is in the content description.
+        title = Ui.wrap(ui.heading("Nothing playing"), 1);
         title.setTypeface(Ui.MEDIUM);
         text.addView(title, ui.ll(Ui.MATCH, Ui.WRAP));
         artist = Ui.wrap(ui.smallText(""), 2);
@@ -83,6 +89,7 @@ public final class MediaWidget extends Widget {
         timeline.addView(duration, ui.ll(ui.px(60), Ui.WRAP));
         column.addView(timeline, ui.ll(Ui.MATCH, ui.px(48)));
 
+        FrameLayout controlsRow = new FrameLayout(ui.context);
         LinearLayout controls = ui.row();
         controls.setGravity(Gravity.CENTER);
         previous = ui.iconButton("previous", "Previous track", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "media.previous")); } });
@@ -94,11 +101,16 @@ public final class MediaWidget extends Widget {
         controls.addView(play, ui.ll(ui.px(76), ui.px(48)));
         next = ui.iconButton("next", "Next track", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "media.next")); } });
         controls.addView(next, ui.margins(ui.ll(ui.px(56), ui.px(48)), 14, 0, 0, 0));
-        column.addView(controls, ui.ll(Ui.MATCH, ui.px(54)));
+        controlsRow.addView(controls, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER));
+        // The playing app's volume, one tap away: opens a small panel with that app's mixer slider.
+        volumeButton = ui.iconButton("volume", "Volume of the playing app", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { openVolume(); } });
+        controlsRow.addView(volumeButton, ui.frame(ui.px(48), ui.px(48), Gravity.END | Gravity.CENTER_VERTICAL));
+        column.addView(controlsRow, ui.ll(Ui.MATCH, ui.px(54)));
 
         hint = ui.smallText("");
         column.addView(hint, ui.ll(Ui.MATCH, ui.px(26)));
-        return ui.card(column, 24);
+        root = ui.card(column, 24);
+        return root;
     }
 
     private PcState.Media media() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.media; }
@@ -110,16 +122,22 @@ public final class MediaWidget extends Widget {
         if (!dash.online()) { title.setText("PC offline"); artist.setText(dash.offlineText()); }
         else if (m != null && m.error) { title.setText("Media controls unavailable"); artist.setText("Windows isn't sharing what's playing right now."); }
         else { title.setText(available ? m.title : "Nothing playing"); artist.setText(available ? m.artist : "Start music or a video in any app on the PC."); }
+        title.setContentDescription(available ? m.title : null);
         source.setText(available ? m.source : "");
-        position.setText(available ? Format.mediaTime((long) m.positionMs) : "—:—");
+        // Between readings a playing song keeps moving here; the next reading corrects it.
+        double shownPosition = available ? m.positionMs : 0;
+        if (available && m.playing && m.durationMs > 0) shownPosition = Math.min(m.durationMs, m.positionMs + (SystemClock.elapsedRealtime() - dash.pc.stateAt));
+        position.setText(available ? Format.mediaTime((long) shownPosition) : "—:—");
         duration.setText(available && m.durationMs > 0 ? Format.mediaTime((long) m.durationMs) : "—:—");
-        if (!seek.dragging()) seek.setValue(available && m.durationMs > 0 ? (float) (1000 * m.positionMs / m.durationMs) : 0);
+        if (!seek.dragging()) seek.setValue(available && m.durationMs > 0 ? (float) (1000 * shownPosition / m.durationMs) : 0);
         Ui.enable(seek, available && m.canSeek);
         play.setGlyph(available && m.playing ? "pause" : "play");
         play.setContentDescription(available && m.playing ? "Pause playback" : "Play media");
         Ui.enable(play, available && m.canPlayPause);
         Ui.enable(previous, available && m.canPrevious);
         Ui.enable(next, available && m.canNext);
+        Ui.enable(volumeButton, available);
+        if (!available) closeVolume();
         hint.setText(hintText);
         String key = available && m.art ? m.key : "";
         if (!key.equals(artKey)) {
@@ -127,6 +145,12 @@ public final class MediaWidget extends Widget {
             if (!key.isEmpty()) loadArt(key);
         }
         art.setImageBitmap(artwork);
+        if (volumePanel != null) renderVolume();
+    }
+
+    @Override public void tick(int ticks, boolean quiet) {
+        PcState.Media m = media();
+        if (m != null && m.available && m.playing && !seek.dragging()) render();
     }
 
     private void loadArt(final String key) {
@@ -144,4 +168,71 @@ public final class MediaWidget extends Widget {
             @Override public void error(Exception error) { hintText = com.alialyami.widgetscreen.integrations.Pc.message(error); if (built()) hint.setText(hintText); }
         });
     }
+
+    // ----- The playing app's volume -----
+
+    private void openVolume() {
+        closeVolume();
+        volumePanel = new FrameLayout(ui.context);
+        volumePanel.setBackgroundColor(ui.theme.surface);
+        volumePanel.setClickable(true);
+        LinearLayout column = ui.column();
+        LinearLayout top = ui.row();
+        LinearLayout titles = ui.column();
+        titles.addView(ui.label("VOLUME"), ui.ll(Ui.WRAP, Ui.WRAP));
+        volumeSubject = ui.heading("Reading the mixer…");
+        volumeSubject.setSingleLine(true); volumeSubject.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titles.addView(volumeSubject, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
+        top.addView(titles, ui.ll(0, Ui.WRAP, 1));
+        top.addView(ui.iconButton("close", "Close volume", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { closeVolume(); } }), ui.ll(ui.px(52), ui.px(52)));
+        column.addView(top, ui.ll(Ui.MATCH, Ui.WRAP));
+        LinearLayout middle = ui.row();
+        volume = new TouchSlider(ui.context, ui).range(0, 100, 0);
+        volume.setContentDescription("Volume of the playing app");
+        volume.setListener(new TouchSlider.Listener() {
+            @Override public void changed(TouchSlider s, float value, boolean done) {
+                volumePercent.setText(Math.round(value) + "%");
+                // At most every 150 ms while dragging, then once more when the finger lifts (like the mixer).
+                long now = SystemClock.elapsedRealtime();
+                if (!done && now - lastVolumeSent < 150) return;
+                lastVolumeSent = now;
+                double level = value / 100.0;
+                dash.commandQuietly(volumeSession == null ? Json.map("action", "audio.volume", "value", level) : Json.map("action", "audio.session.volume", "id", volumeSession, "value", level));
+            }
+        });
+        middle.addView(volume, ui.ll(0, ui.px(52), 1));
+        volumePercent = ui.text("—", 24 * ui.textScale, ui.theme.text);
+        volumePercent.setGravity(Gravity.END);
+        middle.addView(volumePercent, ui.ll(ui.px(72), Ui.WRAP));
+        column.addView(middle, ui.ll(Ui.MATCH, 0, 1));
+        volumeNote = Ui.wrap(ui.smallText(""), 2);
+        column.addView(volumeNote, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6));
+        volumePanel.addView(column, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH);
+        params.topMargin = ui.px(28);
+        root.addView(volumePanel, params);
+        dash.wantPart("audio", true);
+        renderVolume();
+    }
+
+    // Fills the panel from the mixer reading: the playing app's row, or the master volume when it has no row.
+    private void renderVolume() {
+        PcState state = dash.state();
+        PcState.Media m = media();
+        if (state == null || state.audio == null || !state.audio.available) { volumeSubject.setText(state != null && state.audio != null ? "Mixer unavailable" : "Reading the mixer…"); return; }
+        PcState.Session session = state.audio.sessionFor(m == null ? "" : m.app);
+        volumeSession = session == null ? null : session.id;
+        volumeSubject.setText(session == null ? "Master volume" : session.name);
+        volumeNote.setText(session == null ? "This app isn't in the mixer yet, so this is the master volume." : "Only " + session.name + ". Master volume stays where it is.");
+        float level = (float) ((session == null ? state.audio.volume : session.volume) * 100);
+        if (!volume.dragging()) { volume.setValue(level); volumePercent.setText(Math.round(level) + "%"); }
+    }
+
+    private void closeVolume() {
+        if (volumePanel != null && volumePanel.getParent() != null) ((FrameLayout) volumePanel.getParent()).removeView(volumePanel);
+        if (volumePanel != null) dash.wantPart("audio", false);
+        volumePanel = null; volumeSession = null;
+    }
+
+    @Override public void release() { closeVolume(); super.release(); }
 }

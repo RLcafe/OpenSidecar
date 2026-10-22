@@ -605,6 +605,18 @@ internal static class SmokeTests
                 Console.WriteLine("  Outputs: " + result.Devices.Count + "; per-app routing " + (audio.CanRouteApps ? "available" : "unavailable") + "; this process follows " + (routed ?? "the default"));
             }
         });
+        Check("Now Playing names any media app and finds its mixer row", () => {
+            Assert(MediaService.SourceName("Spotify.exe") == "Spotify" && MediaService.SourceName("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify") == "Spotify", "Spotify not named.");
+            Assert(MediaService.SourceName("MSEdge") == "Edge" && MediaService.SourceName("Chrome") == "Chrome" && MediaService.SourceName("308046B0AF4A39CB") == "Firefox" && MediaService.SourceName("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic") == "Media Player", "Known apps not named.");
+            Assert(MediaService.SourceName("Contoso.Player_abc123def456!App") == "Player" && MediaService.SourceName(@"C:\Tools\player.exe") == "player" && MediaService.SourceName("") == "" && MediaService.SourceName(null) == "", "Unknown apps not tidied: " + MediaService.SourceName("Contoso.Player_abc123def456!App"));
+            var sessions = new System.Collections.Generic.List<AudioSession> { new AudioSession { Id = "sys", Name = "System sounds", ProcessId = 0 }, new AudioSession { Id = "s", Name = "Spotify", ProcessId = 5 }, new AudioSession { Id = "c", Name = "chrome", ProcessId = 6 } };
+            Assert(DashboardController.MatchSession(sessions, "Spotify").Id == "s" && DashboardController.MatchSession(sessions, "Chrome").Id == "c" && DashboardController.MatchSession(sessions, "VLC") == null && DashboardController.MatchSession(sessions, "") == null, "Mixer row not matched to the playing app.");
+            var scrubber = new PlaybackScrubber(new System.Windows.Controls.Slider(), (key, position) => { }, position => { });
+            scrubber.Update("song", 10000, 200000, true); scrubber.Advance(1000); scrubber.Advance(1000);
+            Assert(((System.Windows.Controls.Slider)typeof(PlaybackScrubber).GetField("slider", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(scrubber)).Value == 12000, "The scrubber didn't advance between readings.");
+            scrubber.Update("song", 250000, 200000, true); scrubber.Advance(1000);
+            Assert(((System.Windows.Controls.Slider)typeof(PlaybackScrubber).GetField("slider", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(scrubber)).Value == 200000, "The scrubber ran past the end.");
+        });
         Check("Windows media session access (does not control playback)", () => {
             var task = new MediaService().ReadAsync(); Assert(task.Wait(10000), "Media read timed out."); var result = task.Result; Console.WriteLine(result.Available ? "  A media session is available." : "  No media session is active; empty state is expected.");
         });

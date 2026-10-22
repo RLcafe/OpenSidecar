@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/now-playing` (audit branch 6, 22 Oct 2026):
+
+- **The Now Playing position moves every second** while a song plays, on the PC and the phone, instead of jumping every three seconds; readings still correct it.
+- **Any media app is named** in the card's corner (Firefox, VLC, Media Player, Tidal and so on, or a tidied app id), not only Spotify, Chrome and Edge. The phone receives the name too.
+- **The playing app's volume is one tap away**: a volume button on the card opens a small panel with that app's mixer slider (master volume when the app has no mixer row), on both apps.
+- Titles stay on one line (the full title is in the tooltip or content description), so the artist no longer gets pushed around by long names.
 
 ## 0.6.1 (22 Oct 2026)
 
