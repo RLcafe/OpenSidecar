@@ -53,7 +53,7 @@ public final class PcState {
 
     public static final class Button { public String label, glyph, action, describe; public boolean confirm, enabled; }
 
-    public static final class Weather { public String location = ""; public double latitude, longitude; }
+    public static final class Weather { public String location = ""; public double latitude, longitude; public boolean imperial; }
 
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
@@ -169,7 +169,7 @@ public final class PcState {
         if (Json.has(root, "weather")) {
             Map<String, Object> w = Json.obj(Json.value(root, "weather"));
             Weather weather = new Weather();
-            weather.location = text(w, "location"); weather.latitude = Json.number(w, "latitude"); weather.longitude = Json.number(w, "longitude");
+            weather.location = text(w, "location"); weather.latitude = Json.number(w, "latitude"); weather.longitude = Json.number(w, "longitude"); weather.imperial = flag(w, "imperial");
             state.weather = weather;
         }
         if (Json.has(root, "spotify")) {

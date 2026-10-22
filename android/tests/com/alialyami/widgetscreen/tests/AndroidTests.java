@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 // Checks for the phone app's platform-independent core, run on the desktop JVM by
@@ -192,7 +193,19 @@ public final class AndroidTests {
 
         check("Weather parses Open-Meteo responses and describes codes", new Action() { public void run() {
             Weather.Snapshot w = Weather.parse("{\"current\":{\"temperature_2m\":31.6,\"apparent_temperature\":33.2,\"weather_code\":2,\"wind_speed_10m\":12.4}}", 5);
-            ok(w.temperature == 31.6 && w.code == 2 && Weather.describe(w.code).equals("Partly cloudy") && Weather.details(w).equals("Feels 33°C  ·  12 km/h"), "snapshot");
+            ok(w.temperature == 31.6 && w.code == 2 && Weather.describe(w.code).equals("Partly cloudy") && Weather.details(w).equals("Feels 33°  ·  12 km/h") && Weather.details(w, true).equals("Feels 33°  ·  12 mph"), "snapshot");
+            StringBuilder times = new StringBuilder(), temps = new StringBuilder(), codes = new StringBuilder();
+            for (int h = 0; h < 48; h++) {
+                if (h > 0) { times.append(','); temps.append(','); codes.append(','); }
+                times.append('"').append("2026-10-").append(h < 24 ? "22" : "23").append('T').append(String.format(Locale.US, "%02d", h % 24)).append(":00\"");
+                temps.append(10 + h); codes.append(h % 2 == 0 ? 0 : 61);
+            }
+            Weather.Snapshot full = Weather.parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":61},\"daily\":{\"temperature_2m_max\":[24.6],\"temperature_2m_min\":[14.2]},\"hourly\":{\"time\":[" + times + "],\"temperature_2m\":[" + temps + "],\"weather_code\":[" + codes + "]}}", 5, "2026-10-22T21:00");
+            ok(full.high == 24.6 && full.low == 14.2 && Weather.details(full, false).equals("Feels 19°  ·  8 km/h  ·  ↑ 25° ↓ 14°"), "high and low " + Weather.details(full, false));
+            ok(full.hours.size() == 3 && full.hours.get(0).time.equals("2026-10-22T21:00") && full.hours.get(1).time.equals("2026-10-23T00:00") && full.hours.get(2).time.equals("2026-10-23T03:00") && full.hours.get(0).temperature == 31, "next hours");
+            ok(Weather.hourLabel("2026-10-23T00:00", true).equals("00:00") && Weather.hourLabel("2026-10-22T14:00", false).equals("2 PM") && Weather.hourLabel("2026-10-22T00:00", false).equals("12 AM"), "hour labels");
+            ok(Weather.family(0).equals("sun") && Weather.family(2).equals("partly") && Weather.family(3).equals("cloud") && Weather.family(45).equals("fog") && Weather.family(63).equals("rain") && Weather.family(81).equals("rain") && Weather.family(75).equals("snow") && Weather.family(95).equals("storm"), "glyph families");
+            ok(Weather.forecastUrl(1.5, -2.25, true).contains("temperature_unit=fahrenheit&wind_speed_unit=mph") && !Weather.forecastUrl(1.5, -2.25, false).contains("fahrenheit") && Weather.forecastUrl(1.5, -2.25, false).contains("latitude=1.5&longitude=-2.25"), "forecast url");
             throwsOn(new Action() { public void run() { Weather.parse("{\"current\":{\"temperature_2m\":1}}", 0); } }, "Incomplete weather accepted.");
             ok(Weather.describe(95).equals("Thunderstorms") && Weather.describe(50).equals("Conditions unavailable") && Weather.describe(45).equals("Foggy"), "codes");
             ok(Weather.forecastUrl(24.7, 46.7).contains("latitude=24.7&longitude=46.7"), "forecast address");

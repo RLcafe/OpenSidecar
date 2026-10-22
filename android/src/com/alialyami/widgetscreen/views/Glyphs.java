@@ -47,6 +47,16 @@ public final class Glyphs {
     private static void round(Path p, float left, float top, float right, float bottom, float radius) { p.addRoundRect(new RectF(left, top, right, bottom), radius, radius, Path.Direction.CW); }
     private static void circle(Path p, float x, float y, float r) { p.addCircle(x, y, r, Path.Direction.CW); }
 
+    // A cloud outline: a flat base from left to right, a big lobe on the right, a bigger one on top, a small one on the left.
+    private static void cloud(Path p, float left, float top, float right, float bottom) {
+        float h = bottom - top, w = right - left;
+        p.moveTo(left, bottom); p.lineTo(right, bottom);
+        p.cubicTo(right + w * 0.28f, bottom, right + w * 0.28f, bottom - h * 0.95f, right, bottom - h * 0.95f);
+        p.cubicTo(right - w * 0.1f, top - h * 0.1f, left + w * 0.15f, top - h * 0.05f, left + w * 0.05f, bottom - h * 0.7f);
+        p.cubicTo(left - w * 0.3f, bottom - h * 0.7f, left - w * 0.3f, bottom, left, bottom);
+        p.close();
+    }
+
     // A circular arrow: an arc from start sweeping clockwise, with a filled head at its end.
     private static void circularArrow(Glyph g, float r, float start, float sweep) {
         g.stroke.addArc(new RectF(12 - r, 12 - r, 12 + r, 12 + r), start, sweep);
@@ -136,6 +146,22 @@ public final class Glyphs {
                 for (int i = 0; i < 5; i++) circle(f, 6 + i * 3, 10, 0.9f);
                 break;
             case "down": poly(s, false, 6, 10, 12, 16, 18, 10); break;
+            // Weather families (WeatherService.Glyph on Windows): the same shapes on the same 24-unit grid.
+            case "sun":
+                circle(s, 12, 12, 3.8f);
+                line(s, 12, 2.5f, 12, 4.8f); line(s, 12, 19.2f, 12, 21.5f); line(s, 2.5f, 12, 4.8f, 12); line(s, 19.2f, 12, 21.5f, 12);
+                line(s, 5.3f, 5.3f, 6.9f, 6.9f); line(s, 17.1f, 17.1f, 18.7f, 18.7f); line(s, 5.3f, 18.7f, 6.9f, 17.1f); line(s, 17.1f, 6.9f, 18.7f, 5.3f);
+                break;
+            case "partly":
+                s.addArc(new RectF(12.5f, 6.3f, 18.5f, 12.3f), 200, 250);
+                line(s, 15.5f, 3.5f, 15.5f, 5); line(s, 21.3f, 9.3f, 19.8f, 9.3f); line(s, 19.6f, 5.2f, 18.5f, 6.3f);
+                cloud(s, 5.5f, 14, 14.2f, 20);
+                break;
+            case "cloud": cloud(s, 7, 10, 17.3f, 17); break;
+            case "fog": line(s, 4, 8.5f, 20, 8.5f); line(s, 4, 12.5f, 20, 12.5f); line(s, 6, 16.5f, 18, 16.5f); break;
+            case "rain": cloud(s, 7, 6, 17.3f, 13); line(s, 8.5f, 16, 7.5f, 19.5f); line(s, 12.5f, 16, 11.5f, 19.5f); line(s, 16.5f, 16, 15.5f, 19.5f); break;
+            case "snow": cloud(s, 7, 6, 17.3f, 13); circle(f, 8, 17.5f, 1.1f); circle(f, 12, 19.5f, 1.1f); circle(f, 16, 17.5f, 1.1f); break;
+            case "storm": cloud(s, 7, 6, 17.3f, 13); poly(s, false, 13.5f, 14, 10, 18.5f, 13.5f, 18.5f, 11, 22.5f); break;
             default: round(s, 4, 4, 10.5f, 10.5f, 1.5f); round(s, 13.5f, 4, 20, 10.5f, 1.5f); round(s, 4, 13.5f, 10.5f, 20, 1.5f); round(s, 13.5f, 13.5f, 20, 20, 1.5f); break;
         }
         return g;

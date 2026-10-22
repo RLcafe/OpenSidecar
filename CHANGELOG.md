@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/weather` (audit branch 7, 22 Oct 2026):
+
+- **Units**: Settings → Weather chooses Celsius and km/h or Fahrenheit and mph (the region's default until you pick); the phone follows the PC.
+- **Today's high and low** in the details line ("↑ 25° ↓ 14°") and **the next hours** (now, +3 h, +6 h) on a tall enough card, on both apps.
+- **A condition glyph** (sun, partly cloudy, cloud, fog, rain, snow, storm) beside the condition, drawn as a line path on the PC and in `Glyphs.java` on the phone.
+- **The whole card is the refresh tap**; the Refresh button is gone. With no city, the card says where to choose one (and opens Settings → Weather on the PC).
 
 ## 0.7.0 (22 Oct 2026)
 
