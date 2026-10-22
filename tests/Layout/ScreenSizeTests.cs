@@ -54,6 +54,14 @@ internal static class ScreenSizeTests
             var small = ScreenFit.For(1280, 800, 1, 1800);
             Assert(Math.Abs(small.Scale - 0.75) < 1e-9 && small.Stacked, "1280 x 800 should use the 0.75 floor and a stacked header: " + small.Scale);
         });
+        check("High-DPI small screens keep text readable and give up canvas instead", () => {
+            // A 1024 x 600 panel at 150% display scaling: the floor rises with the scaling and the canvas may shrink to 60%.
+            var plain = ScreenFit.For(1024, 600, 1, 1800);
+            var dense = ScreenFit.For(1024, 600, 1.5, 1800, Math.Max(0.6, ScreenFit.MinCanvas / 1.5));
+            Assert(dense.Scale > plain.Scale * 1.2 && dense.Scale <= 1.5 * ScreenFit.CompactBelow + 1e-9, "The floor didn't rise with display scaling: " + dense.Scale);
+            Assert(dense.LogicalWidth - ScreenFit.MarginX >= 1856 * 0.6 - 1 && dense.CanvasHeight >= 576 * 0.6 - 8 && dense.LogicalWidth * dense.Scale <= 1024 + 1e-6, "The canvas shrank past 60% or overflowed: " + dense.CanvasWidth + " x " + dense.CanvasHeight);
+            Assert(ScreenFit.For(1024, 600, 1.5, 1800, 0.2).CanvasWidth >= ScreenFit.For(1024, 600, 1.5, 1800, 0.6).CanvasWidth - 8 && ScreenFit.For(1920, 720, 1.5, 1800, 0.6).Scale == 1, "minCanvas isn't clamped, or the reference screen changed with scaling.");
+        });
         check("Upright screens get an upright canvas with a stacked header", () => {
             var portrait = ScreenFit.For(1080, 1920, 1, 1800);
             Assert(portrait.Scale == 1 && portrait.LogicalWidth == 1080 && portrait.LogicalHeight == 1920 && portrait.Stacked, "Portrait monitor fit.");

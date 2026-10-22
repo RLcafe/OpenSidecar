@@ -256,7 +256,7 @@ internal static class SmokeTests
         });
         Check("Settings normalization", () => {
             var settings = new AppSettings { TextScale = 9, Accent = "invalid", Shortcuts = null, Latitude = double.NaN, WeatherLocation = "Invalid" }; settings.Normalize();
-            Assert(settings.TextScale == 1.15 && settings.Accent == "Lime" && settings.Shortcuts.Count == 6 && settings.WeatherLocation == "", "Invalid settings were not normalized.");
+            Assert(settings.TextScale == 1.4 && settings.Accent == "Lime" && settings.Shortcuts.Count == 6 && settings.WeatherLocation == "", "Invalid settings were not normalized.");
         });
         Check("Free layout migration, independent sizes and invalid coordinates", () => {
             string path = Path.Combine(directory, "free-layout.xml");

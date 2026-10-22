@@ -134,7 +134,8 @@ namespace WidgetScreen
 
         public void Normalize()
         {
-            TextScale = Math.Max(0.9, Math.Min(1.15, Double.IsNaN(TextScale) ? 1 : TextScale));
+            // Up to 140% (audit, 22 Oct 2026): small or far-away screens need more than the 115% the baseline allowed.
+            TextScale = Math.Max(0.9, Math.Min(1.4, Double.IsNaN(TextScale) ? 1 : TextScale));
             if (Accent != "Lime" && Accent != "Glacier" && Accent != "Lavender" && Accent != "Amber") Accent = "Lime";
             if (Theme != "Midnight" && Theme != "Slate" && Theme != "Warm") Theme = "Midnight";
             CornerRadius = Clamp(CornerRadius, 0, 24, 20);

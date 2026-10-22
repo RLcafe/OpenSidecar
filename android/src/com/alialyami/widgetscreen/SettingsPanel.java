@@ -221,7 +221,7 @@ public final class SettingsPanel {
         add(right, note("Size text for your screen and how far you sit from it."), 10);
         final View scaleRow = valueRow("Text size", Math.round(draft.textScale * 100) + "%");
         add(right, scaleRow, 18);
-        TouchSlider scale = new TouchSlider(dash.activity, ui).range(90, 115, 5);
+        TouchSlider scale = new TouchSlider(dash.activity, ui).range(90, 140, 5);
         scale.setValue((float) (draft.textScale * 100));
         scale.setContentDescription("Text size");
         scale.setListener(new TouchSlider.Listener() {
@@ -232,7 +232,7 @@ public final class SettingsPanel {
             }
         });
         add(right, scale, 4);
-        add(right, note("The 24-hour clock follows the PC's setting."), 12);
+        add(right, note("Above 115% some cards show less at once. The 24-hour clock follows the PC's setting."), 12);
     }
 
     // ----- Display -----

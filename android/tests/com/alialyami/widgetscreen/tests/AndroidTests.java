@@ -155,7 +155,7 @@ public final class AndroidTests {
             AppSettings s = new AppSettings();
             s.textScale = 3; s.cornerRadius = -4; s.accent = "Pink"; s.theme = "Neon"; s.layoutMode = "Grid";
             s.normalize();
-            ok(s.textScale == 1.15 && s.cornerRadius == 0 && s.accent.equals("Lime") && s.theme.equals("Midnight") && s.layoutMode.equals("Auto"), "Not normalized.");
+            ok(s.textScale == 1.4 && s.cornerRadius == 0 && s.accent.equals("Lime") && s.theme.equals("Midnight") && s.layoutMode.equals("Auto"), "Not normalized.");
         } });
 
         check("Default layout is the Windows default arrangement", new Action() { public void run() {

@@ -79,3 +79,10 @@ The shared rules are in `src/widgets/CardSizing.cs` and `android/.../core/CardSi
 - Real screens other than 1920 × 720, Windows display scaling other than 100%, a portrait second monitor and monitor hot-plug with a different size were only checked through renders and checks.
 - The Android views (tall tablet dashboard, page switcher, swipe, the list's Pages section, card sizing) build and their core logic is checked on the JVM, but no emulator or device was available, so they haven't been seen running.
 - Touch swipes on the PC are wired to WPF touch events but weren't tried on a touchscreen.
+
+
+## Readable text on small screens (22 Oct 2026, from the app audit)
+
+- **Text size** can go to **140%** on both apps (it stopped at 115%). Above 115% some cards show less at once; the Settings note says so.
+- **Windows display scaling counts on small screens.** `DashboardController.Screen.FitScreen` passes the window's DPI scale as `density` to `ScreenFit.For`, but only when the screen is smaller than the 1920 × 720 reference (`full < 1`); a screen at least the reference size, like the owner's, is never changed by scaling. With `density > 1` the compact floor rises to `density × 0.75` device pixels per design unit, and the canvas may give way down to `max(0.6, 0.8 / density)` of the reference (`ScreenFit.For(width, height, density, stackBelow, minCanvas)`). A 1024 × 600 panel at 150% scaling, for example, goes from 0.66 to about 0.87 pixels per design unit.
+- **The phone keeps its rule**: `DashboardFit` already uses the dp density for the floor and keeps the 80% canvas, so phone layouts (saved per canvas size) don't move.

@@ -6,7 +6,10 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/weather` was merged as v0.8.0.
+| `feature/readable-small-screens` | Audit branch 8: text size to 140% on both apps; DPI-aware compact floor and 60% canvas on small Windows screens | `418e514` (v0.8.0) | In progress | `.worktrees\readable-small-screens` | `.worktrees\readable-small-screens\artifacts\app\WidgetScreen.exe`, `.worktrees\readable-small-screens\artifacts\android\WidgetScreen.apk` |
+eadable-small-screens` | `.worktrees
+eadable-small-screensrtifactspp\WidgetScreen.exe`, `.worktrees
+eadable-small-screensrtifactsndroid\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
