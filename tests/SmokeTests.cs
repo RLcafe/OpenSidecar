@@ -357,7 +357,7 @@ internal static class SmokeTests
                     ((System.Windows.Controls.TextBlock)window.FindName("WeatherCity")).Text = "A long weather location that cannot fit on one line";
                     var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                     dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
-                    foreach (var pair in new[] { new[] { "MediaHint", "MediaCard" }, new[] { "UptimeValue", "SystemCard" }, new[] { "WeatherButton", "WeatherCard" } })
+                    foreach (var pair in new[] { new[] { "MediaHint", "MediaCard" }, new[] { "UptimeValue", "SystemCard" }, new[] { "WeatherCredit", "WeatherCard" } })
                     {
                         var child = (System.Windows.FrameworkElement)window.FindName(pair[0]); var card = (System.Windows.FrameworkElement)window.FindName(pair[1]);
                         Assert(child.TransformToAncestor(card).Transform(new System.Windows.Point(0, child.ActualHeight)).Y <= card.ActualHeight - 20, pair[0] + " escapes minimum widget height.");
@@ -493,6 +493,19 @@ internal static class SmokeTests
         Check("Weather parsing and absent-data handling", () => {
             var result = WeatherService.Parse("{\"current\":{\"temperature_2m\":26.4,\"apparent_temperature\":25,\"wind_speed_10m\":12.3,\"weather_code\":0}}");
             Assert(Math.Abs(result.Temperature - 26.4) < .001 && WeatherService.Describe(result.Code) == "Clear skies", "Weather parsed incorrectly.");
+            Assert(!result.High.HasValue && result.Hours.Count == 0 && WeatherService.Details(result, false) == "Feels 25°  ·  12 km/h" && WeatherService.Details(result, true) == "Feels 25°  ·  12 mph", "Current-only details are wrong.");
+            string hours = ""; for (int h = 0; h < 48; h++) hours += (h > 0 ? "," : "") + "\"2026-10-" + (h < 24 ? "22" : "23") + "T" + (h % 24).ToString("00") + ":00\"";
+            string temps = ""; for (int h = 0; h < 48; h++) temps += (h > 0 ? "," : "") + (10 + h);
+            string codes = ""; for (int h = 0; h < 48; h++) codes += (h > 0 ? "," : "") + (h % 2 == 0 ? 0 : 61);
+            var full = WeatherService.Parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":61},\"daily\":{\"temperature_2m_max\":[24.6],\"temperature_2m_min\":[14.2]},\"hourly\":{\"time\":[" + hours + "],\"temperature_2m\":[" + temps + "],\"weather_code\":[" + codes + "]}}", new DateTime(2026, 10, 22, 21, 40, 0));
+            Assert(full.High == 24.6 && full.Low == 14.2 && WeatherService.Details(full, false) == "Feels 19°  ·  8 km/h  ·  ↑ 25° ↓ 14°", "High and low not parsed: " + WeatherService.Details(full, false));
+            Assert(full.Hours.Count == 3 && full.Hours[0].Time.Hour == 21 && full.Hours[1].Time.Hour == 0 && full.Hours[1].Time.Day == 23 && full.Hours[2].Time.Hour == 3 && full.Hours[0].Temperature == 31, "The next hours weren't picked from now, +3 h and +6 h.");
+            Assert(WeatherService.HourLabel(full.Hours[1].Time, true) == "00:00" && WeatherService.HourLabel(new DateTime(2026, 10, 22, 14, 0, 0), false) == "2 PM", "Hour labels are wrong.");
+            Assert(WeatherService.Family(0) == "sun" && WeatherService.Family(2) == "partly" && WeatherService.Family(3) == "cloud" && WeatherService.Family(45) == "fog" && WeatherService.Family(63) == "rain" && WeatherService.Family(81) == "rain" && WeatherService.Family(75) == "snow" && WeatherService.Family(86) == "snow" && WeatherService.Family(95) == "storm", "Glyph families are wrong.");
+            foreach (string family in new[] { "sun", "partly", "cloud", "fog", "rain", "snow", "storm" }) System.Windows.Media.Geometry.Parse(WeatherService.Glyph(family));
+            Assert(WeatherService.ForecastUrl(1.5, -2.25, true).Contains("temperature_unit=fahrenheit&wind_speed_unit=mph") && !WeatherService.ForecastUrl(1.5, -2.25, false).Contains("fahrenheit") && WeatherService.ForecastUrl(1.5, -2.25, false).Contains("latitude=1.5&longitude=-2.25"), "Forecast URL is wrong.");
+            var units = new AppSettings { WeatherUnits = "bogus" }; units.Normalize();
+            Assert((units.WeatherUnits == "metric" || units.WeatherUnits == "imperial") && new AppSettings { WeatherUnits = "imperial" }.WeatherUnits == "imperial", "Weather units don't normalize.");
             bool threw = false; try { WeatherService.Parse("{\"current\":{\"temperature_2m\":null}}"); } catch (InvalidOperationException) { threw = true; } Assert(threw, "Missing weather became zero readings.");
         });
         Check("Live system readings", () => {

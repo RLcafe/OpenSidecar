@@ -188,13 +188,17 @@ namespace WidgetScreen
                 string id = mediaVolumeSession; double value = e.NewValue / 100;
                 AudioAction(a => { if (id == null) a.SetVolume(value); else a.SetSessionVolume(id, value); }, false);
             };
-            Button("WeatherButton", () => {
+            // The whole Weather card is the refresh tap; without a city it opens Settings → Weather.
+            Action weatherTapped = () => {
+                if (Editor.Editing) return;
                 if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
                 {
                     OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 3; window.UpdateLayout(); Control<TextBox>("CitySearch").BringIntoView(); Control<TextBox>("CitySearch").Focus();
                 }
                 else RefreshWeather();
-            });
+            };
+            Control<Border>("WeatherCard").PreviewMouseLeftButtonUp += (sender, e) => weatherTapped();
+            Control<Border>("WeatherCard").PreviewTouchUp += (sender, e) => weatherTapped();
             Button("SearchCityButton", () => SearchCity());
             Button("ClearCityButton", () => { pendingLocation = null; ShowCityResults(null); Text("SettingsStatus", "Weather will be turned off when you save."); });
             Control<ComboBox>("CityResults").SelectionChanged += (sender, e) => { var selected = Control<ComboBox>("CityResults").SelectedItem as WeatherLocation; if (selected != null) pendingLocation = selected; };
@@ -414,6 +418,7 @@ namespace WidgetScreen
                 Control<ColumnDefinition>("MediaArtColumn").Width = new GridLength(art + 12); Control<Border>("MediaArtBox").MaxHeight = art;
                 var weatherBounds = Editor.Bounds("Weather"); double temperature = CardSizing.WeatherTemperature(weatherBounds.Width, weatherBounds.Height);
                 Control<TextBlock>("WeatherTemperature").FontSize = temperature; Control<ColumnDefinition>("WeatherTemperatureColumn").Width = new GridLength(temperature * 2);
+                UpdateWeatherHoursRow();
                 Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
                 Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
                 UpdatePages();
@@ -871,34 +876,54 @@ namespace WidgetScreen
         {
             if (lastWeather != null) Text("WeatherCredit", "Open-Meteo  ·  updated " + lastWeather.Retrieved.ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture));
         }
+        private bool WeatherImperial { get { return settings.WeatherUnits == "imperial"; } }
         private async void RefreshWeather()
         {
             if (disposed || weatherBusy || !Editor.IsVisible("Weather")) return;
             if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
             {
-                Text("WeatherTemperature", "—°"); Text("WeatherCity", "No city yet"); Text("WeatherDetails", "Choose a city to see current conditions.");
-                Text("WeatherCondition", ""); Control<Button>("WeatherButton").Content = "Choose city"; Text("WeatherCredit", "Weather data by Open-Meteo"); return;
+                Text("WeatherTemperature", "—°"); Text("WeatherCity", "No city yet"); Text("WeatherDetails", "Tap to choose a city.");
+                Text("WeatherCondition", ""); Control<System.Windows.Shapes.Path>("WeatherGlyph").Visibility = Visibility.Collapsed; ShowWeatherHours(null); Text("WeatherCredit", "Weather data by Open-Meteo"); return;
             }
             weatherBusy = true; lastWeatherAttempt = DateTime.UtcNow; int generation = weatherGeneration;
-            Text("WeatherCity", settings.WeatherLocation); Control<Button>("WeatherButton").Content = "Updating…"; Control<Button>("WeatherButton").IsEnabled = false;
+            Text("WeatherCity", settings.WeatherLocation); Text("WeatherCredit", "Open-Meteo  ·  updating…");
             try
             {
-                var snapshot = await weather.ReadAsync(settings.Latitude, settings.Longitude);
+                var snapshot = await weather.ReadAsync(settings.Latitude, settings.Longitude, WeatherImperial);
                 if (disposed || generation != weatherGeneration) return;
                 lastWeather = snapshot;
                 Text("WeatherTemperature", Math.Round(snapshot.Temperature) + "°"); Text("WeatherCondition", WeatherService.Describe(snapshot.Code));
-                Text("WeatherDetails", "Feels " + Math.Round(snapshot.FeelsLike) + "°C  ·  " + Math.Round(snapshot.Wind) + " km/h");
+                var glyph = Control<System.Windows.Shapes.Path>("WeatherGlyph"); glyph.Data = Geometry.Parse(WeatherService.Glyph(WeatherService.Family(snapshot.Code))); glyph.Visibility = Visibility.Visible;
+                Text("WeatherDetails", WeatherService.Details(snapshot, WeatherImperial));
+                ShowWeatherHours(snapshot);
                 ShowWeatherCredit();
             }
             catch (Exception)
             {
-                if (generation == weatherGeneration) { Text("WeatherCondition", "OFFLINE"); Text("WeatherDetails", lastWeather == null ? "Can't reach the weather service. Tap Refresh to try again." : "Showing the last update. Tap Refresh to try again."); }
+                if (generation == weatherGeneration) { Text("WeatherCondition", "OFFLINE"); Text("WeatherDetails", lastWeather == null ? "Can't reach the weather service. Tap the card to try again." : "Showing the last update. Tap the card to try again."); if (lastWeather != null) ShowWeatherCredit(); else Text("WeatherCredit", "Weather data by Open-Meteo"); }
             }
             finally
             {
                 weatherBusy = false;
-                if (!disposed) { Control<Button>("WeatherButton").IsEnabled = true; Control<Button>("WeatherButton").Content = "Refresh weather"; if (generation != weatherGeneration) RefreshWeather(); }
+                if (!disposed && generation != weatherGeneration) RefreshWeather();
             }
+        }
+        // The next hours row: now, +3 h and +6 h, labelled the way the clock is.
+        private void ShowWeatherHours(WeatherSnapshot snapshot)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                bool has = snapshot != null && i < snapshot.Hours.Count;
+                Text("WeatherHourTime" + i, has ? (i == 0 ? "Now" : WeatherService.HourLabel(snapshot.Hours[i].Time, settings.Use24HourClock)) : "");
+                Text("WeatherHourTemp" + i, has ? Math.Round(snapshot.Hours[i].Temperature) + "°" : "");
+            }
+            UpdateWeatherHoursRow();
+        }
+        // The hours take a row only on a tall enough card, and only once there is a reading.
+        private void UpdateWeatherHoursRow()
+        {
+            bool show = lastWeather != null && lastWeather.Hours.Count > 0 && Editor.Bounds("Weather").Height >= 300;
+            Control<RowDefinition>("WeatherHoursRow").Height = new GridLength(show ? 60 : 0);
         }
 
         private void OpenSettings()
@@ -922,6 +947,7 @@ namespace WidgetScreen
             pendingLocation = String.IsNullOrWhiteSpace(settings.WeatherLocation) ? null : new WeatherLocation { Name = settings.WeatherLocation, Latitude = settings.Latitude, Longitude = settings.Longitude };
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
+            var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
             Text("SettingsStatus", ""); UpdateRemoteSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
@@ -952,9 +978,10 @@ namespace WidgetScreen
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
+            candidate.WeatherUnits = Control<ComboBox>("WeatherUnitsChoice").SelectedIndex == 1 ? "imperial" : "metric";
             try { SaveSettingsFile(candidate); }
             catch (Exception e) { Text("SettingsStatus", "Could not save settings: " + e.Message); return; }
-            bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude;
+            bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude || settings.WeatherUnits != candidate.WeatherUnits;
             settings = candidate; CloseSettings(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
             FitScreen();

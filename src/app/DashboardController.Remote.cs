@@ -339,7 +339,7 @@ namespace WidgetScreen
                 state["deck"] = settings.Shortcuts.Select(s => D("label", s.Label, "glyph", String.IsNullOrEmpty(s.Glyph) ? "E8A7" : ((int)s.Glyph[0]).ToString("X4"), "action", s.Action,
                     "describe", DeckActions.Describe(s), "confirm", DeckActions.NeedsConfirmation(s), "enabled", !String.IsNullOrWhiteSpace(s.Target))).ToArray();
             if (parts.Contains("weather"))
-                state["weather"] = D("location", settings.WeatherLocation ?? "", "latitude", settings.Latitude, "longitude", settings.Longitude);
+                state["weather"] = D("location", settings.WeatherLocation ?? "", "latitude", settings.Latitude, "longitude", settings.Longitude, "imperial", settings.WeatherUnits == "imperial");
             if (parts.Contains("spotify"))
                 state["spotify"] = D("connected", spotifyService.Connected, "canControl", spotifyService.CanControl, "canReadRecent", spotifyService.CanReadRecent);
             if (parts.Contains("discord")) state["discord"] = await RemoteDiscord(false);

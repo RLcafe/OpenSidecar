@@ -70,6 +70,8 @@ namespace WidgetScreen
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
+        // "metric" (Celsius, km/h) or "imperial" (Fahrenheit, mph); anything else becomes the region's default.
+        public string WeatherUnits { get; set; }
         [XmlIgnore]
         public List<Shortcut> Shortcuts { get; set; }
 
@@ -102,6 +104,7 @@ namespace WidgetScreen
             FocusChime = true;
             Monitor = "";
             WeatherLocation = "";
+            WeatherUnits = RegionWeatherUnits();
             Shortcuts = DefaultShortcuts();
         }
 
@@ -155,9 +158,15 @@ namespace WidgetScreen
             }
             if (Double.IsNaN(Latitude) || Double.IsInfinity(Latitude) || Double.IsNaN(Longitude) || Double.IsInfinity(Longitude) || Math.Abs(Latitude) > 90 || Math.Abs(Longitude) > 180) WeatherLocation = "";
             WeatherLocation = WeatherLocation ?? "";
+            if (WeatherUnits != "metric" && WeatherUnits != "imperial") WeatherUnits = RegionWeatherUnits();
             var pages = WidgetScreen.WidgetLayout.Pages(this).Take(WidgetScreen.WidgetLayout.MaxPages).ToList();
             for (int i = 0; i < pages.Count; i++) WidgetScreen.WidgetLayout.NormalizePage(pages[i], this, i);
             WidgetScreen.WidgetLayout.SetPages(this, pages);
+        }
+
+        public static string RegionWeatherUnits()
+        {
+            try { return System.Globalization.RegionInfo.CurrentRegion.IsMetric ? "metric" : "imperial"; } catch (Exception) { return "metric"; }
         }
 
         private static double Clamp(double value, double min, double max, double fallback)

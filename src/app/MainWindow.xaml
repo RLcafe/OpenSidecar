@@ -437,11 +437,17 @@
                 </Grid>
               </Grid>
             </Border>
-            <Border x:Name="WeatherCard" Grid.Row="1" Style="{StaticResource Card}">
-              <Grid><Grid.RowDefinitions><RowDefinition Height="26"/><RowDefinition/><RowDefinition Height="48"/><RowDefinition Height="20"/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="WEATHER" Style="{StaticResource Label}"/><TextBlock x:Name="WeatherCondition" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center"/></DockPanel>
-                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition x:Name="WeatherTemperatureColumn" Width="108"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock x:Name="WeatherTemperature" Text="—°" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" VerticalAlignment="Center"/><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="WeatherCity" Text="No city yet" FontSize="{DynamicResource BodySize}" TextWrapping="Wrap" MaxHeight="58" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="WeatherDetails" Text="Choose a city to see current conditions." Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" MaxHeight="46" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel></Grid>
-                <Button x:Name="WeatherButton" Grid.Row="2" Content="Choose city" MinHeight="48" FontSize="16" Padding="12,4"/>
+            <!-- The whole card is the refresh tap (or opens Settings → Weather while there is no city). -->
+            <Border x:Name="WeatherCard" Grid.Row="1" Style="{StaticResource Card}" Cursor="Hand" ToolTip="Tap to update the weather" AutomationProperties.Name="Weather. Tap to update.">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="26"/><RowDefinition/><RowDefinition x:Name="WeatherHoursRow" Height="0"/><RowDefinition Height="20"/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="WEATHER" Style="{StaticResource Label}"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Path x:Name="WeatherGlyph" Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource Accent}" StrokeThickness="1.6" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed"/><TextBlock x:Name="WeatherCondition" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center"/></StackPanel></DockPanel>
+                <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition x:Name="WeatherTemperatureColumn" Width="108"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock x:Name="WeatherTemperature" Text="—°" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" VerticalAlignment="Center"/><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="WeatherCity" Text="No city yet" FontSize="{DynamicResource BodySize}" TextWrapping="Wrap" MaxHeight="58" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="WeatherDetails" Text="Tap to choose a city." Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" MaxHeight="46" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel></Grid>
+                <!-- The next hours (now, +3 h, +6 h) when the card is tall enough (UpdateEditor opens the row). -->
+                <UniformGrid x:Name="WeatherHours" Grid.Row="2" Rows="1" Columns="3" Margin="0,6,0,0">
+                  <StackPanel><TextBlock x:Name="WeatherHourTime0" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Center"/><TextBlock x:Name="WeatherHourTemp0" Text="" FontSize="{DynamicResource BodySize}" HorizontalAlignment="Center" Margin="0,2,0,0"/></StackPanel>
+                  <StackPanel><TextBlock x:Name="WeatherHourTime1" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Center"/><TextBlock x:Name="WeatherHourTemp1" Text="" FontSize="{DynamicResource BodySize}" HorizontalAlignment="Center" Margin="0,2,0,0"/></StackPanel>
+                  <StackPanel><TextBlock x:Name="WeatherHourTime2" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Center"/><TextBlock x:Name="WeatherHourTemp2" Text="" FontSize="{DynamicResource BodySize}" HorizontalAlignment="Center" Margin="0,2,0,0"/></StackPanel>
+                </UniformGrid>
                 <TextBlock x:Name="WeatherCredit" Grid.Row="3" Text="Weather data by Open-Meteo" Style="{StaticResource Caption}" VerticalAlignment="Bottom"/>
               </Grid>
             </Border>
@@ -572,8 +578,10 @@
               <Button x:Name="SearchCityButton" Grid.Column="1" Content="Search" Margin="10,0,0,0" FontSize="16"/>
               </Grid>
               <ComboBox x:Name="CityResults" Margin="0,12,0,0" AutomationProperties.Name="City results" Visibility="Collapsed"/>
-              <Button x:Name="ClearCityButton" Content="Turn weather off" Margin="0,12,0,16" HorizontalAlignment="Left" FontSize="15"/>
-              <TextBlock Text="Search sends the city name to Open-Meteo. No account is needed. Once saved, weather updates every 15 minutes." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="Units" Style="{StaticResource Small}" Margin="0,14,0,6"/>
+              <ComboBox x:Name="WeatherUnitsChoice" AutomationProperties.Name="Weather units"/>
+              <Button x:Name="ClearCityButton" Content="Turn weather off" Margin="0,14,0,16" HorizontalAlignment="Left" FontSize="15"/>
+              <TextBlock Text="Search sends the city name to Open-Meteo. No account is needed. Once saved, weather updates every 15 minutes, and a tap on the card updates it now." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               </StackPanel>
               </TabItem>
                             <TabItem Header="Spotify">
