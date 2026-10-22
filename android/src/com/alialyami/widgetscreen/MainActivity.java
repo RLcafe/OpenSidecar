@@ -1,9 +1,14 @@
 package com.alialyami.widgetscreen;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.DisplayCutout;
@@ -17,11 +22,20 @@ import android.widget.FrameLayout;
 import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.Theme;
 
-// Startup and the window: edge-to-edge, optional hidden system bars, keep-awake and back handling.
+// Startup and the window: edge-to-edge, optional hidden system bars, keep-awake (always, while charging, or never)
+// and back handling (the system's back callback on Android 13+, onBackPressed before).
 public final class MainActivity extends Activity {
     private Dashboard dashboard;
     private FrameLayout root;
-    private boolean hideBars = true;
+    private boolean hideBars = true, charging;
+    private AppSettings windowSettings;
+    private final BroadcastReceiver battery = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+            boolean now = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
+            if (now != charging) { charging = now; applyKeepAwake(); }
+        }
+    };
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -43,6 +57,12 @@ public final class MainActivity extends Activity {
         hideBars = dashboard.settings.hideSystemBars;
         applySystemBars();
         dashboard.attach(root);
+        // Android 13+ routes Back through this callback (predictive back); older versions call onBackPressed.
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, new android.window.OnBackInvokedCallback() {
+                @Override public void onBackInvoked() { back(); }
+            });
+        }
     }
 
     // Hidden bars appear over the dashboard when swiped in, so only the display cutout pads it then;
@@ -86,12 +106,18 @@ public final class MainActivity extends Activity {
 
     // Called on every dashboard rebuild with the saved settings and the current palette.
     public void applyWindow(AppSettings settings, Theme theme) {
-        if (settings.keepScreenOn) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        windowSettings = settings;
+        applyKeepAwake();
         getWindow().getDecorView().setBackgroundColor(theme.page);
         int orientation = settings.landscapeOnly ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
         if (getRequestedOrientation() != orientation) setRequestedOrientation(orientation);
         if (hideBars != settings.hideSystemBars) { hideBars = settings.hideSystemBars; applySystemBars(); }
+    }
+
+    private void applyKeepAwake() {
+        if (windowSettings == null) return;
+        if (windowSettings.keepsScreenOn(charging)) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
@@ -99,10 +125,29 @@ public final class MainActivity extends Activity {
         if (hasFocus && hideBars) applySystemBars();
     }
 
-    @Override protected void onStart() { super.onStart(); dashboard.onStart(); }
-    @Override protected void onStop() { dashboard.onStop(); super.onStop(); }
+    @Override protected void onStart() {
+        super.onStart();
+        // The battery broadcast is sticky, so registering answers at once with the current state.
+        try {
+            Intent state = registerReceiver(battery, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (state != null) battery.onReceive(this, state);
+        } catch (Exception ignored) { }
+        dashboard.onStart();
+    }
 
+    @Override protected void onStop() {
+        try { unregisterReceiver(battery); } catch (Exception ignored) { }
+        dashboard.onStop();
+        super.onStop();
+    }
+
+    private void back() {
+        dashboard.onBack(new Runnable() { @Override public void run() { moveTaskToBack(true); } });
+    }
+
+    @SuppressWarnings("deprecation")
     @Override public void onBackPressed() {
-        dashboard.onBack(new Runnable() { @Override public void run() { MainActivity.super.onBackPressed(); } });
+        if (Build.VERSION.SDK_INT >= 33) { super.onBackPressed(); return; }
+        back();
     }
 }

@@ -242,7 +242,9 @@ public final class SettingsPanel {
         LinearLayout left = c[0], right = c[1];
         add(left, heading("Display"), 0);
         add(left, note("How the dashboard uses this screen."), 10);
-        add(left, ui.check("Keep the screen on while Widget Screen is open", draft.keepScreenOn, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.keepScreenOn = checked; } }), 12);
+        add(left, ui.smallText("Keep the screen on"), 12);
+        add(left, choices(AppSettings.KEEP_SCREEN_MODES, new String[] { "Always", "While charging", "Never" }, draft.keepScreenOn, new Choice() { @Override public void chose(String value) { draft.keepScreenOn = value; build(); } }), 6);
+        add(left, note("While charging suits a phone on a stand: the screen stays on when it's plugged in and goes to sleep as usual in your hand."), 4);
         add(left, ui.check("Hide the status and navigation bars", draft.hideSystemBars, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.hideSystemBars = checked; } }), 4);
         add(left, note("Swipe in from the edge to show them for a moment."), 4);
         add(left, ui.check("Keep the app sideways", draft.landscapeOnly, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.landscapeOnly = checked; } }), 12);

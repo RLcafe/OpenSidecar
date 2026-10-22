@@ -85,6 +85,15 @@ public final class Ui {
         return states;
     }
 
+    // A light tap on every button, so a remote feels like a remote (the system setting can turn haptics off).
+    public static View.OnClickListener haptic(final View.OnClickListener click) {
+        if (click == null) return null;
+        return new View.OnClickListener() { @Override public void onClick(View v) {
+            try { v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK); } catch (Exception ignored) { }
+            click.onClick(v);
+        } };
+    }
+
     public TextView button(String label, View.OnClickListener click) {
         TextView button = text(label, body(), theme.text);
         button.setGravity(Gravity.CENTER);
@@ -92,7 +101,7 @@ public final class Ui {
         button.setPadding(px(16), px(8), px(16), px(8));
         button.setBackground(pressable(theme.raised, theme.controlBorder, 1, 12));
         button.setClickable(true); button.setFocusable(true);
-        button.setOnClickListener(click);
+        button.setOnClickListener(haptic(click));
         return button;
     }
 
@@ -116,7 +125,7 @@ public final class Ui {
         view.setBackground(chrome ? pressable(theme.raised, theme.controlBorder, 1, 12) : pressable(0x00000000, 0, 0, 12));
         view.setContentDescription(description);
         view.setClickable(true); view.setFocusable(true);
-        view.setOnClickListener(click);
+        view.setOnClickListener(haptic(click));
         return view;
     }
 

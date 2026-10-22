@@ -175,6 +175,20 @@ public final class WidgetCanvas extends ViewGroup {
             paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(stroke);
             paint.setColor(selected ? ui.theme.accent : ui.theme.muted);
             canvas.drawRoundRect(new RectF(stroke / 2, stroke / 2, getWidth() - stroke / 2, getHeight() - stroke / 2), radius, radius, paint);
+            // While a finger drags this card, its size and place read at the top of the card, away from the finger
+            // (the status line is under it).
+            if (selected && tracking) {
+                Box b = editor.bounds(id);
+                String readout = Math.round(b.width) + " × " + Math.round(b.height) + "  ·  X " + Math.round(b.x) + ", Y " + Math.round(b.y);
+                paint.setStyle(Paint.Style.FILL); paint.setTextSize(ui.fpx(15)); paint.setTypeface(Ui.MEDIUM);
+                float textWidth = paint.measureText(readout), padX = ui.fpx(12), boxHeight = ui.fpx(30);
+                float left = Math.max(ui.fpx(56), (getWidth() - textWidth) / 2 - padX), top = ui.fpx(8);
+                paint.setColor(ui.theme.accent);
+                canvas.drawRoundRect(new RectF(left, top, left + textWidth + padX * 2, top + boxHeight), ui.fpx(8), ui.fpx(8), paint);
+                paint.setColor(Theme.ON_ACCENT);
+                canvas.drawText(readout, left + padX, top + boxHeight / 2 + ui.fpx(5), paint);
+                paint.setTypeface(null);
+            }
             float hit = ui.fpx(48), grip = ui.fpx(16), r = ui.fpx(4);
             for (int i = 0; i < 4; i++) {
                 float cx = i % 2 == 0 ? hit / 2 : getWidth() - hit / 2, cy = i < 2 ? hit / 2 : getHeight() - hit / 2;
@@ -196,7 +210,7 @@ public final class WidgetCanvas extends ViewGroup {
                     editor.startGesture(id, corner(event.getX(), event.getY()));
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    if (tracking) editor.continueGesture((event.getRawX() - downX) / screenScale, (event.getRawY() - downY) / screenScale);
+                    if (tracking) { editor.continueGesture((event.getRawX() - downX) / screenScale, (event.getRawY() - downY) / screenScale); invalidate(); }
                     return true;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
@@ -204,6 +218,7 @@ public final class WidgetCanvas extends ViewGroup {
                         if (event.getActionMasked() == MotionEvent.ACTION_UP) editor.continueGesture((event.getRawX() - downX) / screenScale, (event.getRawY() - downY) / screenScale);
                         tracking = false;
                         editor.endGesture();
+                        invalidate();
                     }
                     return true;
             }

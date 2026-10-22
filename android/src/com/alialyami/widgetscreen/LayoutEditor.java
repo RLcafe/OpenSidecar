@@ -145,6 +145,18 @@ public final class LayoutEditor {
 
     private int topLayer() { int top = 0; for (Placement p : current) top = Math.max(top, p.layer); return top; }
 
+    // Moves (or, with resize, grows from the bottom-right corner) the selected card by whole units: the Windows
+    // editor's arrow keys. Each nudge is one undo step.
+    public void nudgeSelected(double dx, double dy, boolean resize) {
+        if (!editing || gestureActive()) return;
+        Placement p = WidgetLayout.find(current, selected);
+        if (p == null) return;
+        Box next = WidgetLayout.transform(p.id, p.bounds(), resize ? "SE" : "", dx, dy, false, canvasWidth, canvasHeight);
+        if (next.equals(p.bounds())) return;
+        remember(export()); p.layer = topLayer() + 1; p.setBounds(next);
+        changed(resize);
+    }
+
     public void startGesture(String id, String corner) {
         if (!editing || gestureActive()) return;
         gestureBefore = export(); gestureId = id; gestureCorner = corner; gestureMoved = false;
