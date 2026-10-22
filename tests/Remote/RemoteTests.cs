@@ -91,7 +91,7 @@ internal static class RemoteTests
         check("Phone link pairs, answers with state and commands, and refuses strangers", () => {
             string path = Path.Combine(directory, "remote-settings.xml");
             string store = RemotePairing.StorePath(path); if (File.Exists(store)) File.Delete(store);
-            SettingsStore.Save(path, new AppSettings { RemoteEnabled = true });
+            SettingsStore.Save(path, new AppSettings { RemoteEnabled = true, HideToTrayWithPhone = true });
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
                 var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);

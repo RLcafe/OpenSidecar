@@ -32,6 +32,8 @@ public final class AppSettings {
     public String layoutMode = "Auto";
     // The PC's 24-hour clock choice as last seen, so the clock keeps its format while the PC is away.
     public boolean use24;
+    // The one-time tips under the header were put away with Got it.
+    public boolean hintDismissed;
     // The phone mirrors the PC's layout (docs/design/any-screen-size.md). These hold the last one the PC sent, so the
     // dashboard keeps its arrangement while the PC is away: the current page's layouts per canvas size (the reference
     // 1856 × 576 one in widgetLayout), the page names, the page shown and the canvas of the PC's own screen.
@@ -138,6 +140,7 @@ public final class AppSettings {
         p.setProperty("LandscapeOnly", Boolean.toString(landscapeOnly));
         p.setProperty("LayoutMode", layoutMode);
         p.setProperty("Use24Hour", Boolean.toString(use24));
+        p.setProperty("HintDismissed", Boolean.toString(hintDismissed));
         // The reference layout keeps its old keys (Layout.Focus); other canvases add theirs (Layout.1480x552.Focus).
         if (widgetLayout != null) putLayout(p, "Layout.", widgetLayout);
         for (int i = 0; i < pages.size(); i++) p.setProperty("Page." + i, pages.get(i));
@@ -165,6 +168,7 @@ public final class AppSettings {
         s.landscapeOnly = readBool(p, "LandscapeOnly", false);
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         s.use24 = readBool(p, "Use24Hour", false);
+        s.hintDismissed = readBool(p, "HintDismissed", false);
         s.widgetLayout = readLayout(p, "Layout.");
         for (int i = 0; p.getProperty("Page." + i) != null && i < 8; i++) s.pages.add(p.getProperty("Page." + i));
         s.page = (int) readNumber(p, "CurrentPage", 0);

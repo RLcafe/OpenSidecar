@@ -218,6 +218,11 @@
             </StackPanel>
             <Button x:Name="NextPageButton" Content="&#xE76C;" Style="{StaticResource IconButton}" ToolTip="Next page" AutomationProperties.Name="Next page"/>
           </StackPanel>
+          <!-- A one-time hint for what the dashboard doesn't show by itself; Got it puts it away for good. -->
+          <StackPanel x:Name="HintRow" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Tips">
+            <TextBlock x:Name="HintText" Text="Swipe sideways to switch pages  ·  Settings → Phone pairs your phone" Style="{StaticResource Small}" VerticalAlignment="Center" MaxWidth="560" TextTrimming="CharacterEllipsis"/>
+            <Button x:Name="HintDismiss" Content="Got it" FontSize="{DynamicResource SmallSize}" Padding="12,4" Margin="14,0,0,0" AutomationProperties.Name="Dismiss tips"/>
+          </StackPanel>
           <StackPanel x:Name="MainActions" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button x:Name="EditLayoutButton" Content="Edit layout" Margin="0,0,10,0" ToolTip="Move and resize widgets directly on the dashboard."/>
             <Button x:Name="QuietButton" Content="Quiet mode" Margin="0,0,10,0" ToolTip="Pause output levels and slow down updates, for example while gaming." AutomationProperties.Name="Quiet mode, off"/>
@@ -444,6 +449,21 @@
         </Border>
       </Grid>
 
+      <!-- The confirm sheet (ConfirmSheet): one themed "are you sure" for the whole dashboard. Tapping outside cancels. -->
+      <Grid x:Name="ConfirmOverlay" Visibility="Collapsed" Background="#B30C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
+        <Border Style="{StaticResource Card}" Width="600" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
+          <StackPanel>
+            <TextBlock x:Name="ConfirmTitle" Text="QUICK LAUNCH" Style="{StaticResource Label}"/>
+            <TextBlock x:Name="ConfirmSubject" Text="" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0"/>
+            <TextBlock x:Name="ConfirmDetail" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" MaxHeight="120" Margin="0,8,0,0"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+              <Button x:Name="ConfirmCancel" Content="Cancel" MinWidth="140" MinHeight="52" Margin="0,0,12,0" AutomationProperties.Name="Cancel"/>
+              <Button x:Name="ConfirmAction" Content="Run" Style="{StaticResource AccentButton}" MinWidth="170" MinHeight="52"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </Grid>
+
       <Grid x:Name="SettingsOverlay" Visibility="Collapsed" Background="#E80C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
         <Border x:Name="SettingsCard" Style="{StaticResource Card}" Width="1440" Height="672" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
           <Border.Resources>
@@ -616,30 +636,6 @@
                   </ScrollViewer>
                 </Grid>
               </TabItem>
-              <TabItem Header="Discord">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
-                    <TextBlock Text="Connection" FontSize="24" Margin="0,0,0,12"/>
-                    <TextBlock x:Name="DiscordConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="{DynamicResource BodySize}"/>
-                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                      <StackPanel><TextBlock Text="Client ID (Application ID)" Style="{StaticResource Small}"/><TextBox x:Name="DiscordClientId" MaxLength="20" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client ID"/></StackPanel>
-                      <StackPanel Grid.Column="2"><TextBlock x:Name="DiscordSecretHint" Text="Client Secret" Style="{StaticResource Small}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><PasswordBox x:Name="DiscordClientSecret" MaxLength="128" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client Secret"/></StackPanel>
-                    </Grid>
-                    <WrapPanel><Button x:Name="DiscordSaveApp" Content="Save app details" Margin="0,0,8,8"/><Button x:Name="DiscordConnectButton" Content="Connect Discord" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="DiscordDisconnect" Content="Disconnect" Margin="0,0,8,8"/><Button x:Name="DiscordCancelConnect" Content="Cancel sign-in" Visibility="Collapsed" Margin="0,0,8,8"/></WrapPanel>
-                    <TextBlock Text="Account changes take effect right away. Your app details and sign-in are encrypted for your Windows account, and the secret is never shown again." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,12"/>
-                    <TextBlock Text="Sounds play as you, in the voice channel you're in, through the Discord app on this PC. Only the app's owner can use a personal app like this. Sounds from other servers need Nitro." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                  </StackPanel></ScrollViewer>
-                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
-                    <TextBlock Text="First-time setup" FontSize="24" Margin="0,0,0,12"/>
-                    <TextBlock Text="1.  In the Discord Developer Portal, create a New Application. Any name works." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                    <Button x:Name="DiscordDeveloper" Content="Open Developer Portal" HorizontalAlignment="Left" Margin="0,0,0,16"/>
-                    <TextBlock Text="2.  On its OAuth2 page, add this redirect, then copy the Client ID and Client Secret:" Style="{StaticResource Small}" TextWrapping="Wrap"/>
-                    <TextBox Text="http://127.0.0.1" IsReadOnly="True" Margin="0,8,0,16" AutomationProperties.Name="Discord redirect address"/>
-                    <TextBlock Text="3.  Paste both on the left and tap Connect Discord. Discord asks you once to authorize the app." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                    <TextBlock Text="4.  Turn on the Soundboard widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
-                  </StackPanel></ScrollViewer>
-                </Grid>
-              </TabItem>
               <TabItem Header="Phone">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
@@ -664,6 +660,30 @@
                     <TextBlock x:Name="RemoteCode" Text="—" FontSize="54" FontWeight="Light" FontFamily="Segoe UI Light" Typography.NumeralAlignment="Tabular" AutomationProperties.Name="Pairing code"/>
                     <TextBlock x:Name="RemoteCodeHint" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <TextBlock Text="3.  If Windows asks whether Widget Screen may use private networks, allow it. Otherwise the phone can't reach this PC." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Discord">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Connection" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="DiscordConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="{DynamicResource BodySize}"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                      <StackPanel><TextBlock Text="Client ID (Application ID)" Style="{StaticResource Small}"/><TextBox x:Name="DiscordClientId" MaxLength="20" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client ID"/></StackPanel>
+                      <StackPanel Grid.Column="2"><TextBlock x:Name="DiscordSecretHint" Text="Client Secret" Style="{StaticResource Small}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><PasswordBox x:Name="DiscordClientSecret" MaxLength="128" Margin="0,8,0,12" AutomationProperties.Name="Discord app Client Secret"/></StackPanel>
+                    </Grid>
+                    <WrapPanel><Button x:Name="DiscordSaveApp" Content="Save app details" Margin="0,0,8,8"/><Button x:Name="DiscordConnectButton" Content="Connect Discord" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="DiscordDisconnect" Content="Disconnect" Margin="0,0,8,8"/><Button x:Name="DiscordCancelConnect" Content="Cancel sign-in" Visibility="Collapsed" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock Text="Account changes take effect right away. Your app details and sign-in are encrypted for your Windows account, and the secret is never shown again." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,12"/>
+                    <TextBlock Text="Sounds play as you, in the voice channel you're in, through the Discord app on this PC. Only the app's owner can use a personal app like this. Sounds from other servers need Nitro." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                  </StackPanel></ScrollViewer>
+                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="First-time setup" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="1.  In the Discord Developer Portal, create a New Application. Any name works." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <Button x:Name="DiscordDeveloper" Content="Open Developer Portal" HorizontalAlignment="Left" Margin="0,0,0,16"/>
+                    <TextBlock Text="2.  On its OAuth2 page, add this redirect, then copy the Client ID and Client Secret:" Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                    <TextBox Text="http://127.0.0.1" IsReadOnly="True" Margin="0,8,0,16" AutomationProperties.Name="Discord redirect address"/>
+                    <TextBlock Text="3.  Paste both on the left and tap Connect Discord. Discord asks you once to authorize the app." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="4.  Turn on the Soundboard widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                 </Grid>
               </TabItem>

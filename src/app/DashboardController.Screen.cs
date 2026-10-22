@@ -50,6 +50,7 @@ namespace WidgetScreen
             Control<TextBlock>("StatusMessage").MaxWidth = Math.Max(400, fit.LogicalWidth - 540);
             if (Editor.SetCanvas(new Size(fit.CanvasWidth, fit.CanvasHeight))) Notify("The screen changed size, so the layout changes were discarded.");
             ApplyLayout(settings);
+            UpdateHint();
         }
     }
 }

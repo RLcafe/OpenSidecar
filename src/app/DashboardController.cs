@@ -44,6 +44,7 @@ namespace WidgetScreen
         private readonly FocusTimer focus = new FocusTimer();
         private readonly LevelVisualizer levels = new LevelVisualizer();
         private readonly OutputPicker outputPicker;
+        private readonly ConfirmSheet confirm;
         private List<AudioDevice> outputs = new List<AudioDevice>();
         private readonly DispatcherTimer clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
@@ -78,6 +79,7 @@ namespace WidgetScreen
             Control<Border>("LevelHost").Child = levels;
             Editor = new LayoutEditor(window);
             outputPicker = new OutputPicker(window);
+            confirm = new ConfirmSheet(window);
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -133,6 +135,7 @@ namespace WidgetScreen
         {
             Button("CloseButton", () => window.Close());
             Button("SettingsButton", OpenSettings);
+            Button("HintDismiss", () => { settings.HintDismissed = true; Persist(); UpdateHint(); });
             Button("EditDeck", OpenDeckSettings);
             Button("EmptyDeck", OpenDeckSettings);
             Button("DeckPrevious", () => { deckPage--; BuildShortcuts(); });
@@ -454,7 +457,7 @@ namespace WidgetScreen
         private Size DeckArea() { var b = Editor.Bounds("Shortcuts"); return new Size(Math.Max(0, b.Width - 42), Math.Max(0, b.Height - 90)); }
         private string DeckShape() { var a = DeckArea(); var s = CardSizing.DeckGrid(a.Width, a.Height, settings.Shortcuts.Count); return s[0] + "x" + s[1] + "|" + Math.Round(a.Width) + "x" + Math.Round(a.Height); }
         private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
-        private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 6; }
+        private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 7; }
         // A phone that runs a button has already asked the user, so it passes confirmed.
         private async void RunDeckAction(Shortcut shortcut) { await RunDeckActionAsync(shortcut, false); }
         // Returns null on success, or the message the dashboard showed.
@@ -463,7 +466,11 @@ namespace WidgetScreen
             try
             {
                 string error = DeckActions.Validate(shortcut); if (error != null) throw new InvalidOperationException(error);
-                if (!confirmed && DeckActions.NeedsConfirmation(shortcut) && MessageBox.Show(window, shortcut.Label + "\n\n" + DeckActions.Describe(shortcut) + "\n\nRun this action?", "Quick Launch", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return null;
+                if (!confirmed && DeckActions.NeedsConfirmation(shortcut))
+                {
+                    bool run = await confirm.AskAsync("QUICK LAUNCH", shortcut.Label, DeckActions.Describe(shortcut), "Run " + shortcut.Label);
+                    if (disposed || !run) return null;
+                }
                 if (shortcut.Action == "Hotkey") { await deckHotkeys.SendAsync(shortcut.Target); if (!disposed) Notify("Sent " + shortcut.Target + " to your previous app."); }
                 else if (shortcut.Action == "Control")
                 {
@@ -969,7 +976,8 @@ namespace WidgetScreen
             }
             if (e.Key == Key.Escape)
             {
-                if (Control<Grid>("SettingsOverlay").Visibility == Visibility.Visible) CloseSettings(); else if (fullscreen) ToggleFullscreen(); e.Handled = true;
+                if (confirm.IsOpen) confirm.Cancel();
+                else if (Control<Grid>("SettingsOverlay").Visibility == Visibility.Visible) CloseSettings(); else if (fullscreen) ToggleFullscreen(); e.Handled = true;
             }
             else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
         }

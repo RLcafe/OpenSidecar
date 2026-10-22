@@ -74,6 +74,15 @@ namespace WidgetScreen
             Text("PageCountText", (current + 1) + " of " + count);
             Control<Button>("PreviousPageButton").IsEnabled = current > 0;
             Control<Button>("NextPageButton").IsEnabled = current < count - 1;
+            UpdateHint();
+        }
+
+        // The one-time tips take the page switcher's spot, so they show only while there is one page, room beside
+        // the clock (not a stacked header) and no edit going on.
+        private void UpdateHint()
+        {
+            bool show = !settings.HintDismissed && !Editor.Editing && WidgetLayout.PageCount(settings) == 1 && (fit == null || !fit.Stacked);
+            Control<StackPanel>("HintRow").Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Changes the pages and saves them, or puts everything back and returns the problem.

@@ -57,6 +57,8 @@ namespace WidgetScreen
         // Focus timer: a chime when a session ends (off in Quiet mode), the fourth preset's length (0 = none yet), and
         // today's finished sessions, which reset on the first session of a new day.
         public bool FocusChime { get; set; }
+        // The one-time tips in the header were put away with Got it.
+        public bool HintDismissed { get; set; }
         public int FocusCustomMinutes { get; set; }
         public string FocusSessionDate { get; set; }
         public int FocusSessionsToday { get; set; }
@@ -94,7 +96,9 @@ namespace WidgetScreen
             TextScale = 1;
             ShowLevels = true;
             Use24HourClock = false;
-            HideToTrayWithPhone = true;
+            // Tray mode with the phone is opt-in (audit, 22 Oct 2026): the dashboard vanishing when the phone app opens
+            // surprised more than it helped when both screens were in use.
+            HideToTrayWithPhone = false;
             FocusChime = true;
             Monitor = "";
             WeatherLocation = "";

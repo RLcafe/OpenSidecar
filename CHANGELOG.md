@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/confirm-sheet` (audit branch 5, 22 Oct 2026):
+
+- **One themed confirm sheet.** Quick Launch buttons that ask first now ask in a sheet over the dashboard (52 px Cancel and Run buttons, Escape or a tap outside cancels) instead of a Windows message box; the phone shows the same sheet instead of the system dialog.
+- **First-launch tips** in the header ("Swipe sideways to switch pages · Settings → Phone pairs your phone"; the phone's own line on the phone) with a Got it button that puts them away for good. They show while there is one page and room beside the clock.
+- **Settings → Phone comes before Discord**, since it's used far more often.
+- **Tray mode with the phone is now off by default** (Settings → Phone). The dashboard vanishing the moment the phone app opened surprised more than it helped when both screens were in use; turn it on if you only ever use the phone.
 
 ## 0.6.0 (22 Oct 2026)
 

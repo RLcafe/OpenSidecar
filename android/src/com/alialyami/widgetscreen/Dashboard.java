@@ -65,7 +65,7 @@ public final class Dashboard {
     // The version of the PC layout the dashboard shows; empty asks the PC for its layout on the next reading.
     private String mirroredVersion = "";
     private boolean editAfterMirror;
-    private View pageSwitcher;
+    private View pageSwitcher, hintRow;
     private TextView pageName, pageCount;
     private View previousPage, nextPage;
     private boolean listMode, started, refreshNow, offlineShown, askedToPair;
@@ -322,11 +322,13 @@ public final class Dashboard {
         actions.addView(settingsButton, ui.ll(Ui.WRAP, Ui.WRAP));
         mainActions = actions;
         pageSwitcher = buildPageSwitcher();
+        hintRow = buildHint();
 
         if (stacked) {
             LinearLayout header = ui.column();
             header.addView(clock, ui.ll(Ui.WRAP, Ui.WRAP));
             header.addView(pageSwitcher, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0));
+            header.addView(hintRow, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
             LinearLayout.LayoutParams params = ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0);
             params.gravity = Gravity.END;
             header.addView(actions, params);
@@ -341,6 +343,11 @@ public final class Dashboard {
         FrameLayout.LayoutParams pageParams = ui.frame(Ui.WRAP, Ui.WRAP, twoRows ? Gravity.START | Gravity.BOTTOM : Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         if (twoRows) pageParams.bottomMargin = ui.px(16);
         header.addView(pageSwitcher, pageParams);
+        // The tips take the page switcher's spot while there is one page; a two-row header has no room for them.
+        FrameLayout.LayoutParams hintParams = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+        hintParams.topMargin = ui.px(4);
+        header.addView(hintRow, hintParams);
+        if (twoRows) hintRow.setVisibility(View.GONE);
         int place = Gravity.END | (twoRows ? Gravity.BOTTOM : Gravity.TOP);
         FrameLayout.LayoutParams actionParams = ui.frame(Ui.WRAP, Ui.WRAP, place);
         if (twoRows) actionParams.bottomMargin = ui.px(16);
@@ -350,6 +357,29 @@ public final class Dashboard {
         if (twoRows) toolbarParams.bottomMargin = ui.px(16);
         header.addView(editToolbar, toolbarParams);
         return header;
+    }
+
+    // A one-time hint for what the dashboard doesn't show by itself; Got it puts it away for good (as on the PC).
+    private View buildHint() {
+        LinearLayout row = ui.row();
+        row.setContentDescription("Tips");
+        TextView text = ui.smallText(listMode ? "Edit layout on the PC or a sideways phone  ·  Settings → PC pairs this phone" : "Swipe sideways to switch pages  ·  Edits here are saved on the PC");
+        text.setSingleLine(true); text.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        text.setMaxWidth(ui.px(560));
+        row.addView(text, ui.ll(Ui.WRAP, Ui.WRAP));
+        TextView gotIt = ui.button("Got it", new View.OnClickListener() { @Override public void onClick(View v) { settings.hintDismissed = true; persist(); updateHint(); } });
+        gotIt.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
+        gotIt.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));
+        gotIt.setContentDescription("Dismiss tips");
+        row.addView(gotIt, ui.margins(ui.ll(Ui.WRAP, ui.px(48)), 14, 0, 0, 0));
+        return row;
+    }
+
+    private void updateHint() {
+        if (hintRow == null) return;
+        boolean twoRows = !listMode && fit != null && fit.stacked;
+        boolean show = !settings.hintDismissed && !editor.editing() && settings.pages.size() == 1 && !twoRows;
+        hintRow.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     // Layout pages, as on the PC: previous, the page's name and position, next. Shown when the PC has more than one page.
@@ -381,6 +411,7 @@ public final class Dashboard {
         pageCount.setText((settings.page + 1) + " of " + count);
         Ui.enable(previousPage, settings.page > 0);
         Ui.enable(nextPage, settings.page < count - 1);
+        updateHint();
     }
 
     // The page shown is the PC's: switching here switches the PC, and the PC's layout for that page follows.
@@ -556,7 +587,50 @@ public final class Dashboard {
         saveLayout(layout, editor.canvasWidth(), editor.canvasHeight(), overlaps ? "Layout saved on the PC. Some widgets overlap." : "Layout saved on the PC.");
     }
 
+    // ----- Confirm sheet -----
+
+    private View confirmSheet;
+
+    // The one way the phone asks "are you sure": a themed sheet over the dashboard (the same look as the PC's), with
+    // 52-unit buttons. Tapping outside, Cancel or Back answers no.
+    public void confirm(String title, String subject, String detail, String action, final Runnable yes) {
+        closeConfirm();
+        if (root == null) return;
+        Ui sheetUi = ui != null ? ui : new Ui(activity, Theme.of(look().theme, look().accent), look(), 1f);
+        final FrameLayout scrim = new FrameLayout(activity);
+        scrim.setBackgroundColor(Ui.alpha(sheetUi.theme.page, 0.7f));
+        scrim.setClickable(true);
+        scrim.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); } });
+        LinearLayout panel = sheetUi.column();
+        panel.setBackground(sheetUi.shape(sheetUi.theme.surface, sheetUi.theme.controlBorder, 1, sheetUi.radius));
+        panel.setPadding(sheetUi.px(28), sheetUi.px(28), sheetUi.px(28), sheetUi.px(28));
+        panel.setClickable(true);
+        panel.addView(sheetUi.label(title), sheetUi.ll(Ui.MATCH, Ui.WRAP));
+        TextView subjectText = Ui.wrap(sheetUi.heading(subject), 3); subjectText.setTypeface(Ui.MEDIUM);
+        panel.addView(subjectText, sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
+        if (detail != null && !detail.isEmpty()) panel.addView(Ui.wrap(sheetUi.smallText(detail), 6), sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
+        LinearLayout buttons = sheetUi.row();
+        buttons.setGravity(Gravity.END);
+        TextView cancel = sheetUi.button("Cancel", new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); } });
+        cancel.setMinWidth(sheetUi.px(140));
+        buttons.addView(cancel, sheetUi.margins(sheetUi.ll(Ui.WRAP, sheetUi.px(52)), 0, 0, 12, 0));
+        TextView go = sheetUi.accentButton(action, new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); yes.run(); } });
+        go.setMinWidth(sheetUi.px(170));
+        buttons.addView(go, sheetUi.ll(Ui.WRAP, sheetUi.px(52)));
+        panel.addView(buttons, sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 24, 0, 0));
+        int width = Math.min(sheetUi.px(600), Math.max(1, root.getWidth() - root.getPaddingLeft() - root.getPaddingRight() - sheetUi.px(32)));
+        scrim.addView(panel, sheetUi.frame(width, Ui.WRAP, Gravity.CENTER));
+        confirmSheet = scrim;
+        root.addView(scrim, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+    }
+
+    private void closeConfirm() {
+        if (confirmSheet != null && root != null) root.removeView(confirmSheet);
+        confirmSheet = null;
+    }
+
     public void onBack(Runnable fallback) {
+        if (confirmSheet != null) { closeConfirm(); return; }
         if (settingsPanel != null) { settingsPanel.cancel(); return; }
         if (widgetsPanel != null) { closeWidgetsPanel(); return; }
         if (editor.editing()) { cancelEdit(); return; }
