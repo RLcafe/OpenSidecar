@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/confirm-sheet` | Audit branch 5: themed confirm sheet on both apps, first-launch tips, Phone tab before Discord, tray mode off by default | `bf0af20` (v0.6.0) | In progress | `.worktrees\confirm-sheet` | `.worktrees\confirm-sheet\artifacts\app\WidgetScreen.exe`, `.worktrees\confirm-sheet\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/confirm-sheet` was merged as v0.6.1.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

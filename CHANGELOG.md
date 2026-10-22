@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/confirm-sheet` (audit branch 5, 22 Oct 2026):
+Nothing yet.
+
+## 0.6.1 (22 Oct 2026)
+
+Merges `feature/confirm-sheet`, audit branch 5 (`docs/design/confirm-sheet.md`).
 
 - **One themed confirm sheet.** Quick Launch buttons that ask first now ask in a sheet over the dashboard (52 px Cancel and Run buttons, Escape or a tap outside cancels) instead of a Windows message box; the phone shows the same sheet instead of the system dialog.
 - **First-launch tips** in the header ("Swipe sideways to switch pages · Settings → Phone pairs your phone"; the phone's own line on the phone) with a Got it button that puts them away for good. They show while there is one page and room beside the clock.
