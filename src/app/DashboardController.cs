@@ -159,11 +159,19 @@ namespace WidgetScreen
             Button("FocusStart", () => { focus.Toggle(); UpdateFocus(); });
             Button("FocusReset", () => { focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); });
             Button("Focus25", () => SetFocus(25)); Button("Focus50", () => SetFocus(50)); Button("Focus5", () => SetFocus(5));
+            // The fourth preset: tap to pick a length once, then it stays as a button like the others.
+            Button("FocusCustom", () => { if (settings.FocusCustomMinutes > 0 && Control<Border>("FocusPicker").Visibility != Visibility.Visible && (int)focus.Duration.TotalMinutes != settings.FocusCustomMinutes) SetFocus(settings.FocusCustomMinutes); else OpenFocusPicker(); });
+            Button("FocusPickerClose", CloseFocusPicker);
+            Button("FocusLengthUse", () => StartCustomFocus((int)Control<Slider>("FocusLengthChoice").Value));
+            Control<Slider>("FocusLengthChoice").ValueChanged += (sender, e) => Text("FocusLengthLabel", Math.Round(e.NewValue) + " min");
+            // A finished session is dismissed with a tap anywhere on the card.
+            Control<Border>("FocusCard").PreviewMouseLeftButtonDown += (sender, e) => DismissFocus();
+            Control<Border>("FocusCard").PreviewTouchDown += (sender, e) => DismissFocus();
             Button("MuteButton", () => AudioAction(a => a.ToggleMute()));
             Button("MicrophoneButton", () => AudioAction(a => a.ToggleMicrophone()));
             Button("SoundSettingsButton", () => Launch("ms-settings:sound", "Windows sound settings"));
             Button("OutputDeviceButton", OpenMasterOutputs);
-            foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
+            foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice", "FocusLengthChoice" }) TouchSlider.Attach(Control<Slider>(name));
             SystemStatsLayout.Attach(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
                 if (!updatingAudio) { double value = e.NewValue / 100; AudioAction(a => a.SetVolume(value), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
@@ -228,29 +236,65 @@ namespace WidgetScreen
             Text("ClockDate", now.ToString("MMMM d", culture));
         }
         private void SetFocus(int minutes) { focus.Reset(minutes); UpdateFocus(); }
+        private void OpenFocusPicker()
+        {
+            Control<Slider>("FocusLengthChoice").Value = settings.FocusCustomMinutes > 0 ? settings.FocusCustomMinutes : 45;
+            Text("FocusLengthLabel", Math.Round(Control<Slider>("FocusLengthChoice").Value) + " min");
+            Control<Border>("FocusPicker").Visibility = Visibility.Visible;
+            Control<Slider>("FocusLengthChoice").Focus();
+        }
+        private void CloseFocusPicker() { Control<Border>("FocusPicker").Visibility = Visibility.Collapsed; }
+        // Keeps the length as the fourth preset and starts a session with it (the PC's picker and the phone alike).
+        private void StartCustomFocus(int minutes)
+        {
+            minutes = Math.Max(5, Math.Min(180, minutes));
+            if (settings.FocusCustomMinutes != minutes) { settings.FocusCustomMinutes = minutes; Persist(); selectedFocusPreset = -1; }
+            CloseFocusPicker();
+            focus.Reset(minutes); focus.Toggle(); UpdateFocus();
+        }
+        private void DismissFocus() { if (focus.Finished) { focus.Dismiss(); UpdateFocus(); } }
+        // A finished session counts towards today; the count resets with the first session of a new day.
+        private void RecordFocusSession()
+        {
+            string today = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            if (settings.FocusSessionDate != today) { settings.FocusSessionDate = today; settings.FocusSessionsToday = 0; settings.FocusMinutesToday = 0; }
+            settings.FocusSessionsToday++; settings.FocusMinutesToday += (int)focus.Duration.TotalMinutes;
+            Persist();
+        }
+        private int FocusSessionsToday { get { return settings.FocusSessionDate == DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ? settings.FocusSessionsToday : 0; } }
+        private int FocusMinutesToday { get { return FocusSessionsToday == 0 ? 0 : settings.FocusMinutesToday; } }
+        private static void Chime() { try { System.Media.SystemSounds.Asterisk.Play(); } catch (Exception) { } }
         private void UpdateFocus()
         {
             bool finished = focus.FinishIfElapsed();
+            if (finished) RecordFocusSession();
             TimeSpan remaining = focus.Remaining;
             Text("FocusTime", ((int)Math.Ceiling(remaining.TotalSeconds) / 60).ToString("00") + ":" + ((int)Math.Ceiling(remaining.TotalSeconds) % 60).ToString("00"));
+            // Paused reads dimmer from across the room; a finished session lights the whole card.
+            Control<TextBlock>("FocusTime").SetResourceReference(TextBlock.ForegroundProperty, focus.Paused ? "Muted" : "Text");
+            Control<Border>("FocusFinished").Visibility = focus.Finished ? Visibility.Visible : Visibility.Collapsed;
             string ends = (DateTime.Now + remaining).ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
-            Text("FocusStatus", remaining == TimeSpan.Zero ? "Done. Take a break." : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
+            Text("FocusStatus", remaining == TimeSpan.Zero ? (focus.Finished ? "Done. Take a break. Tap to clear." : "Done. Take a break.") : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
             Control<ProgressBar>("FocusProgress").Value = focus.Progress;
+            Text("FocusSessions", FocusTimer.SessionsText(FocusSessionsToday, FocusMinutesToday));
             Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : "Start focus";
             int minutes = (int)focus.Duration.TotalMinutes;
             if (minutes != selectedFocusPreset)
             {
                 selectedFocusPreset = minutes;
-                foreach (int preset in new[] { 25, 50, 5 })
+                int custom = settings.FocusCustomMinutes;
+                foreach (int preset in new[] { 25, 50, 5, 0 })
                 {
-                    var button = Control<Button>("Focus" + preset); bool selected = preset == minutes;
+                    var button = Control<Button>(preset == 0 ? "FocusCustom" : "Focus" + preset);
+                    bool selected = preset == 0 ? custom > 0 && minutes == custom && custom != 25 && custom != 50 && custom != 5 : preset == minutes;
                     button.SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, selected ? "Accent" : "ControlBorder");
                     button.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, selected ? "Selected" : "Raised");
                     button.BorderThickness = new Thickness(selected ? 2 : 1);
-                    AutomationProperties.SetName(button, preset + " minutes" + (selected ? ", selected" : ""));
+                    if (preset == 0) { button.Content = custom > 0 ? custom + "m" : "…"; AutomationProperties.SetName(button, (custom > 0 ? custom + " minutes" : "Choose another length") + (selected ? ", selected" : "")); }
+                    else AutomationProperties.SetName(button, preset + " minutes" + (selected ? ", selected" : ""));
                 }
             }
-            if (finished) Notify("Focus session complete.");
+            if (finished) { Notify("Focus session complete."); if (settings.FocusChime && !settings.QuietMode) Chime(); }
         }
 
         private void ApplySettings()
@@ -822,6 +866,7 @@ namespace WidgetScreen
             Control<CheckBox>("RamChoice").IsChecked = settings.ShowRam; Control<CheckBox>("NetworkChoice").IsChecked = settings.ShowNetwork; Control<CheckBox>("UptimeChoice").IsChecked = settings.ShowUptime;
             Control<Slider>("ScaleChoice").Value = settings.TextScale * 100;
             Control<CheckBox>("ClockChoice").IsChecked = settings.Use24HourClock; Control<CheckBox>("LevelsChoice").IsChecked = settings.ShowLevels;
+            Control<CheckBox>("FocusChimeChoice").IsChecked = settings.FocusChime;
             pendingLocation = String.IsNullOrWhiteSpace(settings.WeatherLocation) ? null : new WeatherLocation { Name = settings.WeatherLocation, Latitude = settings.Latitude, Longitude = settings.Longitude };
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
@@ -852,6 +897,7 @@ namespace WidgetScreen
             candidate.Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem; candidate.TextScale = Control<Slider>("ScaleChoice").Value / 100;
             candidate.Monitor = monitor == null ? "" : monitor.Id; candidate.ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true;
             candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
+            candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             try { SaveSettingsFile(candidate); }

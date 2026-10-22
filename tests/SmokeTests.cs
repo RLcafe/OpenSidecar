@@ -437,6 +437,21 @@ internal static class SmokeTests
             var timer = new FocusTimer(); timer.Reset(5); timer.Toggle(); Assert(timer.Running, "Timer did not start."); Thread.Sleep(20); timer.Toggle();
             var paused = timer.Remaining; Thread.Sleep(20); Assert(timer.Remaining == paused, "Paused timer continued.");
             Assert(timer.RemainingAt(TimeSpan.FromMinutes(6)) == TimeSpan.Zero, "Timer became negative."); timer.Reset(25); Assert(!timer.Running && timer.Remaining == TimeSpan.FromMinutes(25), "Reset failed.");
+            Assert(timer.Paused == false, "A fresh timer reads as paused."); timer.Toggle(); Thread.Sleep(20); timer.Toggle(); Assert(timer.Paused, "A stopped timer with time left isn't paused.");
+        });
+        Check("Focus finish shows for a minute, is dismissed by a tap, and counts sessions", () => {
+            DateTime clock = new DateTime(2026, 10, 22, 9, 0, 0, DateTimeKind.Utc);
+            var timer = new FocusTimer(() => clock);
+            timer.Reset(TimeSpan.FromMilliseconds(30)); timer.Toggle(); Thread.Sleep(80);
+            Assert(timer.FinishIfElapsed() && timer.Finished && !timer.Running && timer.Remaining == TimeSpan.Zero && timer.Progress == 1, "The session didn't finish.");
+            Assert(!timer.FinishIfElapsed() && timer.Finished, "Finishing reported twice, or the finish was lost.");
+            clock = clock.AddSeconds(61); Assert(!timer.Finished, "The finish didn't clear after a minute.");
+            timer.Reset(TimeSpan.FromMilliseconds(30)); timer.Toggle(); Thread.Sleep(80); timer.FinishIfElapsed();
+            Assert(timer.Finished, "The second finish wasn't shown."); timer.Dismiss(); Assert(!timer.Finished, "Dismiss didn't clear the finish.");
+            timer.Reset(TimeSpan.FromMilliseconds(30)); timer.Toggle(); Thread.Sleep(80); timer.FinishIfElapsed(); timer.Toggle(); Assert(!timer.Finished && timer.Running, "Starting again kept the finish.");
+            Assert(FocusTimer.SessionsText(0, 0) == "" && FocusTimer.SessionsText(1, 25) == "1 session today  ·  25 m" && FocusTimer.SessionsText(3, 100) == "3 sessions today  ·  1 h 40 m", "Session text is wrong.");
+            var settings = new AppSettings { FocusCustomMinutes = 3, FocusSessionsToday = -2 }; settings.Normalize();
+            Assert(settings.FocusCustomMinutes == 5 && settings.FocusSessionsToday == 0 && new AppSettings().FocusChime, "Focus settings don't normalize or default.");
         });
         Check("Shortcut validation", () => {
             Assert(Launcher.IsAllowed("https://example.com") && Launcher.IsAllowed("spotify:") && Launcher.IsAllowed("%windir%\\explorer.exe"), "Valid shortcut rejected.");

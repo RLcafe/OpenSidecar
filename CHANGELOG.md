@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/focus-finish` (audit branch 4, 22 Oct 2026):
+
+- **A finished focus session is hard to miss**: the whole card takes the accent tint, the time reads 00:00 with "Tap to clear", a chime plays (Settings → Theme, on by default, silent in Quiet mode), and the phone shows and sounds the same. A tap on the card clears it; otherwise it clears itself after a minute.
+- **A fourth preset of your own length**: the "…" button opens a 5 to 180 minute picker inside the card; the length starts a session and stays as the fourth preset on both apps.
+- **Sessions today** under the progress bar ("3 sessions today · 1 h 40 m"), counted on the PC and shown on the phone.
+- A paused session dims the time so the pause reads from across the room.
 
 ## 0.5.0 (22 Oct 2026)
 

@@ -97,7 +97,7 @@ public final class AndroidTests {
                     if (text.contains("\"123456\"")) reply = "{\"token\":\"tok\",\"name\":\"DESKTOP-1\"}";
                     else { status = 403; reply = "{\"error\":\"That code doesn't match. Check the code on the PC.\"}"; }
                 } else if (!"Bearer tok".equals(auth)) { status = 401; reply = "{\"error\":\"This phone isn't paired with the PC anymore.\"}"; }
-                else if (path.startsWith("/state")) reply = "{\"name\":\"DESKTOP-1\",\"quiet\":true,\"use24\":false,\"focus\":{\"remainingMs\":60000,\"durationMs\":1500000,\"running\":true,\"progress\":0.96}}";
+                else if (path.startsWith("/state")) reply = "{\"name\":\"DESKTOP-1\",\"quiet\":true,\"use24\":false,\"focus\":{\"remainingMs\":60000,\"durationMs\":1500000,\"running\":true,\"progress\":0.96,\"paused\":false,\"finished\":true,\"chime\":true,\"customMinutes\":45,\"sessionsToday\":2,\"minutesToday\":50}}";
                 else if (path.equals("/spotify")) { status = 409; reply = "{\"error\":\"No active Spotify device.\",\"noDevice\":true}"; }
                 else reply = "{\"ok\":true,\"message\":\"Played Airhorn.\"}";
                 byte[] data = reply.getBytes(StandardCharsets.UTF_8);
@@ -185,6 +185,7 @@ public final class AndroidTests {
             ok(Format.clockDay(t).equals("THURSDAY") && Format.clockDate(t).equals("October 8") && Format.endsAt(t, false).equals("2:05 PM"), "date");
             ok(Format.focus(25 * 60000L).equals("25:00") && Format.focus(25 * 60000L - 1500).equals("24:59") && Format.focusStatus(0, false, 1, "x").equals("Done. Take a break."), "focus");
             ok(Format.focusButton(1000, false, 0.5).equals("Resume") && Format.focusButton(1000, true, 0.5).equals("Pause") && Format.focusButton(1500000, false, 0).equals("Start focus"), "focus button");
+            ok(Format.sessions(0, 0).isEmpty() && Format.sessions(1, 25).equals("1 session today  ·  25 m") && Format.sessions(3, 100).equals("3 sessions today  ·  1 h 40 m"), "sessions");
             ok(Format.mediaTime(185000).equals("3:05") && Format.rate(2048).equals("2 KB/s") && Format.rate(3 * 1048576).equals("3.0 MB/s"), "media and rate");
             ok(Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L).equals("2d 3h 4m"), "uptime");
         } });
@@ -249,6 +250,7 @@ public final class AndroidTests {
                 PcState state = link.state(Arrays.asList("focus", "deck"));
                 ok(fake.requests.get(fake.requests.size() - 1).equals("GET /state?parts=focus,deck") && fake.tokens.get(fake.tokens.size() - 1).equals("Bearer tok"), "state request");
                 ok(state.quiet && state.focus.running && state.focus.durationMs == 1500000 && state.media == null, "state");
+                ok(state.focus.finished && state.focus.chime && !state.focus.paused && state.focus.customMinutes == 45 && state.focus.sessionsToday == 2 && state.focus.minutesToday == 50, "focus finish, preset and session fields");
                 ok(link.command(Json.map("action", "discord.play", "id", "1")).equals("Played Airhorn.") && fake.bodies.get(fake.bodies.size() - 1).equals("{\"action\":\"discord.play\",\"id\":\"1\"}"), "command");
                 try { link.spotify(Json.map("op", "playTrack", "uri", TRACK)); throw new AssertionError("No device accepted."); }
                 catch (PcLink.Failure f) { ok(f.noDevice && f.code == 409, "no device"); }

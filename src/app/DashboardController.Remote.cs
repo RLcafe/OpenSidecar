@@ -293,8 +293,10 @@ namespace WidgetScreen
             if (parts.Contains("layout")) state["layout"] = RemoteLayout();
             if (parts.Contains("focus"))
             {
-                focus.FinishIfElapsed();
-                state["focus"] = D("remainingMs", focus.Remaining.TotalMilliseconds, "durationMs", focus.Duration.TotalMilliseconds, "running", focus.Running, "progress", focus.Progress);
+                if (focus.FinishIfElapsed()) UpdateFocus();
+                state["focus"] = D("remainingMs", focus.Remaining.TotalMilliseconds, "durationMs", focus.Duration.TotalMilliseconds, "running", focus.Running, "progress", focus.Progress,
+                    "paused", focus.Paused, "finished", focus.Finished, "chime", settings.FocusChime && !settings.QuietMode,
+                    "customMinutes", settings.FocusCustomMinutes, "sessionsToday", FocusSessionsToday, "minutesToday", FocusMinutesToday);
             }
             if (parts.Contains("media"))
             {
@@ -418,6 +420,8 @@ namespace WidgetScreen
                 case "focus.toggle": focus.Toggle(); UpdateFocus(); return Done(null);
                 case "focus.reset": focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); return Done(null);
                 case "focus.preset": SetFocus((int)Required(body, "minutes")); return Done(null);
+                case "focus.custom": StartCustomFocus((int)Required(body, "minutes")); return Done(null);
+                case "focus.dismiss": DismissFocus(); return Done(null);
                 case "quiet.toggle":
                     settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();
                     Notify(settings.QuietMode ? "Quiet mode on. Output levels are paused and updates are slower." : "Quiet mode off.");
