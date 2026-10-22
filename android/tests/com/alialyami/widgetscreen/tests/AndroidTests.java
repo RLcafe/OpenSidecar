@@ -131,17 +131,17 @@ public final class AndroidTests {
         check("Default settings match the Windows look", new Action() { public void run() {
             AppSettings s = new AppSettings();
             ok(s.accent.equals("Lime") && s.theme.equals("Midnight") && s.cornerRadius == 20 && s.textScale == 1 && s.snapWidgets, "appearance");
-            ok(s.widgetLayout == null && s.layoutMode.equals("Auto") && s.keepScreenOn && s.hideSystemBars, "layout or display");
+            ok(s.widgetLayout == null && s.layoutMode.equals("Auto") && s.keepScreenOn.equals("Charging") && s.hideSystemBars, "layout or display");
         } });
         check("Settings save atomically and load back", new Action() { public void run() throws Exception {
             File file = new File(folder, "settings.xml");
             AppSettings s = new AppSettings();
-            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.layoutMode = "List"; s.keepScreenOn = false; s.landscapeOnly = true;
+            s.theme = "Warm"; s.accent = "Amber"; s.textScale = 1.1; s.layoutMode = "List"; s.keepScreenOn = "Never"; s.landscapeOnly = true;
             s.widgetLayout = WidgetLayout.defaults(); WidgetLayout.find(s.widgetLayout, "Soundboard").visible = true; s.widgetLayout[0].layer = 7;
             AppSettings.save(file, s);
             ok(!new File(folder, "settings.xml.tmp").exists(), "Temporary file left behind.");
             AppSettings loaded = AppSettings.load(file, null);
-            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.layoutMode.equals("List") && !loaded.keepScreenOn && loaded.landscapeOnly, "settings");
+            ok(loaded.theme.equals("Warm") && loaded.accent.equals("Amber") && Math.abs(loaded.textScale - 1.1) < 1e-9 && loaded.layoutMode.equals("List") && loaded.keepScreenOn.equals("Never") && loaded.landscapeOnly, "settings");
             ok(WidgetLayout.find(loaded.widgetLayout, "Soundboard").visible && WidgetLayout.find(loaded.widgetLayout, "Focus").layer == 7, "layout");
         } });
         check("Unreadable settings fall back to defaults with a warning and keep the file", new Action() { public void run() throws Exception {
@@ -238,6 +238,13 @@ public final class AndroidTests {
             ok(PcLink.retryDelayMs(0) == 0 && PcLink.retryDelayMs(1) == 5000 && PcLink.retryDelayMs(2) == 15000 && PcLink.retryDelayMs(3) == 60000 && PcLink.retryDelayMs(40) == 60000, "retry delays");
             AppSettings remembered = new AppSettings(); remembered.use24 = true;
             ok(AppSettings.fromProperties(remembered.toProperties()).use24 && !AppSettings.fromProperties(new AppSettings().toProperties()).use24, "24-hour clock remembered");
+            // Keep the screen on: Charging for new installs; an older file's KeepScreenOn becomes Always or Never.
+            java.util.Properties old = new AppSettings().toProperties(); old.remove("KeepScreenOnMode"); old.setProperty("KeepScreenOn", "false");
+            AppSettings never = AppSettings.fromProperties(old); old.setProperty("KeepScreenOn", "true"); AppSettings always = AppSettings.fromProperties(old);
+            ok(new AppSettings().keepScreenOn.equals("Charging") && never.keepScreenOn.equals("Never") && always.keepScreenOn.equals("Always"), "keep-screen-on migration");
+            ok(new AppSettings().keepsScreenOn(true) && !new AppSettings().keepsScreenOn(false) && always.keepsScreenOn(false) && !never.keepsScreenOn(true), "keep-screen-on modes");
+            AppSettings badMode = new AppSettings(); badMode.keepScreenOn = "Sometimes"; badMode.normalize();
+            ok(badMode.keepScreenOn.equals("Charging"), "keep-screen-on normalizes");
             AppSettings dismissed = new AppSettings(); dismissed.hintDismissed = true;
             ok(AppSettings.fromProperties(dismissed.toProperties()).hintDismissed && !new AppSettings().hintDismissed, "tips dismissal remembered");
             PcLink.Found pc = PcLink.parseDiscovery("{\"app\":\"Widget Screen\",\"name\":\"DESKTOP-1\",\"port\":43830}", "192.168.1.20");

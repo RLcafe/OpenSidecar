@@ -24,6 +24,7 @@
         android:supportsRtl="false"
         android:resizeableActivity="true"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/WidgetScreen">
 
         <activity

@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/quick-launch-polish` was merged as v0.10.0.
+| `feature/phone-native` | Audit branch 10: offline card, firewall hint, drag readout and nudge arrows, keep-screen modes, haptics, predictive back (phone only) | `be5437b` (v0.10.0) | In progress | `.worktrees\phone-native` | `.worktrees\phone-native\artifacts\app\WidgetScreen.exe`, `.worktrees\phone-native\artifacts\android\WidgetScreen.apk` |
 eadable-small-screens` | `.worktrees
 eadable-small-screensrtifactspp\WidgetScreen.exe`, `.worktrees
 eadable-small-screensrtifactsndroid\WidgetScreen.apk` |

@@ -60,6 +60,7 @@ public final class Pc {
         }, new Async.Done<PcPairing>() {
             @Override public void ok(PcPairing paired) {
                 pairing = paired; problem = null; unpaired = false; state = null; polling = false; generation++; failures = 0; retryAt = 0;
+                pairedAt = SystemClock.elapsedRealtime();
                 done.ok(paired.name);
             }
         }, failed);
@@ -71,6 +72,9 @@ public final class Pc {
     }
 
     public int failures() { return failures; }
+    // When this phone paired (elapsedRealtime), so a failure right after pairing can point at the PC's firewall.
+    public long pairedAt = -1;
+    public boolean justPaired() { return pairedAt >= 0 && SystemClock.elapsedRealtime() - pairedAt < 120000; }
 
     public void discover(Async.Done<List<PcLink.Found>> done) {
         Async.run(new Async.Work<List<PcLink.Found>>() { @Override public List<PcLink.Found> run() { return PcLink.discover(1500); } }, done, null);

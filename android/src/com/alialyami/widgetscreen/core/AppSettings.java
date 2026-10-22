@@ -26,7 +26,12 @@ public final class AppSettings {
     public boolean snapWidgets = true;
     // Display: keep the screen awake while the dashboard is open, hide the status and navigation bars,
     // and whether to use the stretched dashboard canvas or a scrolling list (Auto picks by screen size).
-    public boolean keepScreenOn = true, hideSystemBars = true;
+    public boolean hideSystemBars = true;
+    // Keep the screen on: Always, Charging (on a stand, plugged in) or Never. New installs get Charging; an older
+    // settings file's KeepScreenOn becomes Always or Never.
+    public static final String[] KEEP_SCREEN_MODES = { "Always", "Charging", "Never" };
+    public String keepScreenOn = "Charging";
+    public boolean keepsScreenOn(boolean charging) { return "Always".equals(keepScreenOn) || ("Charging".equals(keepScreenOn) && charging); }
     // Keep the app sideways, so the phone always shows the Windows dashboard arrangement.
     public boolean landscapeOnly;
     public String layoutMode = "Auto";
@@ -91,6 +96,7 @@ public final class AppSettings {
         if (!Theme.contains(Theme.ACCENTS, accent)) accent = "Lime";
         if (!Theme.contains(Theme.THEMES, theme)) theme = "Midnight";
         if (!Theme.contains(LAYOUT_MODES, layoutMode)) layoutMode = "Auto";
+        if (!Theme.contains(KEEP_SCREEN_MODES, keepScreenOn)) keepScreenOn = "Charging";
         cornerRadius = Double.isNaN(cornerRadius) || Double.isInfinite(cornerRadius) ? 20 : Math.max(0, Math.min(24, cornerRadius));
         String reference = WidgetLayout.keyName(WidgetLayout.REFERENCE_WIDTH, WidgetLayout.REFERENCE_HEIGHT);
         Map<String, WidgetLayout.Placement[]> layouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
@@ -137,7 +143,7 @@ public final class AppSettings {
         p.setProperty("Accent", accent); p.setProperty("Theme", theme);
         p.setProperty("CornerRadius", number(cornerRadius)); p.setProperty("TextScale", number(textScale));
         p.setProperty("SnapWidgets", Boolean.toString(snapWidgets));
-        p.setProperty("KeepScreenOn", Boolean.toString(keepScreenOn)); p.setProperty("HideSystemBars", Boolean.toString(hideSystemBars));
+        p.setProperty("KeepScreenOnMode", keepScreenOn); p.setProperty("HideSystemBars", Boolean.toString(hideSystemBars));
         p.setProperty("LandscapeOnly", Boolean.toString(landscapeOnly));
         p.setProperty("LayoutMode", layoutMode);
         p.setProperty("Use24Hour", Boolean.toString(use24));
@@ -165,7 +171,8 @@ public final class AppSettings {
         s.accent = p.getProperty("Accent", s.accent); s.theme = p.getProperty("Theme", s.theme);
         s.cornerRadius = readNumber(p, "CornerRadius", s.cornerRadius); s.textScale = readNumber(p, "TextScale", s.textScale);
         s.snapWidgets = readBool(p, "SnapWidgets", s.snapWidgets);
-        s.keepScreenOn = readBool(p, "KeepScreenOn", s.keepScreenOn); s.hideSystemBars = readBool(p, "HideSystemBars", s.hideSystemBars);
+        s.keepScreenOn = p.getProperty("KeepScreenOnMode", p.getProperty("KeepScreenOn") == null ? s.keepScreenOn : readBool(p, "KeepScreenOn", true) ? "Always" : "Never");
+        s.hideSystemBars = readBool(p, "HideSystemBars", s.hideSystemBars);
         s.landscapeOnly = readBool(p, "LandscapeOnly", false);
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         s.use24 = readBool(p, "Use24Hour", false);

@@ -154,8 +154,14 @@ public final class Dashboard {
     public void refreshSoon() { refreshNow = true; Async.MAIN.postDelayed(new Runnable() { @Override public void run() { if (started && refreshNow) { refreshNow = false; poll(true); } } }, 250); }
 
     private void stateChanged() {
-        if (pc.problem != null) { say(pc.problem, true); offlineShown = true; }
+        if (pc.problem != null) {
+            // Right after pairing, the usual cause is the PC's firewall; say so once, where the user is looking.
+            if (pc.justPaired() && pc.failures() == 1 && !pc.unpaired) say("Paired, but " + pc.name() + " isn't answering. On the PC, allow Widget Screen on private networks when Windows Firewall asks, or in Windows Security → Firewall → Allow an app.", true);
+            else if (offlineCard == null) say(pc.problem, true);
+            offlineShown = true;
+        }
         else if (offlineShown) { offlineShown = false; say("Connected to " + pc.name() + "."); }
+        updateOfflineCard();
         if (pc.state != null && pc.problem == null && settings.use24 != pc.state.use24) { settings.use24 = pc.state.use24; persist(); }
         updateClock(); updateQuiet();
         if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
@@ -262,7 +268,7 @@ public final class Dashboard {
         if (discarded) say("The screen changed shape, so the layout changes were discarded.");
         if (dashboardView != null) root.removeView(dashboardView);
         root.setBackgroundColor(theme.page);
-        widgetsPanel = null;
+        widgetsPanel = null; offlineCard = null;
         scale = (float) fit.scale;
         if (!listMode) {
             int logicalWidth = (int) fit.logicalWidth, logicalHeight = (int) fit.logicalHeight;
@@ -524,6 +530,10 @@ public final class Dashboard {
         statusLine = Ui.wrap(ui.smallText(statusText), 3);
         column.addView(statusLine, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         displayStatus = null;
+        // One calm card at the top while the PC is away, instead of "PC offline" on every card.
+        offlineCard = buildOfflineCard();
+        column.addView(offlineCard, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, LIST_GAP, 0, 0));
+        updateOfflineCard();
         java.util.List<WidgetLayout.Placement> order = new java.util.ArrayList<WidgetLayout.Placement>();
         for (WidgetLayout.Placement p : editor.placements()) if (editor.isVisible(p.id)) order.add(p);
         java.util.Collections.sort(order, new java.util.Comparator<WidgetLayout.Placement>() {
@@ -540,6 +550,37 @@ public final class Dashboard {
         }
         logicalRoot.addView(column, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
         return logicalRoot;
+    }
+
+    // ----- Offline card (phone list) -----
+
+    private View offlineCard;
+    private TextView offlineTitle, offlineText;
+
+    private View buildOfflineCard() {
+        LinearLayout column = ui.column();
+        offlineTitle = ui.heading("Can't reach the PC");
+        offlineTitle.setTypeface(Ui.MEDIUM);
+        column.addView(offlineTitle, ui.ll(Ui.MATCH, Ui.WRAP));
+        offlineText = Ui.wrap(ui.smallText(""), 4);
+        column.addView(offlineText, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 12));
+        LinearLayout buttons = ui.row();
+        buttons.addView(ui.button("Try now", new View.OnClickListener() { @Override public void onClick(View v) { refreshSoon(); } }), ui.margins(ui.ll(Ui.WRAP, ui.px(48)), 0, 0, 10, 0));
+        buttons.addView(ui.flatButton("Settings → PC", new View.OnClickListener() { @Override public void onClick(View v) { openSettings("PC"); } }), ui.ll(Ui.WRAP, ui.px(48)));
+        column.addView(buttons, ui.ll(Ui.MATCH, Ui.WRAP));
+        FrameLayout card = ui.card(column, 20);
+        card.setVisibility(View.GONE);
+        return card;
+    }
+
+    private void updateOfflineCard() {
+        if (offlineCard == null) return;
+        boolean show = pc.paired() && !pc.online();
+        offlineCard.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+        offlineTitle.setText(pc.unpaired ? "The PC forgot this phone" : pc.problem != null ? "Can't reach " + pc.name() : "Connecting to " + pc.name() + "…");
+        int failures = pc.failures();
+        offlineText.setText(pc.unpaired ? "Pair it again in Settings → PC." : pc.problem != null ? pc.problem + (failures >= 3 ? " Trying again every minute." : failures == 2 ? " Trying again in 15 s." : failures == 1 ? " Trying again in 5 s." : "") : "The first reading is on its way.");
     }
 
     private void updateClock() {
@@ -718,6 +759,24 @@ public final class Dashboard {
             if (id.equals(editor.selected())) box.setBackground(ui.shape(ui.theme.selected, ui.theme.accent, 1, 10));
             panel.addView(box, ui.ll(Ui.MATCH, Ui.WRAP));
         }
+        // Nudge arrows: one-unit moves and resizes of the selected card, which a finger can't do on a phone (the PC
+        // has them on the keyboard). 8 units a tap, with Snap on; 1 unit with it off.
+        panel.addView(ui.label("NUDGE " + WidgetLayout.title(editor.selected()).toUpperCase(java.util.Locale.ROOT)), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 20, 0, 8));
+        final int step = editor.snap() ? 8 : 1;
+        LinearLayout move = ui.row();
+        move.addView(ui.smallText("Move"), ui.margins(ui.ll(ui.px(64), Ui.WRAP), 4, 0, 0, 0));
+        move.addView(ui.iconButton("chevron-left", "Move left", 20, true, nudge(-step, 0, false)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        move.addView(ui.iconButton("chevron-up", "Move up", 20, true, nudge(0, -step, false)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        move.addView(ui.iconButton("chevron-down", "Move down", 20, true, nudge(0, step, false)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        move.addView(ui.iconButton("chevron-right", "Move right", 20, true, nudge(step, 0, false)), ui.ll(ui.px(48), ui.px(48)));
+        panel.addView(move, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 6));
+        LinearLayout size = ui.row();
+        size.addView(ui.smallText("Size"), ui.margins(ui.ll(ui.px(64), Ui.WRAP), 4, 0, 0, 0));
+        size.addView(ui.iconButton("chevron-left", "Narrower", 20, true, nudge(-step, 0, true)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        size.addView(ui.iconButton("chevron-up", "Shorter", 20, true, nudge(0, -step, true)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        size.addView(ui.iconButton("chevron-down", "Taller", 20, true, nudge(0, step, true)), ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 6, 0));
+        size.addView(ui.iconButton("chevron-right", "Wider", 20, true, nudge(step, 0, true)), ui.ll(ui.px(48), ui.px(48)));
+        panel.addView(size, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 4));
         panel.addView(ui.label("PAGES"), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 20, 0, 8));
         panel.addView(ui.smallText("Page actions save your layout changes first."), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 0, 0, 8));
         LinearLayout rename = ui.row();
@@ -761,6 +820,10 @@ public final class Dashboard {
         TextView add = ui.button("Add page", new View.OnClickListener() { @Override public void onClick(View v) { pageAction(Json.map("action", "page.add")); } });
         Ui.enable(add, settings.pages.size() < 8);
         panel.addView(add, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 4, 0, 0));
+    }
+
+    private View.OnClickListener nudge(final int dx, final int dy, final boolean resize) {
+        return new View.OnClickListener() { @Override public void onClick(View v) { editor.nudgeSelected(dx, dy, resize); } };
     }
 
     // Deleting a page asks first: a second tap within a few seconds confirms.

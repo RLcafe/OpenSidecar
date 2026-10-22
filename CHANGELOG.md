@@ -4,7 +4,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/phone-native` (audit branch 10, 22 Oct 2026; phone only, see the design note for what the PC side already has):
+
+- **One calm offline card** at the top of the upright phone list while the PC is away ("Can't reach DESKTOP · trying again in 15 s", with Try now and Settings → PC), instead of a sticky status line.
+- **A firewall hint right after pairing**: when the first reading after pairing fails, the phone says to allow Widget Screen on private networks in Windows Firewall, where the problem usually is.
+- **Edit layout on a phone**: a readout of the card's size and place sits at the top of the card while a finger drags it, and the Widgets panel gains Move and Size nudge arrows (8 units a tap with Snap on, 1 without) for the fine moves a finger can't do.
+- **Keep the screen on: Always, While charging or Never** (Settings → Display). New installs get While charging, which suits a phone on a stand; existing settings keep what they had.
+- **Haptics**: a light tap on every button.
+- **Android 13+ Back** goes through the system's back callback (predictive back), so Back keeps closing panels and sheets on new Android versions.
 
 ## 0.10.0 (22 Oct 2026)
 
