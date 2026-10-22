@@ -188,7 +188,20 @@ namespace WidgetScreen
             return new JavaScriptSerializer().DeserializeObject(request.Body) as Dictionary<string, object> ?? new Dictionary<string, object>();
         }
         private static string Str(Dictionary<string, object> body, string key) { object value; return body.TryGetValue(key, out value) && value != null ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) : null; }
-        private static double Num(Dictionary<string, object> body, string key) { object value; return body.TryGetValue(key, out value) && value != null ? Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture) : Double.NaN; }
+        private static double Num(Dictionary<string, object> body, string key)
+        {
+            object value;
+            if (!body.TryGetValue(key, out value) || value == null) return Double.NaN;
+            try { return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture); }
+            catch (FormatException) { return Double.NaN; } catch (InvalidCastException) { return Double.NaN; } catch (OverflowException) { return Double.NaN; }
+        }
+        // A number the phone must send. A missing or malformed one is refused (400) before it reaches an action.
+        private static double Required(Dictionary<string, object> body, string key)
+        {
+            double value = Num(body, key);
+            if (Double.IsNaN(value) || Double.IsInfinity(value)) throw new ArgumentException("The request is missing " + key + ".");
+            return value;
+        }
         private static bool Flag(Dictionary<string, object> body, string key) { object value; return body.TryGetValue(key, out value) && value is bool && (bool)value; }
 
         public static string Version
@@ -336,39 +349,40 @@ namespace WidgetScreen
                 case "media.seek":
                     {
                         await media.ReadAsync();
-                        if (!await media.SeekAsync(Str(body, "key"), Num(body, "positionMs"))) throw new InvalidOperationException("Couldn't jump there. The app may not allow it, or the song changed.");
+                        double positionMs = Required(body, "positionMs");
+                        if (!await media.SeekAsync(Str(body, "key"), positionMs)) throw new InvalidOperationException("Couldn't jump there. The app may not allow it, or the song changed.");
                         return Done(null);
                     }
-                case "audio.volume": RemoteAudio(() => audio.SetVolume(Num(body, "value"))); return Done(null);
+                case "audio.volume": { double value = Required(body, "value"); RemoteAudio(() => audio.SetVolume(value)); return Done(null); }
                 case "audio.mute": RemoteAudio(() => audio.ToggleMute()); return Done(null);
                 case "audio.microphone": RemoteAudio(() => audio.ToggleMicrophone()); return Done(null);
                 case "audio.output": RemoteAudio(() => audio.SetDefaultOutput(Str(body, "id"))); return Done(null);
-                case "audio.session.volume": RemoteAudio(() => audio.SetSessionVolume(Str(body, "id"), Num(body, "value"))); return Done(null);
+                case "audio.session.volume": { double value = Required(body, "value"); RemoteAudio(() => audio.SetSessionVolume(Str(body, "id"), value)); return Done(null); }
                 case "audio.session.mute": RemoteAudio(() => audio.ToggleSessionMute(Str(body, "id"))); return Done(null);
                 case "audio.session.output":
                     {
-                        uint process = (uint)Num(body, "processId");
+                        uint process = (uint)Required(body, "processId");
                         if (process == 0) throw new InvalidOperationException("System sounds always play on the master output.");
                         RemoteAudio(() => { if (!audio.CanRouteApps) throw new InvalidOperationException("Windows didn't allow changing this app's output."); audio.SetAppOutput(process, Str(body, "id")); });
                         return Done(null);
                     }
                 case "audio.session.routed":
                     {
-                        uint process = (uint)Num(body, "processId");
+                        uint process = (uint)Required(body, "processId");
                         string routed = null;
                         if (process != 0 && audio != null && audio.CanRouteApps) routed = audio.AppOutput(process);
                         return RemoteResponse.Json(200, D("ok", true, "routed", routed, "canRoute", process != 0 && audio != null && audio.CanRouteApps));
                     }
                 case "focus.toggle": focus.Toggle(); UpdateFocus(); return Done(null);
                 case "focus.reset": focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); return Done(null);
-                case "focus.preset": SetFocus((int)Num(body, "minutes")); return Done(null);
+                case "focus.preset": SetFocus((int)Required(body, "minutes")); return Done(null);
                 case "quiet.toggle":
                     settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();
                     Notify(settings.QuietMode ? "Quiet mode on. Output levels are paused and updates are slower." : "Quiet mode off.");
                     return Done(null);
                 case "deck.run":
                     {
-                        int index = (int)Num(body, "index");
+                        int index = (int)Required(body, "index");
                         string label = Str(body, "label");
                         if (index < 0 || index >= settings.Shortcuts.Count || (label != null && label != settings.Shortcuts[index].Label)) throw new InvalidOperationException("That button changed on the PC. Try again.");
                         string error = await RunDeckActionAsync(settings.Shortcuts[index], Flag(body, "confirmed"));

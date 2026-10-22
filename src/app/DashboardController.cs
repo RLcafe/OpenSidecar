@@ -144,7 +144,7 @@ namespace WidgetScreen
             Button("Focus25", () => SetFocus(25)); Button("Focus50", () => SetFocus(50)); Button("Focus5", () => SetFocus(5));
             Button("MuteButton", () => AudioAction(() => audio.ToggleMute()));
             Button("MicrophoneButton", () => AudioAction(() => audio.ToggleMicrophone()));
-            Button("SoundSettingsButton", () => Launch("ms-settings:sound"));
+            Button("SoundSettingsButton", () => Launch("ms-settings:sound", "Windows sound settings"));
             Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice" }) TouchSlider.Attach(Control<Slider>(name));
             SystemStatsLayout.Attach(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
@@ -247,7 +247,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); ShowWeatherCredit(); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -414,7 +414,7 @@ namespace WidgetScreen
                         case "volume-down": AudioAction(() => audio.SetVolume(audio.Read().Volume - .05)); break;
                         case "focus": focus.Toggle(); UpdateFocus(); break;
                         case "quiet": settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist(); break;
-                        case "sound": Launch("ms-settings:sound"); break;
+                        case "sound": Launch("ms-settings:sound", "Windows sound settings"); break;
                     }
                 }
                 else { DeckActions.Open(shortcut); Notify("Opened " + shortcut.Label); }
@@ -422,7 +422,14 @@ namespace WidgetScreen
             }
             catch (Exception e) { if (!disposed) Notify(shortcut.Label + ": " + e.Message); return shortcut.Label + ": " + e.Message; }
         }
-        private void Launch(string target) { try { Launcher.Open(target); Notify("Opened " + target); } catch (Exception e) { Notify("Couldn't open shortcut: " + e.Message); } }
+        private void Launch(string target, string label) { try { Launcher.Open(target); Notify("Opened " + label + "."); } catch (Exception e) { Notify("Couldn't open " + label + ": " + e.Message); } }
+
+        // An unhandled error on the UI thread (Program.Main): the dashboard stays up and says where the details are.
+        public void ReportError(Exception error)
+        {
+            if (disposed) return;
+            try { Notify("Something went wrong: " + error.GetBaseException().Message + " Details are in error.log next to settings.xml.", true); } catch (Exception) { }
+        }
 
         private void RefreshAudio()
         {
@@ -667,6 +674,11 @@ namespace WidgetScreen
         }
         private static string FormatTime(TimeSpan time) { return ((int)time.TotalMinutes).ToString("0") + ":" + time.Seconds.ToString("00"); }
 
+        // The "updated" time follows the clock's 12- or 24-hour choice.
+        private void ShowWeatherCredit()
+        {
+            if (lastWeather != null) Text("WeatherCredit", "Open-Meteo  ·  updated " + lastWeather.Retrieved.ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture));
+        }
         private async void RefreshWeather()
         {
             if (disposed || weatherBusy || !Editor.IsVisible("Weather")) return;
@@ -684,7 +696,7 @@ namespace WidgetScreen
                 lastWeather = snapshot;
                 Text("WeatherTemperature", Math.Round(snapshot.Temperature) + "°"); Text("WeatherCondition", WeatherService.Describe(snapshot.Code));
                 Text("WeatherDetails", "Feels " + Math.Round(snapshot.FeelsLike) + "°C  ·  " + Math.Round(snapshot.Wind) + " km/h");
-                Text("WeatherCredit", "Open-Meteo  ·  updated " + snapshot.Retrieved.ToString("HH:mm"));
+                ShowWeatherCredit();
             }
             catch (Exception)
             {
@@ -734,22 +746,18 @@ namespace WidgetScreen
             string discordError = discordAccount.SaveDraft();
             if (discordError != null) { Text("SettingsStatus", discordError); return; }
             var monitor = Control<ComboBox>("MonitorChoice").SelectedItem as MonitorOption;
-            var candidate = new AppSettings {
-                SpotifyClientId = spotifyId.Length == 0 ? settings.SpotifyClientId : spotifyId,
-                Theme = (string)Control<ComboBox>("ThemeChoice").SelectedItem, CornerRadius = Control<Slider>("CornersChoice").Value,
-                StartFullscreen = Control<CheckBox>("StartFullscreenChoice").IsChecked == true,
-                ShowCpu = Control<CheckBox>("CpuChoice").IsChecked == true, ShowGpu = Control<CheckBox>("GpuChoice").IsChecked == true,
-                ShowRam = Control<CheckBox>("RamChoice").IsChecked == true, ShowNetwork = Control<CheckBox>("NetworkChoice").IsChecked == true, ShowUptime = Control<CheckBox>("UptimeChoice").IsChecked == true,
-                Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem, TextScale = Control<Slider>("ScaleChoice").Value / 100,
-                Monitor = monitor == null ? "" : monitor.Id, ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true,
-                Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true, SwapSideWidgets = settings.SwapSideWidgets,
-                WidgetLayout = settings.WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(settings.WidgetLayout), SnapWidgets = settings.SnapWidgets,
-                CanvasLayouts = settings.CanvasLayouts == null ? null : settings.CanvasLayouts.Select(c => c.Copy()).ToArray(),
-                ClockWidth = settings.ClockWidth, MediaWidth = settings.MediaWidth, MixerWidth = settings.MixerWidth, SystemWidth = settings.SystemWidth,
-                ClockHeight = settings.ClockHeight, MediaHeight = settings.MediaHeight, MixerHeight = settings.MixerHeight, SystemHeight = settings.SystemHeight,
-                QuietMode = settings.QuietMode, Shortcuts = shortcuts, WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name,
-                Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude, Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude
-            };
+            // Only the fields the panel shows change; pages, the phone link and everything else come along unchanged.
+            var candidate = settings.Copy();
+            candidate.SpotifyClientId = spotifyId.Length == 0 ? settings.SpotifyClientId : spotifyId;
+            candidate.Theme = (string)Control<ComboBox>("ThemeChoice").SelectedItem; candidate.CornerRadius = Control<Slider>("CornersChoice").Value;
+            candidate.StartFullscreen = Control<CheckBox>("StartFullscreenChoice").IsChecked == true;
+            candidate.ShowCpu = Control<CheckBox>("CpuChoice").IsChecked == true; candidate.ShowGpu = Control<CheckBox>("GpuChoice").IsChecked == true;
+            candidate.ShowRam = Control<CheckBox>("RamChoice").IsChecked == true; candidate.ShowNetwork = Control<CheckBox>("NetworkChoice").IsChecked == true; candidate.ShowUptime = Control<CheckBox>("UptimeChoice").IsChecked == true;
+            candidate.Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem; candidate.TextScale = Control<Slider>("ScaleChoice").Value / 100;
+            candidate.Monitor = monitor == null ? "" : monitor.Id; candidate.ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true;
+            candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
+            candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
+            candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             try { SettingsStore.Save(settingsPath, candidate); }
             catch (Exception e) { Text("SettingsStatus", "Could not save settings: " + e.Message); return; }
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude;

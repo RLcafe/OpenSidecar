@@ -133,6 +133,39 @@ internal static class SmokeTests
                 window.Close();
             }
         });
+        Check("Settings copy is deep and complete", () => {
+            var original = new AppSettings { Accent = "Amber", RemoteEnabled = true, HideToTrayWithPhone = false, QuietMode = true, CurrentPage = 1, PageName = "Work",
+                MorePages = new[] { new LayoutPage { Name = "Games", WidgetLayout = WidgetLayout.DefaultFor(new AppSettings(), WidgetLayout.Reference) } },
+                CanvasLayouts = new[] { new CanvasLayout { Width = 1000, Height = 500, Widgets = WidgetLayout.DefaultFor(new AppSettings(), new System.Windows.Size(1000, 500)) } } };
+            original.WidgetLayout = WidgetLayout.DefaultFor(original, WidgetLayout.Reference);
+            var copy = original.Copy();
+            Func<AppSettings, string> xml = s => { using (var writer = new StringWriter()) { new System.Xml.Serialization.XmlSerializer(typeof(AppSettings)).Serialize(writer, s); return writer.ToString(); } };
+            Assert(xml(copy) == xml(original), "The copy differs from the original.");
+            Assert(copy.Shortcuts != original.Shortcuts && copy.WidgetLayout != original.WidgetLayout && copy.CanvasLayouts != original.CanvasLayouts && copy.MorePages != original.MorePages, "The copy shares collections with the original.");
+            copy.Shortcuts[0].Label = "Changed"; copy.WidgetLayout[0].X += 8; copy.MorePages[0].Name = "Changed"; copy.CanvasLayouts[0].Widgets[0].Y += 8;
+            Assert(original.Shortcuts[0].Label != "Changed" && original.WidgetLayout[0].X != copy.WidgetLayout[0].X && original.MorePages[0].Name == "Games" && original.CanvasLayouts[0].Widgets[0].Y != copy.CanvasLayouts[0].Widgets[0].Y, "Changing the copy changed the original.");
+        });
+        Check("Settings → Save keeps pages, the current page, Quiet mode and the phone link", () => {
+            string path = Path.Combine(directory, "save-keeps.xml");
+            SettingsStore.Save(path, new AppSettings { RemoteEnabled = true, HideToTrayWithPhone = false, QuietMode = true, PageName = "Work", MorePages = new[] { new LayoutPage { Name = "Games" }, new LayoutPage { Name = "Music" } }, CurrentPage = 1 });
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    click("SettingsButton"); ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm"; click("SaveSettings");
+                    string warning; var saved = SettingsStore.Load(path, out warning);
+                    Assert(saved.Theme == "Warm", "The theme change was not saved.");
+                    Assert(WidgetLayout.PageCount(saved) == 3 && saved.PageName == "Work" && saved.MorePages[1].Name == "Music" && saved.CurrentPage == 1, "Save changes dropped the pages or the current page.");
+                    Assert(saved.RemoteEnabled && !saved.HideToTrayWithPhone && saved.QuietMode, "Save changes reset the phone link or Quiet mode.");
+                    click("SettingsButton");
+                    Assert(((System.Windows.Controls.CheckBox)window.FindName("RemoteEnabledChoice")).IsChecked == true && ((System.Windows.Controls.TextBlock)window.FindName("PageNameText")).Text == "Games", "The dashboard shows a different state than it saved.");
+                    click("CancelSettings");
+                }
+                window.Close();
+            }
+        });
         Check("Touch sliders map to the rendered track, clamp, snap and follow direction changes", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {

@@ -23,7 +23,16 @@ namespace WidgetScreen
             try
             {
                 var application = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
-                application.DispatcherUnhandledException += (sender, e) => { Log(e.Exception); };
+                DashboardController running = null; int errors = 0;
+                // One failing widget or service must never take the dashboard down: an unhandled error is logged and
+                // shown on the status line, and the dashboard carries on. A storm of errors (something that throws on
+                // every heartbeat) still closes the app rather than looping forever, and renders fail loudly.
+                application.DispatcherUnhandledException += (sender, e) => {
+                    Log(e.Exception);
+                    if (Rendering || ++errors > 20) return;
+                    e.Handled = true;
+                    if (running != null) running.ReportError(e.Exception);
+                };
                 // Awaits started before Run (for example while the dashboard is constructed) must resume on the UI thread.
                 System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 Window window;
@@ -34,6 +43,7 @@ namespace WidgetScreen
                 if (Rendering) ScreenSize = RenderSize(Argument(args, "--render-size"));
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))
                 {
+                    running = controller;
                     if (renderPath != null)
                     {
                         var renderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
