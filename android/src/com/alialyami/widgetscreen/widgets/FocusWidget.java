@@ -84,7 +84,7 @@ public final class FocusWidget extends Widget {
         if (focus.running) remaining = Math.max(0, remaining - (SystemClock.elapsedRealtime() - dash.pc.stateAt));
         double fraction = focus.durationMs <= 0 ? 0 : 1 - remaining / focus.durationMs;
         time.setText(Format.focus(remaining));
-        String ends = Format.endsAt(LocalDateTime.now().plusNanos(remaining * 1000000L), state.use24);
+        String ends = Format.endsAt(LocalDateTime.now().plusNanos(remaining * 1000000L), dash.use24());
         boolean running = focus.running && remaining > 0;
         status.setText(Format.focusStatus(remaining, running, fraction, ends));
         progress.setValue(fraction);

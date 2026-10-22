@@ -213,6 +213,17 @@ public final class AndroidTests {
         check("PC addresses and discovery replies are read safely", new Action() { public void run() {
             ok(Arrays.equals(PcLink.parseAddress(" 192.168.1.20 "), new String[] { "192.168.1.20", "43830" }) && Arrays.equals(PcLink.parseAddress("desktop-1.local:5000"), new String[] { "desktop-1.local", "5000" }), "addresses");
             ok(PcLink.parseAddress("http://x/") == null && PcLink.parseAddress("1.2.3.4:99999") == null && PcLink.parseAddress("") == null && PcLink.parseAddress("a b") == null, "bad addresses");
+            // Only home-network addresses: a typo must not send the token to the internet.
+            ok(PcLink.parseAddress("8.8.8.8") == null && PcLink.parseAddress("example.com") == null && PcLink.parseAddress("172.32.0.1") == null, "public addresses");
+            ok(PcLink.parseAddress("10.0.0.5") != null && PcLink.parseAddress("172.20.1.1:43830") != null && PcLink.parseAddress("169.254.3.4") != null && PcLink.parseAddress("localhost") != null, "home addresses");
+            // Discovery goes to each interface's broadcast address, with the limited broadcast as the fallback.
+            java.util.List<String> targets = PcLink.broadcastAddresses();
+            ok(targets.contains("255.255.255.255") && targets.indexOf("255.255.255.255") == targets.size() - 1, "broadcast fallback last");
+            for (String target : targets) ok(target.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}"), "broadcast address " + target);
+            // An unreachable PC is asked again after 5 s, 15 s, then every minute.
+            ok(PcLink.retryDelayMs(0) == 0 && PcLink.retryDelayMs(1) == 5000 && PcLink.retryDelayMs(2) == 15000 && PcLink.retryDelayMs(3) == 60000 && PcLink.retryDelayMs(40) == 60000, "retry delays");
+            AppSettings remembered = new AppSettings(); remembered.use24 = true;
+            ok(AppSettings.fromProperties(remembered.toProperties()).use24 && !AppSettings.fromProperties(new AppSettings().toProperties()).use24, "24-hour clock remembered");
             PcLink.Found pc = PcLink.parseDiscovery("{\"app\":\"Widget Screen\",\"name\":\"DESKTOP-1\",\"port\":43830}", "192.168.1.20");
             ok(pc != null && pc.name.equals("DESKTOP-1") && pc.port == 43830 && pc.host.equals("192.168.1.20"), "discovery");
             ok(PcLink.parseDiscovery("{\"app\":\"Other\",\"port\":1}", "x") == null && PcLink.parseDiscovery("garbage", "x") == null, "foreign replies");

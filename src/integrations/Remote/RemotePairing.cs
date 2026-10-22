@@ -13,6 +13,8 @@ namespace WidgetScreen
         public string Name { get; set; }
         public string TokenHash { get; set; }
         public DateTime PairedUtc { get; set; }
+        // The last request this phone made; saved at most every five minutes so polling doesn't rewrite the file.
+        public DateTime LastSeenUtc { get; set; }
     }
 
     // Paired phones. A phone pairs with a six-digit code shown in Settings → Phone for five minutes; it then gets a
@@ -28,6 +30,8 @@ namespace WidgetScreen
         private string code;
         private DateTime codeExpires;
         private int failures;
+        private DateTime lastSeenSaved;
+        public static readonly TimeSpan LastSeenSaveEvery = TimeSpan.FromMinutes(5);
         public string StartupWarning { get; private set; }
 
         public RemotePairing(string path) : this(path, () => DateTime.UtcNow) { }
@@ -44,7 +48,7 @@ namespace WidgetScreen
 
         public static string StorePath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "remote-devices.dat"); }
 
-        public List<RemoteDevice> Devices { get { lock (gate) return devices.Select(d => new RemoteDevice { Name = d.Name, TokenHash = d.TokenHash, PairedUtc = d.PairedUtc }).ToList(); } }
+        public List<RemoteDevice> Devices { get { lock (gate) return devices.Select(d => new RemoteDevice { Name = d.Name, TokenHash = d.TokenHash, PairedUtc = d.PairedUtc, LastSeenUtc = d.LastSeenUtc }).ToList(); } }
 
         public string Code { get { lock (gate) return PairingOpenLocked ? code : null; } }
         public TimeSpan CodeRemaining { get { lock (gate) return PairingOpenLocked ? codeExpires - now() : TimeSpan.Zero; } }
@@ -95,9 +99,27 @@ namespace WidgetScreen
             lock (gate)
             {
                 foreach (var device in devices)
-                    if (FixedEquals(device.TokenHash, hash)) { deviceName = device.Name; return true; }
+                    if (FixedEquals(device.TokenHash, hash))
+                    {
+                        deviceName = device.Name;
+                        device.LastSeenUtc = now();
+                        if (now() - lastSeenSaved >= LastSeenSaveEvery) { lastSeenSaved = now(); try { Save(devices); } catch (Exception) { /* Last seen is a convenience; the pairing itself is already saved. */ } }
+                        return true;
+                    }
             }
             return false;
+        }
+
+        // Forgets one phone by its token hash (from Devices). Returns false when it was already gone.
+        public bool Forget(string tokenHash)
+        {
+            lock (gate)
+            {
+                var next = devices.Where(d => d.TokenHash != tokenHash).ToList();
+                if (next.Count == devices.Count) return false;
+                Save(next); devices = next;
+                return true;
+            }
         }
 
         public void ForgetAll() { lock (gate) { Save(new List<RemoteDevice>()); devices = new List<RemoteDevice>(); } }

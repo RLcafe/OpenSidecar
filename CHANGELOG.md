@@ -4,7 +4,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `fix/phone-link` (audit branch 2, 22 Oct 2026):
+
+- **Find PCs on this Wi-Fi** now sends the discovery packet to each network interface's own broadcast address (with 255.255.255.255 as a fallback), which routers and many phones accept where the limited broadcast was dropped.
+- The phone backs off while the PC is away (5 s, 15 s, then every minute) instead of knocking every 2 s with the screen on; a tap or a settings change still asks straight away.
+- The phone remembers the PC's 12/24-hour clock choice, so the clock no longer flips to 12-hour while the PC is off.
+- While the phone is editing the layout it no longer asks the PC for the layout section it would ignore.
+- Phone link hardening: requests from web pages (an `Origin` or fetch header, or a host name that isn't this PC's address) are refused, so a page in your browser can't reach the link through DNS rebinding; at most 32 connections are served at once; the phone only accepts home-network addresses (private, link-local, `.local`), so a typo can't send its token to the internet.
+- Settings → Phone lists each paired phone with when it paired and was last seen, and a **Forget** button per phone; **Forget all phones** stays.
 
 ## 0.4.1 (22 Oct 2026)
 

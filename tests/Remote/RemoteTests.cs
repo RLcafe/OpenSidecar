@@ -44,6 +44,13 @@ internal static class RemoteTests
                 Assert(rejected, "Malformed request accepted: " + bad);
             }
         });
+        check("Web pages and foreign host names are refused", () => {
+            Assert(RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: 192.168.1.20:43830")) == null, "The phone's own request was refused.");
+            Assert(RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: [fe80::1]:43830")) == null && RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: localhost")) == null && RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1")) == null, "An address host or no host was refused.");
+            Assert(RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: 192.168.1.20:43830\r\nOrigin: http://evil.example")) != null, "A browser Origin was accepted.");
+            Assert(RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: 192.168.1.20\r\nSec-Fetch-Mode: no-cors")) != null, "A browser fetch was accepted.");
+            Assert(RemoteServer.RefuseBrowser(RemoteServer.ParseHead("GET /hello HTTP/1.1\r\nHost: evil.example:43830")) != null, "A rebound host name was accepted.");
+        });
         check("Only phones on the local network may connect", () => {
             foreach (string ok in new[] { "192.168.1.20", "10.0.0.5", "172.20.1.1", "169.254.3.4", "127.0.0.1", "::1", "fe80::1", "fd00::5" }) Assert(DashboardController.IsLocal(IPAddress.Parse(ok)), ok + " refused.");
             foreach (string no in new[] { "8.8.8.8", "172.32.0.1", "100.64.0.1", "2001:4860::8888" }) Assert(!DashboardController.IsLocal(IPAddress.Parse(no)), no + " allowed.");
@@ -69,8 +76,17 @@ internal static class RemoteTests
             Assert(!Encoding.UTF8.GetString(File.ReadAllBytes(path)).Contains(token) && !Encoding.UTF8.GetString(File.ReadAllBytes(path)).Contains(RemotePairing.Hash(token)), "Pairing store isn't encrypted.");
             var restored = new RemotePairing(path, () => now);
             Assert(restored.Authorize(token, out name) && restored.Devices.Count == 1, "Pairing lost on restart.");
+            // Last seen follows each request and is saved now and then; one phone can be forgotten on its own.
+            Assert(restored.Devices[0].LastSeenUtc == now, "Last seen not recorded.");
+            now = now.AddMinutes(10);
+            string second = restored.Pair(restored.StartPairing(), "Tablet");
+            Assert(restored.Authorize(second, out name) && name == "Tablet" && restored.Devices.Count == 2, "Second phone didn't pair.");
+            Assert(new RemotePairing(path, () => now).Devices.First(d => d.Name == "Tablet").LastSeenUtc == now, "Last seen wasn't saved.");
+            Assert(restored.Forget(restored.Devices.First(d => d.Name == "Pixel 9").TokenHash) && !restored.Forget("missing"), "Forget didn't report what it did.");
+            var afterForget = new RemotePairing(path, () => now);
+            Assert(!afterForget.Authorize(token, out name) && afterForget.Authorize(second, out name) && afterForget.Devices.Count == 1, "Forgetting one phone didn't stick, or took the other with it.");
             restored.ForgetAll();
-            Assert(!new RemotePairing(path, () => now).Authorize(token, out name), "Forgotten phone still authorized.");
+            Assert(!new RemotePairing(path, () => now).Authorize(second, out name), "Forgotten phone still authorized.");
         });
         check("Phone link pairs, answers with state and commands, and refuses strangers", () => {
             string path = Path.Combine(directory, "remote-settings.xml");
@@ -102,6 +118,10 @@ internal static class RemoteTests
                     };
 
                     Assert(get("/hello", null).Item1 == 200 && (bool)Json(get("/hello", null).Item2)["paired"] == false, "Hello failed.");
+                    var fromPage = new HttpRequestMessage(HttpMethod.Get, root + "/hello"); fromPage.Headers.Add("Origin", "http://evil.example");
+                    Assert(send(fromPage).Item1 == 403, "A web page's request was answered.");
+                    var rebound = new HttpRequestMessage(HttpMethod.Get, root + "/hello"); rebound.Headers.Host = "evil.example";
+                    Assert(send(rebound).Item1 == 403, "A rebound host name was answered.");
                     Assert(get("/state?parts=focus", null).Item1 == 401 && get("/state?parts=focus", "made-up").Item1 == 401, "Unpaired phone got state.");
                     Assert(post("/pair", "{\"code\":\"123456\",\"device\":\"Test\"}", null).Item1 == 403, "Pairing without an open code.");
                     string code = controller.Pairing.StartPairing();

@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `fix/save-settings` was merged as v0.4.1.
+| `fix/phone-link` | Audit branch 2: directed-broadcast discovery, offline backoff, remembered clock format, browser-request refusal, connection cap, home-only addresses, per-phone Forget with last seen | `4fb6b55` (v0.4.1) | In progress | `.worktrees\phone-link` | `.worktrees\phone-link\artifacts\app\WidgetScreen.exe`, `.worktrees\phone-link\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

@@ -128,6 +128,8 @@ public final class Dashboard {
     public PcState state() { return pc.state; }
     public boolean online() { return pc.online(); }
     public boolean quiet() { return pc.state != null && pc.state.quiet; }
+    // The PC's clock choice, or the last one it sent while it's away, so the clock doesn't flip formats offline.
+    public boolean use24() { return pc.state != null && pc.online() ? pc.state.use24 : settings.use24; }
     public String offlineText() {
         if (!pc.paired()) return "Pair this phone with your PC in Settings → PC.";
         if (pc.unpaired) return "The PC no longer knows this phone. Pair it again in Settings → PC.";
@@ -135,19 +137,21 @@ public final class Dashboard {
         return "Connecting to " + pc.name() + "…";
     }
 
-    // Asks the PC for the cards on screen; hidden cards aren't read on the PC either.
-    private void poll() {
+    // Asks the PC for the cards on screen; hidden cards aren't read on the PC either. The layout section is only asked
+    // for when the PC's version moved, and never while this phone is editing (the edit saves and reads it again).
+    private void poll(boolean force) {
         List<String> parts = new ArrayList<String>();
         for (Widget widget : widgets.values()) if (isActive(widget.id) && !parts.contains(widget.part())) parts.add(widget.part());
-        if (mirroredVersion.isEmpty() || (pc.state != null && !pc.state.layoutVersion.equals(mirroredVersion))) parts.add("layout");
-        pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } });
+        if (!editor.editing() && (mirroredVersion.isEmpty() || (pc.state != null && !pc.state.layoutVersion.equals(mirroredVersion)))) parts.add("layout");
+        pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } }, force);
     }
 
-    public void refreshSoon() { refreshNow = true; Async.MAIN.postDelayed(new Runnable() { @Override public void run() { if (started && refreshNow) { refreshNow = false; poll(); } } }, 250); }
+    public void refreshSoon() { refreshNow = true; Async.MAIN.postDelayed(new Runnable() { @Override public void run() { if (started && refreshNow) { refreshNow = false; poll(true); } } }, 250); }
 
     private void stateChanged() {
         if (pc.problem != null) { say(pc.problem, true); offlineShown = true; }
         else if (offlineShown) { offlineShown = false; say("Connected to " + pc.name() + "."); }
+        if (pc.state != null && pc.problem == null && settings.use24 != pc.state.use24) { settings.use24 = pc.state.use24; persist(); }
         updateClock(); updateQuiet();
         if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
         for (Widget widget : widgets.values()) if (widget.built()) {
@@ -189,7 +193,7 @@ public final class Dashboard {
         Async.MAIN.removeCallbacks(heartbeat);
         Async.MAIN.post(heartbeat);
         for (Widget widget : widgets.values()) if (widget.built()) widget.render();
-        if (pc.paired()) poll();
+        if (pc.paired()) poll(true);
     }
 
     public void onStop() {
@@ -210,7 +214,7 @@ public final class Dashboard {
         updateClock();
         if (ticks >= statusClearsAt && !editor.editing()) { setStatus(""); statusClearsAt = Integer.MAX_VALUE; }
         // The PC is asked every 2 s, or every 5 s in its Quiet mode, like the Windows refresh cadence.
-        if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll();
+        if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll(false);
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.tick(ticks, quiet()); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -498,7 +502,7 @@ public final class Dashboard {
     private void updateClock() {
         if (clockTime == null) return;
         LocalDateTime now = LocalDateTime.now();
-        boolean use24 = pc.state != null && pc.state.use24;
+        boolean use24 = use24();
         clockTime.setText(Format.clockTime(now, use24));
         clockPeriod.setText(Format.clockPeriod(now));
         clockPeriodView.setVisibility(use24 ? View.GONE : View.VISIBLE);
@@ -729,7 +733,7 @@ public final class Dashboard {
     public void pcChanged() {
         offlineShown = false; setStatus("");
         for (Widget widget : widgets.values()) if (widget.built()) widget.stateChanged();
-        if (pc.paired()) poll();
+        if (pc.paired()) poll(true);
     }
 
     // First launch, or the PC forgot this phone: open Settings → PC once so pairing is the obvious next step.
