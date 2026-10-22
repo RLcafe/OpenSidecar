@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/now-playing` | Audit branch 6: per-second scrubber, any app named, one-line title, playing app's volume panel, on both apps | `36b8240` (v0.6.1) | In progress | `.worktrees\now-playing` | `.worktrees\now-playing\artifacts\app\WidgetScreen.exe`, `.worktrees\now-playing\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/now-playing` was merged as v0.7.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
