@@ -248,13 +248,25 @@
 
           <Grid x:Name="FocusColumn" Margin="0,0,16,0">
             <Border x:Name="FocusCard" Style="{StaticResource Card}">
-              <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBlock Text="FOCUS TIMER" Style="{StaticResource Label}"/>
-                <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/></StackPanel>
-                <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" FontSize="16" AutomationProperties.Name="5 minutes"/>
+              <Grid>
+                <!-- A finished session tints the whole card until it's tapped or a minute passes. -->
+                <Border x:Name="FocusFinished" Background="{DynamicResource Accent}" Opacity="0.15" Margin="-24" CornerRadius="{DynamicResource CardRadius}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                  <TextBlock Text="FOCUS TIMER" Style="{StaticResource Label}"/>
+                  <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/><TextBlock x:Name="FocusSessions" Text="" Style="{StaticResource Caption}" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,10,0,0"/></StackPanel>
+                  <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="5 minutes"/><Button x:Name="FocusCustom" Grid.Column="3" Content="…" Padding="5" FontSize="16" ToolTip="Choose another length" AutomationProperties.Name="Choose another length"/>
+                  </Grid>
+                  <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="FocusStart" Content="Start focus" Style="{StaticResource AccentButton}" Margin="0,0,8,0"/><Button x:Name="FocusReset" Grid.Column="1" Content="&#xE777;" Style="{StaticResource IconButton}" ToolTip="Reset timer" AutomationProperties.Name="Reset timer"/></Grid>
                 </Grid>
-                <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="FocusStart" Content="Start focus" Style="{StaticResource AccentButton}" Margin="0,0,8,0"/><Button x:Name="FocusReset" Grid.Column="1" Content="&#xE777;" Style="{StaticResource IconButton}" ToolTip="Reset timer" AutomationProperties.Name="Reset timer"/></Grid>
+                <!-- The fourth preset's length, picked inside the card (5 to 180 minutes). -->
+                <Border x:Name="FocusPicker" Background="{DynamicResource Surface}" Visibility="Collapsed" Margin="-8,0,-8,0" Padding="8,0">
+                  <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <DockPanel><Button x:Name="FocusPickerClose" DockPanel.Dock="Right" Content="&#xE8BB;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Close" AutomationProperties.Name="Close session length"/><TextBlock Text="SESSION LENGTH" Style="{StaticResource Label}" VerticalAlignment="Center"/></DockPanel>
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center"><TextBlock x:Name="FocusLengthLabel" Text="45 min" FontSize="40" FontWeight="Light" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><Slider x:Name="FocusLengthChoice" Minimum="5" Maximum="180" TickFrequency="5" IsSnapToTickEnabled="True" Margin="0,12,0,0" AutomationProperties.Name="Session length in minutes"/><TextBlock Text="5 to 180 minutes. The length stays as your fourth preset." Style="{StaticResource Small}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0"/></StackPanel>
+                    <Button x:Name="FocusLengthUse" Grid.Row="2" Content="Start with this length" Style="{StaticResource AccentButton}"/>
+                  </Grid>
+                </Border>
               </Grid>
             </Border>
           </Grid>
@@ -474,6 +486,8 @@
               <CheckBox x:Name="ClockChoice" Content="Use a 24-hour clock"/>
               <CheckBox x:Name="LevelsChoice" Content="Show live output levels"/>
               <TextBlock Text="The moving bars under the sound mixer. Quiet mode pauses them too." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+              <CheckBox x:Name="FocusChimeChoice" Content="Play a chime when a focus session ends"/>
+              <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
               </StackPanel>
               </Grid>
               </TabItem>

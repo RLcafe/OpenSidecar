@@ -54,6 +54,13 @@ namespace WidgetScreen
         public bool ShowLevels { get; set; }
         public bool Use24HourClock { get; set; }
         public bool SwapSideWidgets { get; set; }
+        // Focus timer: a chime when a session ends (off in Quiet mode), the fourth preset's length (0 = none yet), and
+        // today's finished sessions, which reset on the first session of a new day.
+        public bool FocusChime { get; set; }
+        public int FocusCustomMinutes { get; set; }
+        public string FocusSessionDate { get; set; }
+        public int FocusSessionsToday { get; set; }
+        public int FocusMinutesToday { get; set; }
         // Phone remote (Settings → Phone). Off until the user turns it on.
         public bool RemoteEnabled { get; set; }
         // Move the dashboard to the tray while a paired phone shows it (Settings → Phone).
@@ -88,6 +95,7 @@ namespace WidgetScreen
             ShowLevels = true;
             Use24HourClock = false;
             HideToTrayWithPhone = true;
+            FocusChime = true;
             Monitor = "";
             WeatherLocation = "";
             Shortcuts = DefaultShortcuts();
@@ -129,6 +137,8 @@ namespace WidgetScreen
             MediaHeight = Clamp(MediaHeight, 326, 376, 326);
             SystemHeight = Clamp(SystemHeight, 326, 356, 326);
             MixerHeight = Clamp(MixerHeight, 476, 576, 576);
+            if (FocusCustomMinutes != 0) FocusCustomMinutes = Math.Max(5, Math.Min(180, FocusCustomMinutes));
+            FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();
             Shortcuts.RemoveAll(s => s == null);
             foreach (var shortcut in Shortcuts)

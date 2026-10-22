@@ -163,9 +163,16 @@ internal static class RemoteTests
                     Assert(post("/command", "{\"action\":\"focus.preset\",\"minutes\":50}", token).Item1 == 200, "Focus preset failed.");
                     Assert(Convert.ToDouble(((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["durationMs"]) == 3000000, "Focus preset not applied on the PC.");
                     Assert(post("/command", "{\"action\":\"focus.toggle\"}", token).Item1 == 200 && (bool)((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["running"], "Focus didn't start from the phone.");
+                    string ignored;
+                    var focusState = (Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"];
+                    Assert(!(bool)focusState["finished"] && !(bool)focusState["paused"] && Convert.ToInt32(focusState["customMinutes"]) == 0 && Convert.ToInt32(focusState["sessionsToday"]) == 0 && focusState.ContainsKey("chime"), "Focus state is missing the finish, preset or session fields.");
+                    Assert(post("/command", "{\"action\":\"focus.custom\",\"minutes\":45}", token).Item1 == 200, "Custom focus length failed.");
+                    focusState = (Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"];
+                    Assert(Convert.ToDouble(focusState["durationMs"]) == 2700000 && (bool)focusState["running"] && Convert.ToInt32(focusState["customMinutes"]) == 45 && SettingsStore.Load(path, out ignored).FocusCustomMinutes == 45, "The custom length wasn't kept or started.");
+                    Assert(post("/command", "{\"action\":\"focus.dismiss\"}", token).Item1 == 200 && post("/command", "{\"action\":\"focus.custom\",\"minutes\":1000}", token).Item1 == 200 && Convert.ToDouble(((Dictionary<string, object>)Json(get("/state?parts=focus", token).Item2)["focus"])["durationMs"]) == 10800000, "Dismiss failed, or the custom length wasn't clamped to 180.");
+                    Assert(post("/command", "{\"action\":\"focus.preset\",\"minutes\":25}", token).Item1 == 200, "Focus preset failed.");
                     Assert(post("/command", "{\"action\":\"deck.run\",\"index\":99}", token).Item1 == 409, "Missing deck button accepted.");
 
-                    string ignored;
                     // Layout pages and mirroring: the phone reads the PC's pages and layouts, switches pages and saves its own shape.
                     var layoutState = Json(get("/state?parts=layout", token).Item2);
                     var layout = (Dictionary<string, object>)layoutState["layout"]; string version = (string)layoutState["layoutVersion"];

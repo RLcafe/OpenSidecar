@@ -8,7 +8,11 @@ import java.util.Map;
 // What the PC sends back for GET /state: only the sections the phone asked for (one per visible widget).
 // A missing section stays null; a section the PC couldn't read is marked unavailable.
 public final class PcState {
-    public static final class Focus { public double remainingMs, durationMs, progress; public boolean running; }
+    public static final class Focus {
+        public double remainingMs, durationMs, progress;
+        public boolean running, paused, finished, chime;
+        public int customMinutes, sessionsToday, minutesToday;
+    }
 
     public static final class Media {
         public boolean error, available, playing, canPlayPause, canPrevious, canNext, canSeek, art;
@@ -96,6 +100,8 @@ public final class PcState {
             Focus focus = new Focus();
             focus.remainingMs = Json.number(f, "remainingMs"); focus.durationMs = Json.number(f, "durationMs");
             focus.progress = Json.number(f, "progress"); focus.running = flag(f, "running");
+            focus.paused = flag(f, "paused"); focus.finished = flag(f, "finished"); focus.chime = flag(f, "chime");
+            focus.customMinutes = (int) Json.number(f, "customMinutes"); focus.sessionsToday = (int) Json.number(f, "sessionsToday"); focus.minutesToday = (int) Json.number(f, "minutesToday");
             state.focus = focus;
         }
         if (Json.has(root, "media")) {

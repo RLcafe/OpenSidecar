@@ -29,6 +29,13 @@ public final class Format {
         return remainingMs == 0 ? "Done. Take a break." : running ? "Ends at " + ends : progress > 0 ? "Paused" : "";
     }
 
+    // "3 sessions today · 1 h 40 m", or nothing before the first session (FocusTimer.SessionsText on Windows).
+    public static String sessions(int sessions, int minutes) {
+        if (sessions <= 0) return "";
+        String time = minutes >= 60 ? (minutes / 60) + " h " + (minutes % 60) + " m" : minutes + " m";
+        return sessions + (sessions == 1 ? " session today  ·  " : " sessions today  ·  ") + time;
+    }
+
     public static String focusButton(long remainingMs, boolean running, double progress) {
         return running ? "Pause" : progress > 0 && remainingMs > 0 ? "Resume" : "Start focus";
     }
