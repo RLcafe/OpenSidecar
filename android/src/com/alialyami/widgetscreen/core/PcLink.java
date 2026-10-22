@@ -93,11 +93,13 @@ public final class PcLink {
                     InetAddress broadcast = address.getBroadcast();
                     if (broadcast == null) continue;
                     String text = broadcast.getHostAddress();
-                    if (!targets.contains(text)) targets.add(text);
+                    // Some adapters report the limited broadcast or no address at all; the fallback goes last.
+                    if (text == null || text.equals("255.255.255.255") || text.equals("0.0.0.0") || targets.contains(text)) continue;
+                    targets.add(text);
                 }
             }
         } catch (java.net.SocketException ignored) { }
-        if (!targets.contains("255.255.255.255")) targets.add("255.255.255.255");
+        targets.add("255.255.255.255");
         return targets;
     }
 

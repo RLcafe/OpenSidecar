@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 
@@ -27,6 +28,9 @@ namespace WidgetScreen
             C<ComboBox>("DeckAction").ItemsSource = DeckActions.Types;
             C<ComboBox>("DeckControl").ItemsSource = DeckActions.Controls;
             C<ComboBox>("DeckIcon").ItemsSource = DeckActions.Icons;
+            C<ComboBox>("DeckColor").ItemsSource = DeckActions.Colors;
+            C<ComboBox>("DeckColor").SelectionChanged += (s, e) => Capture();
+            AttachReorder();
             var template = new DataTemplate(); var row = new FrameworkElementFactory(typeof(StackPanel)); row.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             var glyph = new FrameworkElementFactory(typeof(TextBlock)); glyph.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Segoe MDL2 Assets")); glyph.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 10, 0)); glyph.SetBinding(TextBlock.TextProperty, new Binding("Id")); row.AppendChild(glyph);
             var label = new FrameworkElementFactory(typeof(TextBlock)); label.SetBinding(TextBlock.TextProperty, new Binding("Name")); row.AppendChild(label); template.VisualTree = row; C<ComboBox>("DeckIcon").ItemTemplate = template;
@@ -69,7 +73,57 @@ namespace WidgetScreen
         private void Move(int delta)
         {
             int destination = selected + delta; if (Current == null || destination < 0 || destination >= draft.Count) return;
-            var item = Current; draft.RemoveAt(selected); draft.Insert(destination, item); Select(destination);
+            Reorder(selected, destination);
+        }
+        // Moves a button to another place in the list (the up/down buttons and dragging both end here).
+        public void Reorder(int from, int to)
+        {
+            if (from < 0 || from >= draft.Count || to < 0 || to >= draft.Count || from == to) return;
+            var item = draft[from]; draft.RemoveAt(from); draft.Insert(to, item); Select(to);
+        }
+
+        // Drag a button up or down the list to reorder it, with a mouse or a finger. The list captures the pointer,
+        // so rebuilding its rows mid-drag is fine; a drag never counts as a tap on the row.
+        private int dragIndex = -1; private double dragStartY; private bool dragging; private TouchDevice dragTouch;
+        private void AttachReorder()
+        {
+            var list = C<StackPanel>("DeckButtonList");
+            list.PreviewMouseLeftButtonDown += (s, e) => { if (dragTouch != null) return; dragIndex = IndexAt(list, e.GetPosition(list).Y); dragStartY = e.GetPosition(list).Y; dragging = false; };
+            list.PreviewMouseMove += (s, e) => {
+                if (dragIndex < 0 || dragTouch != null || e.LeftButton != MouseButtonState.Pressed) return;
+                double y = e.GetPosition(list).Y;
+                if (!dragging) { if (Math.Abs(y - dragStartY) < 10) return; dragging = true; list.CaptureMouse(); }
+                DragTo(list, y); e.Handled = true;
+            };
+            list.PreviewMouseLeftButtonUp += (s, e) => { if (dragging) { list.ReleaseMouseCapture(); e.Handled = true; } dragging = false; dragIndex = -1; };
+            list.LostMouseCapture += (s, e) => { if (dragTouch == null) { dragging = false; dragIndex = -1; } };
+            list.PreviewTouchDown += (s, e) => { if (dragTouch != null) return; dragTouch = e.TouchDevice; dragIndex = IndexAt(list, e.GetTouchPoint(list).Position.Y); dragStartY = e.GetTouchPoint(list).Position.Y; dragging = false; };
+            list.PreviewTouchMove += (s, e) => {
+                if (e.TouchDevice != dragTouch || dragIndex < 0) return;
+                double y = e.GetTouchPoint(list).Position.Y;
+                if (!dragging) { if (Math.Abs(y - dragStartY) < 12) return; dragging = true; list.CaptureTouch(dragTouch); }
+                DragTo(list, y); e.Handled = true;
+            };
+            list.PreviewTouchUp += (s, e) => { if (e.TouchDevice != dragTouch) return; if (dragging) { list.ReleaseTouchCapture(dragTouch); e.Handled = true; } dragging = false; dragIndex = -1; dragTouch = null; };
+            list.LostTouchCapture += (s, e) => { if (e.TouchDevice == dragTouch) { dragging = false; dragIndex = -1; dragTouch = null; } };
+        }
+        private void DragTo(StackPanel list, double y)
+        {
+            int target = IndexAt(list, y);
+            if (target >= 0 && target != dragIndex) { Reorder(dragIndex, target); dragIndex = target; }
+        }
+        // The row under a y position in the list, or -1 outside the rows.
+        private static int IndexAt(StackPanel list, double y)
+        {
+            double top = 0;
+            for (int i = 0; i < list.Children.Count; i++)
+            {
+                var row = (FrameworkElement)list.Children[i];
+                double bottom = top + row.ActualHeight + row.Margin.Top + row.Margin.Bottom;
+                if (y >= top && y < bottom) return i;
+                top = bottom;
+            }
+            return y < 0 ? 0 : list.Children.Count > 0 && y >= top ? list.Children.Count - 1 : -1;
         }
         private void Capture()
         {
@@ -77,13 +131,17 @@ namespace WidgetScreen
             Current.Label = C<TextBox>("DeckName").Text; Current.Target = C<TextBox>("DeckTarget").Text; Current.Arguments = C<TextBox>("DeckArguments").Text;
             Current.Confirm = C<CheckBox>("DeckConfirm").IsChecked == true;
             var icon = C<ComboBox>("DeckIcon").SelectedItem as DeckOption; if (icon != null) Current.Glyph = icon.Id;
+            var color = C<ComboBox>("DeckColor").SelectedItem as DeckOption; if (color != null) Current.Color = color.Id;
             var list = C<StackPanel>("DeckButtonList");
             if (selected < list.Children.Count) UpdateButton((Button)list.Children[selected], Current, selected);
         }
         private void UpdateButton(Button button, Shortcut item, int index)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            var glyph = new TextBlock { Text = item.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 22, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) }; glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); row.Children.Add(glyph);
+            var glyph = new TextBlock { Text = item.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 22, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            string hex = DeckActions.AccentHex(item.Color);
+            if (hex != null) { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); brush.Freeze(); glyph.Foreground = brush; } else glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+            row.Children.Add(glyph);
             row.Children.Add(new TextBlock { Text = (index + 1) + ". " + item.Label, FontSize = 16, MaxWidth = 214, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
             button.Content = row; AutomationProperties.SetName(button, "Edit button " + (index + 1) + ": " + item.Label);
         }
@@ -106,6 +164,7 @@ namespace WidgetScreen
                 C<TextBox>("DeckName").Text = Current.Label; C<TextBox>("DeckTarget").Text = Current.Target; C<TextBox>("DeckArguments").Text = Current.Arguments ?? "";
                 C<CheckBox>("DeckConfirm").IsChecked = Current.Confirm;
                 C<ComboBox>("DeckIcon").SelectedItem = DeckActions.Icons.FirstOrDefault(i => i.Id == Current.Glyph);
+                C<ComboBox>("DeckColor").SelectedItem = DeckActions.Colors.FirstOrDefault(c => c.Id == (Current.Color ?? "")) ?? DeckActions.Colors[0];
                 C<ComboBox>("DeckAction").SelectedItem = DeckActions.Types.FirstOrDefault(i => i.Id == Current.Action);
                 C<ComboBox>("DeckControl").SelectedItem = DeckActions.Controls.FirstOrDefault(i => i.Id == Current.Target);
                 C<ComboBox>("DeckPreset").SelectedIndex = 0;

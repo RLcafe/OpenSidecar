@@ -33,6 +33,24 @@ namespace WidgetScreen
             Option("\uE768", "Play"), Option("\uE916", "Clock"), Option("\uE713", "Settings"),
             Option("\uE734", "Star"), Option("\uE722", "Camera"), Option("\uE7F4", "Game"), Option("\uE8A5", "Document")
         };
+        // A button's glyph colour: the theme's accent, or one of the four accents so buttons tell apart at a glance.
+        public static readonly DeckOption[] Colors = { Option("", "Theme accent"), Option("Lime", "Lime"), Option("Glacier", "Glacier"), Option("Lavender", "Lavender"), Option("Amber", "Amber") };
+        public static string AccentHex(string name)
+        {
+            return name == "Glacier" ? "#8ED8F8" : name == "Lavender" ? "#C5AEFF" : name == "Amber" ? "#F5C47D" : name == "Lime" ? "#BAF28B" : null;
+        }
+        // Control buttons that show a state: on when the thing they toggle is on.
+        public static bool IsStateful(Shortcut shortcut)
+        {
+            return shortcut.Action == "Control" && (shortcut.Target == "mute" || shortcut.Target == "microphone" || shortcut.Target == "focus" || shortcut.Target == "quiet");
+        }
+        // "Ctrl+Shift+S → Chrome" for a hotkey, once the app it would go to is known.
+        public static string DescribeWithTarget(Shortcut shortcut, string targetApp)
+        {
+            string text = Describe(shortcut);
+            if (shortcut.Action == "Hotkey") text += String.IsNullOrEmpty(targetApp) ? "  →  select an app first" : "  →  " + targetApp;
+            return text;
+        }
         public static DeckOption Option(string id, string name) { return new DeckOption { Id = id, Name = name }; }
         public static string InferAction(string target)
         {

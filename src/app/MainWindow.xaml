@@ -619,11 +619,12 @@
                   </Grid>
                   <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
                     <StackPanel Margin="0,0,12,0">
-                      <TextBlock x:Name="DeckEditorEmpty" Text="Tap + Add, then choose what the new button does." TextWrapping="Wrap" Margin="0,12"/>
+                      <TextBlock x:Name="DeckEditorEmpty" Text="Tap + Add, then choose what the new button does. Drag a button up or down the list to reorder it." TextWrapping="Wrap" Margin="0,12"/>
                       <StackPanel x:Name="DeckFields">
-                        <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition Width="200"/><ColumnDefinition Width="16"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
                           <StackPanel><TextBlock Text="Button name" Style="{StaticResource Small}"/><TextBox x:Name="DeckName" MaxLength="40" Margin="0,6,0,10" AutomationProperties.Name="Button name"/></StackPanel>
                           <StackPanel Grid.Column="2"><TextBlock Text="Icon" Style="{StaticResource Small}"/><ComboBox x:Name="DeckIcon" Margin="0,6,0,10" AutomationProperties.Name="Button icon"/></StackPanel>
+                          <StackPanel Grid.Column="4"><TextBlock Text="Icon color" Style="{StaticResource Small}"/><ComboBox x:Name="DeckColor" Margin="0,6,0,10" AutomationProperties.Name="Button icon color"/></StackPanel>
                         </Grid>
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="16"/><ColumnDefinition/></Grid.ColumnDefinitions>
                           <StackPanel><TextBlock Text="Action" Style="{StaticResource Small}"/><ComboBox x:Name="DeckAction" Margin="0,6,0,10" AutomationProperties.Name="Button action type"/></StackPanel>
@@ -648,7 +649,7 @@
                         <ComboBox x:Name="DeckControl" Margin="0,0,0,10" AutomationProperties.Name="Dashboard or media control"/>
                         <TextBlock x:Name="DeckHelp" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                         <CheckBox x:Name="DeckConfirm" Content="Ask before running this button"/>
-                        <TextBlock Text="Extra buttons continue on more pages in the widget." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock Text="Extra buttons continue on more pages in the widget. Drag a button up or down the list to reorder it." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                       </StackPanel>
                     </StackPanel>
                   </ScrollViewer>

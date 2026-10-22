@@ -311,6 +311,7 @@ namespace WidgetScreen
                 }
             }
             if (finished) { Notify("Focus session complete."); if (settings.FocusChime && !settings.QuietMode) Chime(); }
+            UpdateDeckStates();
         }
 
         private void ApplySettings()
@@ -441,7 +442,7 @@ namespace WidgetScreen
 
         private void BuildShortcuts()
         {
-            var grid = Control<System.Windows.Controls.Primitives.UniformGrid>("ShortcutGrid"); grid.Children.Clear();
+            var grid = Control<System.Windows.Controls.Primitives.UniformGrid>("ShortcutGrid"); grid.Children.Clear(); deckStateButtons.Clear();
             // As many buttons as the card holds, like the Soundboard (CardSizing.DeckGrid).
             deckShape = DeckShape();
             var area = DeckArea(); int[] shape = CardSizing.DeckGrid(area.Width, area.Height, settings.Shortcuts.Count);
@@ -461,10 +462,45 @@ namespace WidgetScreen
                 bool compact = beside; double glyphSize = CardSizing.DeckGlyph(cellHeight, beside);
                 var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Orientation = compact ? Orientation.Horizontal : Orientation.Vertical };
                 var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = glyphSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); content.Children.Add(glyph);
+                // A button's own colour tells it apart at a glance; otherwise the theme's accent.
+                string hex = DeckActions.AccentHex(shortcut.Color);
+                if (hex != null) { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); brush.Freeze(); glyph.Foreground = brush; } else glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+                content.Children.Add(glyph);
+                // A hotkey's tooltip names the app it would go to right now.
+                if (shortcut.Action == "Hotkey") { var hotkey = shortcut; button.ToolTipOpening += (sender, e) => button.ToolTip = DeckActions.DescribeWithTarget(hotkey, deckHotkeys.TargetName); }
+                if (DeckActions.IsStateful(shortcut)) deckStateButtons.Add(new KeyValuePair<Button, Shortcut>(button, shortcut));
                 var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = Math.Max(40, compact ? cellWidth - glyphSize - 40 : cellWidth - 24), TextTrimming = TextTrimming.CharacterEllipsis };
                 content.Children.Add(name); button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
+            }
+            UpdateDeckStates();
+        }
+        // Control buttons that toggle something show whether it's on (mute, microphone, focus, Quiet mode), the
+        // same selected look as the Focus presets. The phone receives the same flag.
+        private readonly List<KeyValuePair<Button, Shortcut>> deckStateButtons = new List<KeyValuePair<Button, Shortcut>>();
+        private bool DeckStateOn(Shortcut shortcut)
+        {
+            if (shortcut.Action != "Control") return false;
+            switch (shortcut.Target)
+            {
+                case "mute": return lastAudio != null && lastAudio.Muted;
+                case "microphone": return lastAudio != null && lastAudio.MicrophoneMuted == true;
+                case "focus": return focus.Running;
+                case "quiet": return settings.QuietMode;
+                default: return false;
+            }
+        }
+        private void UpdateDeckStates()
+        {
+            foreach (var pair in deckStateButtons)
+            {
+                bool on = DeckStateOn(pair.Value); var button = pair.Key;
+                if (button.BorderThickness.Left == (on ? 2 : 1) && button.Tag is bool && (bool)button.Tag == on) continue;
+                button.Tag = on;
+                button.SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, on ? "Accent" : "ControlBorder");
+                button.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, on ? "Selected" : "Raised");
+                button.BorderThickness = new Thickness(on ? 2 : 1);
+                AutomationProperties.SetName(button, pair.Value.Label + (on ? ", on" : ""));
             }
         }
         // The button grid: the Quick Launch card less its 20-unit padding, border and 48-unit header.
@@ -559,6 +595,7 @@ namespace WidgetScreen
                 UpdateSessions(snapshot.Sessions);
                 Text("NoSessions", snapshot.SessionsAvailable ? "Apps show up here when they play sound." : "App volumes aren't available right now. Master volume still works.");
                 if (!snapshot.SessionsAvailable) Text("SessionCount", "UNAVAILABLE");
+                UpdateDeckStates();
             }
             finally { updatingAudio = false; }
         }

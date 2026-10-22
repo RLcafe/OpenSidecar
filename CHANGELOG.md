@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/quick-launch-polish` (audit branch 9, 22 Oct 2026):
+
+- **A colour per button**: Settings → Quick Launch → Icon color picks one of the four accents for a button's glyph (or the theme's accent), so Spotify, Browser and Files aren't six identical green glyphs. The phone shows the same colours.
+- **Control buttons show their state**: Mute, Microphone, Focus and Quiet mode buttons take the selected look while the thing they toggle is on, on both apps.
+- **Drag to reorder** buttons in Settings → Quick Launch, with a mouse or a finger; the up and down buttons stay.
+- **A hotkey names its target**: a hotkey button's tooltip (and the phone's confirmation) says which app it would go to right now, for example "Win+Shift+S → chrome".
 
 ## 0.9.0 (22 Oct 2026)
 

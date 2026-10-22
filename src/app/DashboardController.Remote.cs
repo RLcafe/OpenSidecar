@@ -336,8 +336,12 @@ namespace WidgetScreen
                 catch (Exception) { state["system"] = D("error", true); }
             }
             if (parts.Contains("deck"))
+            {
+                string hotkeyTarget = deckHotkeys.TargetName;
                 state["deck"] = settings.Shortcuts.Select(s => D("label", s.Label, "glyph", String.IsNullOrEmpty(s.Glyph) ? "E8A7" : ((int)s.Glyph[0]).ToString("X4"), "action", s.Action,
-                    "describe", DeckActions.Describe(s), "confirm", DeckActions.NeedsConfirmation(s), "enabled", !String.IsNullOrWhiteSpace(s.Target))).ToArray();
+                    "describe", DeckActions.DescribeWithTarget(s, hotkeyTarget), "confirm", DeckActions.NeedsConfirmation(s), "enabled", !String.IsNullOrWhiteSpace(s.Target),
+                    "color", s.Color ?? "", "on", DeckStateOn(s))).ToArray();
+            }
             if (parts.Contains("weather"))
                 state["weather"] = D("location", settings.WeatherLocation ?? "", "latitude", settings.Latitude, "longitude", settings.Longitude, "imperial", settings.WeatherUnits == "imperial");
             if (parts.Contains("spotify"))
