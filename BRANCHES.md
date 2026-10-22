@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/weather` | Audit branch 7: units, high/low and next hours, condition glyphs, card-as-refresh, on both apps | `4ef4433` (v0.7.0) | In progress | `.worktrees\weather` | `.worktrees\weather\artifacts\app\WidgetScreen.exe`, `.worktrees\weather\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/weather` was merged as v0.8.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

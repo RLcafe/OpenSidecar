@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/weather` (audit branch 7, 22 Oct 2026):
+Nothing yet.
+
+## 0.8.0 (22 Oct 2026)
+
+Merges `feature/weather`, audit branch 7 (`docs/design/weather.md`).
 
 - **Units**: Settings → Weather chooses Celsius and km/h or Fahrenheit and mph (the region's default until you pick); the phone follows the PC.
 - **Today's high and low** in the details line ("↑ 25° ↓ 14°") and **the next hours** (now, +3 h, +6 h) on a tall enough card, on both apps.
