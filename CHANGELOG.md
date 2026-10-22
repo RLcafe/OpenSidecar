@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `fix/phone-link` (audit branch 2, 22 Oct 2026):
+Nothing yet.
+
+## 0.4.2 (22 Oct 2026)
+
+Merges `fix/phone-link`, audit branch 2.
 
 - **Find PCs on this Wi-Fi** now sends the discovery packet to each network interface's own broadcast address (with 255.255.255.255 as a fallback), which routers and many phones accept where the limited broadcast was dropped.
 - The phone backs off while the PC is away (5 s, 15 s, then every minute) instead of knocking every 2 s with the screen on; a tap or a settings change still asks straight away.
