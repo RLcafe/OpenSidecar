@@ -154,7 +154,7 @@ namespace WidgetScreen
                     break;
                 case "page.rename": problem = ChangePages(() => WidgetLayout.RenamePage(settings, index, Str(body, "name"))); break;
                 case "page.delete": problem = ChangePages(() => { if (!WidgetLayout.DeletePage(settings, index)) throw new InvalidOperationException("The only page can't be deleted."); }); done = "Page deleted."; break;
-                case "page.move": problem = ChangePages(() => WidgetLayout.MovePage(settings, index, (int)Num(body, "to"))); break;
+                case "page.move": { int to = (int)Required(body, "to"); problem = ChangePages(() => WidgetLayout.MovePage(settings, index, to)); break; }
             }
             if (problem != null) throw new InvalidOperationException(problem);
             return Done(done);

@@ -93,6 +93,18 @@ namespace WidgetScreen
             Shortcuts = DefaultShortcuts();
         }
 
+        // A deep copy. Settings → Save starts from one and overwrites only the fields the panel owns, so everything
+        // the panel doesn't show (pages, the current page, the phone link, Quiet mode) survives a save.
+        public AppSettings Copy()
+        {
+            var copy = (AppSettings)MemberwiseClone();
+            copy.Shortcuts = Shortcuts == null ? null : Shortcuts.Select(s => s.Copy()).ToList();
+            copy.WidgetLayout = WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(WidgetLayout);
+            copy.CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray();
+            copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
+            return copy;
+        }
+
         public static List<Shortcut> DefaultShortcuts()
         {
             return new List<Shortcut> {

@@ -4,7 +4,13 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `fix/save-settings` (audit, 22 Oct 2026):
+
+- **Fixed Settings → Save changes deleting every layout page except the first and turning phone control off.** The panel now saves on top of a copy of the current settings, so pages, the current page, Quiet mode and the Phone settings survive a save. A check covers it.
+- The dashboard no longer closes when something unexpected goes wrong on the UI thread: the error is logged to `error.log` and shown on the status line, and the dashboard carries on (renders still fail loudly, and a storm of errors still exits).
+- The phone link refuses a command whose number is missing or malformed instead of acting on it.
+- "Opened ms-settings:sound" became "Opened Windows sound settings."
+- Weather's "updated" time follows the 12- or 24-hour clock choice on both apps.
 
 ## 0.4.0 (21 Oct 2026)
 

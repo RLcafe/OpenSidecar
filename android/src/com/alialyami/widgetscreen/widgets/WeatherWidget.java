@@ -11,14 +11,15 @@ import android.widget.TextView;
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.CardSizing;
+import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.integrations.Async;
 import com.alialyami.widgetscreen.integrations.Http;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 // Weather for the city chosen on the PC. The phone asks Open-Meteo itself (it only needs the city's position
 // from the PC) and refreshes every 15 minutes while the card is shown.
@@ -92,7 +93,9 @@ public final class WeatherWidget extends Widget {
         button.setText(busy ? "Updating…" : "Refresh weather");
         if (last != null) {
             temperature.setText(Math.round(last.temperature) + "°");
-            credit.setText("Open-Meteo  ·  updated " + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(last.retrievedMs)));
+            // The "updated" time follows the PC clock's 12- or 24-hour choice, as on Windows.
+            LocalDateTime retrieved = LocalDateTime.ofInstant(Instant.ofEpochMilli(last.retrievedMs), ZoneId.systemDefault());
+            credit.setText("Open-Meteo  ·  updated " + Format.endsAt(retrieved, state != null && state.use24));
         } else temperature.setText("—°");
         if (offline) {
             condition.setText("OFFLINE");
