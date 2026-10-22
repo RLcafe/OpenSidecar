@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/readable-small-screens` | Audit branch 8: text size to 140% on both apps; DPI-aware compact floor and 60% canvas on small Windows screens | `418e514` (v0.8.0) | In progress | `.worktrees\readable-small-screens` | `.worktrees\readable-small-screens\artifacts\app\WidgetScreen.exe`, `.worktrees\readable-small-screens\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/readable-small-screens` was merged as v0.9.0.
 eadable-small-screens` | `.worktrees
 eadable-small-screensrtifactspp\WidgetScreen.exe`, `.worktrees
 eadable-small-screensrtifactsndroid\WidgetScreen.apk` |
