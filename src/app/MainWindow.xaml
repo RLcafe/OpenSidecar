@@ -636,8 +636,10 @@
                     <CheckBox x:Name="RemoteEnabledChoice" Content="Let my phone control this PC"/>
                     <CheckBox x:Name="RemoteTrayChoice" Content="Move to the tray while my phone shows the dashboard" ToolTip="Hides Widget Screen from the taskbar while a paired phone is connected, and brings it back a minute after the phone stops."/>
                     <TextBlock x:Name="RemoteStatus" Text="" TextWrapping="Wrap" Margin="0,8,0,12" FontSize="{DynamicResource BodySize}"/>
-                    <WrapPanel><Button x:Name="RemotePairButton" Content="Pair a phone" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="RemoteForgetButton" Content="Forget paired phones" Margin="0,0,8,8"/></WrapPanel>
+                    <WrapPanel><Button x:Name="RemotePairButton" Content="Pair a phone" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="RemoteForgetButton" Content="Forget all phones" Margin="0,0,8,8"/></WrapPanel>
                     <TextBlock x:Name="RemoteDevicesText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+                    <!-- One row per paired phone: name, when it paired and was last seen, and its own Forget button. -->
+                    <StackPanel x:Name="RemoteDevices" Margin="0,0,0,12"/>
                     <TextBlock Text="Changes here take effect right away. Only phones on your local network can connect, and only after pairing with a code from this screen. The connection isn't encrypted, so use it on a Wi-Fi you trust." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                   <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">

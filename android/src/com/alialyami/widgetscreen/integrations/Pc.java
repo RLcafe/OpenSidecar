@@ -24,6 +24,9 @@ public final class Pc {
     private PcPairing pairing = PcPairing.none();
     private int generation;
     private boolean polling;
+    // Readings that failed in a row, and when the next unforced reading may go (PcLink.retryDelayMs).
+    private int failures;
+    private long retryAt;
     public PcState state;
     // When the last state arrived (elapsedRealtime), so the focus countdown keeps moving between readings.
     public long stateAt;
@@ -56,7 +59,7 @@ public final class Pc {
             }
         }, new Async.Done<PcPairing>() {
             @Override public void ok(PcPairing paired) {
-                pairing = paired; problem = null; unpaired = false; state = null; polling = false; generation++;
+                pairing = paired; problem = null; unpaired = false; state = null; polling = false; generation++; failures = 0; retryAt = 0;
                 done.ok(paired.name);
             }
         }, failed);
@@ -64,16 +67,21 @@ public final class Pc {
 
     public void forget() throws Exception {
         SecureStore.write(file, "{}");
-        pairing = PcPairing.none(); state = null; problem = null; unpaired = false; generation++;
+        pairing = PcPairing.none(); state = null; problem = null; unpaired = false; generation++; failures = 0; retryAt = 0;
     }
+
+    public int failures() { return failures; }
 
     public void discover(Async.Done<List<PcLink.Found>> done) {
         Async.run(new Async.Work<List<PcLink.Found>>() { @Override public List<PcLink.Found> run() { return PcLink.discover(1500); } }, done, null);
     }
 
-    // One state reading at a time; a reading that was asked for while another runs is skipped.
-    public void poll(final List<String> parts, final Runnable changed) {
+    // One state reading at a time; a reading that was asked for while another runs is skipped. While the PC is
+    // away, unforced readings back off (5 s, 15 s, then a minute); a forced one (a tap, a settings change) goes now.
+    public void poll(final List<String> parts, final Runnable changed) { poll(parts, changed, false); }
+    public void poll(final List<String> parts, final Runnable changed, boolean force) {
         if (!paired() || polling) return;
+        if (!force && SystemClock.elapsedRealtime() < retryAt) return;
         polling = true;
         final int version = generation;
         final PcLink current = link();
@@ -83,7 +91,7 @@ public final class Pc {
             @Override public void ok(PcState next) {
                 polling = false;
                 if (version != generation) return;
-                state = next; stateAt = SystemClock.elapsedRealtime(); problem = null; unpaired = false;
+                state = next; stateAt = SystemClock.elapsedRealtime(); problem = null; unpaired = false; failures = 0; retryAt = 0;
                 changed.run();
             }
         }, new Async.Failed() {
@@ -93,6 +101,7 @@ public final class Pc {
                 PcLink.Failure failure = error instanceof PcLink.Failure ? (PcLink.Failure) error : null;
                 unpaired = failure != null && failure.unpaired();
                 problem = failure != null ? failure.getMessage() : "Can't reach the PC.";
+                failures++; retryAt = SystemClock.elapsedRealtime() + PcLink.retryDelayMs(failures);
                 changed.run();
             }
         });

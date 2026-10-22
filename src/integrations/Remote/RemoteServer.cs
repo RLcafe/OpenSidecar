@@ -50,6 +50,9 @@ namespace WidgetScreen
         public const int DefaultPort = 43830, DefaultDiscoveryPort = 43831;
         public const string DiscoveryRequest = "WIDGETSCREEN-DISCOVER";
         private const int MaxHead = 16 * 1024, MaxBody = 64 * 1024;
+        // Connections served at once. A misbehaving device can't hold the link open for everyone else.
+        public const int MaxConnections = 32;
+        private readonly SemaphoreSlim connections = new SemaphoreSlim(MaxConnections, MaxConnections);
         private readonly Func<RemoteRequest, Task<RemoteResponse>> handler;
         private readonly Func<IPAddress, bool> allowed;
         private readonly TcpListener listener;
@@ -102,7 +105,30 @@ namespace WidgetScreen
             }
         }
 
+        // A request a web page made rather than the phone app. A page in the user's browser could reach this port
+        // through DNS rebinding, so anything carrying browser fetch headers, or a Host that isn't an address of this
+        // PC, is refused. The phone app sends a bare IP address as Host and no Origin.
+        public static string RefuseBrowser(RemoteRequest request)
+        {
+            if (request.Header("Origin") != null || request.Header("Sec-Fetch-Mode") != null || request.Header("Sec-Fetch-Site") != null) return "Web pages can't use the phone link.";
+            string host = request.Header("Host");
+            if (host == null) return null;
+            host = host.Trim();
+            if (host.StartsWith("[", StringComparison.Ordinal)) { int end = host.IndexOf(']'); host = end > 0 ? host.Substring(1, end - 1) : host; }
+            else { int colon = host.LastIndexOf(':'); if (colon > 0 && host.IndexOf(':') == colon) host = host.Substring(0, colon); }
+            IPAddress address;
+            return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || IPAddress.TryParse(host, out address) ? null : "That name isn't this PC. Use the PC's address shown in Settings → Phone.";
+        }
+
         private async Task Serve(TcpClient client)
+        {
+            // Over the limit: close at once rather than queue, so the phone's next request still gets a turn.
+            if (!connections.Wait(0)) { try { client.Close(); } catch (Exception) { } return; }
+            try { await ServeOne(client).ConfigureAwait(false); }
+            finally { connections.Release(); }
+        }
+
+        private async Task ServeOne(TcpClient client)
         {
             using (client)
             using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
@@ -123,8 +149,13 @@ namespace WidgetScreen
                     {
                         RemoteRequest request = await ReadRequest(stream, timeout.Token).ConfigureAwait(false);
                         if (request == null) return;
-                        try { response = await handler(request).ConfigureAwait(false) ?? RemoteResponse.Error(500, "No response."); }
-                        catch (Exception) { response = RemoteResponse.Error(500, "Widget Screen couldn't do that. Try again."); }
+                        string refusal = RefuseBrowser(request);
+                        if (refusal != null) response = RemoteResponse.Error(403, refusal);
+                        else
+                        {
+                            try { response = await handler(request).ConfigureAwait(false) ?? RemoteResponse.Error(500, "No response."); }
+                            catch (Exception) { response = RemoteResponse.Error(500, "Widget Screen couldn't do that. Try again."); }
+                        }
                     }
                     catch (InvalidDataException e) { response = RemoteResponse.Error(e.Message.StartsWith("Too large") ? 413 : 400, e.Message); }
                     catch (Exception) { return; }

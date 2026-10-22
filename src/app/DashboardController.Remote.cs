@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 
@@ -65,7 +66,7 @@ namespace WidgetScreen
             Button("RemoteForgetButton", () => {
                 try { pairing.ForgetAll(); Text("RemoteStatus", "Paired phones were removed. They need a new code to connect."); }
                 catch (Exception) { Text("RemoteStatus", "Couldn't remove the paired phones. Try again."); }
-                UpdateRemoteSettings();
+                remoteDevicesShown = null; UpdateRemoteSettings();
             });
             Control<CheckBox>("RemoteEnabledChoice").Click += (sender, e) => SetRemoteEnabled(Control<CheckBox>("RemoteEnabledChoice").IsChecked == true);
             if (pairing.StartupWarning != null && pendingMessage == null) pendingMessage = pairing.StartupWarning;
@@ -159,13 +160,57 @@ namespace WidgetScreen
             var remaining = pairing.CodeRemaining;
             Text("RemoteCodeHint", code == null ? (settings.RemoteEnabled ? "Tap Pair a phone for a code." : "Turn on phone control to pair a phone.") : "Enter this code on your phone. It expires in " + Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes)) + " min.");
             Control<Button>("RemotePairButton").Content = code == null ? "Pair a phone" : "New code";
-            int count = pairing.Devices.Count;
-            Text("RemoteDevicesText", count == 0 ? "No phones paired yet." : count == 1 ? "1 phone paired: " + pairing.Devices[0].Name + "." : count + " phones paired: " + String.Join(", ", pairing.Devices.Select(d => d.Name)) + ".");
+            var devices = pairing.Devices; int count = devices.Count;
+            Text("RemoteDevicesText", count == 0 ? "No phones paired yet." : count == 1 ? "1 phone paired." : count + " phones paired.");
             Control<Button>("RemoteForgetButton").IsEnabled = count > 0;
+            ShowRemoteDevices(devices);
             if (remoteError != null) Text("RemoteStatus", remoteError);
             else if (!settings.RemoteEnabled) Text("RemoteStatus", "Off. Phones can't connect to this PC.");
             else if (code == null && Control<TextBlock>("RemoteStatus").Text.StartsWith("Paired phones were removed")) { }
             else Text("RemoteStatus", "On. Paired phones on this Wi-Fi can see and control the dashboard.");
+        }
+
+        private string remoteDevicesShown;
+
+        // The paired phones, one row each with a Forget button. Rebuilt only when a name or a last-seen reading changes,
+        // because this runs on the heartbeat while a pairing code is shown.
+        private void ShowRemoteDevices(List<RemoteDevice> devices)
+        {
+            string signature = String.Join("|", devices.Select(d => d.TokenHash + ":" + d.Name + ":" + Ago(d.LastSeenUtc)));
+            if (signature == remoteDevicesShown) return;
+            remoteDevicesShown = signature;
+            var panel = Control<StackPanel>("RemoteDevices"); panel.Children.Clear();
+            foreach (var device in devices)
+            {
+                var hash = device.TokenHash; string name = device.Name;
+                var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+                row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                text.Children.Add(new TextBlock { Text = name, TextTrimming = TextTrimming.CharacterEllipsis });
+                var detail = new TextBlock { Text = "Paired " + device.PairedUtc.ToLocalTime().ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture) + "  ·  " + (device.LastSeenUtc == DateTime.MinValue ? "not seen yet" : "last seen " + Ago(device.LastSeenUtc)), Margin = new Thickness(0, 2, 0, 0) };
+                detail.SetResourceReference(FrameworkElement.StyleProperty, "Small");
+                text.Children.Add(detail); row.Children.Add(text);
+                var forget = new Button { Content = "Forget", MinHeight = 52, Margin = new Thickness(12, 0, 0, 0), ToolTip = "This phone needs a new code to connect again." };
+                AutomationProperties.SetName(forget, "Forget " + name);
+                forget.Click += (sender, e) => {
+                    try { Text("RemoteStatus", pairing.Forget(hash) ? "Forgot " + name + ". It needs a new code to connect again." : name + " was already forgotten."); }
+                    catch (Exception) { Text("RemoteStatus", "Couldn't forget " + name + ". Try again."); }
+                    remoteDevicesShown = null; UpdateRemoteSettings();
+                };
+                Grid.SetColumn(forget, 1); row.Children.Add(forget);
+                panel.Children.Add(row);
+            }
+        }
+
+        // "just now", "3 min ago", "2 h ago", or the date.
+        public static string Ago(DateTime utc)
+        {
+            if (utc == DateTime.MinValue) return "";
+            var span = DateTime.UtcNow - utc;
+            if (span < TimeSpan.FromMinutes(1)) return "just now";
+            if (span < TimeSpan.FromHours(1)) return (int)span.TotalMinutes + " min ago";
+            if (span < TimeSpan.FromDays(1)) return (int)span.TotalHours + " h ago";
+            return utc.ToLocalTime().ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         // Runs on a socket thread; the work happens on the UI thread.

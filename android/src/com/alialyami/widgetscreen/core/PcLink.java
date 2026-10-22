@@ -43,7 +43,8 @@ public final class PcLink {
 
     public PcLink(String host, int port, String token) { this.host = host; this.port = port; this.token = token; }
 
-    // Accepts "192.168.1.20" or "192.168.1.20:43830"; returns { host, port } or null.
+    // Accepts "192.168.1.20" or "192.168.1.20:43830"; returns { host, port } or null. Only home-network addresses
+    // (private, link-local, loopback, or a .local name) are accepted, so a typo can't send the token off the Wi-Fi.
     public static String[] parseAddress(String text) {
         if (text == null) return null;
         String value = text.trim();
@@ -53,8 +54,51 @@ public final class PcLink {
             try { port = Integer.parseInt(value.substring(colon + 1)); } catch (NumberFormatException e) { return null; }
             value = value.substring(0, colon);
         }
-        if (port <= 0 || port > 65535 || !value.matches("[A-Za-z0-9.-]{1,253}") || value.startsWith(".") || value.endsWith(".")) return null;
+        if (port <= 0 || port > 65535 || !value.matches("[A-Za-z0-9.-]{1,253}") || value.startsWith(".") || value.endsWith(".") || !isHomeAddress(value)) return null;
         return new String[] { value, Integer.toString(port) };
+    }
+
+    // A private, link-local or loopback IPv4 address, or a name only the local network resolves (.local, localhost).
+    public static boolean isHomeAddress(String host) {
+        if (host == null) return false;
+        String value = host.toLowerCase(java.util.Locale.ROOT);
+        if (value.equals("localhost") || value.endsWith(".local")) return true;
+        String[] parts = value.split("\\.");
+        if (parts.length != 4) return false;
+        int[] octets = new int[4];
+        for (int i = 0; i < 4; i++) {
+            if (!parts[i].matches("[0-9]{1,3}")) return false;
+            octets[i] = Integer.parseInt(parts[i]);
+            if (octets[i] > 255) return false;
+        }
+        return octets[0] == 10 || octets[0] == 127 || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) || (octets[0] == 192 && octets[1] == 168) || (octets[0] == 169 && octets[1] == 254);
+    }
+
+    // How long to wait before asking an unreachable PC again: 5 s, then 15 s, then a minute, so a phone left on a
+    // stand doesn't drain its battery knocking every 2 s. A tap or a settings change asks straight away.
+    public static long retryDelayMs(int failures) {
+        return failures <= 0 ? 0 : failures == 1 ? 5000 : failures == 2 ? 15000 : 60000;
+    }
+
+    // Where to send a discovery packet: each interface's own broadcast address (routers and many phones drop the
+    // limited broadcast 255.255.255.255), with the limited broadcast last as a fallback.
+    public static List<String> broadcastAddresses() {
+        List<String> targets = new ArrayList<String>();
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> interfaces = java.net.NetworkInterface.getNetworkInterfaces();
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                java.net.NetworkInterface network = interfaces.nextElement();
+                try { if (!network.isUp() || network.isLoopback()) continue; } catch (java.net.SocketException e) { continue; }
+                for (java.net.InterfaceAddress address : network.getInterfaceAddresses()) {
+                    InetAddress broadcast = address.getBroadcast();
+                    if (broadcast == null) continue;
+                    String text = broadcast.getHostAddress();
+                    if (!targets.contains(text)) targets.add(text);
+                }
+            }
+        } catch (java.net.SocketException ignored) { }
+        if (!targets.contains("255.255.255.255")) targets.add("255.255.255.255");
+        return targets;
     }
 
     private byte[] send(String method, String path, String body, int timeoutMs, int maxBytes) throws Failure {
@@ -145,7 +189,10 @@ public final class PcLink {
             socket.setBroadcast(true);
             socket.setSoTimeout(300);
             byte[] ask = DISCOVERY_REQUEST.getBytes(StandardCharsets.UTF_8);
-            socket.send(new DatagramPacket(ask, ask.length, InetAddress.getByName("255.255.255.255"), DISCOVERY_PORT));
+            for (String target : broadcastAddresses()) {
+                try { socket.send(new DatagramPacket(ask, ask.length, InetAddress.getByName(target), DISCOVERY_PORT)); }
+                catch (IOException ignored) { /* One interface refusing broadcast doesn't stop the others. */ }
+            }
             long until = System.currentTimeMillis() + timeoutMs;
             byte[] buffer = new byte[2048];
             while (System.currentTimeMillis() < until) {

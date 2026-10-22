@@ -22,3 +22,12 @@ After trying the first Android build (decision 007, a standalone phone dashboard
 - **Not over the internet.** Reaching the PC from outside the home network would need port forwarding or a relay service; that's out of scope.
 - **Rule break, agreed.** CLAUDE.md said "no companion server". The user approved this exception for the phone link; it is off by default and lives inside the app.
 - The Windows checks (`tests/Remote/RemoteTests.cs`) pair, read state, run commands and discover the PC over loopback with an isolated settings folder, and save a real `/state` answer to `artifacts\tests\remote-state-sample.json`; the Android checks parse that file, so both sides agree on the format. A real phone on real Wi-Fi, the firewall prompt and UDP broadcast across a router are still unverified.
+
+## Hardening (22 Oct 2026, from the app audit)
+
+- **Web pages are refused.** A page in the user's browser could reach the link through DNS rebinding. `RemoteServer.RefuseBrowser` answers 403 to any request with an `Origin`, `Sec-Fetch-Mode` or `Sec-Fetch-Site` header, or whose `Host` isn't an IP address or `localhost`. The phone app sends a bare address as `Host` and none of those headers.
+- **At most 32 connections** are served at once; extra ones are closed, not queued, so the phone's next request still gets a turn.
+- **Per-phone forget and last seen.** `RemoteDevice.LastSeenUtc` follows each authorized request and is saved at most every five minutes; Settings → Phone lists each phone with a Forget button, and *Forget all phones* stays.
+- **The phone only talks to home addresses** (`PcLink.isHomeAddress`: private and link-local IPv4, loopback, `.local` names), so a typo can't send the bearer token to the internet. Discovery sends to each interface's directed broadcast first and 255.255.255.255 last, because routers and many phones drop the limited broadcast. Unforced polling backs off 5 s, 15 s, then a minute while the PC is away (`PcLink.retryDelayMs`).
+- **Cleartext stays app-wide on Android.** A network security config can limit cleartext to named domains, not to IP ranges, and the PC is reached by address; so `usesCleartextTraffic` stays on and the address check above does the limiting.
+- **Still plain HTTP.** Encrypting the link (a self-signed certificate pinned at pairing) remains a future decision; it is real work on both sides and not needed on a trusted home Wi-Fi.

@@ -95,7 +95,7 @@ public final class WeatherWidget extends Widget {
             temperature.setText(Math.round(last.temperature) + "°");
             // The "updated" time follows the PC clock's 12- or 24-hour choice, as on Windows.
             LocalDateTime retrieved = LocalDateTime.ofInstant(Instant.ofEpochMilli(last.retrievedMs), ZoneId.systemDefault());
-            credit.setText("Open-Meteo  ·  updated " + Format.endsAt(retrieved, state != null && state.use24));
+            credit.setText("Open-Meteo  ·  updated " + Format.endsAt(retrieved, dash.use24()));
         } else temperature.setText("—°");
         if (offline) {
             condition.setText("OFFLINE");
