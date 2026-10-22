@@ -26,18 +26,24 @@ namespace WidgetScreen
         // width and height in device units; density is device units per Android dp (1 on Windows, which measures in
         // pixels so a screen keeps the same arrangement at any Windows display scaling); stackBelow is the logical
         // width under which the header stacks.
-        public static ScreenFit For(double width, double height, double density, double stackBelow)
+        public static ScreenFit For(double width, double height, double density, double stackBelow) { return For(width, height, density, stackBelow, MinCanvas); }
+        // minCanvas: how much of the reference canvas a compact dashboard must keep (80% by default). A small
+        // high-DPI screen passes less (down to 60%) so the text stays readable and the canvas gives way instead.
+        public static ScreenFit For(double width, double height, double density, double stackBelow, double minCanvas)
         {
             if (!(width > 0) || !(height > 0) || Double.IsInfinity(width) || Double.IsInfinity(height)) { width = 1920; height = 720; }
             if (!(density > 0)) density = 1;
+            minCanvas = Math.Max(0.6, Math.Min(MinCanvas, Double.IsNaN(minCanvas) ? MinCanvas : minCanvas));
             bool upright = height > width;
             double referenceWidth = upright ? 720 : 1920, referenceHeight = upright ? 1920 : 720;
             double full = Math.Min(width / referenceWidth, height / referenceHeight), scale = full;
+            // A screen at least the reference size is never changed by display scaling: it looks the same at any.
+            if (full >= 1) density = 1;
             if (full / density < CompactBelow)
             {
                 // A compact dashboard may be narrow enough to stack its header, which costs canvas height.
-                double chrome = MarginY + ((referenceWidth - MarginX) * MinCanvas + MarginX < stackBelow ? StackedHeader : Header) + Footer;
-                double compact = Math.Min(width / ((referenceWidth - MarginX) * MinCanvas + MarginX), height / ((referenceHeight - chrome) * MinCanvas + chrome));
+                double chrome = MarginY + ((referenceWidth - MarginX) * minCanvas + MarginX < stackBelow ? StackedHeader : Header) + Footer;
+                double compact = Math.Min(width / ((referenceWidth - MarginX) * minCanvas + MarginX), height / ((referenceHeight - chrome) * minCanvas + chrome));
                 scale = Math.Max(full, Math.Min(compact, density * CompactBelow));
             }
             double logicalWidth = Math.Floor(width / scale + 1e-6), logicalHeight = Math.Floor(height / scale + 1e-6);

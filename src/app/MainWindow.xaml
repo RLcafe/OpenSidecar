@@ -517,7 +517,8 @@
               <TextBlock Text="Text size" Style="{StaticResource Small}"/>
               <TextBlock x:Name="ScaleLabel" Style="{StaticResource Small}" HorizontalAlignment="Right"/>
               </DockPanel>
-              <Slider x:Name="ScaleChoice" Minimum="90" Maximum="115" TickFrequency="5" IsSnapToTickEnabled="True" AutomationProperties.Name="Text size"/>
+              <Slider x:Name="ScaleChoice" Minimum="90" Maximum="140" TickFrequency="5" IsSnapToTickEnabled="True" AutomationProperties.Name="Text size"/>
+              <TextBlock Text="Above 115% some cards show less at once; give them more room in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,8"/>
               <CheckBox x:Name="ClockChoice" Content="Use a 24-hour clock"/>
               <CheckBox x:Name="LevelsChoice" Content="Show live output levels"/>
               <TextBlock Text="The moving bars under the sound mixer. Quiet mode pauses them too." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>

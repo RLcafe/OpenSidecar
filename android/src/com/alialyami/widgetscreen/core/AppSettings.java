@@ -86,7 +86,8 @@ public final class AppSettings {
     public AppSettings copy() { return fromProperties(toProperties()); }
 
     public void normalize() {
-        textScale = Double.isNaN(textScale) ? 1 : Math.max(0.9, Math.min(1.15, textScale));
+        // Up to 140% (audit, 22 Oct 2026), as on the PC.
+        textScale = Double.isNaN(textScale) ? 1 : Math.max(0.9, Math.min(1.4, textScale));
         if (!Theme.contains(Theme.ACCENTS, accent)) accent = "Lime";
         if (!Theme.contains(Theme.THEMES, theme)) theme = "Midnight";
         if (!Theme.contains(LAYOUT_MODES, layoutMode)) layoutMode = "Auto";

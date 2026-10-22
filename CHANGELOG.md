@@ -4,7 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+From `feature/readable-small-screens` (audit branch 8, 22 Oct 2026):
+
+- **Text size goes up to 140%** (Settings → Theme on the PC, Settings → Theme on the phone), for small screens and screens you sit far from. Above 115% some cards show less at once.
+- **Small high-DPI screens keep readable text**: on Windows, a secondary screen smaller than 1920 × 720 on a system with display scaling above 100% now scales the dashboard up with that scaling and lets the widget canvas shrink to 60% instead of 80%. Screens at least 1920 × 720 are not affected, so the owner's panel looks exactly as before.
 
 ## 0.8.0 (22 Oct 2026)
 

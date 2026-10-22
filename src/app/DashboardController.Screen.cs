@@ -30,10 +30,29 @@ namespace WidgetScreen
             return new Size(1920, 720);
         }
 
+        // Windows display scaling, as device pixels per DIP for this window (1 at 100%). Renders and tests use 1.
+        private double DisplayScale()
+        {
+            if (Program.ScreenSize.HasValue) return 1;
+            try
+            {
+                var source = PresentationSource.FromVisual(window);
+                if (source != null && source.CompositionTarget != null) { double m = source.CompositionTarget.TransformToDevice.M11; if (m > 0 && !Double.IsInfinity(m)) return m; }
+            }
+            catch (Exception) { }
+            return 1;
+        }
+
         private void FitScreen()
         {
             Size target = TargetScreen();
-            var next = ScreenFit.For(target.Width, target.Height, 1, StackBelow);
+            // A screen smaller than the 1920 × 720 reference on a high-DPI system (a 10-inch 1280 × 800 at 150%, say)
+            // keeps its text readable: the compact floor rises with the display scaling and the canvas may give way
+            // down to 60%. A screen at least the reference size, like the owner's, is never changed by scaling.
+            double full = Math.Max(Math.Min(target.Width / 1920, target.Height / 720), Math.Min(target.Width / 720, target.Height / 1920));
+            double density = full >= 1 ? 1 : DisplayScale();
+            double minCanvas = density > 1 ? Math.Max(0.6, ScreenFit.MinCanvas / density) : ScreenFit.MinCanvas;
+            var next = ScreenFit.For(target.Width, target.Height, density, StackBelow, minCanvas);
             if (next.SameAs(fit)) return;
             fit = next;
             var dashboard = Control<Grid>("Dashboard"); dashboard.Width = fit.LogicalWidth; dashboard.Height = fit.LogicalHeight;
