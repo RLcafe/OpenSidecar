@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/quick-launch-polish` (audit branch 9, 22 Oct 2026):
+Nothing yet.
+
+## 0.10.0 (22 Oct 2026)
+
+Merges `feature/quick-launch-polish`, audit branch 9 (`docs/design/quick-launch-polish.md`).
 
 - **A colour per button**: Settings → Quick Launch → Icon color picks one of the four accents for a button's glyph (or the theme's accent), so Spotify, Browser and Files aren't six identical green glyphs. The phone shows the same colours.
 - **Control buttons show their state**: Mute, Microphone, Focus and Quiet mode buttons take the selected look while the thing they toggle is on, on both apps.

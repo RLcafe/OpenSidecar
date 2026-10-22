@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/quick-launch-polish` | Audit branch 9: per-button colour, control-button state, drag reorder, hotkey target, on both apps | `1c36e54` (v0.9.0) | In progress | `.worktrees\quick-launch-polish` | `.worktrees\quick-launch-polish\artifacts\app\WidgetScreen.exe`, `.worktrees\quick-launch-polish\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/quick-launch-polish` was merged as v0.10.0.
 eadable-small-screens` | `.worktrees
 eadable-small-screensrtifactspp\WidgetScreen.exe`, `.worktrees
 eadable-small-screensrtifactsndroid\WidgetScreen.apk` |
