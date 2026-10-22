@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/focus-finish` | Audit branch 4: unmissable finish with chime, custom fourth preset, sessions today, paused look, on both apps | `50698e3` (v0.5.0) | In progress | `.worktrees\focus-finish` | `.worktrees\focus-finish\artifacts\app\WidgetScreen.exe`, `.worktrees\focus-finish\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/focus-finish` was merged as v0.6.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
