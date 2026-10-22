@@ -1,7 +1,5 @@
 package com.alialyami.widgetscreen.widgets;
 
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -125,11 +123,9 @@ public final class QuickLaunchWidget extends Widget {
 
     private void run(final PcState.Button shortcut, final int index) {
         if (!shortcut.confirm) { dash.command(Json.map("action", "deck.run", "index", index, "label", shortcut.label, "confirmed", false), "Ran " + shortcut.label + " on the PC."); return; }
-        new AlertDialog.Builder(dash.activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Quick Launch")
-            .setMessage(shortcut.label + "\n\n" + shortcut.describe + "\n\nRun this on the PC?")
-            .setPositiveButton("Run", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) { dash.command(Json.map("action", "deck.run", "index", index, "label", shortcut.label, "confirmed", true), "Ran " + shortcut.label + " on the PC."); } })
-            .setNegativeButton("Cancel", null)
-            .show();
+        // The same themed sheet as the PC, not the system dialog.
+        dash.confirm("QUICK LAUNCH", shortcut.label, shortcut.describe + "\n\nRuns on the PC.", "Run " + shortcut.label, new Runnable() {
+            @Override public void run() { dash.command(Json.map("action", "deck.run", "index", index, "label", shortcut.label, "confirmed", true), "Ran " + shortcut.label + " on the PC."); }
+        });
     }
 }

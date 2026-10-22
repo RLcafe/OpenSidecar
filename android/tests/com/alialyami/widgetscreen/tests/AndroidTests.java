@@ -225,6 +225,8 @@ public final class AndroidTests {
             ok(PcLink.retryDelayMs(0) == 0 && PcLink.retryDelayMs(1) == 5000 && PcLink.retryDelayMs(2) == 15000 && PcLink.retryDelayMs(3) == 60000 && PcLink.retryDelayMs(40) == 60000, "retry delays");
             AppSettings remembered = new AppSettings(); remembered.use24 = true;
             ok(AppSettings.fromProperties(remembered.toProperties()).use24 && !AppSettings.fromProperties(new AppSettings().toProperties()).use24, "24-hour clock remembered");
+            AppSettings dismissed = new AppSettings(); dismissed.hintDismissed = true;
+            ok(AppSettings.fromProperties(dismissed.toProperties()).hintDismissed && !new AppSettings().hintDismissed, "tips dismissal remembered");
             PcLink.Found pc = PcLink.parseDiscovery("{\"app\":\"Widget Screen\",\"name\":\"DESKTOP-1\",\"port\":43830}", "192.168.1.20");
             ok(pc != null && pc.name.equals("DESKTOP-1") && pc.port == 43830 && pc.host.equals("192.168.1.20"), "discovery");
             ok(PcLink.parseDiscovery("{\"app\":\"Other\",\"port\":1}", "x") == null && PcLink.parseDiscovery("garbage", "x") == null, "foreign replies");

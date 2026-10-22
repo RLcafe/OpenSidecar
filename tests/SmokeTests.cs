@@ -166,6 +166,39 @@ internal static class SmokeTests
                 window.Close();
             }
         });
+        Check("Quick Launch confirms in a themed sheet, and the tips go away with Got it", () => {
+            string path = Path.Combine(directory, "confirm-sheet.xml");
+            var settings = new AppSettings(); settings.Shortcuts.Insert(0, new Shortcut { Label = "Quiet", Action = "Control", Target = "quiet", Glyph = "", Confirm = true });
+            SettingsStore.Save(path, settings);
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    Action<System.Windows.Controls.Button> click = button => button.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Action pump = () => System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(new Action(() => { }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    var overlay = (System.Windows.Controls.Grid)window.FindName("ConfirmOverlay");
+                    var deck = ((System.Windows.Controls.Primitives.UniformGrid)window.FindName("ShortcutGrid")).Children.OfType<System.Windows.Controls.Button>().First();
+                    Assert(overlay.Visibility == System.Windows.Visibility.Collapsed && !settings.QuietMode, "The sheet started open.");
+                    click(deck); pump();
+                    Assert(overlay.Visibility == System.Windows.Visibility.Visible && ((System.Windows.Controls.TextBlock)window.FindName("ConfirmSubject")).Text == "Quiet" && (string)((System.Windows.Controls.Button)window.FindName("ConfirmAction")).Content == "Run Quiet", "The sheet didn't open for a confirmed button.");
+                    click((System.Windows.Controls.Button)window.FindName("ConfirmCancel")); pump();
+                    string warning;
+                    Assert(overlay.Visibility == System.Windows.Visibility.Collapsed && !SettingsStore.Load(path, out warning).QuietMode, "Cancel ran the action, or left the sheet open.");
+                    click(deck); pump(); click((System.Windows.Controls.Button)window.FindName("ConfirmAction")); pump();
+                    Assert(overlay.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).QuietMode, "Run didn't run the action.");
+                    foreach (string name in new[] { "ConfirmCancel", "ConfirmAction" }) Assert(((System.Windows.FrameworkElement)window.FindName(name)).MinHeight >= 52, name + " is shorter than 52.");
+                    var hint = (System.Windows.Controls.StackPanel)window.FindName("HintRow");
+                    Assert(hint.Visibility == System.Windows.Visibility.Visible, "The first-launch tips aren't shown.");
+                    click((System.Windows.Controls.Button)window.FindName("HintDismiss"));
+                    Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
+                    Assert((string)((System.Windows.Controls.TabItem)tabs.Items[6]).Header == "Phone" && (string)((System.Windows.Controls.TabItem)tabs.Items[7]).Header == "Discord", "The Phone tab doesn't come before Discord.");
+                    Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
+                }
+                window.Close();
+            }
+        });
         Check("Touch sliders map to the rendered track, clamp, snap and follow direction changes", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
