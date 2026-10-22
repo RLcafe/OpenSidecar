@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/phone-native` (audit branch 10, 22 Oct 2026; phone only, see the design note for what the PC side already has):
+Nothing yet.
+
+## v0.11.0 (22 Oct 2026)
+
+Phone-native polish (audit branch 10; phone only, see the design note for what the PC side already has):
 
 - **One calm offline card** at the top of the upright phone list while the PC is away ("Can't reach DESKTOP · trying again in 15 s", with Try now and Settings → PC), instead of a sticky status line.
 - **A firewall hint right after pairing**: when the first reading after pairing fails, the phone says to allow Widget Screen on private networks in Windows Firewall, where the problem usually is.
