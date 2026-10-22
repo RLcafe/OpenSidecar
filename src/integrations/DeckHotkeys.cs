@@ -27,6 +27,22 @@ namespace WidgetScreen
             uint process; GetWindowThreadProcessId(handle, out process);
             if (handle != IntPtr.Zero && process != ownProcess && IsWindowVisible(handle)) { previous = handle; previousProcess = process; }
         }
+        // The app a hotkey would go to right now (its process name), or null while there is none.
+        private uint namedProcess; private string namedName;
+        public string TargetName
+        {
+            get
+            {
+                IntPtr target = previous; uint process; GetWindowThreadProcessId(target, out process);
+                if (target == IntPtr.Zero || process == 0 || process != previousProcess || !IsWindow(target)) return null;
+                if (process != namedProcess)
+                {
+                    namedProcess = process;
+                    try { using (var owner = Process.GetProcessById((int)process)) namedName = owner.ProcessName; } catch (Exception) { namedName = null; }
+                }
+                return namedName;
+            }
+        }
         public static bool TryParse(string text, out ushort[] keys)
         {
             keys = null;

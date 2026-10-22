@@ -14,6 +14,8 @@ namespace WidgetScreen
         public string Action { get; set; }
         public string Arguments { get; set; }
         public bool Confirm { get; set; }
+        // The glyph's colour: one of the four accents, or empty for the theme's accent.
+        public string Color { get; set; }
         public Shortcut Copy() { return (Shortcut)MemberwiseClone(); }
     }
 
@@ -156,6 +158,7 @@ namespace WidgetScreen
                 shortcut.Arguments = shortcut.Arguments ?? "";
                 if (String.IsNullOrEmpty(shortcut.Action)) shortcut.Action = DeckActions.InferAction(shortcut.Target);
                 if (String.IsNullOrEmpty(shortcut.Glyph)) shortcut.Glyph = "\uE8A7";
+                if (shortcut.Color != "Lime" && shortcut.Color != "Glacier" && shortcut.Color != "Lavender" && shortcut.Color != "Amber") shortcut.Color = "";
             }
             if (Double.IsNaN(Latitude) || Double.IsInfinity(Latitude) || Double.IsNaN(Longitude) || Double.IsInfinity(Longitude) || Math.Abs(Latitude) > 90 || Math.Abs(Longitude) > 180) WeatherLocation = "";
             WeatherLocation = WeatherLocation ?? "";

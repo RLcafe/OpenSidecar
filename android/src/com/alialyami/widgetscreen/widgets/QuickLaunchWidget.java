@@ -11,6 +11,7 @@ import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
+import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.views.GlyphView;
 
 import java.util.List;
@@ -98,7 +99,7 @@ public final class QuickLaunchWidget extends Widget {
 
     private static String signature(List<PcState.Button> buttons) {
         StringBuilder out = new StringBuilder();
-        for (PcState.Button b : buttons) out.append(b.label).append('\u0001').append(b.glyph).append('\u0001').append(b.enabled).append('\u0002');
+        for (PcState.Button b : buttons) out.append(b.label).append('\u0001').append(b.glyph).append('\u0001').append(b.enabled).append('\u0001').append(b.color).append('\u0001').append(b.on).append('\u0001').append(b.describe).append('\u0002');
         return out.toString();
     }
 
@@ -107,14 +108,16 @@ public final class QuickLaunchWidget extends Widget {
         LinearLayout button = compact ? ui.row() : ui.column();
         button.setGravity(Gravity.CENTER);
         button.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(8));
-        button.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
+        // Control buttons that toggle something show whether it's on; a button's own colour tells it apart.
+        ui.select(button, shortcut.on);
         button.setMinimumHeight(ui.px(48));
-        button.addView(new GlyphView(ui.context, shortcut.glyph, ui.theme.accent, ui.fpx(glyph)), ui.ll(ui.px(glyph + 4), ui.px(glyph + 4)));
+        int color = shortcut.color == null || shortcut.color.isEmpty() ? ui.theme.accent : Theme.accentColor(shortcut.color);
+        button.addView(new GlyphView(ui.context, shortcut.glyph, color, ui.fpx(glyph)), ui.ll(ui.px(glyph + 4), ui.px(glyph + 4)));
         TextView name = ui.text(shortcut.label, (compact ? 14 : 15) * ui.textScale, ui.theme.text);
         name.setGravity(Gravity.CENTER);
         name.setMaxWidth(ui.px(Math.max(40, compact ? cellWidth - glyph - 40 : cellWidth - 24)));
         button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
-        button.setContentDescription(shortcut.label);
+        button.setContentDescription(shortcut.label + (shortcut.on ? ", on" : ""));
         button.setClickable(true);
         Ui.enable(button, shortcut.enabled);
         button.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { run(shortcut, index); } });

@@ -91,6 +91,37 @@ internal static class DeckTests
             }
             window.Close();
         });
+        check("Deck buttons keep a colour, show control state and name the hotkey's target", () => {
+            string path = Path.Combine(directory, "deck-polish.xml"), warning;
+            var settings = new AppSettings();
+            settings.Shortcuts.Insert(0, new Shortcut { Label = "Quiet", Action = "Control", Target = "quiet", Glyph = "", Color = "Amber" });
+            settings.Shortcuts.Insert(1, new Shortcut { Label = "Snap", Action = "Hotkey", Target = "Win+Shift+S", Glyph = "", Color = "bogus" });
+            SettingsStore.Save(path, settings); var loaded = SettingsStore.Load(path, out warning);
+            Assert(loaded.Shortcuts[0].Color == "Amber" && loaded.Shortcuts[1].Color == "", "Button colours don't save, or an unknown colour wasn't cleared.");
+            Assert(DeckActions.AccentHex("Amber") == "#F5C47D" && DeckActions.AccentHex("") == null && DeckActions.IsStateful(loaded.Shortcuts[0]) && !DeckActions.IsStateful(loaded.Shortcuts[1]), "Colour or state helpers are wrong.");
+            Assert(DeckActions.DescribeWithTarget(loaded.Shortcuts[1], "chrome") == "Win+Shift+S  →  chrome" && DeckActions.DescribeWithTarget(loaded.Shortcuts[1], null).EndsWith("select an app first") && DeckActions.DescribeWithTarget(loaded.Shortcuts[0], "chrome") == "Toggle Quiet mode", "Hotkey target description is wrong.");
+            var window = Window();
+            using (var controller = new DashboardController(window, path, true))
+            {
+                // Quiet mode rebuilds the deck, so the button is looked up again after each toggle.
+                Func<Button> quietButton = () => ((UniformGrid)window.FindName("ShortcutGrid")).Children.OfType<Button>().First(b => System.Windows.Automation.AutomationProperties.GetName(b).StartsWith("Quiet"));
+                Assert(quietButton().BorderThickness.Left == 1, "Quiet button shows on before Quiet mode is on.");
+                Click(window, "QuietButton");
+                Assert(quietButton().BorderThickness.Left == 2 && System.Windows.Automation.AutomationProperties.GetName(quietButton()) == "Quiet, on", "Quiet button doesn't show that Quiet mode is on.");
+                Click(window, "QuietButton");
+                Assert(quietButton().BorderThickness.Left == 1, "Quiet button doesn't show that Quiet mode went off.");
+                var glyph = ((StackPanel)quietButton().Content).Children.OfType<TextBlock>().First();
+                Assert(((System.Windows.Media.SolidColorBrush)glyph.Foreground).Color == (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F5C47D"), "The button's own colour isn't used.");
+                // Reordering by drag ends in Reorder; it saves like the up/down buttons.
+                Click(window, "EditDeck");
+                var editor = typeof(DashboardController).GetField("deckEditor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(controller);
+                editor.GetType().GetMethod("Reorder").Invoke(editor, new object[] { 0, 2 });
+                Click(window, "SaveSettings");
+                var saved = SettingsStore.Load(path, out warning);
+                Assert(saved.Shortcuts[2].Label == "Quiet" && saved.Shortcuts[0].Label == "Snap", "Reorder didn't move the button.");
+            }
+            window.Close();
+        });
         check("Deck compact paging and editor controls fit at 115% text", () => {
             string path = Path.Combine(directory, "deck-sizing.xml"); var settings = new AppSettings { TextScale = 1.15 };
             settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings); var placement = settings.WidgetLayout.First(w => w.Id == "Shortcuts"); placement.Width = 420; placement.Height = 190;
