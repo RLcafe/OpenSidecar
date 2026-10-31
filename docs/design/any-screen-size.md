@@ -66,7 +66,7 @@ Edit layout's toolbar keeps Undo, Redo, Reset layout and Snap. The widget dropdo
 
 The shared rules are in `src/widgets/CardSizing.cs` and `android/.../core/CardSizing.java`, with the same numbers.
 
-- **Quick Launch** works like the Soundboard: as many buttons as the card holds (124 × 76 cells including margins), with paging beyond that. When every button fits on one page, it uses the smallest grid that holds them, so the buttons grow into the card. A single row puts the glyph beside the label. Glyphs grow with the buttons (24 to 44). The reference card still shows 3 × 2, and the minimum card 3 × 1.
+- **Quick Launch** works like the Soundboard: six buttons a page at any card size since v0.16.0 (3 × 2, 2 × 3, 6 × 1 or 1 × 6, see `resizable-widgets.md`), with paging beyond that. Fewer than six buttons use the smallest grid that holds them, so the buttons grow into the card. Glyphs grow with the buttons (24 to 44). The reference card still shows 3 × 2.
 - **Focus**: the countdown follows the card's width and free height (42 to 160; 84 on the reference column).
 - **Now Playing**: the cover grows with free height and width (104 to 220).
 - **Weather**: the temperature follows the card (40 to 96; 54 on the reference card).

@@ -257,10 +257,11 @@ internal static class DiscordTests
             }
             finally { SynchronizationContext.SetSynchronizationContext(context); }
         });
-        check("Soundboard page size follows the widget and the widget starts hidden", () => {
+        check("Soundboard pages six sounds at any size and the widget starts hidden", () => {
             int columns, rows;
-            Assert(SoundboardWidget.Capacity(432, 154, out columns, out rows) == 4 && columns == 2 && rows == 2, "Compact page size is wrong.");
-            Assert(SoundboardWidget.Capacity(0, 0, out columns, out rows) == 1, "Unmeasured grid has no room for a sound.");
+            Assert(SoundboardWidget.Capacity(432, 154, 20, out columns, out rows) == 6 && columns == 3 && rows == 2, "Compact page size is wrong.");
+            Assert(SoundboardWidget.Capacity(1400, 500, 20, out columns, out rows) == 6 && SoundboardWidget.Capacity(0, 0, 20, out columns, out rows) == 6, "A page should always hold six sounds.");
+            Assert(SoundboardWidget.Capacity(432, 154, 3, out columns, out rows) == 3, "Three sounds should fill the grid.");
             var settings = new AppSettings();
             Assert(WidgetLayout.Ids.Contains("Soundboard") && !WidgetLayout.Default(settings).First(p => p.Id == "Soundboard").Visible && !WidgetLayout.SpotifyDefault(settings).First(p => p.Id == "Soundboard").Visible, "Soundboard is visible by default.");
             var old = WidgetLayout.Default(settings).Where(p => p.Id != "Soundboard").ToArray();

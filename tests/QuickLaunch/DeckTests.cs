@@ -129,7 +129,7 @@ internal static class DeckTests
             using (var controller = new DashboardController(window, path, true))
             {
                 var dashboard = (FrameworkElement)window.FindName("Dashboard"); Action layout = () => { dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout(); }; layout();
-                Assert(((UniformGrid)window.FindName("ShortcutGrid")).Children.Count == 3, "Compact deck should show three touch-sized buttons.");
+                Assert(((UniformGrid)window.FindName("ShortcutGrid")).Children.Count == 6, "Compact deck should still show six touch-sized buttons.");
                 foreach (Button button in ((UniformGrid)window.FindName("ShortcutGrid")).Children) Assert(button.ActualHeight >= 48 && button.ActualWidth >= 48, "Small deck has undersized targets.");
                 Click(window, "EditDeck"); layout();
                 foreach (string name in new[] { "DeckName", "DeckAction", "DeckIcon", "DeckTarget", "DeckAdd", "DeckRemove" })

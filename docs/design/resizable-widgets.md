@@ -17,14 +17,14 @@ The smallest size of each card is now where it still keeps its main reading and 
 | --- | --- | --- |
 | Focus timer | 296 × 300 | 280 × 192 |
 | Now playing | 360 × 310 | 312 × 200 |
-| Quick launch | 420 × 190 | 200 × 152 |
+| Quick launch | 420 × 190 | 200 × 152, then 288 × 204 for six buttons (v0.16.0) |
 | Sound mixer | 380 × 420 | 320 × 224 |
 | System stats | 380 × 310 | 260 × 280 |
 | Weather | 360 × 220 | 232 × 152 |
 | Spotify | 560 × 500 | 360 × 360 |
-| Soundboard | 360 × 240 | 240 × 152 |
+| Soundboard | 360 × 240 | 240 × 152, then 300 × 240 for six buttons (v0.16.0) |
 
-On compact canvases these still shrink to 78% at most (`WidgetLayout.Compact`).
+On compact canvases these still shrink to 78% at most (`WidgetLayout.Compact`), except Quick Launch and the Soundboard, which keep their full minimum so six buttons fit (`WidgetLayout.KeepsSix`).
 
 ## 3. Cards that fold
 
@@ -33,7 +33,7 @@ Thresholds live in `CardSizing` (`src/widgets/CardSizing.cs`, `android/.../core/
 - **Focus**, under 300 tall: the four presets fold into one **length button** beside Start ("25m"; a tap steps 25 → 50 → 5 → the chosen fourth length, and it's off while a session runs). Start reads "Start", and the status and today's sessions lines go; the countdown fills what's left (40 at the smallest).
 - **Now playing**, under 290 tall: the seek row and the hint row fold away, and the cover shrinks to the title row (44 to 104). Under 400 wide the buttons draw closer (4-unit gaps, a 56-wide play button), always centred clear of the volume button.
 - **Sound mixer**: *Full* at 420 tall and up (as before). *Compact* from 300: the microphone becomes a button beside the master slider, the level meter and the APPS heading fold away (the meter stops running), and the app list scrolls. *Master* under 300: the master volume and microphone, with an **Apps · 3** button in the header that swaps the master rows for the app list in the same card ("Done" brings them back). The Windows sound settings button gives its room to the slider on compact cards under 400 wide (Windows only; the phone never had it).
-- **Quick launch**: the button grid already fitted its card (down to one button with paging). Under 342 wide the Edit button goes (Settings → Quick Launch still opens the deck; Windows only, the phone has none), and a paged card under 300 wide keeps its pager over its heading.
+- **Quick launch**: six buttons a page at any size since v0.16.0 (see "Six buttons a page" below); before that the grid went down to one button with paging. Under 342 wide the Edit button goes (Settings → Quick Launch still opens the deck; Windows only, the phone has none), and a paged card under 300 wide keeps its pager over its heading.
 - **System stats**, under 380 wide: rows drop the CPU graph and the GPU and RAM bars (248-unit rows instead of 324), so more fit and the numbers stay large. Network rates use 17 instead of 21.
 - **Weather**, under 200 tall: the details line goes; the temperature, city, condition and the Open-Meteo credit stay.
 - **Spotify**, under 500 tall: a smaller now-playing strip (48 cover), and the status row only while it has something to say.
@@ -50,3 +50,13 @@ Thresholds live in `CardSizing` (`src/widgets/CardSizing.cs`, `android/.../core/
 
 - Edge grips with a real finger on the touchscreen, and the phone's cards at small sizes on a device or emulator (none was available; the Android views build and their thresholds are checked on the JVM).
 - The Spotify card's compact strip with a connected account (no live account in the renders).
+
+## Six buttons a page (user request, 31 Oct 2026, v0.16.0)
+
+The user asked for Quick Launch and the Discord Soundboard to always show six buttons, whatever the card's size, instead of fewer buttons with more pages on small cards and more buttons on big ones. Both apps now use the same rule (`CardSizing.PageGrid`, `pageGrid`):
+
+- A page holds six buttons (`PageButtons`). With fewer than six buttons or sounds, the grid holds just those, so they grow into the card.
+- The grid is 3 × 2, 2 × 3, 6 × 1 or 1 × 6: whichever keeps every button at least 48 units and gives cells closest to the usual button shape (124 × 76 for Quick Launch, 156 × 64 for the Soundboard). A grid never leaves a whole row or column empty.
+- Buttons grow with the card. A Quick Launch label sits under its glyph in cells 76 tall or more, beside it in shorter cells 112 wide or more, and otherwise the button shows its glyph alone, with the label in its tooltip and spoken name (`CardSizing.DeckLabel`).
+- Minimum sizes went up to fit six 48-unit buttons: Quick Launch 288 × 204 and the Soundboard 300 × 240. On compact canvases these two don't shrink (`WidgetLayout.KeepsSix`), so a saved layout with a smaller card grows to the new minimum when it loads.
+- The phone's cards use the same grid; its Soundboard rows now stretch to fill the card like the Windows `UniformGrid`.

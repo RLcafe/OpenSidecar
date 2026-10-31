@@ -220,8 +220,12 @@ internal static class ScreenSizeTests
             }
             window.Close();
         });
-        check("Cards size their content: Quick Launch fills its card, Focus, cover and temperature grow", () => {
-            Assert(CardSizing.DeckGrid(430, 160).SequenceEqual(new[] { 3, 2 }) && CardSizing.DeckGrid(378, 100).SequenceEqual(new[] { 3, 1 }) && CardSizing.FocusTime(320, 576) == 84 && CardSizing.MediaArt(472, 310) == 104 && CardSizing.WeatherTemperature(472, 250) == 54 && CardSizing.SpotifyColumns(752) == 2, "The reference card sizes changed.");
+        check("Cards size their content: Quick Launch keeps six buttons that grow, Focus, cover and temperature grow", () => {
+            Assert(CardSizing.DeckGrid(1500, 114).SequenceEqual(new[] { 6, 1 }) && CardSizing.DeckGrid(246, 510).SequenceEqual(new[] { 1, 6 }) && CardSizing.DeckGrid(246, 114).SequenceEqual(new[] { 3, 2 }) && CardSizing.DeckGrid(902, 486, 40).SequenceEqual(new[] { 3, 2 }) && CardSizing.DeckGrid(430, 160, 4).SequenceEqual(new[] { 2, 2 }), "Six-button pages.");
+            Assert(CardSizing.SoundGrid(266, 116, 30).SequenceEqual(new[] { 3, 2 }) && CardSizing.SoundGrid(900, 90, 30).SequenceEqual(new[] { 6, 1 }) && CardSizing.SoundGrid(266, 500, 30).SequenceEqual(new[] { 1, 6 }) && CardSizing.SoundGrid(400, 200, 2)[0] * CardSizing.SoundGrid(400, 200, 2)[1] == 2, "Six-sound pages.");
+            Assert(CardSizing.DeckLabel(143, 80) == CardSizing.DeckLabelMode.Below && CardSizing.DeckLabel(126, 57) == CardSizing.DeckLabelMode.Beside && CardSizing.DeckLabel(82, 57) == CardSizing.DeckLabelMode.None, "Deck label placement.");
+            Assert(WidgetLayout.Minimum("Shortcuts", new Size(1000, 400)) == WidgetLayout.Minimum("Shortcuts") && WidgetLayout.Minimum("Soundboard", new Size(1000, 400)) == WidgetLayout.Minimum("Soundboard") && WidgetLayout.Minimum("Focus", new Size(1000, 400)).Height < WidgetLayout.Minimum("Focus").Height, "Six-button cards keep their minimum on a small canvas.");
+            Assert(CardSizing.DeckGrid(430, 160).SequenceEqual(new[] { 3, 2 }) && CardSizing.DeckGrid(378, 100).SequenceEqual(new[] { 3, 2 }) && CardSizing.FocusTime(320, 576) == 84 && CardSizing.MediaArt(472, 310) == 104 && CardSizing.WeatherTemperature(472, 250) == 54 && CardSizing.SpotifyColumns(752) == 2, "The reference card sizes changed.");
             string path = Path.Combine(directory, "card-sizing.xml");
             var s = new AppSettings { Shortcuts = Enumerable.Range(1, 20).Select(i => new Shortcut { Label = "B" + i, Action = "Website", Target = "https://example.com/" + i, Glyph = "\uE774" }).ToList() };
             s.WidgetLayout = WidgetLayout.SpotifyDefault(s);
@@ -234,7 +238,8 @@ internal static class ScreenSizeTests
             {
                 var dashboard = (FrameworkElement)window.FindName("Dashboard"); dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                 var grid = (System.Windows.Controls.Primitives.UniformGrid)window.FindName("ShortcutGrid");
-                Assert(grid.Columns * grid.Rows >= 20 && grid.Columns * grid.Rows < 24 && grid.Children.Count == 20, "A big Quick Launch card should hold more buttons: " + grid.Columns + " x " + grid.Rows);
+                Assert(grid.Columns == 3 && grid.Rows == 2 && grid.Children.Count == 6, "A big Quick Launch card should keep six bigger buttons: " + grid.Columns + " x " + grid.Rows);
+                foreach (System.Windows.Controls.Button button in grid.Children) Assert(button.ActualHeight > 200, "Six buttons should grow into a big card.");
                 foreach (System.Windows.Controls.Button button in grid.Children) Assert(button.ActualWidth >= 48 && button.ActualHeight >= 48, "A deck button is under 48.");
                 Assert(((System.Windows.Controls.TextBlock)window.FindName("FocusTime")).FontSize == 84, "Focus countdown on the reference card.");
             }

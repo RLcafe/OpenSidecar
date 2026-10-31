@@ -74,13 +74,13 @@ public final class QuickLaunchWidget extends Widget {
             return;
         }
         empty.setVisibility(View.GONE);
-        // As many buttons as the card holds, like the Soundboard (CardSizing, as on the PC): the card less its padding
-        // and header.
+        // Six buttons a page that grow with the card, like the Soundboard (CardSizing, as on the PC): the card less its
+        // padding and header.
         double areaWidth = Math.max(0, width - 42), areaHeight = Math.max(0, height - 90);
         int[] shape = CardSizing.deckGrid(areaWidth, areaHeight, buttons.size());
         int columns = shape[0], rows = shape[1];
-        boolean compact = rows == 1;
         double cellWidth = areaWidth / columns, cellHeight = areaHeight / rows;
+        int labelMode = CardSizing.deckLabel(cellWidth, cellHeight);
         int pageSize = columns * rows, pages = Math.max(1, (buttons.size() + pageSize - 1) / pageSize);
         page = Math.max(0, Math.min(pages - 1, page));
         pager.setVisibility(pages > 1 ? View.VISIBLE : View.GONE);
@@ -92,7 +92,7 @@ public final class QuickLaunchWidget extends Widget {
             LinearLayout row = ui.row();
             for (int c = 0; c < columns; c++) {
                 int index = page * pageSize + r * columns + c;
-                View cell = index < buttons.size() ? button(buttons.get(index), index, compact, cellWidth, cellHeight) : new View(ui.context);
+                View cell = index < buttons.size() ? button(buttons.get(index), index, labelMode, cellWidth, cellHeight) : new View(ui.context);
                 LinearLayout.LayoutParams params = ui.ll(0, Ui.MATCH, 1);
                 params.setMargins(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
                 row.addView(cell, params);
@@ -107,7 +107,8 @@ public final class QuickLaunchWidget extends Widget {
         return out.toString();
     }
 
-    private View button(final PcState.Button shortcut, final int index, boolean compact, double cellWidth, double cellHeight) {
+    private View button(final PcState.Button shortcut, final int index, int labelMode, double cellWidth, double cellHeight) {
+        boolean compact = labelMode == CardSizing.DECK_LABEL_BESIDE;
         double glyph = CardSizing.deckGlyph(cellHeight, compact);
         LinearLayout button = compact ? ui.row() : ui.column();
         button.setGravity(Gravity.CENTER);
@@ -120,7 +121,7 @@ public final class QuickLaunchWidget extends Widget {
         TextView name = ui.text(shortcut.label, (compact ? 14 : 15) * ui.textScale, ui.theme.text);
         name.setGravity(Gravity.CENTER);
         name.setMaxWidth(ui.px(Math.max(40, compact ? cellWidth - glyph - 40 : cellWidth - 24)));
-        button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
+        if (labelMode != CardSizing.DECK_LABEL_NONE) button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
         button.setContentDescription(shortcut.label + (shortcut.on ? ", on" : ""));
         button.setClickable(true);
         Ui.enable(button, shortcut.enabled);

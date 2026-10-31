@@ -74,10 +74,10 @@ namespace WidgetScreen
                 case "Focus": return new Size(280, 192);
                 case "Media": return new Size(312, 200);
                 case "Spotify": return new Size(360, 360);
-                case "Shortcuts": return new Size(200, 152);
+                case "Shortcuts": return new Size(288, 204);
                 case "Mixer": return new Size(320, 224);
                 case "System": return new Size(260, 280);
-                case "Soundboard": return new Size(240, 152);
+                case "Soundboard": return new Size(300, 240);
                 default: return new Size(232, 152);
             }
         }
@@ -93,9 +93,11 @@ namespace WidgetScreen
         }
         public static Size Minimum(string id, Size canvas)
         {
-            Size minimum = Minimum(id), k = Compact(canvas);
+            // Quick Launch and the Soundboard need their full minimum for six 48-unit buttons (CardSizing.PageButtons).
+            Size minimum = Minimum(id), k = KeepsSix(id) ? new Size(1, 1) : Compact(canvas);
             return new Size(Math.Min(canvas.Width, Math.Round(minimum.Width * k.Width)), Math.Min(canvas.Height, Math.Round(minimum.Height * k.Height)));
         }
+        public static bool KeepsSix(string id) { return id == "Shortcuts" || id == "Soundboard"; }
         // Layouts are kept per canvas size, rounded down to the 8-unit snap grid.
         public static Size Key(Size canvas) { return new Size(Math.Max(8, Math.Floor(canvas.Width / 8) * 8), Math.Max(8, Math.Floor(canvas.Height / 8) * 8)); }
         public static bool IsReference(Size canvas) { return Key(canvas) == Reference; }

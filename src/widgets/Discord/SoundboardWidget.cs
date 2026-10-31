@@ -13,7 +13,7 @@ namespace WidgetScreen
     // Voice channel changes arrive as Discord events; the widget only retries the connection while visible.
     public sealed class SoundboardWidget : IDisposable
     {
-        private const double ButtonWidth = 148, ButtonHeight = 56, Gap = 8;
+        private const double Gap = 8;
         private readonly Window window;
         private readonly DiscordService service;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
@@ -113,18 +113,18 @@ namespace WidgetScreen
             return error is InvalidOperationException ? error.Message : "Couldn't reach Discord. Retrying.";
         }
 
-        // Page size follows the widget: as many 148 × 56 buttons as fit.
-        public static int Capacity(double width, double height, out int columns, out int rows)
+        // Six sounds a page that grow with the widget (CardSizing.SoundGrid), fewer when there are fewer.
+        public static int Capacity(double width, double height, int count, out int columns, out int rows)
         {
-            columns = Math.Max(1, (int)Math.Floor((Math.Max(0, width) + Gap) / (ButtonWidth + Gap)));
-            rows = Math.Max(1, (int)Math.Floor((Math.Max(0, height) + Gap) / (ButtonHeight + Gap)));
+            int[] shape = CardSizing.SoundGrid(width, height, count);
+            columns = shape[0]; rows = shape[1];
             return columns * rows;
         }
         private void Build()
         {
             var grid = C<UniformGrid>("SoundboardGrid"); grid.Children.Clear();
             int columns, rows;
-            int size = Capacity(grid.ActualWidth, grid.ActualHeight, out columns, out rows);
+            int size = Capacity(grid.ActualWidth, grid.ActualHeight, sounds.Count, out columns, out rows);
             grid.Columns = columns; grid.Rows = rows;
             int pages = Math.Max(1, (sounds.Count + size - 1) / size);
             page = Math.Max(0, Math.Min(pages - 1, page));

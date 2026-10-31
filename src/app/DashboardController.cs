@@ -445,12 +445,12 @@ namespace WidgetScreen
         private void BuildShortcuts()
         {
             var grid = Control<System.Windows.Controls.Primitives.UniformGrid>("ShortcutGrid"); grid.Children.Clear(); deckStateButtons.Clear();
-            // As many buttons as the card holds, like the Soundboard (CardSizing.DeckGrid).
+            // Six buttons a page that grow with the card, like the Soundboard (CardSizing.DeckGrid).
             deckShape = DeckShape();
             var area = DeckArea(); int[] shape = CardSizing.DeckGrid(area.Width, area.Height, settings.Shortcuts.Count);
             int pageSize = shape[0] * shape[1];
-            bool beside = shape[1] == 1;
             double cellWidth = area.Width / shape[0], cellHeight = area.Height / shape[1];
+            var labelMode = CardSizing.DeckLabel(cellWidth, cellHeight); bool beside = labelMode == CardSizing.DeckLabelMode.Beside;
             int pages = Math.Max(1, (settings.Shortcuts.Count + pageSize - 1) / pageSize);
             deckPage = Math.Max(0, Math.Min(pages - 1, deckPage));
             grid.Columns = shape[0]; grid.Rows = shape[1];
@@ -464,7 +464,9 @@ namespace WidgetScreen
             Control<Button>("EmptyDeck").Visibility = settings.Shortcuts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             foreach (var shortcut in settings.Shortcuts.Skip(deckPage * pageSize).Take(pageSize))
             {
-                var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target) };
+                // A glyph-only button names itself in its tooltip.
+                string named = labelMode == CardSizing.DeckLabelMode.None ? shortcut.Label + Environment.NewLine : "";
+                var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = named + DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target) };
                 bool compact = beside; double glyphSize = CardSizing.DeckGlyph(cellHeight, beside);
                 var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Orientation = compact ? Orientation.Horizontal : Orientation.Vertical };
                 var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = glyphSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -473,9 +475,10 @@ namespace WidgetScreen
                 if (hex != null) { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); brush.Freeze(); glyph.Foreground = brush; } else glyph.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
                 content.Children.Add(glyph);
                 // A hotkey's tooltip names the app it would go to right now.
-                if (shortcut.Action == "Hotkey") { var hotkey = shortcut; button.ToolTipOpening += (sender, e) => button.ToolTip = DeckActions.DescribeWithTarget(hotkey, deckHotkeys.TargetName); }
+                if (shortcut.Action == "Hotkey") { var hotkey = shortcut; button.ToolTipOpening += (sender, e) => button.ToolTip = named + DeckActions.DescribeWithTarget(hotkey, deckHotkeys.TargetName); }
                 if (DeckActions.IsStateful(shortcut)) deckStateButtons.Add(new KeyValuePair<Button, Shortcut>(button, shortcut));
                 var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = Math.Max(40, compact ? cellWidth - glyphSize - 40 : cellWidth - 24), TextTrimming = TextTrimming.CharacterEllipsis };
+                if (labelMode == CardSizing.DeckLabelMode.None) name.Visibility = Visibility.Collapsed;
                 content.Children.Add(name); button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
             }
