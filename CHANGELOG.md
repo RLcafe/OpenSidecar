@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.17.0 (31 Oct 2026)
+
+Small, medium and large designs, starting with System stats and Weather (user request; Windows and the phone, the same sizes on both):
+
+- **Each card has three designs and switches between them as you resize it** in Edit layout. Your layouts open in the Medium design, which is the size they already had.
+- **System stats.** Small is a clean list: each reading's name and a large number, with a thin bar under CPU, GPU and RAM. Medium shows CPU, GPU and RAM as rings with the percentage inside, and the network rates and uptime in a strip below. Large gives each reading its own tile with a graph of the last minute and a half; network graphs download and upload together, and uptime moves to the heading.
+- **Weather.** Small is a glance: temperature and condition icon, city, today's high and low. Medium shows a large icon beside the temperature, the condition and city, and Feels, Wind and High / Low as three small tiles (plus the next three hours on a tall card). Large is a forecast with the next five hours in a strip.
+- A reading at 90% or more still turns to the warning colour. Nothing new is polled: the graphs use the readings the card already gets.
+- Not yet tried on a phone or emulator; the phone's designs build and their sizes are checked like the PC's.
+
 ## v0.16.0 (31 Oct 2026)
 
 Six buttons a page (user request; Windows and the phone, the same rules on both):
