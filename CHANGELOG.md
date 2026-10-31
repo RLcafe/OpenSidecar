@@ -6,6 +6,15 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.13.0 (31 Oct 2026)
+
+Keep the game focused (user request; Windows only, the phone is a separate device and never touches the PC's focus):
+
+- **Tapping the dashboard no longer takes the focus** from the game or app on your main screen. Buttons, sliders and dropdowns work as before; Windows just leaves the keyboard where it was.
+- **Text boxes still take the keyboard** (Spotify search, Settings fields), so you can type; click back into the game and the dashboard stops taking the focus again.
+- The window coming back from the tray when your phone disconnects, opening at sign-in, and a monitor being unplugged or replugged no longer grab the focus either.
+- **Settings → Display → Keep the focus on the game or app I'm using**, on by default. With it on, F11 and Escape reach the dashboard only after tapping a text box; turning it off brings back the old behavior.
+
 ## v0.12.0 (31 Oct 2026)
 
 A setup exe (user request; Windows only, the APK is already Android's installer):
