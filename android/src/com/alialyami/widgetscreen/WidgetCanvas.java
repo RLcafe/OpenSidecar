@@ -141,6 +141,20 @@ public final class WidgetCanvas extends ViewGroup {
         return editor.layer(id);
     }
 
+    // Alignment guides go above every card, the raised selected one included.
+    private final Paint guidePaint = new Paint();
+
+    @Override protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        if (!editor.editing() || editor.guides().isEmpty()) return;
+        guidePaint.setColor(ui.theme.accent);
+        float half = ui.fpx(1);
+        for (WidgetLayout.Guide g : editor.guides()) {
+            if (g.vertical) canvas.drawRect((float) g.at - half, (float) g.from, (float) g.at + half, (float) Math.max(g.to, g.from + 2 * half), guidePaint);
+            else canvas.drawRect((float) g.from, (float) g.at - half, (float) Math.max(g.to, g.from + 2 * half), (float) g.at + half, guidePaint);
+        }
+    }
+
     @Override protected int getChildDrawingOrder(int count, int i) {
         if (order.size() != count) return i;
         return indexOfChild(order.get(i));

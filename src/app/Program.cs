@@ -58,6 +58,8 @@ namespace WidgetScreen
                                     controller.Editor.TransformSelected("SE", 48, 24, false);
                                     controller.Editor.SetVisible("Media", false);
                                 }
+                                // Mid-drag: Quick launch a few units off its place under Now playing, held there by the alignment guides.
+                                if (args.Contains("--render-edit-guides")) controller.Editor.Drag("Shortcuts", "", 5, -4, false);
                                 if (args.Contains("--render-edit-panel")) controller.OpenEditPanel();
                             }
                             if (args.Contains("--render-settings"))

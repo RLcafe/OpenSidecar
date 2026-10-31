@@ -179,6 +179,46 @@ public final class AndroidTests {
             ok(WidgetLayout.transform("Focus", start, "NW", -1000, -1000, false).equals(new Box(0, 0, 500, 420)), "grow to edge");
             ok(WidgetLayout.transform("Focus", start, "NE", Double.NaN, 0, false) == start, "NaN");
         } });
+        check("Snapping to other widgets matches Windows, with guides", new Action() { public void run() {
+            List<WidgetLayout.Guide> guides = new ArrayList<WidgetLayout.Guide>();
+            List<Box> other = java.util.Arrays.asList(new Box(705, 0, 400, 300));
+            Box moved = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "", 385, 3, other, 1856, 576, guides);
+            ok(moved.equals(new Box(389, 0, 300, 300)), "gap " + moved);
+            boolean gapGuide = false;
+            for (WidgetLayout.Guide g : guides) if (g.vertical && g.at == 697 && g.from == 0 && g.to == 300) gapGuide = true;
+            ok(gapGuide, "gap guide");
+            Box far = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "", 357, 3, other, 1856, 576, guides);
+            ok(far.x == 360, "grid when out of reach " + far);
+            Box centred = WidgetLayout.align("Focus", new Box(0, 400, 300, 176), "", 645, 0, java.util.Arrays.asList(new Box(600, 0, 400, 300)), 1856, 576, guides);
+            ok(centred.x == 650, "centre " + centred);
+            Box resized = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "SE", 95, 30, java.util.Arrays.asList(new Box(0, 341, 400, 200)), 1856, 576, guides);
+            ok(resized.equals(new Box(0, 0, 400, 325)), "resize " + resized);
+            Box squeezed = WidgetLayout.align("Focus", new Box(0, 0, 400, 400), "SE", -98, 0, java.util.Arrays.asList(new Box(0, 420, 290, 100)), 1856, 576, guides);
+            ok(squeezed.width == 296, "minimum " + squeezed);
+            Box still = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "", 0, 0, other, 1856, 576, guides);
+            ok(still.equals(new Box(0, 0, 300, 300)) && guides.isEmpty(), "no drag");
+        } });
+        check("Arrange keeps the reading order and tidies without overlaps", new Action() { public void run() {
+            List<Placement> columns = java.util.Arrays.asList(new Placement("Focus", 0, 0, 320, 576, true), new Placement("Shortcuts", 344, 330, 460, 246, true),
+                new Placement("Media", 336, 0, 472, 310, true), new Placement("Mixer", 830, 20, 456, 500, true));
+            ok(WidgetLayout.arrangeOrder(columns, 1856, 576).equals(java.util.Arrays.asList("Focus", "Media", "Shortcuts", "Mixer")), "columns " + WidgetLayout.arrangeOrder(columns, 1856, 576));
+            List<Placement> rows = java.util.Arrays.asList(new Placement("Mixer", 0, 700, 600, 500, true), new Placement("Media", 340, 10, 300, 320, true), new Placement("Focus", 0, 0, 320, 320, true));
+            ok(WidgetLayout.arrangeOrder(rows, 656, 1712).equals(java.util.Arrays.asList("Focus", "Media", "Mixer")), "rows");
+            double[][] sizes = { { 1856, 576 }, { 2496, 576 }, { 1216, 680 }, { 656, 1712 } };
+            for (double[] size : sizes) {
+                Placement[] start = WidgetLayout.defaults(size[0], size[1]);
+                List<String> shown = java.util.Arrays.asList("Focus", "Media", "Shortcuts", "Mixer", "System", "Weather");
+                Placement[] tidy = WidgetLayout.tidy(start, shown, size[0], size[1]);
+                List<Placement> visible = new ArrayList<Placement>();
+                for (Placement p : tidy) if (shown.contains(p.id)) { Placement q = p.copy(); q.visible = true; visible.add(q); }
+                ok(!overlaps(visible.toArray(new Placement[0])), "overlap on " + size[0] + "x" + size[1]);
+                for (Placement p : tidy) {
+                    ok(p.x >= 0 && p.y >= 0 && p.x + p.width <= size[0] && p.y + p.height <= size[1], "inside " + p.id);
+                    if (!shown.contains(p.id)) ok(p.bounds().equals(WidgetLayout.find(start, p.id).bounds()), "hidden kept " + p.id);
+                    ok(p.visible == WidgetLayout.find(start, p.id).visible, "shown set kept");
+                }
+            }
+        } });
 
         check("Clock, focus and readings use the Windows formats", new Action() { public void run() {
             LocalDateTime t = LocalDateTime.of(2026, 10, 8, 14, 5);

@@ -462,6 +462,145 @@ namespace WidgetScreen
             return sizes;
         }
 
+        // Shown widgets in the order Arrange keeps them (docs/design/organize-widgets.md): on a wide canvas column by
+        // column, left to right and each column top to bottom; on an upright one row by row. A widget whose centre falls
+        // inside the span of the first widget of the current column (or row) joins it.
+        public static string[] ArrangeOrder(IEnumerable<WidgetPlacement> shown, Size canvas)
+        {
+            bool rows = canvas.Height > canvas.Width;
+            Func<Rect, double> low = r => rows ? r.Top : r.Left, high = r => rows ? r.Bottom : r.Right, along = r => rows ? r.Left : r.Top;
+            var groups = new List<List<WidgetPlacement>>(); double start = 0, end = 0;
+            foreach (var p in shown.Where(p => p != null).OrderBy(p => low(p.Bounds) + high(p.Bounds)))
+            {
+                double middle = (low(p.Bounds) + high(p.Bounds)) / 2;
+                if (groups.Count > 0 && middle >= start && middle <= end) groups[groups.Count - 1].Add(p);
+                else { groups.Add(new List<WidgetPlacement> { p }); start = low(p.Bounds); end = high(p.Bounds); }
+            }
+            return groups.SelectMany(g => g.OrderBy(p => along(p.Bounds))).Select(p => p.Id).ToArray();
+        }
+        // The layout with its shown widgets arranged neatly in their current order (Arrange). Hidden widgets keep their
+        // places, and layers reset because nothing overlaps any more. Widgets too many to fit at their minimums keep
+        // them and stay on the canvas, overlapping.
+        public static WidgetPlacement[] Tidy(WidgetPlacement[] layout, IList<string> shown, Size canvas)
+        {
+            var arranged = Arrange(canvas, shown);
+            return layout.Select(p => {
+                var q = p.Copy();
+                if (!shown.Contains(p.Id)) return q;
+                var r = arranged.First(a => a.Id == p.Id).Bounds;
+                q.Width = Math.Min(canvas.Width, r.Width); q.Height = Math.Min(canvas.Height, r.Height);
+                q.X = Math.Max(0, Math.Min(canvas.Width - q.Width, r.X)); q.Y = Math.Max(0, Math.Min(canvas.Height - q.Height, r.Y));
+                q.Layer = 0;
+                return q;
+            }).ToArray();
+        }
+
+        // ----- Snapping to other widgets (docs/design/organize-widgets.md) -----
+
+        // How close, in canvas units, an edge has to come to a target to snap to it.
+        public const double AlignDistance = 12;
+        // A guide line drawn while an edge sits on a target: vertical lines at X = At from Y = From to To, horizontal
+        // lines at Y = At from X = From to To.
+        public struct Guide
+        {
+            public bool Vertical; public double At, From, To;
+            public Guide(bool vertical, double at, double from, double to) { Vertical = vertical; At = at; From = from; To = to; }
+        }
+        // Where an edge can snap along one axis: a leading edge (left or top) to the canvas edge, another widget's leading
+        // edge or one gap after its trailing edge; a trailing edge likewise; a centre to another widget's centre.
+        private static IEnumerable<double> Targets(int kind, IEnumerable<Tuple<double, double>> others, double length)
+        {
+            if (kind == 0) yield return 0;
+            if (kind == 1) yield return length;
+            foreach (var o in others)
+            {
+                if (kind == 0) { yield return o.Item1; yield return o.Item2 + Gap; }
+                else if (kind == 1) { yield return o.Item2; yield return o.Item1 - Gap; }
+                else yield return (o.Item1 + o.Item2) / 2;
+            }
+        }
+        // The shift that puts the nearest of the given edges (kinds 0 leading, 1 trailing, 2 centre) on a target within
+        // AlignDistance, or null.
+        private static double? Shift(double[] edges, int[] kinds, IEnumerable<Tuple<double, double>> others, double length)
+        {
+            double? best = null;
+            for (int i = 0; i < edges.Length; i++)
+                foreach (double target in Targets(kinds[i], others, length))
+                {
+                    double shift = target - edges[i];
+                    if (Math.Abs(shift) <= AlignDistance && (best == null || Math.Abs(shift) < Math.Abs(best.Value))) best = shift;
+                }
+            return best;
+        }
+        // Transform with snapping on: the edges that move snap to other shown widgets (lined up with an edge, one gap
+        // beside it, or centred on it, for moves) and to the canvas edges when they come within AlignDistance; an axis
+        // that finds no target follows the 8-unit grid. Guides lists the lines to draw for the result.
+        public static Rect Align(string id, Rect start, string corner, double dx, double dy, IList<Rect> others, Size canvas, List<Guide> guides)
+        {
+            guides.Clear();
+            Rect free = Transform(id, start, corner, dx, dy, false, canvas), grid = Transform(id, start, corner, dx, dy, true, canvas);
+            if (free == start) return start;
+            var xs = others.Select(o => Tuple.Create(o.Left, o.Right)).ToArray(); var ys = others.Select(o => Tuple.Create(o.Top, o.Bottom)).ToArray();
+            Rect result;
+            if (String.IsNullOrEmpty(corner))
+            {
+                double? sx = Shift(new[] { free.Left, free.Right, free.Left + free.Width / 2 }, new[] { 0, 1, 2 }, xs, canvas.Width);
+                double? sy = Shift(new[] { free.Top, free.Bottom, free.Top + free.Height / 2 }, new[] { 0, 1, 2 }, ys, canvas.Height);
+                double x = sx == null ? grid.X : free.X + sx.Value, y = sy == null ? grid.Y : free.Y + sy.Value;
+                result = new Rect(Math.Max(0, Math.Min(canvas.Width - free.Width, x)), Math.Max(0, Math.Min(canvas.Height - free.Height, y)), free.Width, free.Height);
+            }
+            else
+            {
+                var minimum = Minimum(id, canvas);
+                double left = grid.Left, right = grid.Right, top = grid.Top, bottom = grid.Bottom; double? s;
+                if (corner.Contains("W") && (s = Shift(new[] { free.Left }, new[] { 0 }, xs, canvas.Width)) != null) left = free.Left + s.Value;
+                if (corner.Contains("E") && (s = Shift(new[] { free.Right }, new[] { 1 }, xs, canvas.Width)) != null) right = free.Right + s.Value;
+                if (corner.Contains("N") && (s = Shift(new[] { free.Top }, new[] { 0 }, ys, canvas.Height)) != null) top = free.Top + s.Value;
+                if (corner.Contains("S") && (s = Shift(new[] { free.Bottom }, new[] { 1 }, ys, canvas.Height)) != null) bottom = free.Bottom + s.Value;
+                if (corner.Contains("W")) left = Math.Max(0, Math.Min(right - minimum.Width, left));
+                if (corner.Contains("E")) right = Math.Min(canvas.Width, Math.Max(left + minimum.Width, right));
+                if (corner.Contains("N")) top = Math.Max(0, Math.Min(bottom - minimum.Height, top));
+                if (corner.Contains("S")) bottom = Math.Min(canvas.Height, Math.Max(top + minimum.Height, bottom));
+                result = new Rect(left, top, right - left, bottom - top);
+            }
+            bool move = String.IsNullOrEmpty(corner);
+            Func<double, double, bool> on = (a, b) => Math.Abs(a - b) < 0.5;
+            foreach (var o in others)
+            {
+                double fromY = Math.Min(o.Top, result.Top), toY = Math.Max(o.Bottom, result.Bottom), fromX = Math.Min(o.Left, result.Left), toX = Math.Max(o.Right, result.Right);
+                if (move || corner.Contains("W"))
+                {
+                    if (on(result.Left, o.Left) || on(result.Left, o.Right)) AddGuide(guides, new Guide(true, result.Left, fromY, toY));
+                    if (on(result.Left, o.Right + Gap)) AddGuide(guides, new Guide(true, o.Right + Gap / 2, fromY, toY));
+                }
+                if (move || corner.Contains("E"))
+                {
+                    if (on(result.Right, o.Right) || on(result.Right, o.Left)) AddGuide(guides, new Guide(true, result.Right, fromY, toY));
+                    if (on(result.Right, o.Left - Gap)) AddGuide(guides, new Guide(true, o.Left - Gap / 2, fromY, toY));
+                }
+                if (move || corner.Contains("N"))
+                {
+                    if (on(result.Top, o.Top) || on(result.Top, o.Bottom)) AddGuide(guides, new Guide(false, result.Top, fromX, toX));
+                    if (on(result.Top, o.Bottom + Gap)) AddGuide(guides, new Guide(false, o.Bottom + Gap / 2, fromX, toX));
+                }
+                if (move || corner.Contains("S"))
+                {
+                    if (on(result.Bottom, o.Bottom) || on(result.Bottom, o.Top)) AddGuide(guides, new Guide(false, result.Bottom, fromX, toX));
+                    if (on(result.Bottom, o.Top - Gap)) AddGuide(guides, new Guide(false, o.Top - Gap / 2, fromX, toX));
+                }
+                if (move && on(result.Left + result.Width / 2, o.Left + o.Width / 2)) AddGuide(guides, new Guide(true, result.Left + result.Width / 2, fromY, toY));
+                if (move && on(result.Top + result.Height / 2, o.Top + o.Height / 2)) AddGuide(guides, new Guide(false, result.Top + result.Height / 2, fromX, toX));
+            }
+            return result;
+        }
+        // One line per position: guides that share a line merge their spans.
+        private static void AddGuide(List<Guide> guides, Guide guide)
+        {
+            int i = guides.FindIndex(g => g.Vertical == guide.Vertical && Math.Abs(g.At - guide.At) < 0.5);
+            if (i < 0) { guides.Add(guide); return; }
+            guides[i] = new Guide(guide.Vertical, guides[i].At, Math.Min(guides[i].From, guide.From), Math.Max(guides[i].To, guide.To));
+        }
+
         private static double Snap(double value, bool enabled) { return enabled ? Math.Round(value / 8) * 8 : value; }
         public static Rect Transform(string id, Rect start, string corner, double dx, double dy, bool snap) { return Transform(id, start, corner, dx, dy, snap, Reference); }
         public static Rect Transform(string id, Rect start, string corner, double dx, double dy, bool snap, Size canvas)
