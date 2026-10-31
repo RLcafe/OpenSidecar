@@ -34,6 +34,9 @@ try {
                 Copy-Item -LiteralPath (Join-Path $buildCheckout 'artifacts\android\WidgetScreen.apk') -Destination $releasePath
             } catch { Write-Warning "The Android app was not built for this release: $($_.Exception.Message)" }
         }
+        # The setup exe (tags from v0.12.0 on) installs this release with Start menu and startup shortcuts.
+        $packageScript = Join-Path $buildCheckout 'scripts\package.ps1'
+        if (Test-Path -LiteralPath $packageScript) { & $packageScript -SourceDirectory $releasePath -OutputDirectory $releasePath -Version $Version -Test }
     } finally {
         git worktree remove --force $buildCheckout
         git worktree prune
@@ -45,6 +48,7 @@ try {
     "Commit: $commit"
     "Built: $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
     'Settings: %LOCALAPPDATA%\WidgetScreen\settings.xml (shared with every build)'
+    $(if (Test-Path -LiteralPath (Join-Path $releasePath "WidgetScreen-Setup-$Version.exe")) { "Setup: WidgetScreen-Setup-$Version.exe installs it for you, with Start menu and startup shortcuts and an uninstaller (docs\design\setup.md)" })
     $(if (Test-Path -LiteralPath (Join-Path $releasePath 'WidgetScreen.apk')) { 'Android: WidgetScreen.apk, to install on a phone or tablet (docs\design\android-app.md)' })
 ) | Set-Content -LiteralPath (Join-Path $releasePath 'release.txt') -Encoding utf8
 Write-Output "Release: $releasePath\WidgetScreen.exe"

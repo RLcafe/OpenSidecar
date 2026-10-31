@@ -6,10 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/phone-native` was merged as v0.11.0.
-eadable-small-screens` | `.worktrees
-eadable-small-screensrtifactspp\WidgetScreen.exe`, `.worktrees
-eadable-small-screensrtifactsndroid\WidgetScreen.apk` |
+| `feature/setup-installer` | A setup exe that installs Widget Screen for the user with Start menu and Startup shortcuts, an Installed apps entry and an uninstaller | `aa77c2a` (v0.11.0) | In progress | `.worktrees\setup-installer` | `.worktrees\setup-installer\artifacts\setup\WidgetScreen-Setup-v0.11.0-dirty.exe` (no Android change) |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
@@ -44,7 +41,7 @@ None yet.
 
 ## Releases
 
-The copy you actually use lives in `releases\vX.Y.Z\` inside this folder (git-ignored), never in `artifacts\` and never next to `Widget screen`. Each release folder is self-contained: `WidgetScreen.exe`, `WidgetScreen.exe.config`, `WidgetScreen.apk` (from v0.4.0, when the Android SDK is installed) and a `release.txt` naming the version and commit. Settings and the Spotify session stay in `%LOCALAPPDATA%\WidgetScreen\`, so every build shares them.
+The copy you actually use lives in `releases\vX.Y.Z\` inside this folder (git-ignored), never in `artifacts\` and never next to `Widget screen`. Each release folder is self-contained: `WidgetScreen.exe`, `WidgetScreen.exe.config`, `WidgetScreen.apk` (from v0.4.0, when the Android SDK is installed), `WidgetScreen-Setup-vX.Y.Z.exe` (from v0.12.0) and a `release.txt` naming the version and commit. Settings and the Spotify session stay in `%LOCALAPPDATA%\WidgetScreen\`, so every build shares them.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -UpdateShortcut
@@ -52,6 +49,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -U
 
 - With no `-Version`, it builds the newest `vX.Y.Z` tag on `main`. It checks the tag out into a temporary `.worktrees\release-vX.Y.Z`, runs `build.ps1 -Test` there, copies the app into `releases\vX.Y.Z\` and removes the checkout, so uncommitted or later work never ends up in a release.
 - `-UpdateShortcut` points the desktop "Widget Screen" shortcut at the new release. `-Force` rebuilds a release folder that already exists (close the app first).
+- `release.ps1` also runs `scripts\package.ps1` in the tag's checkout, which packs the app into `WidgetScreen-Setup-vX.Y.Z.exe` and runs the sandboxed setup checks (`tests\Installer\installer-checks.ps1`). Running that setup on the PC installs or updates the copy that starts with Windows (see `docs\design\setup.md`); the desktop shortcut still opens the release folder.
 - Keep older release folders until the new one has been used for a while, then delete them by hand.
 
 ## Versions

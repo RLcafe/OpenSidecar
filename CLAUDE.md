@@ -2,7 +2,7 @@
 
 A personal dashboard for a Windows PC's secondary touchscreen (the owner's is **1920 × 720**; other sizes work too): clock, focus timer, Windows Now Playing, Quick Launch deck, sound mixer, Spotify, and optional System stats and Weather. It should stay glanceable and light on resources while the user works or plays games.
 
-**Stack:** native **WPF on .NET Framework 4.8, x64**, C#, built directly with the Framework's `csc.exe`. No `.csproj`, no NuGet packages, no WebView, no browser frontend, no companion server, no installer.
+**Stack:** native **WPF on .NET Framework 4.8, x64**, C#, built directly with the Framework's `csc.exe`. No `.csproj`, no NuGet packages, no WebView, no browser frontend, no companion server. The one installer is the project's own setup exe (`installer/`, decision 012), built with the same `csc.exe`.
 
 **Android version** (since 20 Oct 2026): a native Android app in `android/` (Java, framework views only, minSdk 26) built straight from the Android SDK tools by `scripts\build-android.ps1` into an installable `WidgetScreen.apk`. No Gradle, no AndroidX or other libraries, no WebView. Since 21 Oct 2026 it is a **remote for the PC**: it mirrors the PC's dashboard and controls the PC over home Wi-Fi through the phone link in the Windows app (Settings → Phone). See `docs/decisions/007-android-app.md`, `docs/decisions/008-phone-remote.md` and `docs/design/android-app.md`.
 
@@ -51,8 +51,9 @@ Widget screen/
 │   ├── widgets/           Widget presentation and interactions (Spotify/ subfolder)
 │   └── integrations/      Windows APIs, devices, external services (Spotify/ subfolder)
 ├── assets/                WidgetScreen.ico, the exe and window logo (drawn by scripts\make-icon.ps1)
-├── tests/                 Automated checks and manual procedures (QuickLaunch/, Spotify/)
-├── scripts/               build.ps1, build-android.ps1, run.ps1, release.ps1, make-icon.ps1, export-design-reference.ps1
+├── installer/             Setup exe source (Installer.cs, Setup.cs, setup.manifest), packed by scripts\package.ps1
+├── tests/                 Automated checks and manual procedures (QuickLaunch/, Spotify/, Installer/)
+├── scripts/               build.ps1, build-android.ps1, package.ps1, run.ps1, release.ps1, make-icon.ps1, export-design-reference.ps1
 ├── artifacts/             Build output (git-ignored, created by the build)
 ├── releases/              Self-contained release copies, releases\vX.Y.Z (git-ignored)
 └── .worktrees/            One git worktree per branch (git-ignored)
@@ -129,6 +130,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-android.
 - Readable text on small screens (audit, 22 Oct 2026): text size goes up to 140% on both apps; on Windows a screen smaller than 1920 × 720 on a high-DPI system raises the compact floor with the display scaling and lets the canvas shrink to 60% (`ScreenFit.For(..., minCanvas)`, `DashboardController.Screen.FitScreen`); a screen at least the reference size is never changed by scaling, and the phone keeps its 80% canvas. See `docs/design/any-screen-size.md`.
 - Quick Launch polish (audit, 22 Oct 2026): each button may have its own accent colour (`Shortcut.Color`); Mute, Microphone, Focus and Quiet buttons show their state with the selected look (`DeckStateOn`, sent to the phone as `on`); the Settings list reorders by drag (`DeckEditor.Reorder`); hotkey buttons name the app they'd go to (`DeckHotkeys.TargetName`). See `docs/design/quick-launch-polish.md`.
 - Phone-native polish (audit, 22 Oct 2026, Android only): an offline card tops the upright list while the PC is away; a firewall hint follows a failed first reading after pairing; Edit layout shows a drag readout and has Move/Size nudge arrows (`LayoutEditor.nudgeSelected`); keep-screen-on is Always/While charging/Never (`AppSettings.keepScreenOn`, charging from `ACTION_BATTERY_CHANGED`); every button taps (`Ui.haptic`); Android 13+ Back uses `OnBackInvokedCallback`. QR pairing was not done: decoding a QR needs a library. See `docs/design/phone-native.md`.
+- Setup exe (user request, 31 Oct 2026, Windows only): `WidgetScreen-Setup-vX.Y.Z.exe` in every release installs for the signed-in user in `%LOCALAPPDATA%\Programs\Widget Screen` (no admin rights), with a Start menu shortcut, a Startup shortcut (checkbox, on by default) and an Installed apps entry whose uninstaller keeps settings unless asked. Built by `scripts\package.ps1` from `installer/` with `csc.exe`; no WiX, Inno Setup or MSIX. Its checks run with `--root` in a temporary folder and never touch the real Start menu, Startup folder, Installed apps or settings. The Android app needs no installer (the APK installs and uninstalls through Android). See `docs/decisions/012-setup-exe.md` and `docs/design/setup.md`.
 - Discord soundboard (user request, 20 Oct 2026): a Soundboard widget, hidden by default, plays sounds as the user in their current voice channel through the Discord desktop app's local RPC pipe, using the user's own Discord app (Client ID and Secret in Settings → Discord, encrypted in `discord-session.dat`). The Discord tab is the last one, after Phone. No bot and no user token. See `docs/decisions/006-discord-soundboard.md`.
 
 **Still open:** whether controls must work during exclusive-fullscreen games. Physical touch, on-screen keyboard, monitor unplug and replug, and live Spotify account actions are still unverified on real hardware.
