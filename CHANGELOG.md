@@ -6,6 +6,15 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.16.0 (31 Oct 2026)
+
+Six buttons a page (user request; Windows and the phone, the same rules on both):
+
+- **Quick Launch and the Soundboard always show six buttons**, whatever size the card is. Small cards no longer drop to one or two buttons with lots of pages, and big cards no longer fill up with many small buttons: the six buttons grow with the card instead.
+- The six sit 3 × 2, 2 × 3, in one row or in one column, whichever suits the card's shape while keeping every button at full touch size. With fewer than six buttons or sounds, they fill the card.
+- On the smallest Quick Launch cards the buttons show just their icon; the name is in the tooltip. Wider cards put the name beside the icon, taller ones under it.
+- The smallest sizes went up to fit six buttons: Quick Launch 288 × 204 and the Soundboard 300 × 240, also on small screens. A saved card smaller than that grows to the new minimum.
+
 ## v0.15.0 (31 Oct 2026)
 
 Much more resizable widgets (user request, designed with the Impeccable skill; Windows and the phone, the same rules on both):

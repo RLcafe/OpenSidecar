@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/six-buttons` | Quick Launch and the Soundboard always show six buttons a page, at any card size, with minimum sizes that fit them (Windows and phone) | `d007e90` (v0.15.0) | In progress | `.worktrees\six-buttons` | `.worktrees\six-buttonsrtifactspp\WidgetScreen.exe`, `.worktrees\six-buttonsrtifactsndroid\WidgetScreen.apk` |
+None right now. `feature/six-buttons` was merged as v0.16.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
