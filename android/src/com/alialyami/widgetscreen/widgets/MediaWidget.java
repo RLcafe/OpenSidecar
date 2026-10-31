@@ -40,6 +40,8 @@ public final class MediaWidget extends Widget {
 
     @Override protected View create() {
         volumePanel = null;
+        // A short card is one row of cover and song over the buttons; a narrow one draws the buttons closer (as on the PC).
+        boolean folded = CardSizing.mediaShort(height), narrow = CardSizing.mediaNarrow(width);
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
         header.addView(ui.label("NOW PLAYING"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -50,24 +52,24 @@ public final class MediaWidget extends Widget {
 
         LinearLayout content = ui.row();
         FrameLayout cover = new FrameLayout(ui.context);
-        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, 14));
+        // The cover grows with the card (CardSizing, as on the PC).
+        double size = CardSizing.mediaArt(width, height);
+        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, size < 80 ? 10 : 14));
         cover.setClipToOutline(true);
-        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx(46)), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx((float) Math.round(Math.min(46, size * 0.44)))), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         art = new ImageView(ui.context);
         art.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        // The cover grows with the card (CardSizing, as on the PC).
-        double size = CardSizing.mediaArt(width, height);
         content.addView(cover, ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
         LinearLayout text = ui.column();
         // One line for the title, as on the PC; the whole name is in the content description.
         title = Ui.wrap(ui.heading("Nothing playing"), 1);
         title.setTypeface(Ui.MEDIUM);
         text.addView(title, ui.ll(Ui.MATCH, Ui.WRAP));
-        artist = Ui.wrap(ui.smallText(""), 2);
-        text.addView(artist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
+        artist = Ui.wrap(ui.smallText(""), folded ? 1 : 2);
+        text.addView(artist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, folded ? 2 : 8, 0, 0));
         content.addView(text, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
-        column.addView(content, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 12, 0, 4));
+        column.addView(content, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, folded ? 8 : 12, 0, 4));
 
         LinearLayout timeline = ui.row();
         position = Ui.tabular(ui.smallText("—:—"));
@@ -87,20 +89,21 @@ public final class MediaWidget extends Widget {
         duration = Ui.tabular(ui.smallText("—:—"));
         duration.setGravity(Gravity.END);
         timeline.addView(duration, ui.ll(ui.px(60), Ui.WRAP));
-        column.addView(timeline, ui.ll(Ui.MATCH, ui.px(48)));
+        if (!folded) column.addView(timeline, ui.ll(Ui.MATCH, ui.px(48)));
 
         FrameLayout controlsRow = new FrameLayout(ui.context);
         LinearLayout controls = ui.row();
         controls.setGravity(Gravity.CENTER);
+        int side = narrow ? 48 : 56, gap = narrow ? 4 : 14;
         previous = ui.iconButton("previous", "Previous track", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "media.previous")); } });
-        controls.addView(previous, ui.margins(ui.ll(ui.px(56), ui.px(48)), 0, 0, 14, 0));
+        controls.addView(previous, ui.margins(ui.ll(ui.px(side), ui.px(48)), 0, 0, gap, 0));
         play = new GlyphView(ui.context, "play", Theme.ON_ACCENT, ui.fpx(23));
         play.setBackground(ui.pressable(ui.theme.accent, 0, 0, 12));
         play.setClickable(true);
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "media.toggle")); } });
-        controls.addView(play, ui.ll(ui.px(76), ui.px(48)));
+        controls.addView(play, ui.ll(ui.px(narrow ? 56 : 76), ui.px(48)));
         next = ui.iconButton("next", "Next track", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "media.next")); } });
-        controls.addView(next, ui.margins(ui.ll(ui.px(56), ui.px(48)), 14, 0, 0, 0));
+        controls.addView(next, ui.margins(ui.ll(ui.px(side), ui.px(48)), gap, 0, 0, 0));
         controlsRow.addView(controls, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER));
         // The playing app's volume, one tap away: opens a small panel with that app's mixer slider.
         volumeButton = ui.iconButton("volume", "Volume of the playing app", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { openVolume(); } });
@@ -108,7 +111,7 @@ public final class MediaWidget extends Widget {
         column.addView(controlsRow, ui.ll(Ui.MATCH, ui.px(54)));
 
         hint = ui.smallText("");
-        column.addView(hint, ui.ll(Ui.MATCH, ui.px(26)));
+        if (!folded) column.addView(hint, ui.ll(Ui.MATCH, ui.px(26)));
         root = ui.card(column, 24);
         return root;
     }

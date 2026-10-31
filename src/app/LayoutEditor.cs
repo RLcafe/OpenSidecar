@@ -16,6 +16,7 @@ namespace WidgetScreen
         private readonly Dictionary<string, Border> cards = new Dictionary<string, Border>();
         private readonly Dictionary<string, Grid> chrome = new Dictionary<string, Grid>();
         private readonly Dictionary<string, Border> outlines = new Dictionary<string, Border>();
+        private readonly List<Border> edges = new List<Border>();
         // Alignment guides shown while a drag sits on another widget's edge (WidgetLayout.Align), drawn above the cards.
         private readonly List<WidgetLayout.Guide> guides = new List<WidgetLayout.Guide>();
         private readonly List<Border> guideLines = new List<Border>();
@@ -67,17 +68,20 @@ namespace WidgetScreen
             var outline = new Border { BorderThickness = new Thickness(1), IsHitTestVisible = false };
             outline.SetResourceReference(Border.BorderBrushProperty, "Muted"); outline.SetResourceReference(Border.CornerRadiusProperty, "CardRadius");
             outlines[id] = outline; overlay.Children.Add(outline);
-            foreach (string corner in new[] { "NW", "NE", "SW", "SE" })
+            // Four corner grips resize both ways; four edge grips (a bar along the side) resize one way only.
+            foreach (string corner in new[] { "NW", "NE", "SW", "SE", "N", "S", "W", "E" })
             {
+                bool edge = corner.Length == 1, across = corner == "N" || corner == "S";
                 var hit = new Border { Width = 48, Height = 48, Background = Brushes.Transparent, Tag = corner,
-                    HorizontalAlignment = corner.Contains("W") ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-                    VerticalAlignment = corner.Contains("N") ? VerticalAlignment.Top : VerticalAlignment.Bottom,
-                    Cursor = corner == "NW" || corner == "SE" ? Cursors.SizeNWSE : Cursors.SizeNESW,
+                    HorizontalAlignment = across ? HorizontalAlignment.Center : corner.Contains("W") ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                    VerticalAlignment = edge && !across ? VerticalAlignment.Center : corner.Contains("N") ? VerticalAlignment.Top : VerticalAlignment.Bottom,
+                    Cursor = edge ? (across ? Cursors.SizeNS : Cursors.SizeWE) : corner == "NW" || corner == "SE" ? Cursors.SizeNWSE : Cursors.SizeNESW,
                     ToolTip = "Drag to resize " + WidgetLayout.Title(id) };
-                var grip = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(2) };
+                var grip = new Border { Width = edge ? (across ? 28 : 8) : 16, Height = edge ? (across ? 8 : 28) : 16, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(2) };
                 grip.SetResourceReference(Border.BackgroundProperty, "Accent"); grip.SetResourceReference(Border.BorderBrushProperty, "Page");
                 hit.Child = grip; overlay.Children.Add(hit);
-                AutomationProperties.SetName(hit, "Resize " + WidgetLayout.Title(id) + " " + corner + " corner");
+                if (edge) edges.Add(hit);
+                AutomationProperties.SetName(hit, "Resize " + WidgetLayout.Title(id) + (edge ? " " + EdgeName(corner) + " edge" : " " + corner + " corner"));
             }
             // Coordinates come from the design canvas, so pointer motion remains correct inside the scaled Viewbox.
             overlay.PreviewMouseLeftButtonDown += (sender, e) => {
@@ -109,6 +113,18 @@ namespace WidgetScreen
             };
             overlay.LostTouchCapture += (sender, e) => { if (!endingGesture && gestureTouch == e.TouchDevice) EndGesture(); };
             return overlay;
+        }
+
+        private static string EdgeName(string edge) { return edge == "N" ? "top" : edge == "S" ? "bottom" : edge == "W" ? "left" : "right"; }
+        // An edge grip shows only when its side is long enough to keep it clear of both corner grips.
+        public const double EdgeGripSide = 168;
+        private void ShowEdges(string id, Rect bounds)
+        {
+            foreach (var hit in edges.Where(h => h.Parent == chrome[id]))
+            {
+                string edge = (string)hit.Tag;
+                hit.Visibility = (edge == "N" || edge == "S" ? bounds.Width : bounds.Height) >= EdgeGripSide ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         private static string FindCorner(object source)
@@ -286,6 +302,7 @@ namespace WidgetScreen
                 chrome[p.Id].Visibility = Editing ? Visibility.Visible : Visibility.Collapsed;
                 outlines[p.Id].BorderThickness = new Thickness(p.Id == SelectedId ? 2 : 1);
                 outlines[p.Id].SetResourceReference(Border.BorderBrushProperty, p.Id == SelectedId ? "Accent" : "Muted");
+                if (Editing) ShowEdges(p.Id, p.Bounds);
             }
             DrawGuides();
             if (Changed != null) Changed();

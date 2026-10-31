@@ -55,16 +55,18 @@ public final class WidgetLayout {
         }
     }
 
+    // The smallest each card can be while it keeps its main reading and controls at full size (CardSizing folds the
+    // rest away; docs/design/resizable-widgets.md). The same numbers as WidgetLayout.cs.
     public static double[] minimum(String id) {
         switch (id) {
-            case "Focus": return new double[] { 296, 300 };
-            case "Media": return new double[] { 360, 310 };
-            case "Spotify": return new double[] { 560, 500 };
-            case "Shortcuts": return new double[] { 420, 190 };
-            case "Mixer": return new double[] { 380, 420 };
-            case "System": return new double[] { 380, 310 };
-            case "Soundboard": return new double[] { 360, 240 };
-            default: return new double[] { 360, 220 };
+            case "Focus": return new double[] { 280, 192 };
+            case "Media": return new double[] { 312, 200 };
+            case "Spotify": return new double[] { 360, 360 };
+            case "Shortcuts": return new double[] { 200, 152 };
+            case "Mixer": return new double[] { 320, 224 };
+            case "System": return new double[] { 260, 280 };
+            case "Soundboard": return new double[] { 240, 152 };
+            default: return new double[] { 232, 152 };
         }
     }
 

@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcState;
@@ -34,11 +35,15 @@ public final class MixerWidget extends Widget {
         PcState.Session session;
     }
 
-    private TextView status, device, percent, sessionCount, noSessions, microphoneLabel;
+    private TextView status, device, percent, sessionCount, noSessions, microphoneLabel, appsButton;
     private TouchSlider master;
-    private GlyphView mute, microphoneGlyph;
-    private LinearLayout sessionList, microphone, outputButton;
-    private FrameLayout picker, root;
+    private GlyphView mute, microphoneGlyph, microphoneCompact;
+    private LinearLayout sessionList, microphone, outputButton, masterRow, sliderRow;
+    private FrameLayout picker, root, listHost;
+    // FULL, COMPACT or MASTER (CardSizing.mixer, as on the PC); a MASTER card shows the app list in place of the
+    // master volume while appsOpen is set.
+    private int mode;
+    private boolean appsOpen;
     private final Map<String, Row> rows = new HashMap<String, Row>();
     private String rowSignature;
     // Slider moves are sent at most every 150 ms, then once more when the finger lifts.
@@ -52,16 +57,26 @@ public final class MixerWidget extends Widget {
 
     @Override protected View create() {
         rows.clear(); rowSignature = null; picker = null;
+        mode = CardSizing.mixer(height);
+        if (mode != CardSizing.MIXER_MASTER) appsOpen = false;
+        boolean full = mode == CardSizing.MIXER_FULL, masterOnly = mode == CardSizing.MIXER_MASTER;
         root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
-        FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("SOUND MIXER"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        LinearLayout header = ui.row();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(ui.label("SOUND MIXER"), ui.ll(Ui.WRAP, Ui.WRAP));
         status = ui.caption("");
         status.setTextColor(Theme.WARNING);
-        header.addView(status, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
-        column.addView(header, ui.ll(Ui.MATCH, ui.px(34)));
+        status.setGravity(Gravity.END); status.setSingleLine(true); status.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        header.addView(status, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
+        // On a MASTER card the app list is one tap away: this swaps the master rows for the list and back.
+        appsButton = ui.button("Apps", new View.OnClickListener() { @Override public void onClick(View v) { appsOpen = !appsOpen; closePicker(); showApps(); } });
+        appsButton.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.fpx(14));
+        appsButton.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));
+        if (masterOnly) header.addView(appsButton, ui.margins(ui.ll(Ui.WRAP, ui.px(48)), 8, 0, 0, 0));
+        column.addView(header, ui.ll(Ui.MATCH, ui.px(masterOnly ? 48 : 34)));
 
-        LinearLayout masterRow = ui.row();
+        masterRow = ui.row();
         outputButton = ui.column();
         outputButton.setBackground(ui.pressable(0x00000000, 0, 0, 12));
         outputButton.setPadding(ui.px(8), 0, ui.px(8), 0);
@@ -82,20 +97,23 @@ public final class MixerWidget extends Widget {
         masterRow.addView(percent, ui.ll(ui.px(80), Ui.WRAP));
         column.addView(masterRow, ui.ll(Ui.MATCH, ui.px(66)));
 
-        LinearLayout sliderRow = ui.row();
+        sliderRow = ui.row();
         mute = ui.iconButton("volume", "Mute output", 22, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "audio.mute")); } });
         sliderRow.addView(mute, ui.ll(ui.px(58), ui.px(52)));
         master = slider(null);
         master.setContentDescription("Master volume");
         sliderRow.addView(master, ui.margins(ui.ll(0, ui.px(52), 1), 8, 0, 0, 0));
+        // Smaller cards move the microphone beside the master slider.
+        microphoneCompact = ui.iconButton("microphone", "Microphone", 20, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "audio.microphone")); } });
+        if (!full) sliderRow.addView(microphoneCompact, ui.margins(ui.ll(ui.px(52), ui.px(52)), 4, 0, 0, 0));
         column.addView(sliderRow, ui.ll(Ui.MATCH, ui.px(52)));
 
         FrameLayout appsHeader = new FrameLayout(ui.context);
         appsHeader.addView(ui.label("APPS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
         sessionCount = ui.smallText("");
         appsHeader.addView(sessionCount, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
-        column.addView(appsHeader, ui.margins(ui.ll(Ui.MATCH, ui.px(24)), 0, 18, 0, 0));
-        FrameLayout listHost = new FrameLayout(ui.context);
+        if (full) column.addView(appsHeader, ui.margins(ui.ll(Ui.MATCH, ui.px(24)), 0, 18, 0, 0));
+        listHost = new FrameLayout(ui.context);
         ScrollView scroll = new ScrollView(ui.context);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setNestedScrollingEnabled(true);
@@ -105,7 +123,7 @@ public final class MixerWidget extends Widget {
         noSessions = Ui.wrap(ui.smallText(""), 3);
         noSessions.setGravity(Gravity.CENTER);
         listHost.addView(noSessions, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        column.addView(listHost, ui.ll(Ui.MATCH, 0, 1));
+        column.addView(listHost, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, full ? 0 : 8, 0, 0));
 
         microphone = ui.row();
         microphone.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
@@ -117,9 +135,20 @@ public final class MixerWidget extends Widget {
         microphone.addView(microphoneLabel, ui.ll(Ui.WRAP, Ui.WRAP));
         microphone.setClickable(true);
         microphone.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "audio.microphone")); } });
-        column.addView(microphone, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 8, 0, 0));
+        if (full) column.addView(microphone, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 8, 0, 0));
         root.addView(column, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        showApps();
         return ui.card(root, 24);
+    }
+
+    private void showApps() {
+        boolean masterOnly = mode == CardSizing.MIXER_MASTER, list = !masterOnly || appsOpen;
+        masterRow.setVisibility(masterOnly && appsOpen ? View.GONE : View.VISIBLE);
+        sliderRow.setVisibility(masterOnly && appsOpen ? View.GONE : View.VISIBLE);
+        listHost.setVisibility(list ? View.VISIBLE : View.GONE);
+        String count = sessionCount.getText().toString();
+        appsButton.setText(appsOpen ? "Done" : count.isEmpty() ? "Apps" : "Apps · " + count);
+        appsButton.setContentDescription(appsOpen ? "Back to master volume" : "Show app volumes");
     }
 
     private PcState.Audio audio() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.audio; }
@@ -173,6 +202,8 @@ public final class MixerWidget extends Widget {
         int micColor = Boolean.TRUE.equals(mic) ? ui.theme.accent : ui.theme.text;
         microphoneLabel.setTextColor(micColor); microphoneGlyph.setColor(micColor);
         microphone.setContentDescription(microphoneLabel.getText());
+        Ui.enable(microphoneCompact, mic != null);
+        microphoneCompact.setColor(micColor); microphoneCompact.setContentDescription(microphoneLabel.getText());
         renderSessions(available ? a : null);
         if (picker != null && !available) closePicker();
     }
@@ -198,6 +229,7 @@ public final class MixerWidget extends Widget {
             row.output.setContentDescription("Output for " + s.name + ": " + (output == null ? "Unknown output" : output.name));
         }
         sessionCount.setText(sessions.isEmpty() ? "" : Integer.toString(sessions.size()));
+        showApps();
         noSessions.setVisibility(sessions.isEmpty() ? View.VISIBLE : View.GONE);
         noSessions.setText(a == null ? "" : !a.sessionsAvailable ? "App volumes aren't available right now. Master volume still works." : "Apps show up here when they play sound on the PC.");
     }

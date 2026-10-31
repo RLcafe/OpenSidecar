@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
 // tints the card and chimes (when the PC says so) until it's tapped; the fourth preset's length is picked in the card.
 public final class FocusWidget extends Widget {
     private static final int[] PRESETS = { 25, 50, 5 };
-    private TextView time, status, sessions, start, custom, lengthLabel;
+    private TextView time, status, sessions, start, custom, lengthLabel, lengthStep;
     private ProgressLine progress;
     private GlyphView reset;
     private final TextView[] presets = new TextView[3];
@@ -34,7 +34,7 @@ public final class FocusWidget extends Widget {
     private View finishedTint;
     private TouchSlider length;
     private int selectedPreset = -1, selectedCustom = -1;
-    private boolean wasFinished;
+    private boolean wasFinished, folded;
 
     public FocusWidget(Dashboard dash) { super("Focus", dash); }
 
@@ -42,6 +42,8 @@ public final class FocusWidget extends Widget {
 
     @Override protected View create() {
         boolean compact = height < 320;
+        // A short card keeps the countdown and the start row; its length button steps through the presets (as on the PC).
+        folded = CardSizing.focusShort(height);
         selectedPreset = -1; selectedCustom = -1; picker = null;
         LinearLayout column = ui.column();
         column.addView(ui.label("FOCUS TIMER"), ui.ll(Ui.MATCH, Ui.WRAP));
@@ -54,13 +56,13 @@ public final class FocusWidget extends Widget {
         middle.addView(time, ui.ll(Ui.MATCH, Ui.WRAP));
         status = Ui.wrap(ui.smallText(""), 2);
         status.setGravity(Gravity.CENTER);
-        middle.addView(status, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, compact ? 2 : 6, 0, compact ? 8 : 12));
+        if (!folded) middle.addView(status, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, compact ? 2 : 6, 0, compact ? 8 : 12));
         progress = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track);
         progress.setContentDescription("Focus session progress");
-        middle.addView(progress, ui.ll(Ui.MATCH, ui.px(5)));
+        middle.addView(progress, folded ? ui.margins(ui.ll(Ui.MATCH, ui.px(5)), 0, 4, 0, 12) : ui.ll(Ui.MATCH, ui.px(5)));
         sessions = ui.caption("");
         sessions.setGravity(Gravity.CENTER); sessions.setSingleLine(true);
-        middle.addView(sessions, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
+        if (!folded) middle.addView(sessions, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
         column.addView(middle, ui.ll(Ui.MATCH, 0, 1));
 
         LinearLayout presetRow = ui.row();
@@ -83,9 +85,13 @@ public final class FocusWidget extends Widget {
         custom.setPadding(ui.px(5), ui.px(5), ui.px(5), ui.px(5));
         custom.setContentDescription("Choose another length");
         presetRow.addView(custom, ui.ll(0, Ui.WRAP, 1));
-        column.addView(presetRow, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, compact ? 8 : 12));
+        if (!folded) column.addView(presetRow, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, compact ? 8 : 12));
 
         LinearLayout bottom = ui.row();
+        lengthStep = ui.button("25m", new View.OnClickListener() { @Override public void onClick(View v) { nextLength(); } });
+        lengthStep.setTextSize(TypedValue.COMPLEX_UNIT_PX, ui.fpx(16));
+        lengthStep.setPadding(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
+        if (folded) bottom.addView(lengthStep, ui.margins(ui.ll(ui.px(64), ui.px(48)), 0, 0, 8, 0));
         start = ui.accentButton("Start focus", new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "focus.toggle")); } });
         bottom.addView(start, ui.margins(ui.ll(0, Ui.WRAP, 1), 0, 0, 8, 0));
         reset = ui.iconButton("reset", "Reset timer", 22, true, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "focus.reset")); } });
@@ -108,6 +114,18 @@ public final class FocusWidget extends Widget {
         return root;
     }
 
+    // The next length for the folded presets: 25, 50, 5, then the chosen fourth length when there is one.
+    private void nextLength() {
+        PcState.Focus focus = focus();
+        if (focus == null || focus.running) return;
+        int current = (int) Math.round(focus.durationMs / 60000);
+        boolean extra = focus.customMinutes > 0 && focus.customMinutes != 25 && focus.customMinutes != 50 && focus.customMinutes != 5;
+        int[] lengths = extra ? new int[] { 25, 50, 5, focus.customMinutes } : PRESETS;
+        int index = -1;
+        for (int i = 0; i < lengths.length; i++) if (lengths[i] == current) index = i;
+        dash.command(Json.map("action", "focus.preset", "minutes", lengths[(index + 1) % lengths.length]));
+    }
+
     private PcState.Focus focus() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.focus; }
 
     @Override public void render() {
@@ -116,7 +134,7 @@ public final class FocusWidget extends Widget {
         PcState.Focus focus = focus();
         boolean online = focus != null;
         for (TextView preset : presets) Ui.enable(preset, online);
-        Ui.enable(custom, online); Ui.enable(start, online); Ui.enable(reset, online);
+        Ui.enable(custom, online); Ui.enable(start, online); Ui.enable(reset, online); Ui.enable(lengthStep, online && !focus.running);
         if (!online) { time.setText("—:—"); time.setTextColor(ui.theme.text); status.setText(dash.offlineText()); sessions.setText(""); progress.setValue(0); finishedTint.setVisibility(View.GONE); return; }
         // Between readings a running timer keeps counting down here.
         long remaining = (long) focus.remainingMs;
@@ -131,7 +149,11 @@ public final class FocusWidget extends Widget {
         status.setText(remaining == 0 && focus.finished ? "Done. Take a break. Tap to clear." : Format.focusStatus(remaining, running, fraction, ends));
         progress.setValue(fraction);
         sessions.setText(Format.sessions(focus.sessionsToday, focus.minutesToday));
-        start.setText(Format.focusButton(remaining, running, fraction));
+        String label = Format.focusButton(remaining, running, fraction);
+        start.setText(folded && label.equals("Start focus") ? "Start" : label);
+        int length = (int) Math.round(focus.durationMs / 60000);
+        lengthStep.setText(length + "m");
+        lengthStep.setContentDescription("Session length " + length + " minutes. Tap for the next length.");
         if (focus.finished && !wasFinished && focus.chime) chime();
         wasFinished = focus.finished;
         int minutes = (int) Math.round(focus.durationMs / 60000);

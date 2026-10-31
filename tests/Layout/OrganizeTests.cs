@@ -45,10 +45,30 @@ internal static class OrganizeTests
             var resized = WidgetLayout.Align("Focus", new Rect(0, 0, 300, 300), "SE", 95, 30, new[] { new Rect(0, 341, 400, 200) }, canvas, guides);
             Assert(resized == new Rect(0, 0, 400, 325), "Resize did not snap to the edge and the gap: " + resized);
             Assert(guides.Any(g => g.Vertical && g.At == 400) && guides.Any(g => !g.Vertical && g.At == 333), "Resize guides: " + Describe(guides));
-            var squeezed = WidgetLayout.Align("Focus", new Rect(0, 0, 400, 400), "SE", -98, 0, new[] { new Rect(0, 420, 290, 100) }, canvas, guides);
+            var squeezed = WidgetLayout.Align("Focus", new Rect(0, 0, 300, 300), "SE", -30, 0, new[] { new Rect(0, 420, 270, 100) }, canvas, guides);
             Assert(squeezed.Width == WidgetLayout.Minimum("Focus").Width, "Snapping must never squeeze under the minimum: " + squeezed);
             var edge = WidgetLayout.Align("Focus", new Rect(1500, 0, 300, 300), "NE", 50, 0, new Rect[0], canvas, guides);
             Assert(edge.Right == canvas.Width && edge.Left == 1500 && guides.Count == 0, "Resize must snap to the canvas edge without a guide: " + edge);
+        });
+        check("Edge grips resize one side only, snap that side and keep the smaller minimums", () => {
+            var start = new Rect(400, 100, 400, 360);
+            Assert(WidgetLayout.Transform("Media", start, "E", 57, 80, false, canvas) == new Rect(400, 100, 457, 360), "The right edge moved more than the right side.");
+            Assert(WidgetLayout.Transform("Media", start, "N", 40, -60, false, canvas) == new Rect(400, 40, 400, 420), "The top edge moved more than the top.");
+            Assert(WidgetLayout.Transform("Media", start, "W", 1000, 0, false, canvas) == new Rect(488, 100, 312, 360), "The left edge squeezed under the minimum width.");
+            Assert(WidgetLayout.Transform("Media", start, "S", 0, -1000, false, canvas) == new Rect(400, 100, 400, 200), "The bottom edge squeezed under the minimum height.");
+            var guides = new List<WidgetLayout.Guide>();
+            var snapped = WidgetLayout.Align("Media", start, "S", 0, 30, new[] { new Rect(900, 0, 300, 486) }, canvas, guides);
+            Assert(snapped == new Rect(400, 100, 400, 386) && guides.All(g => !g.Vertical), "The bottom edge did not snap alone: " + snapped);
+            foreach (string id in WidgetLayout.Ids)
+            {
+                var minimum = WidgetLayout.Minimum(id);
+                Assert(minimum.Width <= 360 && minimum.Height <= 360, id + " is still too large at its smallest: " + minimum);
+                Assert(minimum.Width >= 200 && minimum.Height >= 152, id + " would drop under its touch-size floor: " + minimum);
+            }
+            Assert(CardSizing.FocusShort(299) && !CardSizing.FocusShort(300) && CardSizing.MediaShort(289) && !CardSizing.MediaShort(290), "Focus or Now Playing folds at the wrong height.");
+            Assert(CardSizing.Mixer(420) == CardSizing.MixerMode.Full && CardSizing.Mixer(300) == CardSizing.MixerMode.Compact && CardSizing.Mixer(299) == CardSizing.MixerMode.Master, "Mixer arrangements.");
+            Assert(CardSizing.EmptyDetail(478) == 3 && CardSizing.EmptyDetail(262) == 2 && CardSizing.EmptyDetail(120) == 1 && CardSizing.EmptyDetail(62) == 0, "Empty states.");
+            Assert(CardSizing.FocusTime(320, 576) == 84 && CardSizing.MediaArt(552, 310) == 104 && CardSizing.FocusTime(280, 192) == 40 && CardSizing.MediaArt(312, 200) == 64, "Reading sizes changed: " + CardSizing.FocusTime(280, 192) + ", " + CardSizing.MediaArt(312, 200));
         });
         check("Arrange keeps the reading order by columns on wide canvases and rows on upright ones", () => {
             var layout = new[] {

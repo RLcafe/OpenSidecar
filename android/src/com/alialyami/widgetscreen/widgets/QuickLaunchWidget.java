@@ -21,7 +21,7 @@ import java.util.List;
 public final class QuickLaunchWidget extends Widget {
     private int page;
     private LinearLayout grid, pager;
-    private TextView pageLabel, empty;
+    private TextView pageLabel, empty, heading;
     private GlyphView previousPage, nextPage;
     private String shown;
 
@@ -34,7 +34,9 @@ public final class QuickLaunchWidget extends Widget {
         shown = null;
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
-        header.addView(ui.label("QUICK LAUNCH"), ui.margins(ui.ll(0, Ui.WRAP, 1), 4, 0, 4, 0));
+        heading = ui.label("QUICK LAUNCH");
+        heading.setSingleLine(true); heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        header.addView(heading, ui.margins(ui.ll(0, Ui.WRAP, 1), 4, 0, 4, 0));
         pager = ui.row();
         previousPage = ui.iconButton("chevron-left", "Previous button page", 16, false, new View.OnClickListener() { @Override public void onClick(View v) { page--; shown = null; render(); } });
         pager.addView(previousPage, ui.ll(ui.px(48), ui.px(48)));
@@ -82,6 +84,8 @@ public final class QuickLaunchWidget extends Widget {
         int pageSize = columns * rows, pages = Math.max(1, (buttons.size() + pageSize - 1) / pageSize);
         page = Math.max(0, Math.min(pages - 1, page));
         pager.setVisibility(pages > 1 ? View.VISIBLE : View.GONE);
+        // A narrow card keeps its pager over its heading (CardSizing.headingShown, as on the PC).
+        heading.setVisibility(CardSizing.headingShown(width, pages > 1) ? View.VISIBLE : View.INVISIBLE);
         Ui.enable(previousPage, page > 0); Ui.enable(nextPage, page < pages - 1);
         pageLabel.setText((page + 1) + "/" + pages);
         for (int r = 0; r < rows; r++) {

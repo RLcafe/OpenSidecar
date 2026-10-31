@@ -66,17 +66,19 @@ namespace WidgetScreen
                 default: return id;
             }
         }
+        // The smallest each card can be while it keeps its main reading and controls at full size (CardSizing folds
+        // the rest away; docs/design/resizable-widgets.md). Preferred sizes stay where they were.
         public static Size Minimum(string id)
         {
             switch (id) {
-                case "Focus": return new Size(296, 300);
-                case "Media": return new Size(360, 310);
-                case "Spotify": return new Size(560, 500);
-                case "Shortcuts": return new Size(420, 190);
-                case "Mixer": return new Size(380, 420);
-                case "System": return new Size(380, 310);
-                case "Soundboard": return new Size(360, 240);
-                default: return new Size(360, 220);
+                case "Focus": return new Size(280, 192);
+                case "Media": return new Size(312, 200);
+                case "Spotify": return new Size(360, 360);
+                case "Shortcuts": return new Size(200, 152);
+                case "Mixer": return new Size(320, 224);
+                case "System": return new Size(260, 280);
+                case "Soundboard": return new Size(240, 152);
+                default: return new Size(232, 152);
             }
         }
         // On a canvas smaller than the reference (80% at least, see ScreenFit) minimum sizes shrink with it, so widgets

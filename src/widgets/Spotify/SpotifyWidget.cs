@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -47,7 +47,8 @@ namespace WidgetScreen
         }
         private T C<T>(string name) where T : class { return (T)(object)window.FindName(name); }
         private void Text(string name, string value) { C<TextBlock>(name).Text = value; }
-        private void Status(string value) { Text("SpotifyStatus", value); }
+        // An empty status takes no room, so a compact card's status row closes (CardSizing.SpotifyCompact).
+        private void Status(string value) { Text("SpotifyStatus", value); C<FrameworkElement>("SpotifyStatus").Visibility = Connected && !String.IsNullOrEmpty(value) ? Visibility.Visible : Visibility.Collapsed; }
         private void Open(string url) { if (url == null) return; try { Launcher.Open(url); } catch (Exception) { Status("Could not open Spotify."); } }
         public void AccountChanged()
         {
@@ -58,7 +59,7 @@ namespace WidgetScreen
             Status(Connected ? "" : "Connect Spotify in Settings to use your library.");
             // Until an account is connected, one empty state replaces the tabs, list, now-playing strip and status line.
             var connected = Connected ? Visibility.Visible : Visibility.Collapsed;
-            foreach (string name in new[] { "SpotifyTabs", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyStatus", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
+            foreach (string name in new[] { "SpotifyTabs", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
             C<FrameworkElement>("SpotifyEmpty").Visibility = Connected ? Visibility.Collapsed : Visibility.Visible;
             // The first list loads on the first visible tick: never from the constructor, and never while hidden.
             C<Panel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();

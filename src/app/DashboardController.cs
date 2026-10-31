@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -164,6 +164,7 @@ namespace WidgetScreen
             });
             Button("FocusStart", () => { focus.Toggle(); UpdateFocus(); });
             Button("FocusReset", () => { focus.Reset((int)focus.Duration.TotalMinutes); UpdateFocus(); });
+            Button("FocusLength", NextFocusLength);
             Button("Focus25", () => SetFocus(25)); Button("Focus50", () => SetFocus(50)); Button("Focus5", () => SetFocus(5));
             // The fourth preset: tap to pick a length once, then it stays as a button like the others.
             Button("FocusCustom", () => { if (settings.FocusCustomMinutes > 0 && Control<Border>("FocusPicker").Visibility != Visibility.Visible && (int)focus.Duration.TotalMinutes != settings.FocusCustomMinutes) SetFocus(settings.FocusCustomMinutes); else OpenFocusPicker(); });
@@ -175,6 +176,8 @@ namespace WidgetScreen
             Control<Border>("FocusCard").PreviewTouchDown += (sender, e) => DismissFocus();
             Button("MuteButton", () => AudioAction(a => a.ToggleMute()));
             Button("MicrophoneButton", () => AudioAction(a => a.ToggleMicrophone()));
+            Button("MicrophoneCompact", () => AudioAction(a => a.ToggleMicrophone()));
+            Button("MixerApps", ToggleMixerApps);
             Button("SoundSettingsButton", () => Launch("ms-settings:sound", "Windows sound settings"));
             Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice", "FocusLengthChoice" }) TouchSlider.Attach(Control<Slider>(name));
@@ -296,8 +299,10 @@ namespace WidgetScreen
             Text("FocusStatus", remaining == TimeSpan.Zero ? (focus.Finished ? "Done. Take a break. Tap to clear." : "Done. Take a break.") : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
             Control<ProgressBar>("FocusProgress").Value = focus.Progress;
             Text("FocusSessions", FocusTimer.SessionsText(FocusSessionsToday, FocusMinutesToday));
-            Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : "Start focus";
+            Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : CardSizing.FocusShort(Editor.Bounds("Focus").Height) ? "Start" : "Start focus";
             int minutes = (int)focus.Duration.TotalMinutes;
+            var length = Control<Button>("FocusLength"); length.Content = minutes + "m"; length.IsEnabled = !focus.Running;
+            AutomationProperties.SetName(length, "Session length " + minutes + " minutes. Tap for the next length.");
             if (minutes != selectedFocusPreset)
             {
                 selectedFocusPreset = minutes;
@@ -417,31 +422,23 @@ namespace WidgetScreen
                     Text("DisplayStatus", "ARROWS MOVE · SHIFT+ARROWS RESIZE · ESC CANCELS");
                 }
                 if (deckShape != DeckShape()) BuildShortcuts();
-                // Card contents follow their card's size (CardSizing).
-                var focusBounds = Editor.Bounds("Focus"); bool compactFocus = focusBounds.Height < 320;
-                Control<TextBlock>("FocusTime").FontSize = CardSizing.FocusTime(focusBounds.Width, focusBounds.Height);
-                var mediaBounds = Editor.Bounds("Media"); double art = CardSizing.MediaArt(mediaBounds.Width, mediaBounds.Height);
-                Control<ColumnDefinition>("MediaArtColumn").Width = new GridLength(art + 12); Control<Border>("MediaArtBox").MaxHeight = art;
-                var weatherBounds = Editor.Bounds("Weather"); double temperature = CardSizing.WeatherTemperature(weatherBounds.Width, weatherBounds.Height);
-                Control<TextBlock>("WeatherTemperature").FontSize = temperature; Control<ColumnDefinition>("WeatherTemperatureColumn").Width = new GridLength(temperature * 2);
-                UpdateWeatherHoursRow();
-                Control<TextBlock>("FocusStatus").Margin = compactFocus ? new Thickness(0, 2, 0, 8) : new Thickness(0, 6, 0, 12);
-                Control<Grid>("FocusPresets").Margin = compactFocus ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 12);
+                // Card contents follow their card's size (CardSizing, DashboardController.Cards.cs).
+                FitCards();
                 UpdatePages();
-                var city = Control<TextBlock>("WeatherCity"); bool compactWeather = Editor.Bounds("Weather").Height < 250;
-                city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
-                city.MaxHeight = compactWeather ? 28 : 58;
             }
             finally { syncingEditor = false; }
         }
 
         private void UpdateLevelTimer()
         {
-            bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && Showing;
+            // Only a Full mixer card has room for the meter (CardSizing.Mixer), so smaller cards don't run it.
+            bool room = CardSizing.Mixer(Editor.Bounds("Mixer").Height) == CardSizing.MixerMode.Full;
+            bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && Showing && room;
             if (enabled) levelTimer.Start(); else { levelTimer.Stop(); levels.Clear(); }
             // The meter's row shows while levels run, or to say they're unavailable; paused levels take no room.
-            bool unavailable = settings.ShowLevels && !audioAvailable && Editor.IsVisible("Mixer");
+            bool unavailable = settings.ShowLevels && !audioAvailable && Editor.IsVisible("Mixer") && room;
             Control<RowDefinition>("LevelRow").Height = new GridLength(enabled || unavailable ? 28 : 0);
+            ((FrameworkElement)Control<Border>("LevelHost").Parent).Visibility = room ? Visibility.Visible : Visibility.Collapsed;
             Text("LevelStatus", unavailable ? "OUTPUT LEVEL UNAVAILABLE" : "");
         }
 
@@ -458,6 +455,10 @@ namespace WidgetScreen
             deckPage = Math.Max(0, Math.Min(pages - 1, deckPage));
             grid.Columns = shape[0]; grid.Rows = shape[1];
             Control<StackPanel>("DeckPages").Visibility = pages > 1 ? Visibility.Visible : Visibility.Collapsed;
+            // A narrow card keeps its pager and buttons first (CardSizing.DeckEditShown, HeadingShown).
+            double cardWidth = Editor.Bounds("Shortcuts").Width;
+            Control<Button>("EditDeck").Visibility = CardSizing.DeckEditShown(cardWidth) ? Visibility.Visible : Visibility.Collapsed;
+            Control<TextBlock>("DeckHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("DeckPrevious").IsEnabled = deckPage > 0; Control<Button>("DeckNext").IsEnabled = deckPage < pages - 1;
             Text("DeckPageLabel", (deckPage + 1) + "/" + pages);
             Control<Button>("EmptyDeck").Visibility = settings.Shortcuts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -664,7 +665,7 @@ namespace WidgetScreen
                 var root = sessionRows[sessions[i].Id].Root;
                 if (panel.Children.IndexOf(root) != i) { panel.Children.Remove(root); panel.Children.Insert(i, root); }
             }
-            Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString());
+            Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString()); UpdateMixerApps();
             Control<TextBlock>("NoSessions").Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -676,6 +677,11 @@ namespace WidgetScreen
             AutomationProperties.SetName(microphone, label);
             microphone.ToolTip = !muted.HasValue ? null : muted.Value ? "Unmute microphone" : "Mute microphone";
             foreach (string name in new[] { "MicrophoneGlyph", "MicrophoneLabel" }) Control<TextBlock>(name).SetResourceReference(TextBlock.ForegroundProperty, muted == true ? "Accent" : "Text");
+            // The compact cards' microphone button beside the master slider says the same with its glyph and tooltip.
+            var compact = Control<Button>("MicrophoneCompact"); compact.IsEnabled = muted.HasValue;
+            compact.Content = muted == true ? "" : ""; compact.ToolTip = label;
+            compact.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, muted == true ? "Accent" : "Text");
+            AutomationProperties.SetName(compact, label);
         }
 
         private SessionRow CreateSessionRow()

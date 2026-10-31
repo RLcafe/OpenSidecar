@@ -37,17 +37,56 @@ public final class CardSizing {
         return beside ? clamp(Math.round(cellHeight * 0.18), 18, 32) : clamp(Math.round(cellHeight * 0.3), 24, 44);
     }
 
-    // The Focus countdown: as wide as the card allows, and only as tall as the room above the buttons.
-    public static double focusTime(double width, double height) { return clamp(Math.round(Math.min((width - 48) * 0.31, (height - 300) * 0.6)), 42, 160); }
+    // The Focus countdown: as wide as the card allows, and only as tall as the room above the buttons. A short card
+    // has only the start row under it (focusShort).
+    public static double focusTime(double width, double height) {
+        boolean folded = focusShort(height);
+        double room = folded ? (height - 140) * 0.75 : (height - 300) * 0.6;
+        return clamp(Math.round(Math.min((width - 48) * 0.31, room)), folded ? 40 : 42, 160);
+    }
 
-    // The Now Playing cover: at least the reference 104, growing with the card's free height and width.
-    public static double mediaArt(double width, double height) { return clamp(Math.round(Math.min(height - 220, (width - 48) * 0.36)), 104, 220); }
+    // The Now Playing cover: the reference 104 and up on a full card, as tall as the title row on a short one.
+    public static double mediaArt(double width, double height) {
+        if (mediaShort(height)) return clamp(Math.round(Math.min(height - 136, (width - 48) * 0.3)), 44, 104);
+        return clamp(Math.round(Math.min(height - 220, (width - 48) * 0.36)), 104, 220);
+    }
 
     // The Weather temperature (54 on the reference 250-unit card); its column is twice as wide.
     public static double weatherTemperature(double width, double height) { return clamp(Math.round(Math.min(height * 0.216, width * 0.14)), 40, 96); }
 
     // Spotify rows side by side once the card fits two 340-unit rows.
     public static int spotifyColumns(double width) { return (int) clamp(Math.floor((width - 48) / 340), 1, 3); }
+
+    // Small cards (docs/design/resizable-widgets.md), the same thresholds as CardSizing.cs. Each card keeps every
+    // control it has, rearranged, until a threshold; below it the card trades secondary rows for room, never its main
+    // reading or main action.
+    // Focus under 300 tall: the presets fold into one length button beside Start that steps through them.
+    public static boolean focusShort(double height) { return height < 300; }
+    // Now Playing under 290 tall: the seek bar and the hint row fold away; under 400 wide the buttons draw closer.
+    public static boolean mediaShort(double height) { return height < 290; }
+    public static boolean mediaNarrow(double width) { return width < 400; }
+    // The mixer: FULL at 420 tall and up; COMPACT (the microphone moves beside the master slider, the level meter and
+    // the APPS heading fold away, the app list scrolls); MASTER under 300 tall (the master volume, with the app list one
+    // tap away in the same card).
+    public static final int MIXER_FULL = 0, MIXER_COMPACT = 1, MIXER_MASTER = 2;
+    public static int mixer(double height) { return height >= 420 ? MIXER_FULL : height >= 300 ? MIXER_COMPACT : MIXER_MASTER; }
+    // The sound settings button gives its room to the slider on narrow compact cards.
+    public static boolean mixerSettingsShown(double width, int mode) { return mode == MIXER_FULL || width >= 400; }
+    // Card headers with pages: the Edit button needs 342 units, and a paged card under 300 wide keeps its pager over
+    // its heading (Quick Launch and Soundboard).
+    public static boolean deckEditShown(double width) { return width >= 342; }
+    public static boolean headingShown(double width, boolean paged) { return !paged || width >= 300; }
+    // System stats rows drop their graph and bar under 380 wide, so the numbers stay large.
+    public static boolean statsNarrow(double width) { return width < 380; }
+    // Weather under 200 tall keeps the temperature and city and drops the details line.
+    public static boolean weatherTiny(double height) { return height < 200; }
+    // Spotify under 500 tall: a smaller now-playing strip, and the status row only while it has something to say.
+    public static boolean spotifyCompact(double height) { return height < 500; }
+    // Empty states for the room under the card's heading: 3 shows the icon, heading, sentence and button; 2 drops the
+    // icon; 1 keeps the heading and button; 0 the button alone.
+    public static int emptyDetail(double room) { return room >= 268 ? 3 : room >= 156 ? 2 : room >= 100 ? 1 : 0; }
+    // The Discord channel name beside the Soundboard heading.
+    public static boolean soundboardChannelShown(double width) { return width >= 360; }
 
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

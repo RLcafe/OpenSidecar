@@ -21,8 +21,9 @@ import java.util.List;
 import java.util.Map;
 
 // The free widget canvas. Placements are in design units on a canvas shaped like the screen (DashboardFit), which
-// ScaledHost scales to pixels. In Edit layout each card gets a chrome on top: an outline and four 48 × 48 corner
-// grips, and the whole card moves when dragged elsewhere.
+// ScaledHost scales to pixels. In Edit layout each card gets a chrome on top: an outline, four 48 × 48 corner grips
+// (both ways) and four edge grips at the middle of each side (one way, on sides of at least 168 units, like the PC),
+// and the whole card moves when dragged elsewhere.
 public final class WidgetCanvas extends ViewGroup {
     private final LayoutEditor editor;
     private final Ui ui;
@@ -160,6 +161,9 @@ public final class WidgetCanvas extends ViewGroup {
         return indexOfChild(order.get(i));
     }
 
+    // An edge grip shows only when its side is long enough to keep it clear of both corner grips (LayoutEditor.cs).
+    public static final double EDGE_GRIP_SIDE = 168;
+
     private final class Chrome extends View {
         private final String id;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -180,6 +184,13 @@ public final class WidgetCanvas extends ViewGroup {
             if (north && east) return "NE";
             if (south && west) return "SW";
             if (south && east) return "SE";
+            Box b = editor.bounds(id);
+            float midX = getWidth() / 2f, midY = getHeight() / 2f;
+            boolean across = b.width >= EDGE_GRIP_SIDE && Math.abs(x - midX) < hit / 2, along = b.height >= EDGE_GRIP_SIDE && Math.abs(y - midY) < hit / 2;
+            if (north && across) return "N";
+            if (south && across) return "S";
+            if (west && along) return "W";
+            if (east && along) return "E";
             return "";
         }
 
@@ -207,6 +218,20 @@ public final class WidgetCanvas extends ViewGroup {
             for (int i = 0; i < 4; i++) {
                 float cx = i % 2 == 0 ? hit / 2 : getWidth() - hit / 2, cy = i < 2 ? hit / 2 : getHeight() - hit / 2;
                 RectF box = new RectF(cx - grip / 2, cy - grip / 2, cx + grip / 2, cy + grip / 2);
+                paint.setStyle(Paint.Style.FILL); paint.setColor(ui.theme.accent);
+                canvas.drawRoundRect(box, r, r, paint);
+                paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(ui.fpx(2)); paint.setColor(ui.theme.page);
+                canvas.drawRoundRect(box, r, r, paint);
+            }
+            // Edge grips: a 28 × 8 bar along the side, on sides long enough to keep it clear of the corners.
+            Box b = editor.bounds(id);
+            float length = ui.fpx(28), thick = ui.fpx(8);
+            for (int i = 0; i < 4; i++) {
+                boolean across = i < 2;
+                if ((across ? b.width : b.height) < EDGE_GRIP_SIDE) continue;
+                float cx = across ? getWidth() / 2f : i == 2 ? hit / 2 : getWidth() - hit / 2, cy = across ? (i == 0 ? hit / 2 : getHeight() - hit / 2) : getHeight() / 2f;
+                float w = across ? length : thick, h = across ? thick : length;
+                RectF box = new RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
                 paint.setStyle(Paint.Style.FILL); paint.setColor(ui.theme.accent);
                 canvas.drawRoundRect(box, r, r, paint);
                 paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(ui.fpx(2)); paint.setColor(ui.theme.page);

@@ -63,7 +63,8 @@ public final class WeatherWidget extends Widget {
         city = Ui.wrap(ui.body("No city yet"), height < 250 ? 1 : 2);
         text.addView(city, ui.ll(Ui.MATCH, Ui.WRAP));
         details = Ui.wrap(ui.smallText(""), 2);
-        text.addView(details, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 5, 0, 0));
+        // Under 200 tall the card keeps the temperature and city (CardSizing.weatherTiny, as on the PC).
+        if (!CardSizing.weatherTiny(height)) text.addView(details, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 5, 0, 0));
         body.addView(text, ui.ll(0, Ui.WRAP, 1));
         column.addView(body, ui.ll(Ui.MATCH, 0, 1));
 
