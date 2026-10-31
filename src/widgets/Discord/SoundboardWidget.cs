@@ -132,12 +132,30 @@ namespace WidgetScreen
             C<Button>("SoundboardPrevious").IsEnabled = page > 0; C<Button>("SoundboardNext").IsEnabled = page < pages - 1;
             C<TextBlock>("SoundboardPageLabel").Text = (page + 1) + "/" + pages;
             bool ready = channel != null && service.Linked;
+            // Small cells show the name alone; Medium adds a play mark over it; Large is a tile with the mark, the name and
+            // where the sound comes from (CardSizing.Tile, docs/design/widget-size-views.md).
+            var design = CardSizing.Tile(grid.ActualWidth / Math.Max(1, columns) - Gap, grid.ActualHeight / Math.Max(1, rows) - Gap);
             foreach (var sound in sounds.Skip(page * size).Take(size))
             {
                 bool otherServer = !sound.IsDefault && channel != null && sound.GuildId != channel.GuildId;
                 var name = new TextBlock { Text = sound.Name, TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                name.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize");
-                var button = new Button { Content = name, Margin = new Thickness(Gap / 2), Padding = new Thickness(8, 4, 8, 4), MinHeight = 48, IsEnabled = ready, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                name.SetResourceReference(TextBlock.FontSizeProperty, design == CardSizing.Design.Large ? "BodySize" : "SmallSize");
+                object content = name;
+                if (design != CardSizing.Design.Small)
+                {
+                    bool large = design == CardSizing.Design.Large;
+                    var mark = new TextBlock { Text = "", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = large ? 26 : 16, HorizontalAlignment = large ? HorizontalAlignment.Left : HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, large ? 10 : 6) };
+                    mark.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+                    var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; stack.Children.Add(mark); stack.Children.Add(name);
+                    if (large)
+                    {
+                        name.HorizontalAlignment = HorizontalAlignment.Left; name.TextAlignment = TextAlignment.Left; name.FontWeight = FontWeights.SemiBold;
+                        var from = new TextBlock { Text = sound.IsDefault ? "Discord sound" : otherServer ? "From another server" : "This server", FontSize = 13, Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+                        from.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); stack.Children.Add(from);
+                    }
+                    content = stack;
+                }
+                var button = new Button { Content = content, Margin = new Thickness(Gap / 2), Padding = design == CardSizing.Design.Large ? new Thickness(16, 10, 12, 10) : new Thickness(8, 4, 8, 4), MinHeight = 48, IsEnabled = ready, HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     ToolTip = sound.Name + (sound.IsDefault ? " · Discord sound" : otherServer ? " · From another server" : "") };
                 AutomationProperties.SetName(button, "Play " + sound.Name);
                 var chosen = sound; button.Click += (s, e) => Play(chosen);

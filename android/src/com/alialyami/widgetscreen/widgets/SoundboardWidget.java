@@ -105,6 +105,9 @@ public final class SoundboardWidget extends Widget {
         Ui.enable(previousPage, page > 0); Ui.enable(nextPage, page < pages - 1);
         pageLabel.setText((page + 1) + "/" + pages);
         boolean ready = d.linked && !d.channel.isEmpty();
+        // SMALL cells show the name alone; MEDIUM adds a play mark over it; LARGE is a tile with the mark, the name and
+        // where the sound comes from (CardSizing.tile, as on the PC).
+        int design = CardSizing.tile((width - 40 + GAP) / columns - GAP, (height - 40 - 48 - 36) / rows - GAP);
         StringBuilder signature = new StringBuilder().append(page).append('|').append(ready).append('|').append(columns).append('x').append(rows);
         for (PcState.Sound sound : d.sounds) signature.append('|').append(sound.id);
         if (signature.toString().equals(shown)) return;
@@ -115,7 +118,7 @@ public final class SoundboardWidget extends Widget {
             LinearLayout line = ui.row();
             for (int c = 0; c < columns; c++) {
                 int index = page * size + r * columns + c;
-                View cell = index < sounds.size() ? button(sounds.get(index), ready, d.channelGuild) : new View(ui.context);
+                View cell = index < sounds.size() ? button(sounds.get(index), ready, d.channelGuild, design) : new View(ui.context);
                 LinearLayout.LayoutParams params = ui.ll(0, Ui.MATCH, 1);
                 params.setMargins(ui.px(GAP / 2), ui.px(GAP / 2), ui.px(GAP / 2), ui.px(GAP / 2));
                 line.addView(cell, params);
@@ -124,11 +127,29 @@ public final class SoundboardWidget extends Widget {
         }
     }
 
-    private View button(final PcState.Sound sound, boolean ready, String guild) {
+    private View button(final PcState.Sound sound, boolean ready, String guild, int design) {
+        boolean otherServer = !sound.isDefault && !guild.isEmpty() && !sound.guild.equals(guild);
+        if (design != CardSizing.SMALL) {
+            boolean large = design == CardSizing.LARGE;
+            LinearLayout tile = ui.column();
+            tile.setGravity(large ? Gravity.START | Gravity.CENTER_VERTICAL : Gravity.CENTER);
+            tile.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
+            tile.setPadding(ui.px(large ? 16 : 8), ui.px(large ? 10 : 4), ui.px(large ? 12 : 8), ui.px(large ? 10 : 4));
+            tile.setMinimumHeight(ui.px(48));
+            tile.addView(new GlyphView(ui.context, "play", ui.theme.accent, ui.fpx(large ? 26 : 16)), ui.margins(ui.ll(ui.px(large ? 30 : 20), ui.px(large ? 30 : 20)), 0, 0, 0, large ? 10 : 6));
+            TextView name = ui.text(sound.name, large ? ui.body() : ui.small(), ui.theme.text);
+            if (large) name.setTypeface(Ui.MEDIUM); else name.setGravity(Gravity.CENTER);
+            tile.addView(name, ui.ll(Ui.WRAP, Ui.WRAP));
+            if (large) tile.addView(ui.caption(sound.isDefault ? "Discord sound" : otherServer ? "From another server" : "This server"), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 3, 0, 0));
+            tile.setClickable(true); tile.setFocusable(true);
+            tile.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { play(sound); } }));
+            tile.setContentDescription("Play " + sound.name + (sound.isDefault ? ", Discord sound" : otherServer ? ", from another server" : ""));
+            Ui.enable(tile, ready);
+            return tile;
+        }
         TextView button = ui.button(sound.name, new View.OnClickListener() { @Override public void onClick(View v) { play(sound); } });
         button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
         button.setPadding(ui.px(8), ui.px(4), ui.px(8), ui.px(4));
-        boolean otherServer = !sound.isDefault && !guild.isEmpty() && !sound.guild.equals(guild);
         button.setContentDescription("Play " + sound.name + (sound.isDefault ? ", Discord sound" : otherServer ? ", from another server" : ""));
         Ui.enable(button, ready);
         return button;

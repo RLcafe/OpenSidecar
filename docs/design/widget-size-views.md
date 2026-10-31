@@ -46,3 +46,21 @@ Minimum and preferred sizes are unchanged, so default layouts open in the Medium
 
 - The phone's new card layouts on a device or emulator (none was available; they build, and their sizes are checked on the JVM).
 - Live touch resizing on the real touchscreen.
+
+## Every widget (31 Oct 2026, v0.18.0)
+
+The user asked for the rest the same day. Small is each card's folded layout from [`resizable-widgets.md`](resizable-widgets.md) and Medium is the card as it was; Large is new. Thresholds are in `CardSizing` on both apps.
+
+| Card | Small | Medium | Large |
+| --- | --- | --- | --- |
+| Focus (`Focus`) | under 300 tall: countdown, length button, Start | the countdown, status, presets and a progress line | from 300 × 460 (the default full column): the progress as a ring (`FocusRing`, 160–420) around the countdown, with the status and today's sessions inside it |
+| Now Playing (`Media`) | under 290 tall: cover and song in one row over the buttons | cover beside the song over the seek row | from 360 × 460: a big centred cover (`MediaCover`, 120–360, less with larger text) over the song in 28, then the seek row and buttons |
+| Sound mixer (`MixerDesign`) | Master (under 300 tall) | Compact (300–419) | Full (420 and up); 760 wide or more lists the apps in two columns 24 apart (`MixerColumns`) |
+| Spotify (`Spotify`) | under 500 tall: the compact card | the full card | from 760 wide: the song moves into a Raised side panel (a third of the card, 260–360) with a cover as wide as the panel over the title, artist and a full-width Like |
+| Quick Launch and Soundboard buttons (`Tile`, by cell) | under 100 × 64: the glyph (or the sound's name) alone | the glyph over the name (a play mark over the sound's name) | from 150 × 110: a tile from the top left with the glyph, the name in 17 semibold, and what it does: "App", "Website · www.example.com", "Hotkey · Ctrl+Shift+M" (`DeckActions.Kind`, sent to the phone as `kind`), or "Discord sound", "This server", "From another server" |
+
+- The default layout's Focus column (320 × 576) now opens in the Large ring design; everything else in the default layout keeps its Medium design.
+- Windows rearranges the existing XAML parts for each design (`FitFocus`, `FitMedia`, `FitMixer` in `DashboardController.Cards.cs`, `SpotifyWidget.Fit`, `BuildShortcuts`, `SoundboardWidget.Build`); the phone builds each design when the card is built for its size.
+- Checks: `SmokeTests` "Every other card picks small, medium and large designs, and the large ones stay inside their cards" (thresholds, deck lines, and the Large Focus, Now Playing and two-column mixer in bounds at 140% text); `SpotifyTests` "Spotify's Large design puts the song in a side panel that stays inside the card" (labelled fixture, `artifacts\tests\spotify-large-fixture.png`); `AndroidTests` "Every other card picks small, medium and large designs like the PC".
+- Renders: `tests\size-design-renders.ps1` scenes `cards-small`, `cards-medium`, `cards-large` and `cards-wide` (live audio and media; Spotify and Discord aren't connected in isolated settings, so their cards show the Connect state there).
+- Not verified: the phone's new layouts on a device, the Soundboard's tiles with a connected Discord, and Spotify's side panel with a real account (fixture only).

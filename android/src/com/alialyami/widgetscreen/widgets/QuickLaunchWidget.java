@@ -103,7 +103,7 @@ public final class QuickLaunchWidget extends Widget {
 
     private static String signature(List<PcState.Button> buttons) {
         StringBuilder out = new StringBuilder();
-        for (PcState.Button b : buttons) out.append(b.label).append('\u0001').append(b.glyph).append('\u0001').append(b.enabled).append('\u0001').append(b.color).append('\u0001').append(b.on).append('\u0001').append(b.describe).append('\u0002');
+        for (PcState.Button b : buttons) out.append(b.label).append('\u0001').append(b.glyph).append('\u0001').append(b.enabled).append('\u0001').append(b.color).append('\u0001').append(b.on).append('\u0001').append(b.describe).append('\u0001').append(b.kind).append('\u0002');
         return out.toString();
     }
 
@@ -121,7 +121,19 @@ public final class QuickLaunchWidget extends Widget {
         TextView name = ui.text(shortcut.label, (compact ? 14 : 15) * ui.textScale, ui.theme.text);
         name.setGravity(Gravity.CENTER);
         name.setMaxWidth(ui.px(Math.max(40, compact ? cellWidth - glyph - 40 : cellWidth - 24)));
-        if (labelMode != CardSizing.DECK_LABEL_NONE) button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
+        // LARGE cells are tiles: the glyph, the name and what the button does, from the top left (as on the PC).
+        if (CardSizing.tile(cellWidth, cellHeight) == CardSizing.LARGE) {
+            button.removeAllViews();
+            button.setOrientation(LinearLayout.VERTICAL); button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            button.setPadding(ui.px(16), ui.px(12), ui.px(12), ui.px(12));
+            double size = Math.min(40, glyph);
+            button.addView(new GlyphView(ui.context, shortcut.glyph, color, ui.fpx(size)), ui.ll(ui.px(size + 4), ui.px(size + 4)));
+            TextView title = ui.text(shortcut.label, 17 * ui.textScale, ui.theme.text);
+            title.setTypeface(Ui.MEDIUM); title.setMaxWidth(ui.px(cellWidth - 44));
+            button.addView(title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0));
+            TextView kind = ui.caption(shortcut.kind); kind.setMaxWidth(ui.px(cellWidth - 44));
+            button.addView(kind, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 3, 0, 0));
+        } else if (labelMode != CardSizing.DECK_LABEL_NONE) button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
         button.setContentDescription(shortcut.label + (shortcut.on ? ", on" : ""));
         button.setClickable(true);
         Ui.enable(button, shortcut.enabled);

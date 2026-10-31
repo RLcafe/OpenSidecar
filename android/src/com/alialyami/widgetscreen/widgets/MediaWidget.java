@@ -50,25 +50,32 @@ public final class MediaWidget extends Widget {
         header.addView(source, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 
-        LinearLayout content = ui.row();
+        // Three designs (CardSizing.media, as on the PC): SMALL is one row of cover and song over the buttons; MEDIUM puts
+        // the cover beside the song over the seek row; LARGE centres a big cover over the song.
+        boolean large = CardSizing.media(width, height) == CardSizing.LARGE;
+        LinearLayout content = large ? ui.column() : ui.row();
+        if (large) content.setGravity(Gravity.CENTER);
         FrameLayout cover = new FrameLayout(ui.context);
-        // The cover grows with the card (CardSizing, as on the PC).
-        double size = CardSizing.mediaArt(width, height);
-        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, size < 80 ? 10 : 14));
+        // The cover grows with the card (CardSizing, as on the PC); larger text takes more of the room under it.
+        double size = large ? Math.max(120, CardSizing.mediaCover(width, height) - Math.round((ui.textScale - 1) * 80)) : CardSizing.mediaArt(width, height);
+        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, size < 80 ? 10 : large ? 20 : 14));
         cover.setClipToOutline(true);
-        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx((float) Math.round(Math.min(46, size * 0.44)))), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx((float) Math.round(Math.min(large ? 96 : 46, size * 0.44)))), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         art = new ImageView(ui.context);
         art.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        content.addView(cover, ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
+        content.addView(cover, large ? ui.ll(ui.px(size), ui.px(size)) : ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
         LinearLayout text = ui.column();
         // One line for the title, as on the PC; the whole name is in the content description.
-        title = Ui.wrap(ui.heading("Nothing playing"), 1);
+        title = Ui.wrap(large ? ui.text("Nothing playing", 28 * ui.textScale, ui.theme.text) : ui.heading("Nothing playing"), 1);
         title.setTypeface(Ui.MEDIUM);
+        if (large) title.setGravity(Gravity.CENTER);
         text.addView(title, ui.ll(Ui.MATCH, Ui.WRAP));
-        artist = Ui.wrap(ui.smallText(""), folded ? 1 : 2);
-        text.addView(artist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, folded ? 2 : 8, 0, 0));
-        content.addView(text, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
+        artist = Ui.wrap(ui.smallText(""), folded || large ? 1 : 2);
+        if (large) artist.setGravity(Gravity.CENTER);
+        text.addView(artist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, folded ? 2 : large ? 6 : 8, 0, 0));
+        if (large) content.addView(text, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 14, 0, 0));
+        else content.addView(text, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
         column.addView(content, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, folded ? 8 : 12, 0, 4));
 
         LinearLayout timeline = ui.row();

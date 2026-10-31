@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -340,7 +340,7 @@ namespace WidgetScreen
                 string hotkeyTarget = deckHotkeys.TargetName;
                 state["deck"] = settings.Shortcuts.Select(s => D("label", s.Label, "glyph", String.IsNullOrEmpty(s.Glyph) ? "E8A7" : ((int)s.Glyph[0]).ToString("X4"), "action", s.Action,
                     "describe", DeckActions.DescribeWithTarget(s, hotkeyTarget), "confirm", DeckActions.NeedsConfirmation(s), "enabled", !String.IsNullOrWhiteSpace(s.Target),
-                    "color", s.Color ?? "", "on", DeckStateOn(s))).ToArray();
+                    "color", s.Color ?? "", "on", DeckStateOn(s), "kind", DeckActions.Kind(s))).ToArray();
             }
             if (parts.Contains("weather"))
                 state["weather"] = D("location", settings.WeatherLocation ?? "", "latitude", settings.Latitude, "longitude", settings.Longitude, "imperial", settings.WeatherUnits == "imperial");

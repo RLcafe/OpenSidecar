@@ -115,6 +115,23 @@ namespace WidgetScreen
             if (size == Design.Medium) return Clamp(Math.Round(Math.Min(room / 1.12, width * 0.15)), 40, 80);
             return Clamp(Math.Round(Math.Min(room / 1.12, width * 0.2)), 52, 128);
         }
+        // The other cards' designs (docs/design/widget-size-views.md, "Every widget"). Small is the folded card from
+        // resizable-widgets.md; Large is a new layout.
+        // Focus: Small under 300 tall; Large (the progress as a ring around the countdown) from 300 × 460.
+        public static Design Focus(double width, double height) { return FocusShort(height) ? Design.Small : width >= 300 && height >= 460 ? Design.Large : Design.Medium; }
+        public static double FocusRing(double width, double height) { return Clamp(Math.Floor(Math.Min(width - 48, height - 186)), 160, 420); }
+        // Now Playing: Small under 290 tall; Large (a big centred cover over the song) from 360 × 460.
+        public static Design Media(double width, double height) { return MediaShort(height) ? Design.Small : width >= 360 && height >= 460 ? Design.Large : Design.Medium; }
+        public static double MediaCover(double width, double height) { return Clamp(Math.Floor(Math.Min(width - 88, height - 296)), 120, 360); }
+        // The mixer's Master, Compact and Full arrangements are its Small, Medium and Large; a Large card 760 wide lists
+        // the apps in two columns.
+        public static Design MixerDesign(double height) { var mode = Mixer(height); return mode == MixerMode.Master ? Design.Small : mode == MixerMode.Compact ? Design.Medium : Design.Large; }
+        public static int MixerColumns(double width, double height) { return Mixer(height) == MixerMode.Full && width >= 760 ? 2 : 1; }
+        // Spotify: Small is the compact card under 500 tall; Large (the song in a side panel with a big cover) from 760 wide.
+        public static Design Spotify(double width, double height) { return SpotifyCompact(height) ? Design.Small : width >= 760 ? Design.Large : Design.Medium; }
+        // Quick Launch and Soundboard buttons by their cell: Small (glyph or name alone), Medium (glyph over the name),
+        // Large (a tile with the glyph, the name and what it does).
+        public static Design Tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? Design.Small : cellWidth >= 150 && cellHeight >= 110 ? Design.Large : Design.Medium; }
         // The hours a Large forecast shows: up to five, as many as fit 72 units each.
         public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }

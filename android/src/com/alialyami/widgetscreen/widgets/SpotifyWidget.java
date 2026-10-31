@@ -88,6 +88,9 @@ public final class SpotifyWidget extends Widget {
         // A compact card keeps the tabs, list and now-playing strip, with a smaller strip and no idle status row (as on
         // the PC).
         compact = CardSizing.spotifyCompact(height);
+        // LARGE moves the song into a side panel with a cover as wide as the panel (CardSizing.spotify, as on the PC).
+        boolean large = CardSizing.spotify(width, height) == CardSizing.LARGE;
+        double side = large ? Math.max(260, Math.min(360, Math.round((width - 48) * 0.32))) : 0;
         int detail = CardSizing.emptyDetail(height - 98);
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
@@ -99,6 +102,7 @@ public final class SpotifyWidget extends Widget {
         account.setContentDescription("Spotify account and setup in Settings");
         header.addView(account, ui.ll(Ui.WRAP, Ui.WRAP));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(48)));
+        LinearLayout left = large ? ui.column() : column;
 
         tabs = ui.row();
         for (int i = 0; i < KINDS.length; i++) {
@@ -108,7 +112,7 @@ public final class SpotifyWidget extends Widget {
             tabButtons[i].setPadding(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
             tabs.addView(tabButtons[i], ui.margins(ui.ll(0, Ui.MATCH, 1), 0, 0, i < 2 ? 4 : 0, 0));
         }
-        column.addView(tabs, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 4, 0, 4));
+        left.addView(tabs, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 4, 0, 4));
 
         library = ui.column();
         searchRow = ui.row();
@@ -152,27 +156,30 @@ public final class SpotifyWidget extends Widget {
         pageNext = ui.button("Next", new View.OnClickListener() { @Override public void onClick(View v) { offset += 10; loadPage(); } });
         paging.addView(pageNext, ui.ll(Ui.WRAP, Ui.WRAP));
         library.addView(paging, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
-        column.addView(library, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 4));
+        left.addView(library, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 4));
 
-        strip = ui.row();
+        strip = large ? ui.column() : ui.row();
+        if (large) strip.setGravity(Gravity.CENTER);
         strip.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
-        strip.setPadding(ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8));
+        double pad = compact ? 6 : large ? 14 : 8;
+        strip.setPadding(ui.px(pad), ui.px(pad), ui.px(pad), ui.px(pad));
         FrameLayout cover = new FrameLayout(ui.context);
-        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, 10));
+        double coverSize = large ? side - 16 - 28 : compact ? 48 : 64;
+        cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, large ? 16 : 10));
         cover.setClipToOutline(true);
-        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx(26)), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx(large ? Math.round(coverSize * 0.3) : 26)), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         art = new ImageView(ui.context);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setContentDescription("Current song cover");
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        strip.addView(cover, ui.ll(ui.px(compact ? 48 : 64), ui.px(compact ? 48 : 64)));
+        strip.addView(cover, ui.ll(ui.px(coverSize), ui.px(coverSize)));
         LinearLayout song = ui.column();
-        songTitle = ui.body("");
+        songTitle = large ? Ui.wrap(ui.body(""), 2) : ui.body("");
         songTitle.setTypeface(Ui.MEDIUM);
         song.addView(songTitle, ui.ll(Ui.MATCH, Ui.WRAP));
         songArtist = ui.smallText("");
         song.addView(songArtist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
-        strip.addView(song, ui.margins(ui.ll(0, Ui.WRAP, 1), 12, 0, 8, 0));
+        strip.addView(song, large ? ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 2, 14, 2, 0) : ui.margins(ui.ll(0, Ui.WRAP, 1), 12, 0, 8, 0));
         LinearLayout likeButton = ui.row();
         likeButton.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
         likeButton.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));
@@ -183,8 +190,14 @@ public final class SpotifyWidget extends Widget {
         likeButton.addView(like, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 6, 0, 0, 0));
         likeButton.setClickable(true);
         likeButton.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { toggleLike(); } });
-        strip.addView(likeButton, ui.ll(Ui.WRAP, Ui.WRAP));
-        column.addView(strip, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
+        if (large) likeButton.setGravity(Gravity.CENTER);
+        strip.addView(likeButton, large ? ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 14, 0, 0) : ui.ll(Ui.WRAP, Ui.WRAP));
+        if (large) {
+            LinearLayout body = ui.row(); body.setGravity(Gravity.FILL_VERTICAL);
+            body.addView(left, ui.ll(0, Ui.MATCH, 1));
+            body.addView(strip, ui.margins(ui.ll(ui.px(side - 16), Ui.MATCH), 16, 4, 0, 4));
+            column.addView(body, ui.ll(Ui.MATCH, 0, 1));
+        } else column.addView(strip, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
 
         status = ui.smallText("");
         column.addView(status, compact ? ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0) : ui.ll(Ui.MATCH, ui.px(36)));

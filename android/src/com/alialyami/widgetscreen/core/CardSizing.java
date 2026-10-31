@@ -113,6 +113,23 @@ public final class CardSizing {
         if (design == MEDIUM) return clamp(Math.round(Math.min(room / 1.12, width * 0.15)), 40, 80);
         return clamp(Math.round(Math.min(room / 1.12, width * 0.2)), 52, 128);
     }
+    // The other cards' designs, the same numbers as CardSizing.cs (docs/design/widget-size-views.md, "Every widget").
+    // Small is the folded card from resizable-widgets.md; Large is a new layout.
+    // Focus: Small under 300 tall; Large (the progress as a ring around the countdown) from 300 × 460.
+    public static int focus(double width, double height) { return focusShort(height) ? SMALL : width >= 300 && height >= 460 ? LARGE : MEDIUM; }
+    public static double focusRing(double width, double height) { return clamp(Math.floor(Math.min(width - 48, height - 186)), 160, 420); }
+    // Now Playing: Small under 290 tall; Large (a big centred cover over the song) from 360 × 460.
+    public static int media(double width, double height) { return mediaShort(height) ? SMALL : width >= 360 && height >= 460 ? LARGE : MEDIUM; }
+    public static double mediaCover(double width, double height) { return clamp(Math.floor(Math.min(width - 88, height - 296)), 120, 360); }
+    // The mixer's MASTER, COMPACT and FULL arrangements are its SMALL, MEDIUM and LARGE; a LARGE card 760 wide lists the
+    // apps in two columns.
+    public static int mixerDesign(double height) { int mode = mixer(height); return mode == MIXER_MASTER ? SMALL : mode == MIXER_COMPACT ? MEDIUM : LARGE; }
+    public static int mixerColumns(double width, double height) { return mixer(height) == MIXER_FULL && width >= 760 ? 2 : 1; }
+    // Spotify: SMALL is the compact card under 500 tall; LARGE (the song in a side panel with a big cover) from 760 wide.
+    public static int spotify(double width, double height) { return spotifyCompact(height) ? SMALL : width >= 760 ? LARGE : MEDIUM; }
+    // Quick Launch and Soundboard buttons by their cell: SMALL (glyph or name alone), MEDIUM (glyph over the name), LARGE
+    // (a tile with the glyph, the name and what it does).
+    public static int tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? SMALL : cellWidth >= 150 && cellHeight >= 110 ? LARGE : MEDIUM; }
     // The hours a Large forecast shows: up to five, as many as fit 72 units each.
     public static int weatherHours(double width) { return (int) clamp(Math.floor((width - 48 - 16) / 72), 3, 5); }
 

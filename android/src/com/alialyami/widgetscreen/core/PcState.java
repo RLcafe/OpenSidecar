@@ -51,7 +51,7 @@ public final class PcState {
         public boolean anyShown() { return showCpu || showGpu || showRam || showNetwork || showUptime; }
     }
 
-    public static final class Button { public String label, glyph, action, describe, color = ""; public boolean confirm, enabled, on; }
+    public static final class Button { public String label, glyph, action, describe, color = "", kind = ""; public boolean confirm, enabled, on; }
 
     public static final class Weather { public String location = ""; public double latitude, longitude; public boolean imperial; }
 
@@ -162,7 +162,7 @@ public final class PcState {
                 Map<String, Object> b = Json.obj(item);
                 Button button = new Button();
                 button.label = text(b, "label"); button.glyph = glyph(Json.field(b, "glyph")); button.action = text(b, "action"); button.describe = text(b, "describe");
-                button.confirm = flag(b, "confirm"); button.enabled = flag(b, "enabled"); button.on = flag(b, "on"); button.color = text(b, "color");
+                button.confirm = flag(b, "confirm"); button.enabled = flag(b, "enabled"); button.on = flag(b, "on"); button.color = text(b, "color"); button.kind = text(b, "kind");
                 state.deck.add(button);
             }
         }
