@@ -9,7 +9,6 @@ import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Spotify;
-import com.alialyami.widgetscreen.core.StatsLayout;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.core.WidgetLayout;
@@ -245,7 +244,7 @@ public final class AndroidTests {
             ok(Format.focusButton(1000, false, 0.5).equals("Resume") && Format.focusButton(1000, true, 0.5).equals("Pause") && Format.focusButton(1500000, false, 0).equals("Start focus"), "focus button");
             ok(Format.sessions(0, 0).isEmpty() && Format.sessions(1, 25).equals("1 session today  ·  25 m") && Format.sessions(3, 100).equals("3 sessions today  ·  1 h 40 m"), "sessions");
             ok(Format.mediaTime(185000).equals("3:05") && Format.rate(2048).equals("2 KB/s") && Format.rate(3 * 1048576).equals("3.0 MB/s"), "media and rate");
-            ok(Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L).equals("2d 3h 4m"), "uptime");
+            ok(Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L).equals("2d 3h 4m") && Format.uptime((2 * 1440 + 3 * 60 + 4) * 60000L, 2).equals("2d 3h"), "uptime");
         } });
 
         check("Weather parses Open-Meteo responses and describes codes", new Action() { public void run() {
@@ -259,7 +258,7 @@ public final class AndroidTests {
             }
             Weather.Snapshot full = Weather.parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":61},\"daily\":{\"temperature_2m_max\":[24.6],\"temperature_2m_min\":[14.2]},\"hourly\":{\"time\":[" + times + "],\"temperature_2m\":[" + temps + "],\"weather_code\":[" + codes + "]}}", 5, "2026-10-22T21:00");
             ok(full.high == 24.6 && full.low == 14.2 && Weather.details(full, false).equals("Feels 19°  ·  8 km/h  ·  ↑ 25° ↓ 14°"), "high and low " + Weather.details(full, false));
-            ok(full.hours.size() == 3 && full.hours.get(0).time.equals("2026-10-22T21:00") && full.hours.get(1).time.equals("2026-10-23T00:00") && full.hours.get(2).time.equals("2026-10-23T03:00") && full.hours.get(0).temperature == 31, "next hours");
+            ok(full.hours.size() == 5 && full.hours.get(4).time.equals("2026-10-23T09:00") && full.hours.get(0).time.equals("2026-10-22T21:00") && full.hours.get(1).time.equals("2026-10-23T00:00") && full.hours.get(2).time.equals("2026-10-23T03:00") && full.hours.get(0).temperature == 31, "next hours");
             ok(Weather.hourLabel("2026-10-23T00:00", true).equals("00:00") && Weather.hourLabel("2026-10-22T14:00", false).equals("2 PM") && Weather.hourLabel("2026-10-22T00:00", false).equals("12 AM"), "hour labels");
             ok(Weather.family(0).equals("sun") && Weather.family(2).equals("partly") && Weather.family(3).equals("cloud") && Weather.family(45).equals("fog") && Weather.family(63).equals("rain") && Weather.family(81).equals("rain") && Weather.family(75).equals("snow") && Weather.family(95).equals("storm"), "glyph families");
             ok(Weather.forecastUrl(1.5, -2.25, true).contains("temperature_unit=fahrenheit&wind_speed_unit=mph") && !Weather.forecastUrl(1.5, -2.25, false).contains("fahrenheit") && Weather.forecastUrl(1.5, -2.25, false).contains("latitude=1.5&longitude=-2.25"), "forecast url");
@@ -389,10 +388,11 @@ public final class AndroidTests {
         check("Quick Launch glyphs from the PC map to drawn icons", new Action() { public void run() {
             ok(PcState.glyph("E8D6").equals("music") && PcState.glyph("e774").equals("globe") && PcState.glyph("E720").equals("microphone") && PcState.glyph("FFFF").equals("app") && PcState.glyph(null).equals("app"), "glyphs");
         } });
-        check("System stats pick columns like the Windows layout", new Action() { public void run() {
-            ok(StatsLayout.bestColumns(400, 262, 336, 46, 5) == 1, "narrow card");
-            ok(StatsLayout.bestColumns(1100, 100, 336, 46, 5) == 3 && StatsLayout.bestColumns(1100, 200, 336, 46, 5) == 2, "wide card");
-            ok(StatsLayout.rowWidth(1100, 200, 324, 12, 46, 5, 3) >= 324, "row width");
+        check("System stats and Weather pick small, medium and large designs like the PC", new Action() { public void run() {
+            ok(CardSizing.stats(260, 280) == CardSizing.SMALL && CardSizing.stats(339, 576) == CardSizing.SMALL && CardSizing.stats(472, 310) == CardSizing.MEDIUM && CardSizing.stats(900, 300) == CardSizing.MEDIUM && CardSizing.stats(400, 420) == CardSizing.LARGE && CardSizing.stats(472, 576) == CardSizing.LARGE, "stats");
+            ok(CardSizing.weather(232, 152) == CardSizing.SMALL && CardSizing.weather(600, 219) == CardSizing.SMALL && CardSizing.weather(472, 250) == CardSizing.MEDIUM && CardSizing.weather(360, 576) == CardSizing.MEDIUM && CardSizing.weather(400, 340) == CardSizing.LARGE, "weather");
+            ok(CardSizing.statsTileColumns(472, 4) == 2 && CardSizing.statsTileColumns(1200, 4) == 4 && CardSizing.statsTileColumns(1200, 1) == 1 && CardSizing.weatherHours(400) == 4 && CardSizing.weatherHours(800) == 5 && CardSizing.weatherHours(300) == 3, "tiles and hours");
+            ok(CardSizing.statsListValue(39) == 22 && CardSizing.statsRing(143, 110) == 110 && CardSizing.statsTileValue(240) == 58, "reading sizes");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");
@@ -489,7 +489,7 @@ public final class AndroidTests {
             ok(CardSizing.deckGlyph(80, false) == 24 && CardSizing.deckGlyph(100, true) == 18 && CardSizing.deckGlyph(400, false) == 44, "glyphs");
             ok(CardSizing.focusTime(320, 576) == 84 && CardSizing.focusTime(296, 300) == 42 && CardSizing.focusTime(600, 900) > 84, "countdown");
             ok(CardSizing.mediaArt(472, 310) == 104 && CardSizing.mediaArt(600, 500) > 104 && CardSizing.mediaArt(2000, 2000) == 220, "cover");
-            ok(CardSizing.weatherTemperature(472, 250) == 54 && CardSizing.weatherTemperature(360, 220) >= 40, "temperature");
+            ok(CardSizing.weatherTemperature(CardSizing.MEDIUM, 472, 88) == 71 && CardSizing.weatherTemperature(CardSizing.SMALL, 232, 60) == 54 && CardSizing.weatherTemperature(CardSizing.LARGE, 400, 60) == 54, "temperature");
             ok(CardSizing.spotifyColumns(560) == 1 && CardSizing.spotifyColumns(752) == 2 && CardSizing.spotifyColumns(3000) == 3, "Spotify");
         } });
         check("Palettes and accents match the Windows resources", new Action() { public void run() {

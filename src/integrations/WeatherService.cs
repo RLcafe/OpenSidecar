@@ -24,7 +24,7 @@ namespace WidgetScreen
     {
         public double Temperature, FeelsLike, Wind;
         public int Code;
-        // Today's high and low, and the next hours (now, +3 h, +6 h), when the answer had them.
+        // Today's high and low, and the next hours (now, +3 h, +6 h, +9 h, +12 h), when the answer had them.
         public double? High, Low;
         public List<WeatherHour> Hours = new List<WeatherHour>();
         public DateTime Retrieved;
@@ -105,7 +105,7 @@ namespace WidgetScreen
                         DateTime thisHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
                         int start = all.FindIndex(hour => hour.Time >= thisHour);
                         if (start < 0) start = 0;
-                        foreach (int offset in new[] { 0, 3, 6 }) if (start + offset < all.Count) snapshot.Hours.Add(all[start + offset]);
+                        foreach (int offset in new[] { 0, 3, 6, 9, 12 }) if (start + offset < all.Count) snapshot.Hours.Add(all[start + offset]);
                     }
                 }
             }
@@ -140,6 +140,13 @@ namespace WidgetScreen
             string text = "Feels " + Math.Round(snapshot.FeelsLike) + "°  ·  " + Math.Round(snapshot.Wind) + (imperial ? " mph" : " km/h");
             if (snapshot.High.HasValue && snapshot.Low.HasValue) text += "  ·  ↑ " + Math.Round(snapshot.High.Value) + "° ↓ " + Math.Round(snapshot.Low.Value) + "°";
             return text;
+        }
+        // The three facts under the reading in the Medium and Large designs: name and value (Weather.facts on the phone).
+        public static string[][] Facts(WeatherSnapshot snapshot, bool imperial)
+        {
+            var facts = new List<string[]> { new[] { "FEELS", Math.Round(snapshot.FeelsLike) + "°" }, new[] { "WIND", Math.Round(snapshot.Wind) + (imperial ? " mph" : " km/h") } };
+            if (snapshot.High.HasValue && snapshot.Low.HasValue) facts.Add(new[] { "HIGH / LOW", Math.Round(snapshot.High.Value) + "° / " + Math.Round(snapshot.Low.Value) + "°" });
+            return facts.ToArray();
         }
         // The glyph family for a condition: sun, partly, cloud, fog, rain, snow or storm.
         public static string Family(int code)

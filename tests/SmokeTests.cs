@@ -121,7 +121,7 @@ internal static class SmokeTests
                     Assert(saved.Theme == "Slate" && !saved.ShowGpu && !saved.ShowRam && !saved.StartFullscreen, "Cross-tab save lost values.");
                     Assert(((System.Windows.Controls.Border)window.FindName("SystemCard")).Visibility == System.Windows.Visibility.Collapsed, "All-off stats still occupy a card.");
                     click("SettingsButton"); ((System.Windows.Controls.CheckBox)window.FindName("RamChoice")).IsChecked = true; click("SaveSettings");
-                    Assert(((System.Windows.FrameworkElement)window.FindName("RamSection")).Visibility == System.Windows.Visibility.Visible && ((System.Windows.FrameworkElement)window.FindName("GpuSection")).Visibility == System.Windows.Visibility.Collapsed, "Individual stats not restored.");
+                    Assert(window.FindName("RamSection") != null && window.FindName("GpuSection") == null && window.FindName("CpuSection") == null, "Individual stats not restored.");
                 }
                 window.Close();
             }
@@ -492,12 +492,47 @@ internal static class SmokeTests
                 window.Close();
             }
         });
-        Check("System stats pick columns and scale with their widget", () => {
-            var cell = new System.Windows.Size(336, 46);
-            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(332, 226), cell, 5) == 1, "Compact stats did not stay in one column.");
-            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(900, 226), cell, 5) == 2, "Wide stats did not use two columns.");
-            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(1800, 120), cell, 5) == 3, "Very wide stats did not use three columns.");
-            Assert(SystemStatsLayout.BestColumns(new System.Windows.Size(0, 0), cell, 5) == 1 && SystemStatsLayout.BestColumns(new System.Windows.Size(900, 226), cell, 1) == 1, "Degenerate sizes picked several columns.");
+        Check("System stats and Weather switch between small, medium and large designs that stay inside their cards", () => {
+            Assert(CardSizing.Stats(260, 280) == CardSizing.Design.Small && CardSizing.Stats(339, 576) == CardSizing.Design.Small && CardSizing.Stats(472, 310) == CardSizing.Design.Medium && CardSizing.Stats(900, 300) == CardSizing.Design.Medium && CardSizing.Stats(400, 420) == CardSizing.Design.Large && CardSizing.Stats(472, 576) == CardSizing.Design.Large, "Stats designs are picked at the wrong sizes.");
+            Assert(CardSizing.Weather(232, 152) == CardSizing.Design.Small && CardSizing.Weather(600, 219) == CardSizing.Design.Small && CardSizing.Weather(472, 250) == CardSizing.Design.Medium && CardSizing.Weather(360, 576) == CardSizing.Design.Medium && CardSizing.Weather(400, 340) == CardSizing.Design.Large, "Weather designs are picked at the wrong sizes.");
+            Assert(CardSizing.StatsTileColumns(472, 4) == 2 && CardSizing.StatsTileColumns(1200, 4) == 4 && CardSizing.StatsTileColumns(1200, 1) == 1 && CardSizing.WeatherHours(400) == 4 && CardSizing.WeatherHours(800) == 5 && CardSizing.WeatherHours(300) == 3, "Tile columns or forecast hours are wrong.");
+            Assert(SystemStatsCard.Uptime(new TimeSpan(3, 4, 12, 0), 3, false) == "3d 4h 12m" && SystemStatsCard.Uptime(new TimeSpan(3, 4, 12, 0), 2, true) == "Up 3d 4h", "Uptime text is wrong.");
+            foreach (var size in new[] { new System.Windows.Size(260, 280), new System.Windows.Size(472, 310), new System.Windows.Size(472, 576), new System.Windows.Size(1200, 420) })
+            {
+                string path = Path.Combine(directory, "designs-" + size.Width + "x" + size.Height + ".xml");
+                var settings = new AppSettings { TextScale = 1.4, WeatherLocation = "A city with a long name, Somewhere, Far away", Latitude = 1, Longitude = 1 };
+                settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings).Select(p => { p.Visible = p.Id == "System" || p.Id == "Weather"; p.X = p.Id == "Weather" ? 0 : 1856 - size.Width; p.Y = 0; p.Width = Math.Min(size.Width, 1856 - size.Width); p.Height = size.Height; if (p.Id == "System") p.Width = size.Width; return p; }).ToArray();
+                if (size.Width * 2 > 1856) settings.WidgetLayout.First(p => p.Id == "Weather").Visible = false;
+                SettingsStore.Save(path, settings);
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                    try
+                    {
+                        using (var controller = new DashboardController(window, path, true))
+                        {
+                            var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
+                            dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                            foreach (string id in new[] { "System", "Weather" })
+                            {
+                                var card = (System.Windows.FrameworkElement)window.FindName(id + "Card");
+                                if (card.Visibility != System.Windows.Visibility.Visible) continue;
+                                var view = (System.Windows.FrameworkElement)window.FindName(id + "View");
+                                Assert(view != null, id + " built no design at " + size + ".");
+                                // Every text and drawn part sits inside the card's padding, whole.
+                                foreach (var part in Descendants(view).OfType<System.Windows.FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is System.Windows.Controls.TextBlock || e is RingGauge || e is HistoryGraph || e is System.Windows.Controls.Border)))
+                                {
+                                    var box = part.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, part.ActualWidth, part.ActualHeight));
+                                    Assert(box.Left >= 23.5 && box.Top >= 23.5 && box.Right <= card.ActualWidth - 23.5 && box.Bottom <= card.ActualHeight - 23.5, id + " pushes " + part.GetType().Name + " " + (part is System.Windows.Controls.TextBlock ? "\"" + ((System.Windows.Controls.TextBlock)part).Text + "\" " : "") + "out of its " + size + " card: " + box);
+                                }
+                            }
+                        }
+                    }
+                    finally { window.Close(); }
+                }
+            }
+        });
+        Check("System stats grow with their widget", () => {
             Func<double, double, double> cpuHeight = (width, height) => {
                 string path = Path.Combine(directory, "stats-" + width + ".xml");
                 var settings = new AppSettings();
@@ -513,7 +548,7 @@ internal static class SmokeTests
                             var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                             dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                             var card = (System.Windows.FrameworkElement)window.FindName("SystemCard");
-                            foreach (string name in new[] { "CpuSection", "UptimeSection" })
+                            foreach (string name in new[] { "CpuSection", "UptimeValue" })
                             {
                                 var row = (System.Windows.FrameworkElement)window.FindName(name);
                                 var bounds = row.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, row.ActualWidth, row.ActualHeight));
@@ -562,7 +597,9 @@ internal static class SmokeTests
             string codes = ""; for (int h = 0; h < 48; h++) codes += (h > 0 ? "," : "") + (h % 2 == 0 ? 0 : 61);
             var full = WeatherService.Parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":61},\"daily\":{\"temperature_2m_max\":[24.6],\"temperature_2m_min\":[14.2]},\"hourly\":{\"time\":[" + hours + "],\"temperature_2m\":[" + temps + "],\"weather_code\":[" + codes + "]}}", new DateTime(2026, 10, 22, 21, 40, 0));
             Assert(full.High == 24.6 && full.Low == 14.2 && WeatherService.Details(full, false) == "Feels 19°  ·  8 km/h  ·  ↑ 25° ↓ 14°", "High and low not parsed: " + WeatherService.Details(full, false));
-            Assert(full.Hours.Count == 3 && full.Hours[0].Time.Hour == 21 && full.Hours[1].Time.Hour == 0 && full.Hours[1].Time.Day == 23 && full.Hours[2].Time.Hour == 3 && full.Hours[0].Temperature == 31, "The next hours weren't picked from now, +3 h and +6 h.");
+            Assert(full.Hours.Count == 5 && full.Hours[0].Time.Hour == 21 && full.Hours[1].Time.Hour == 0 && full.Hours[1].Time.Day == 23 && full.Hours[2].Time.Hour == 3 && full.Hours[4].Time.Hour == 9 && full.Hours[0].Temperature == 31, "The next hours weren't picked from now, +3 h, +6 h, +9 h and +12 h.");
+            var facts = WeatherService.Facts(full, false);
+            Assert(facts.Length == 3 && facts[0][0] == "FEELS" && facts[0][1] == "19°" && facts[1][1] == "8 km/h" && facts[2][1] == "25° / 14°" && WeatherService.Facts(result, true).Length == 2 && WeatherService.Facts(result, true)[1][1] == "12 mph", "Weather facts are wrong.");
             Assert(WeatherService.HourLabel(full.Hours[1].Time, true) == "00:00" && WeatherService.HourLabel(new DateTime(2026, 10, 22, 14, 0, 0), false) == "2 PM", "Hour labels are wrong.");
             Assert(WeatherService.Family(0) == "sun" && WeatherService.Family(2) == "partly" && WeatherService.Family(3) == "cloud" && WeatherService.Family(45) == "fog" && WeatherService.Family(63) == "rain" && WeatherService.Family(81) == "rain" && WeatherService.Family(75) == "snow" && WeatherService.Family(86) == "snow" && WeatherService.Family(95) == "storm", "Glyph families are wrong.");
             foreach (string family in new[] { "sun", "partly", "cloud", "fog", "rain", "snow", "storm" }) System.Windows.Media.Geometry.Parse(WeatherService.Glyph(family));

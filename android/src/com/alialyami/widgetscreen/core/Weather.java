@@ -30,7 +30,7 @@ public final class Weather {
     }
 
     public static Snapshot parse(String json, long nowMs) { return parse(json, nowMs, null); }
-    // nowHour is "yyyy-MM-ddTHH:00" in the city's local time; the next hours (now, +3 h, +6 h) start from it.
+    // nowHour is "yyyy-MM-ddTHH:00" in the city's local time; the next hours (now, +3 h, +6 h, +9 h, +12 h) start from it.
     public static Snapshot parse(String json, long nowMs, String nowHour) {
         Map<String, Object> root = Json.obj(Json.parse(json));
         if (!Json.has(root, "current")) throw new IllegalStateException("Weather data is unavailable.");
@@ -64,7 +64,7 @@ public final class Weather {
                 }
                 int start = 0;
                 if (nowHour != null) { for (int i = 0; i < all.size(); i++) if (all.get(i).time.compareTo(nowHour) >= 0) { start = i; break; } }
-                for (int offset : new int[] { 0, 3, 6 }) if (start + offset < all.size()) snapshot.hours.add(all.get(start + offset));
+                for (int offset : new int[] { 0, 3, 6, 9, 12 }) if (start + offset < all.size()) snapshot.hours.add(all.get(start + offset));
             }
         } catch (RuntimeException e) { snapshot.high = snapshot.low = null; snapshot.hours.clear(); }
         return snapshot;
@@ -90,6 +90,13 @@ public final class Weather {
         String text = "Feels " + Math.round(snapshot.feelsLike) + "°  ·  " + Math.round(snapshot.wind) + (imperial ? " mph" : " km/h");
         if (snapshot.high != null && snapshot.low != null) text += "  ·  ↑ " + Math.round(snapshot.high) + "° ↓ " + Math.round(snapshot.low) + "°";
         return text;
+    }
+
+    // The three facts under the reading in the Medium and Large designs: name and value (WeatherService.Facts on Windows).
+    public static String[][] facts(Snapshot snapshot, boolean imperial) {
+        String wind = Math.round(snapshot.wind) + (imperial ? " mph" : " km/h");
+        if (snapshot.high == null || snapshot.low == null) return new String[][] { { "FEELS", Math.round(snapshot.feelsLike) + "°" }, { "WIND", wind } };
+        return new String[][] { { "FEELS", Math.round(snapshot.feelsLike) + "°" }, { "WIND", wind }, { "HIGH / LOW", Math.round(snapshot.high) + "° / " + Math.round(snapshot.low) + "°" } };
     }
 
     // The glyph family for a condition (Glyphs.java draws them): sun, partly, cloud, fog, rain, snow or storm.
