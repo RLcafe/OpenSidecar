@@ -27,6 +27,8 @@ namespace WidgetScreen
         public string Theme { get; set; }
         public double CornerRadius { get; set; }
         public bool StartFullscreen { get; set; }
+        // Taps on the dashboard leave the game or app in front focused (decision 013).
+        public bool KeepGameFocus { get; set; }
         public bool ShowCpu { get; set; }
         public bool ShowGpu { get; set; }
         public bool ShowRam { get; set; }
@@ -93,6 +95,7 @@ namespace WidgetScreen
             Theme = "Midnight";
             CornerRadius = 20;
             StartFullscreen = true;
+            KeepGameFocus = true;
             SnapWidgets = true;
             ShowCpu = ShowGpu = ShowRam = ShowNetwork = ShowUptime = true;
             ClockWidth = 1; MediaWidth = 3; MixerWidth = 3; SystemWidth = 2;

@@ -23,7 +23,7 @@ namespace WidgetScreen
             window.WindowStyle = WindowStyle.None;
             window.ResizeMode = ResizeMode.NoResize;
             var bounds = screen.Bounds;
-            return SetWindowPos(new WindowInteropHelper(window).Handle, IntPtr.Zero, bounds.X, bounds.Y, bounds.Width, bounds.Height, 0x0040 | 0x0004);
+            return SetWindowPos(new WindowInteropHelper(window).Handle, IntPtr.Zero, bounds.X, bounds.Y, bounds.Width, bounds.Height, 0x0040 | 0x0010 | 0x0004);
         }
         public static void Windowed(Window window)
         {
@@ -33,7 +33,7 @@ namespace WidgetScreen
             var bounds = Forms.Screen.PrimaryScreen.WorkingArea;
             int width = Math.Min(1536, (int)(bounds.Width * .90));
             int height = Math.Min(660, (int)(bounds.Height * .88));
-            SetWindowPos(new WindowInteropHelper(window).Handle, IntPtr.Zero, bounds.X + (bounds.Width - width) / 2, bounds.Y + (bounds.Height - height) / 2, width, height, 0x0040 | 0x0004);
+            SetWindowPos(new WindowInteropHelper(window).Handle, IntPtr.Zero, bounds.X + (bounds.Width - width) / 2, bounds.Y + (bounds.Height - height) / 2, width, height, 0x0040 | 0x0010 | 0x0004);
         }
     }
 }

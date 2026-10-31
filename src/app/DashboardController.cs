@@ -52,6 +52,7 @@ namespace WidgetScreen
         private readonly List<double> cpuHistory = new List<double>();
         private readonly DeckEditor deckEditor;
         private readonly DeckHotkeys deckHotkeys;
+        private readonly FocusKeeper focusKeeper;
         private int deckPage;
         public LayoutEditor Editor { get; private set; }
         private bool syncingEditor;
@@ -99,6 +100,7 @@ namespace WidgetScreen
             mediaScrubber = new PlaybackScrubber(Control<Slider>("MediaProgress"), SeekMedia, value => Text("MediaPosition", FormatTime(TimeSpan.FromMilliseconds(value))));
             deckEditor = new DeckEditor(window, message => Text("SettingsStatus", message));
             deckHotkeys = new DeckHotkeys();
+            focusKeeper = new FocusKeeper(window);
             BindActions();
             InitializeRemote();
             InitializePages();
@@ -318,6 +320,7 @@ namespace WidgetScreen
         {
             ApplyAppearance(settings);
             ApplyLayout(settings);
+            focusKeeper.Enabled = settings.KeepGameFocus && !Program.Rendering;
             foreach (var row in sessionRows.Values) { row.Label.FontSize = 16 * settings.TextScale; row.Percent.FontSize = 14 * settings.TextScale; }
             // Quiet mode is a toggle: when on it takes the same selected look as the chosen Focus preset.
             var quiet = Control<Button>("QuietButton");
@@ -976,6 +979,7 @@ namespace WidgetScreen
             var theme = Control<ComboBox>("ThemeChoice"); theme.ItemsSource = new[] { "Midnight", "Slate", "Warm" }; theme.SelectedItem = settings.Theme;
             Control<Slider>("CornersChoice").Value = settings.CornerRadius;
             Control<CheckBox>("StartFullscreenChoice").IsChecked = settings.StartFullscreen;
+            Control<CheckBox>("KeepFocusChoice").IsChecked = settings.KeepGameFocus;
             Control<CheckBox>("CpuChoice").IsChecked = settings.ShowCpu; Control<CheckBox>("GpuChoice").IsChecked = settings.ShowGpu;
             Control<CheckBox>("RamChoice").IsChecked = settings.ShowRam; Control<CheckBox>("NetworkChoice").IsChecked = settings.ShowNetwork; Control<CheckBox>("UptimeChoice").IsChecked = settings.ShowUptime;
             Control<Slider>("ScaleChoice").Value = settings.TextScale * 100;
@@ -1007,6 +1011,7 @@ namespace WidgetScreen
             candidate.SpotifyClientId = spotifyId.Length == 0 ? settings.SpotifyClientId : spotifyId;
             candidate.Theme = (string)Control<ComboBox>("ThemeChoice").SelectedItem; candidate.CornerRadius = Control<Slider>("CornersChoice").Value;
             candidate.StartFullscreen = Control<CheckBox>("StartFullscreenChoice").IsChecked == true;
+            candidate.KeepGameFocus = Control<CheckBox>("KeepFocusChoice").IsChecked == true;
             candidate.ShowCpu = Control<CheckBox>("CpuChoice").IsChecked == true; candidate.ShowGpu = Control<CheckBox>("GpuChoice").IsChecked == true;
             candidate.ShowRam = Control<CheckBox>("RamChoice").IsChecked == true; candidate.ShowNetwork = Control<CheckBox>("NetworkChoice").IsChecked == true; candidate.ShowUptime = Control<CheckBox>("UptimeChoice").IsChecked == true;
             candidate.Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem; candidate.TextScale = Control<Slider>("ScaleChoice").Value / 100;
