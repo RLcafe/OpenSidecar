@@ -138,7 +138,7 @@ namespace WidgetScreen
             if (!PhoneActive)
             {
                 keepWindowWithPhone = false;
-                if (tray.Hidden && tray.Automatic && DateTime.UtcNow - lastPhoneSeen > PhoneGoneAfter) { tray.Show(); Notify("Your phone disconnected, so the dashboard is back."); }
+                if (tray.Hidden && tray.Automatic && DateTime.UtcNow - lastPhoneSeen > PhoneGoneAfter) { tray.Show(false); Notify("Your phone disconnected, so the dashboard is back."); }
                 return;
             }
             if (settings.HideToTrayWithPhone && !tray.Hidden && !keepWindowWithPhone && !Editor.Editing && Control<Grid>("SettingsOverlay").Visibility != Visibility.Visible) tray.Hide(true);

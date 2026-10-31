@@ -13,6 +13,8 @@ internal static class SmokeTests
         catch (Exception e) { failures++; Console.WriteLine("FAIL " + name + ": " + e); }
     }
     private static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr window, int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 
     [STAThread]
     private static int Main(string[] args)
@@ -103,6 +105,35 @@ internal static class SmokeTests
                     Assert(((System.Windows.Controls.Border)window.FindName("SystemCard")).Visibility == System.Windows.Visibility.Collapsed, "All-off stats still occupy a card.");
                     click("SettingsButton"); ((System.Windows.Controls.CheckBox)window.FindName("RamChoice")).IsChecked = true; click("SaveSettings");
                     Assert(((System.Windows.FrameworkElement)window.FindName("RamSection")).Visibility == System.Windows.Visibility.Visible && ((System.Windows.FrameworkElement)window.FindName("GpuSection")).Visibility == System.Windows.Visibility.Collapsed, "Individual stats not restored.");
+                }
+                window.Close();
+            }
+        });
+        Check("Tapping the dashboard keeps the game focused, and text boxes still take the keyboard", () => {
+            string path = Path.Combine(directory, "keep-focus.xml"); SettingsStore.Save(path, new AppSettings());
+            string warning; Assert(SettingsStore.Load(path, out warning).KeepGameFocus, "Keeping the game focused is not on by default.");
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                using (var controller = new DashboardController(window, path, true))
+                {
+                    IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+                    Func<bool> noActivate = () => (GetWindowLong(handle, -20) & 0x08000000) != 0;
+                    Assert(noActivate() && !window.ShowActivated, "The window would still take the focus.");
+                    Assert(SendMessage(handle, 0x0021, handle, IntPtr.Zero) == new IntPtr(3), "A click would still activate the window.");
+                    var query = (System.Windows.Controls.TextBox)window.FindName("SpotifyQuery");
+                    Assert(FocusKeeper.IsTextField(query) && !FocusKeeper.IsTextField((System.Windows.DependencyObject)window.FindName("SettingsButton")), "Text fields and buttons are not told apart.");
+                    // Fullscreen and back rewrite the window style; the no-activate bit has to survive.
+                    window.WindowStyle = System.Windows.WindowStyle.None; window.WindowStyle = System.Windows.WindowStyle.SingleBorderWindow;
+                    Assert(noActivate(), "Changing the window style dropped the no-activate bit.");
+                    query.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left) { RoutedEvent = System.Windows.UIElement.PreviewMouseDownEvent, Source = query });
+                    Assert(!noActivate(), "Pressing a text box left the window unable to take the keyboard.");
+                    Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    click("SettingsButton"); ((System.Windows.Controls.CheckBox)window.FindName("KeepFocusChoice")).IsChecked = false; click("SaveSettings");
+                    Assert(!SettingsStore.Load(path, out warning).KeepGameFocus && !noActivate() && window.ShowActivated, "Turning it off did not give back an ordinary window.");
+                    Assert(SendMessage(handle, 0x0021, handle, IntPtr.Zero) != new IntPtr(3), "Turned off, a click still would not activate the window.");
+                    click("SettingsButton"); ((System.Windows.Controls.CheckBox)window.FindName("KeepFocusChoice")).IsChecked = true; click("SaveSettings");
+                    Assert(noActivate(), "Turning it back on did not stop the window taking the focus.");
                 }
                 window.Close();
             }

@@ -536,6 +536,8 @@
               <CheckBox x:Name="StartFullscreenChoice" Content="Open fullscreen on this display at launch" Margin="0,10,0,0"/>
               <TextBlock Text="If this display is unplugged, another secondary display is used. With none connected, the dashboard opens in a window on your main screen." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,12"/>
               <TextBlock Text="F11 switches between fullscreen and a window. Escape leaves fullscreen." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <CheckBox x:Name="KeepFocusChoice" Content="Keep the focus on the game or app I'm using"/>
+              <TextBlock Text="Tapping the dashboard won't take the keyboard away from your main screen. Tapping a text box still does, so you can type. F11 and Escape only work after that." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
               </StackPanel>
               </TabItem>
               <TabItem Header="Widgets">

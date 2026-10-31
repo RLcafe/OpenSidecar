@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/setup-installer` was merged as v0.12.0.
+| `feature/keep-game-focus` | Tapping the dashboard leaves the game or app on the main screen focused; text boxes still take the keyboard (decision 013). Setting in Settings → Display, on by default. Android unchanged (separate device). | `46201b4` (v0.12.0) | Ready for review | `.worktrees\keep-game-focus` | `.worktrees\keep-game-focusrtifactspp\WidgetScreen.exe`, `.worktrees\keep-game-focusrtifactsndroid\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

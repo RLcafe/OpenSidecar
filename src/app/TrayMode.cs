@@ -33,14 +33,18 @@ namespace WidgetScreen
             if (Changed != null) Changed();
         }
 
-        public void Show()
+        // activate is false when the window comes back by itself, so it never takes the focus from a game.
+        public void Show(bool activate = true)
         {
             if (!Hidden) return;
             Hidden = false; Automatic = false;
             window.ShowInTaskbar = true;
+            bool showActivated = window.ShowActivated;
+            if (!activate) window.ShowActivated = false;
             if (window.IsLoaded) window.Show();
             if (window.WindowState == WindowState.Minimized) window.WindowState = restoreState;
-            window.Activate();
+            window.ShowActivated = showActivated;
+            if (activate) window.Activate();
             HideIcon();
             if (Changed != null) Changed();
         }
