@@ -50,6 +50,12 @@ public final class Format {
         return String.format(Locale.US, "%.0f KB/s", bytesPerSecond / 1024);
     }
 
+    // "3d 4h 12m"; parts 2 drops the minutes, as SystemStatsCard.Uptime on Windows.
+    public static String uptime(long ms, int parts) {
+        long minutes = Math.max(0, ms) / 60000;
+        String text = (minutes / 1440) + "d " + (minutes / 60 % 24) + "h";
+        return parts >= 3 ? text + " " + (minutes % 60) + "m" : text;
+    }
     public static String uptime(long ms) {
         long minutes = Math.max(0, ms) / 60000;
         return (minutes / 1440) + "d " + (minutes / 60 % 24) + "h " + (minutes % 60) + "m";

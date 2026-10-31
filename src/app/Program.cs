@@ -46,7 +46,9 @@ namespace WidgetScreen
                     running = controller;
                     if (renderPath != null)
                     {
-                        var renderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                        // --render-wait N gives live readings longer to arrive (System stats history fills every 2 s).
+                        int wait; if (!Int32.TryParse(Argument(args, "--render-wait"), out wait) || wait < 1 || wait > 120) wait = 5;
+                        var renderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(wait) };
                         renderTimer.Tick += (sender, e) => {
                             renderTimer.Stop();
                             if (args.Contains("--render-edit"))

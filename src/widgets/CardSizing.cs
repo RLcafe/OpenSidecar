@@ -65,8 +65,6 @@ namespace WidgetScreen
             if (MediaShort(height)) return Clamp(Math.Round(Math.Min(height - 136, (width - 48) * 0.3)), 44, 104);
             return Clamp(Math.Round(Math.Min(height - 220, (width - 48) * 0.36)), 104, 220);
         }
-        // The Weather temperature (54 on the reference 250-unit card); its column is twice as wide.
-        public static double WeatherTemperature(double width, double height) { return Clamp(Math.Round(Math.Min(height * 0.216, width * 0.14)), 40, 96); }
         // Spotify rows side by side once the card fits two 340-unit rows.
         public static int SpotifyColumns(double width) { return (int)Clamp(Math.Floor((width - 48) / 340), 1, 3); }
 
@@ -84,14 +82,10 @@ namespace WidgetScreen
         public static MixerMode Mixer(double height) { return height >= 420 ? MixerMode.Full : height >= 300 ? MixerMode.Compact : MixerMode.Master; }
         // The Windows sound settings button gives its room to the slider on narrow compact cards.
         public static bool MixerSettingsShown(double width, MixerMode mode) { return mode == MixerMode.Full || width >= 400; }
-        // Card headers with pages: the Edit button needs 342 units (Settings → Quick Launch still opens the deck),
+        // Card headers with pages: the Edit button needs 342 units (Settings â†’ Quick Launch still opens the deck),
         // and a paged card under 300 wide keeps its pager over its heading (Quick Launch and Soundboard).
         public static bool DeckEditShown(double width) { return width >= 342; }
         public static bool HeadingShown(double width, bool paged) { return !paged || width >= 300; }
-        // System stats rows drop their graph and bar under 380 wide, so more columns fit and the numbers stay large.
-        public static bool StatsNarrow(double width) { return width < 380; }
-        // Weather under 200 tall keeps the temperature and city and drops the details line.
-        public static bool WeatherTiny(double height) { return height < 200; }
         // Spotify under 500 tall: a smaller now-playing strip, and the status row only while it has something to say.
         public static bool SpotifyCompact(double height) { return height < 500; }
         // Empty states ("Connect Spotify", "Connect Discord") for the room under the card's heading: 3 shows the icon,
@@ -99,6 +93,30 @@ namespace WidgetScreen
         public static int EmptyDetail(double room) { return room >= 268 ? 3 : room >= 156 ? 2 : room >= 100 ? 1 : 0; }
         // The Discord channel name beside the Soundboard heading.
         public static bool SoundboardChannelShown(double width) { return width >= 360; }
+
+        // Small, medium and large designs (docs/design/widget-size-views.md). A card picks one of three layouts by its
+        // size, not just a scale of one layout; System stats and Weather are the first two.
+        public enum Design { Small, Medium, Large }
+        // System stats: a list of readings under 340 wide (or 240 tall), rings at the reference 472 أ— 310, and tiles
+        // with history graphs from 400 أ— 420.
+        public static Design Stats(double width, double height) { return width < 340 || height < 240 ? Design.Small : width >= 400 && height >= 420 ? Design.Large : Design.Medium; }
+        // Weather: a glance under 340 wide (or 220 tall), today's reading with three facts at the reference 472 أ— 250,
+        // and a forecast with five hours from 400 أ— 340.
+        public static Design Weather(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 400 && height >= 340 ? Design.Large : Design.Medium; }
+        // A Small stats row's reading for its row height; Medium ring diameter for its cell; a Large tile's reading.
+        public static double StatsListValue(double rowHeight) { return Clamp(Math.Round(rowHeight * 0.56), 20, 40); }
+        public static double StatsRing(double cellWidth, double height) { return Clamp(Math.Floor(Math.Min(cellWidth - 16, height)), 56, 200); }
+        public static double StatsTileValue(double tileHeight) { return Clamp(Math.Round(tileHeight * 0.24), 30, 64); }
+        public static int StatsTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.Min(count, 4) : 2; }
+        // The weather temperature for the room left to it (the card less its fixed rows) and the card's width.
+        public static double WeatherTemperature(Design size, double width, double room)
+        {
+            if (size == Design.Small) return Clamp(Math.Round(Math.Min(room / 1.12, width * 0.26)), 36, 96);
+            if (size == Design.Medium) return Clamp(Math.Round(Math.Min(room / 1.12, width * 0.15)), 40, 80);
+            return Clamp(Math.Round(Math.Min(room / 1.12, width * 0.2)), 52, 128);
+        }
+        // The hours a Large forecast shows: up to five, as many as fit 72 units each.
+        public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

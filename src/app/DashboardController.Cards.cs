@@ -20,14 +20,9 @@ namespace WidgetScreen
             FitFocus(Editor.Bounds("Focus"));
             FitMedia(Editor.Bounds("Media"));
             FitMixer(Editor.Bounds("Mixer"));
-            FitStats(Editor.Bounds("System"));
-            var weather = Editor.Bounds("Weather"); double temperature = CardSizing.WeatherTemperature(weather.Width, weather.Height);
-            Control<TextBlock>("WeatherTemperature").FontSize = temperature; Control<ColumnDefinition>("WeatherTemperatureColumn").Width = new GridLength(temperature * 2);
-            UpdateWeatherHoursRow();
-            var city = Control<TextBlock>("WeatherCity"); bool compactWeather = weather.Height < 250;
-            city.TextWrapping = compactWeather ? TextWrapping.NoWrap : TextWrapping.Wrap;
-            city.MaxHeight = compactWeather ? 28 : 58;
-            Show("WeatherDetails", !CardSizing.WeatherTiny(weather.Height));
+            // System stats and Weather switch between a Small, Medium and Large design (docs/design/widget-size-views.md).
+            systemCard.Fit(Editor.Bounds("System"));
+            weatherCard.Fit(Editor.Bounds("Weather"));
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
             Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;
@@ -109,21 +104,6 @@ namespace WidgetScreen
             AutomationProperties.SetName(button, mixerAppsOpen ? "Back to master volume" : "Show app volumes");
         }
         private void ToggleMixerApps() { mixerAppsOpen = !mixerAppsOpen; outputPicker.Close(); FitMixer(Editor.Bounds("Mixer")); }
-
-        // Under 380 wide the rows drop their graph and bar, so the Viewbox can keep the numbers large.
-        private void FitStats(Rect bounds)
-        {
-            bool narrow = CardSizing.StatsNarrow(bounds.Width);
-            foreach (string name in new[] { "CpuSection", "GpuSection", "RamSection" })
-            {
-                var row = Control<Grid>(name);
-                row.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-                foreach (UIElement child in row.Children) if (Grid.GetColumn(child) == 2) child.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
-            }
-            foreach (string name in new[] { "DownloadValue", "UploadValue" }) Control<TextBlock>(name).FontSize = narrow ? 17 : 21;
-            foreach (var row in Control<UniformGrid>("SystemMetrics").Children.OfType<FrameworkElement>()) row.MinWidth = narrow ? 248 : 324;
-            SystemStatsLayout.Update(Control<FrameworkElement>("SystemBody"), Control<UniformGrid>("SystemMetrics"));
-        }
 
         // A compact Spotify card keeps the tabs, list and now-playing strip, with a smaller strip and no idle status row.
         private void FitSpotify(Rect bounds)

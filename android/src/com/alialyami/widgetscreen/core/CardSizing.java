@@ -63,9 +63,6 @@ public final class CardSizing {
         return clamp(Math.round(Math.min(height - 220, (width - 48) * 0.36)), 104, 220);
     }
 
-    // The Weather temperature (54 on the reference 250-unit card); its column is twice as wide.
-    public static double weatherTemperature(double width, double height) { return clamp(Math.round(Math.min(height * 0.216, width * 0.14)), 40, 96); }
-
     // Spotify rows side by side once the card fits two 340-unit rows.
     public static int spotifyColumns(double width) { return (int) clamp(Math.floor((width - 48) / 340), 1, 3); }
 
@@ -88,10 +85,6 @@ public final class CardSizing {
     // its heading (Quick Launch and Soundboard).
     public static boolean deckEditShown(double width) { return width >= 342; }
     public static boolean headingShown(double width, boolean paged) { return !paged || width >= 300; }
-    // System stats rows drop their graph and bar under 380 wide, so the numbers stay large.
-    public static boolean statsNarrow(double width) { return width < 380; }
-    // Weather under 200 tall keeps the temperature and city and drops the details line.
-    public static boolean weatherTiny(double height) { return height < 200; }
     // Spotify under 500 tall: a smaller now-playing strip, and the status row only while it has something to say.
     public static boolean spotifyCompact(double height) { return height < 500; }
     // Empty states for the room under the card's heading: 3 shows the icon, heading, sentence and button; 2 drops the
@@ -99,6 +92,29 @@ public final class CardSizing {
     public static int emptyDetail(double room) { return room >= 268 ? 3 : room >= 156 ? 2 : room >= 100 ? 1 : 0; }
     // The Discord channel name beside the Soundboard heading.
     public static boolean soundboardChannelShown(double width) { return width >= 360; }
+
+    // Small, medium and large designs (docs/design/widget-size-views.md), the same numbers as CardSizing.cs. A card
+    // picks one of three layouts by its size, not just a scale of one layout; System stats and Weather are the first two.
+    public static final int SMALL = 0, MEDIUM = 1, LARGE = 2;
+    // System stats: a list of readings under 340 wide (or 240 tall), rings at the reference 472 × 310, and tiles with
+    // history graphs from 400 × 420.
+    public static int stats(double width, double height) { return width < 340 || height < 240 ? SMALL : width >= 400 && height >= 420 ? LARGE : MEDIUM; }
+    // Weather: a glance under 340 wide (or 220 tall), today's reading with three facts at the reference 472 × 250, and a
+    // forecast with five hours from 400 × 340.
+    public static int weather(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 400 && height >= 340 ? LARGE : MEDIUM; }
+    // A Small stats row's reading for its row height; Medium ring diameter for its cell; a Large tile's reading.
+    public static double statsListValue(double rowHeight) { return clamp(Math.round(rowHeight * 0.56), 20, 40); }
+    public static double statsRing(double cellWidth, double height) { return clamp(Math.floor(Math.min(cellWidth - 16, height)), 56, 200); }
+    public static double statsTileValue(double tileHeight) { return clamp(Math.round(tileHeight * 0.24), 30, 64); }
+    public static int statsTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.min(count, 4) : 2; }
+    // The weather temperature for the room left to it (the card less its fixed rows) and the card's width.
+    public static double weatherTemperature(int design, double width, double room) {
+        if (design == SMALL) return clamp(Math.round(Math.min(room / 1.12, width * 0.26)), 36, 96);
+        if (design == MEDIUM) return clamp(Math.round(Math.min(room / 1.12, width * 0.15)), 40, 80);
+        return clamp(Math.round(Math.min(room / 1.12, width * 0.2)), 52, 128);
+    }
+    // The hours a Large forecast shows: up to five, as many as fit 72 units each.
+    public static int weatherHours(double width) { return (int) clamp(Math.floor((width - 48 - 16) / 72), 3, 5); }
 
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

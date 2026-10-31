@@ -49,7 +49,8 @@ namespace WidgetScreen
         private readonly DispatcherTimer clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         private readonly Dictionary<string, SessionRow> sessionRows = new Dictionary<string, SessionRow>();
-        private readonly List<double> cpuHistory = new List<double>();
+        private readonly SystemStatsCard systemCard;
+        private readonly WeatherCard weatherCard;
         private readonly DeckEditor deckEditor;
         private readonly DeckHotkeys deckHotkeys;
         private readonly FocusKeeper focusKeeper;
@@ -62,7 +63,6 @@ namespace WidgetScreen
         private bool updatingAudio, audioAvailable, mediaBusy, mediaCommandBusy, weatherBusy, disposed, fullscreen;
         private int ticks, weatherGeneration, settingsGeneration, statusClearsAt;
         private DateTime lastWeatherAttempt = DateTime.MinValue;
-        private WeatherSnapshot lastWeather;
         private WeatherLocation pendingLocation;
         private string pendingMessage;
 
@@ -81,6 +81,8 @@ namespace WidgetScreen
             Editor = new LayoutEditor(window);
             outputPicker = new OutputPicker(window);
             confirm = new ConfirmSheet(window);
+            systemCard = new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime"));
+            weatherCard = new WeatherCard(window, Control<Grid>("WeatherBody"));
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -181,7 +183,6 @@ namespace WidgetScreen
             Button("SoundSettingsButton", () => Launch("ms-settings:sound", "Windows sound settings"));
             Button("OutputDeviceButton", OpenMasterOutputs);
             foreach (string name in new[] { "MasterSlider", "ScaleChoice", "CornersChoice", "FocusLengthChoice" }) TouchSlider.Attach(Control<Slider>(name));
-            SystemStatsLayout.Attach(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
             Control<Slider>("MasterSlider").ValueChanged += (sender, e) => {
                 if (!updatingAudio) { double value = e.NewValue / 100; AudioAction(a => a.SetVolume(value), false); Text("MasterPercent", Math.Round(e.NewValue).ToString() + "%"); }
             };
@@ -334,7 +335,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); ShowWeatherCredit(); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -363,12 +364,7 @@ namespace WidgetScreen
         private void ApplyLayout(AppSettings layout)
         {
             Editor.Apply(layout);
-            Control<FrameworkElement>("CpuSection").Visibility = layout.ShowCpu ? Visibility.Visible : Visibility.Collapsed;
-            Control<FrameworkElement>("GpuSection").Visibility = layout.ShowGpu ? Visibility.Visible : Visibility.Collapsed;
-            Control<FrameworkElement>("RamSection").Visibility = layout.ShowRam ? Visibility.Visible : Visibility.Collapsed;
-            Control<FrameworkElement>("NetworkSection").Visibility = layout.ShowNetwork ? Visibility.Visible : Visibility.Collapsed;
-            Control<FrameworkElement>("UptimeSection").Visibility = layout.ShowUptime ? Visibility.Visible : Visibility.Collapsed;
-            SystemStatsLayout.Update(Control<FrameworkElement>("SystemBody"), Control<System.Windows.Controls.Primitives.UniformGrid>("SystemMetrics"));
+            systemCard.Choose(layout.ShowCpu, layout.ShowGpu, layout.ShowRam, layout.ShowNetwork, layout.ShowUptime);
         }
 
         private void BeginLayoutEdit()
@@ -800,37 +796,14 @@ namespace WidgetScreen
             {
                 var snapshot = await ReadSystemAsync(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime);
                 if (disposed || requested != settings) return;
-                Text("CpuValue", snapshot.CpuAvailable ? Math.Round(snapshot.Cpu) + "%" : "—"); Load("CpuValue", snapshot.CpuAvailable ? snapshot.Cpu : 0);
-                Text("SystemStatus", "");
-                Text("GpuValue", snapshot.Gpu.HasValue ? Math.Round(snapshot.Gpu.Value) + "%" : "—"); Load("GpuValue", snapshot.Gpu ?? 0);
-                Text("GpuStatus", snapshot.GpuStatus ?? "Unavailable"); Control<ProgressBar>("GpuBar").Value = snapshot.Gpu ?? 0;
-                Text("MemoryValue", snapshot.MemoryAvailable ? snapshot.UsedMemoryGB.ToString("0.0") + " / " + snapshot.TotalMemoryGB.ToString("0.0") + " GB" : "Unavailable");
-                Text("MemoryPercent", snapshot.MemoryAvailable ? Math.Round(snapshot.MemoryPercent) + "%" : "—"); Control<ProgressBar>("MemoryBar").Value = snapshot.MemoryPercent;
-                Load("MemoryPercent", snapshot.MemoryAvailable ? snapshot.MemoryPercent : 0);
-                Text("DownloadValue", "↓ " + (snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.DownloadBytes) : "— KB/s")); Text("UploadValue", "↑ " + (snapshot.NetworkAvailable ? SystemService.FormatRate(snapshot.UploadBytes) : "— KB/s"));
-                Text("UptimeValue", (int)snapshot.Uptime.TotalDays + "d " + snapshot.Uptime.Hours + "h " + snapshot.Uptime.Minutes + "m");
-                if (snapshot.CpuAvailable) cpuHistory.Add(snapshot.Cpu); else cpuHistory.Clear();
-                if (cpuHistory.Count > 48) cpuHistory.RemoveAt(0);
-                var points = new PointCollection(); double width = Math.Max(1, Control<Canvas>("CpuGraphHost").ActualWidth);
-                for (int i = 0; i < cpuHistory.Count; i++) points.Add(new Point(width * (48 - cpuHistory.Count + i) / 47.0, 30 - cpuHistory[i] * .28));
-                Control<Polyline>("CpuGraph").Points = points;
+                Text("SystemStatus", ""); systemCard.Update(snapshot);
             }
             catch (Exception)
             {
                 if (disposed) return;
-                Text("SystemStatus", "UNAVAILABLE"); Text("CpuValue", "—"); Text("MemoryValue", "Unavailable");
-                Text("GpuValue", "—"); Text("GpuStatus", "Unavailable"); Control<ProgressBar>("GpuBar").Value = 0;
-                Text("MemoryPercent", "—"); Text("DownloadValue", "↓ — KB/s"); Text("UploadValue", "↑ — KB/s");
-                foreach (string name in new[] { "CpuValue", "GpuValue", "MemoryPercent" }) Load(name, 0);
-                Control<ProgressBar>("MemoryBar").Value = 0; Control<Polyline>("CpuGraph").Points = new PointCollection(); cpuHistory.Clear();
+                Text("SystemStatus", "UNAVAILABLE"); systemCard.Unavailable();
             }
             finally { systemBusy = false; if (!disposed && requested != settings) RefreshSystem(); }
-        }
-
-        // A reading at 90% or more switches to the theme's warning color so it stands out at a glance.
-        private void Load(string name, double percent)
-        {
-            Control<TextBlock>(name).SetResourceReference(TextBlock.ForegroundProperty, percent >= 90 ? "Warning" : "Text");
         }
 
         private async void RefreshMedia(bool fresh = false)
@@ -922,59 +895,30 @@ namespace WidgetScreen
             return null;
         }
 
-        // The "updated" time follows the clock's 12- or 24-hour choice.
-        private void ShowWeatherCredit()
-        {
-            if (lastWeather != null) Text("WeatherCredit", "Open-Meteo  ·  updated " + lastWeather.Retrieved.ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture));
-        }
         private bool WeatherImperial { get { return settings.WeatherUnits == "imperial"; } }
+        // WeatherCard shows the reading in the design for its size; the "updated" time follows the clock's choice.
         private async void RefreshWeather()
         {
             if (disposed || weatherBusy || !Editor.IsVisible("Weather")) return;
-            if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
-            {
-                Text("WeatherTemperature", "—°"); Text("WeatherCity", "No city yet"); Text("WeatherDetails", "Tap to choose a city.");
-                Text("WeatherCondition", ""); Control<System.Windows.Shapes.Path>("WeatherGlyph").Visibility = Visibility.Collapsed; ShowWeatherHours(null); Text("WeatherCredit", "Weather data by Open-Meteo"); return;
-            }
+            weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock);
+            if (String.IsNullOrWhiteSpace(settings.WeatherLocation)) return;
             weatherBusy = true; lastWeatherAttempt = DateTime.UtcNow; int generation = weatherGeneration;
-            Text("WeatherCity", settings.WeatherLocation); Text("WeatherCredit", "Open-Meteo  ·  updating…");
+            weatherCard.Updating();
             try
             {
                 var snapshot = await weather.ReadAsync(settings.Latitude, settings.Longitude, WeatherImperial);
                 if (disposed || generation != weatherGeneration) return;
-                lastWeather = snapshot;
-                Text("WeatherTemperature", Math.Round(snapshot.Temperature) + "°"); Text("WeatherCondition", WeatherService.Describe(snapshot.Code));
-                var glyph = Control<System.Windows.Shapes.Path>("WeatherGlyph"); glyph.Data = Geometry.Parse(WeatherService.Glyph(WeatherService.Family(snapshot.Code))); glyph.Visibility = Visibility.Visible;
-                Text("WeatherDetails", WeatherService.Details(snapshot, WeatherImperial));
-                ShowWeatherHours(snapshot);
-                ShowWeatherCredit();
+                weatherCard.Reading(snapshot);
             }
             catch (Exception)
             {
-                if (generation == weatherGeneration) { Text("WeatherCondition", "OFFLINE"); Text("WeatherDetails", lastWeather == null ? "Can't reach the weather service. Tap the card to try again." : "Showing the last update. Tap the card to try again."); if (lastWeather != null) ShowWeatherCredit(); else Text("WeatherCredit", "Weather data by Open-Meteo"); }
+                if (generation == weatherGeneration) weatherCard.Failed();
             }
             finally
             {
                 weatherBusy = false;
                 if (!disposed && generation != weatherGeneration) RefreshWeather();
             }
-        }
-        // The next hours row: now, +3 h and +6 h, labelled the way the clock is.
-        private void ShowWeatherHours(WeatherSnapshot snapshot)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                bool has = snapshot != null && i < snapshot.Hours.Count;
-                Text("WeatherHourTime" + i, has ? (i == 0 ? "Now" : WeatherService.HourLabel(snapshot.Hours[i].Time, settings.Use24HourClock)) : "");
-                Text("WeatherHourTemp" + i, has ? Math.Round(snapshot.Hours[i].Temperature) + "°" : "");
-            }
-            UpdateWeatherHoursRow();
-        }
-        // The hours take a row only on a tall enough card, and only once there is a reading.
-        private void UpdateWeatherHoursRow()
-        {
-            bool show = lastWeather != null && lastWeather.Hours.Count > 0 && Editor.Bounds("Weather").Height >= 300;
-            Control<RowDefinition>("WeatherHoursRow").Height = new GridLength(show ? 60 : 0);
         }
 
         private void OpenSettings()
@@ -1038,7 +982,7 @@ namespace WidgetScreen
             settings = candidate; CloseSettings(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
             FitScreen();
-            if (locationChanged) { weatherGeneration++; lastWeather = null; Text("WeatherTemperature", "—°"); Text("WeatherDetails", "Updating weather…"); RefreshWeather(); }
+            if (locationChanged) { weatherGeneration++; weatherCard.Forget(); RefreshWeather(); }
             Notify("Settings saved.");
         }
 
