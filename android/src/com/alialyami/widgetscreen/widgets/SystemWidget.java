@@ -9,6 +9,7 @@ import android.widget.TextView;
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.Format;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.StatsLayout;
 import com.alialyami.widgetscreen.core.Theme;
@@ -23,12 +24,13 @@ import java.util.Locale;
 // The PC's System stats: CPU (with its recent history), GPU, RAM, network and uptime, the readings chosen on
 // the PC. Rows have one design size and scale with the card, like SystemStatsLayout on Windows.
 public final class SystemWidget extends Widget {
-    private static final double ROW_MIN_WIDTH = 324, ROW_HEIGHT = 40, ROW_MARGIN_X = 6, ROW_MARGIN_Y = 3;
+    private static final double ROW_MIN_WIDTH = 324, ROW_NARROW_WIDTH = 248, ROW_HEIGHT = 40, ROW_MARGIN_X = 6, ROW_MARGIN_Y = 3;
     private TextView status, cpuValue, gpuValue, gpuDetail, memoryValue, memoryDetail, download, upload, uptime;
     private ProgressLine gpuBar, memoryBar;
     private Sparkline cpuGraph;
     private final List<Double> cpuHistory = new ArrayList<Double>();
     private String builtFor = "";
+    private boolean narrow;
 
     public SystemWidget(Dashboard dash) { super("System", dash); }
 
@@ -44,6 +46,8 @@ public final class SystemWidget extends Widget {
         builtFor = selection(s);
         boolean cpu = s == null || s.showCpu, gpu = s == null || s.showGpu, ram = s == null || s.showRam, net = s == null || s.showNetwork, up = s == null || s.showUptime;
         cpuValue = gpuValue = memoryValue = download = upload = uptime = null;
+        // Under 380 wide the rows drop their graph and bar, so the numbers stay large (CardSizing.statsNarrow, as on the PC).
+        narrow = CardSizing.statsNarrow(width);
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
         header.addView(ui.label("SYSTEM STATS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -59,7 +63,7 @@ public final class SystemWidget extends Widget {
             cpuValue = value("—", 30);
             row.addView(cpuValue, ui.ll(ui.px(96), Ui.WRAP));
             cpuGraph = new Sparkline(ui.context, ui.theme.accent, ui.fpx(2));
-            row.addView(cpuGraph, ui.ll(0, ui.px(32), 1));
+            if (!narrow) row.addView(cpuGraph, ui.ll(0, ui.px(32), 1));
             rows.add(row);
         }
         if (gpu) {
@@ -73,9 +77,9 @@ public final class SystemWidget extends Widget {
         if (net) {
             LinearLayout row = ui.row();
             row.addView(name("NET"), ui.ll(ui.px(76), Ui.WRAP));
-            download = value("↓ — KB/s", 21); download.setContentDescription("Download rate");
+            download = value("↓ — KB/s", narrow ? 17 : 21); download.setContentDescription("Download rate");
             row.addView(download, ui.ll(0, Ui.WRAP, 1));
-            upload = value("↑ — KB/s", 21); upload.setContentDescription("Upload rate");
+            upload = value("↑ — KB/s", narrow ? 17 : 21); upload.setContentDescription("Upload rate");
             row.addView(upload, ui.ll(0, Ui.WRAP, 1));
             rows.add(row);
         }
@@ -89,8 +93,9 @@ public final class SystemWidget extends Widget {
         int count = Math.max(1, rows.size());
         double availableWidth = Math.max(1, width - 48), availableHeight = Math.max(1, height - 48 - 28 - 8);
         double cellHeight = ROW_HEIGHT + 2 * ROW_MARGIN_Y;
-        int columns = StatsLayout.bestColumns(availableWidth, availableHeight, ROW_MIN_WIDTH + 2 * ROW_MARGIN_X, cellHeight, count);
-        double rowWidth = StatsLayout.rowWidth(availableWidth, availableHeight, ROW_MIN_WIDTH, 2 * ROW_MARGIN_X, cellHeight, count, columns);
+        double minWidth = narrow ? ROW_NARROW_WIDTH : ROW_MIN_WIDTH;
+        int columns = StatsLayout.bestColumns(availableWidth, availableHeight, minWidth + 2 * ROW_MARGIN_X, cellHeight, count);
+        double rowWidth = StatsLayout.rowWidth(availableWidth, availableHeight, minWidth, 2 * ROW_MARGIN_X, cellHeight, count, columns);
         LinearLayout grid = ui.column();
         LinearLayout line = null;
         for (int i = 0; i < rows.size(); i++) {
@@ -115,7 +120,7 @@ public final class SystemWidget extends Widget {
         LinearLayout right = ui.column();
         right.addView(bar, ui.ll(Ui.MATCH, ui.px(8)));
         right.addView(detail, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 5, 0, 0));
-        row.addView(right, ui.ll(0, Ui.WRAP, 1));
+        if (!narrow) row.addView(right, ui.ll(0, Ui.WRAP, 1));
         return row;
     }
 

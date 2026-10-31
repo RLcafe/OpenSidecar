@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -13,6 +13,22 @@ internal static class SmokeTests
         catch (Exception e) { failures++; Console.WriteLine("FAIL " + name + ": " + e); }
     }
     private static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
+    // Whether an element and every parent up to root are visible (IsVisible needs a shown window).
+    private static bool Shown(System.Windows.DependencyObject element, System.Windows.DependencyObject root)
+    {
+        for (var e = element; e != null && e != root; e = System.Windows.Media.VisualTreeHelper.GetParent(e) ?? System.Windows.LogicalTreeHelper.GetParent(e))
+            if (e is System.Windows.UIElement && ((System.Windows.UIElement)e).Visibility != System.Windows.Visibility.Visible) return false;
+        return true;
+    }
+    private static System.Collections.Generic.IEnumerable<System.Windows.DependencyObject> Descendants(System.Windows.DependencyObject parent)
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var deeper in Descendants(child)) yield return deeper;
+        }
+    }
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr window, int index);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 
@@ -394,8 +410,23 @@ internal static class SmokeTests
                         var child = (System.Windows.FrameworkElement)window.FindName(pair[0]); var card = (System.Windows.FrameworkElement)window.FindName(pair[1]);
                         Assert(child.TransformToAncestor(card).Transform(new System.Windows.Point(0, child.ActualHeight)).Y <= card.ActualHeight - 20, pair[0] + " escapes minimum widget height.");
                     }
-                    var progress = (System.Windows.FrameworkElement)window.FindName("FocusProgress"); var focusCard = (System.Windows.FrameworkElement)window.FindName("FocusCard"); var presets = (System.Windows.FrameworkElement)window.FindName("Focus25");
-                    Assert(progress.TransformToAncestor(focusCard).Transform(new System.Windows.Point(0, progress.ActualHeight)).Y <= presets.TransformToAncestor(focusCard).Transform(new System.Windows.Point(0, 0)).Y, "Compact focus content overlaps its controls.");
+                    var progress = (System.Windows.FrameworkElement)window.FindName("FocusProgress"); var focusCard = (System.Windows.FrameworkElement)window.FindName("FocusCard"); var start = (System.Windows.FrameworkElement)window.FindName("FocusStart");
+                    Assert(progress.TransformToAncestor(focusCard).Transform(new System.Windows.Point(0, progress.ActualHeight)).Y <= start.TransformToAncestor(focusCard).Transform(new System.Windows.Point(0, 0)).Y, "Compact focus content overlaps its controls.");
+                    // The smallest cards fold their secondary rows away (CardSizing) and keep every shown control whole,
+                    // at touch size and inside its card.
+                    var focusCardRoot = (System.Windows.FrameworkElement)window.FindName("FocusCard"); var mixerCard = (System.Windows.FrameworkElement)window.FindName("MixerCard");
+                    Assert(!Shown((System.Windows.FrameworkElement)window.FindName("FocusPresets"), focusCardRoot) && Shown((System.Windows.FrameworkElement)window.FindName("FocusLength"), focusCardRoot), "A short Focus card must fold its presets into the length button.");
+                    Assert(Shown((System.Windows.FrameworkElement)window.FindName("MixerApps"), mixerCard) && !Shown((System.Windows.FrameworkElement)window.FindName("SessionPanel"), mixerCard) && Shown((System.Windows.FrameworkElement)window.FindName("MicrophoneCompact"), mixerCard), "A Master mixer card shows the master volume, the microphone and the Apps button.");
+                    foreach (string id in new[] { "Focus", "Media", "Mixer", "Shortcuts", "Weather" })
+                    {
+                        var card = (System.Windows.FrameworkElement)window.FindName(id + "Card");
+                        foreach (var button in Descendants(card).OfType<System.Windows.Controls.Button>().Where(b => Shown(b, card) && b.ActualWidth > 0))
+                        {
+                            var box = button.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, button.ActualWidth, button.ActualHeight));
+                            Assert(button.ActualHeight >= 48 && button.ActualWidth >= 48, id + " shrinks a control under 48: " + (button.Name ?? "") + " " + box);
+                            Assert(box.Left >= 0 && box.Top >= 0 && box.Right <= card.ActualWidth + 0.5 && box.Bottom <= card.ActualHeight + 0.5, id + " pushes a control out of its card: " + (button.Name ?? "") + " " + box);
+                        }
+                    }
                     foreach (System.Windows.Controls.Button button in ((System.Windows.Controls.Primitives.UniformGrid)window.FindName("ShortcutGrid")).Children)
                     {
                         var content = (System.Windows.FrameworkElement)button.Content;

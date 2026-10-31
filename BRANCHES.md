@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/organize-widgets` was merged as v0.14.0.
+| `feature/resizable-widgets` | Edge grips, much smaller minimum sizes and cards that fold at small sizes, both apps | `95ee950` (v0.14.0) | In progress | Main folder (this thread can't create worktrees) | `artifacts\app\WidgetScreen.exe`, `artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

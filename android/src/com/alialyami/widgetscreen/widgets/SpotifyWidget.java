@@ -74,7 +74,7 @@ public final class SpotifyWidget extends Widget {
     private final Proxy proxy = new Proxy();
     private Proxy service() { return proxy; }
     private static boolean noDevice(Exception error) { return error instanceof PcLink.Failure && ((PcLink.Failure) error).noDevice; }
-    private boolean wasConnected;
+    private boolean wasConnected, compact;
 
     @Override public String part() { return "spotify"; }
 
@@ -85,6 +85,10 @@ public final class SpotifyWidget extends Widget {
     }
 
     @Override protected View create() {
+        // A compact card keeps the tabs, list and now-playing strip, with a smaller strip and no idle status row (as on
+        // the PC).
+        compact = CardSizing.spotifyCompact(height);
+        int detail = CardSizing.emptyDetail(height - 98);
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
@@ -152,7 +156,7 @@ public final class SpotifyWidget extends Widget {
 
         strip = ui.row();
         strip.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
-        strip.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(8));
+        strip.setPadding(ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8), ui.px(compact ? 6 : 8));
         FrameLayout cover = new FrameLayout(ui.context);
         cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, 10));
         cover.setClipToOutline(true);
@@ -161,7 +165,7 @@ public final class SpotifyWidget extends Widget {
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setContentDescription("Current song cover");
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        strip.addView(cover, ui.ll(ui.px(64), ui.px(64)));
+        strip.addView(cover, ui.ll(ui.px(compact ? 48 : 64), ui.px(compact ? 48 : 64)));
         LinearLayout song = ui.column();
         songTitle = ui.body("");
         songTitle.setTypeface(Ui.MEDIUM);
@@ -183,7 +187,7 @@ public final class SpotifyWidget extends Widget {
         column.addView(strip, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
 
         status = ui.smallText("");
-        column.addView(status, ui.ll(Ui.MATCH, ui.px(36)));
+        column.addView(status, compact ? ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0) : ui.ll(Ui.MATCH, ui.px(36)));
         status.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(column, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
 
@@ -193,13 +197,14 @@ public final class SpotifyWidget extends Widget {
         FrameLayout tile = new FrameLayout(ui.context);
         tile.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, 20));
         tile.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx(38)), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        emptyState.addView(tile, ui.ll(ui.px(88), ui.px(88)));
+        // The icon, sentence and heading give way as room runs out; the button stays (CardSizing.emptyDetail).
+        if (detail >= 3) emptyState.addView(tile, ui.margins(ui.ll(ui.px(88), ui.px(88)), 0, 0, 0, 20));
         TextView heading = ui.heading("Connect Spotify");
         heading.setTypeface(Ui.MEDIUM);
-        emptyState.addView(heading, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 20, 0, 0));
+        if (detail >= 1) emptyState.addView(heading, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 0, detail >= 2 ? 8 : 22));
         TextView blurb = Ui.wrap(ui.smallText("Connect Spotify on the PC to browse your recent albums and playlists here, and like the song that's playing."), 3);
         blurb.setGravity(Gravity.CENTER);
-        emptyState.addView(blurb, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 22));
+        if (detail >= 2) emptyState.addView(blurb, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 22));
         TextView setup = ui.accentButton("How to connect", new View.OnClickListener() { @Override public void onClick(View v) { dash.say("On the PC, open Settings → Spotify and connect your account. The phone uses the PC's connection."); } });
         setup.setMinWidth(ui.px(200));
         emptyState.addView(setup, ui.ll(Ui.WRAP, Ui.WRAP));
@@ -209,7 +214,13 @@ public final class SpotifyWidget extends Widget {
         return ui.card(root, 24);
     }
 
-    private void setStatus(String text) { statusText = text == null ? "" : text; if (built()) status.setText(statusText); }
+    private void setStatus(String text) { statusText = text == null ? "" : text; if (built()) { status.setText(statusText); showStatus(); } }
+
+    // A compact card's status row only takes room while it has something to say (CardSizing.spotifyCompact).
+    private void showStatus() {
+        boolean connected = service().connected();
+        status.setVisibility(connected && (!compact || !statusText.isEmpty()) ? View.VISIBLE : View.GONE);
+    }
 
     private void open(String url) {
         if (url == null) return;
@@ -235,7 +246,8 @@ public final class SpotifyWidget extends Widget {
         if (!built()) return;
         boolean connected = service().connected();
         int shown = connected ? View.VISIBLE : View.GONE;
-        tabs.setVisibility(shown); library.setVisibility(shown); strip.setVisibility(shown); status.setVisibility(shown); account.setVisibility(shown);
+        tabs.setVisibility(shown); library.setVisibility(shown); strip.setVisibility(shown); account.setVisibility(shown);
+        showStatus();
         emptyState.setVisibility(connected ? View.GONE : View.VISIBLE);
         for (int i = 0; i < KINDS.length; i++) {
             boolean on = KINDS[i].equals(kind);

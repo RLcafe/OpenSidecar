@@ -168,14 +168,14 @@ public final class AndroidTests {
             Placement[] input = { new Placement("Focus", -50, 900, 10, 10, true), new Placement("Media", Double.NaN, 0, 5000, 5000, false) };
             Placement[] n = WidgetLayout.normalize(input);
             Placement focus = WidgetLayout.find(n, "Focus"), media = WidgetLayout.find(n, "Media");
-            ok(n.length == WidgetLayout.IDS.length && focus.x == 0 && focus.width == 296 && focus.height == 300 && focus.y == 576 - 300, "focus " + focus.bounds());
+            ok(n.length == WidgetLayout.IDS.length && focus.x == 0 && focus.width == 280 && focus.height == 192 && focus.y == 576 - 192, "focus " + focus.bounds());
             ok(media.width == 1856 && media.height == 576 && media.x == 0 && !media.visible, "media " + media.bounds());
         } });
         check("Moving and resizing respect edges, minimums and snap", new Action() { public void run() {
             Box start = new Box(100, 100, 400, 320);
             ok(WidgetLayout.transform("Focus", start, "", -500, 5, false).equals(new Box(0, 105, 400, 320)), "move");
             ok(WidgetLayout.transform("Focus", start, "", 3, 5, true).equals(new Box(104, 104, 400, 320)), "snap");
-            ok(WidgetLayout.transform("Focus", start, "SE", -1000, -1000, false).equals(new Box(100, 100, 296, 300)), "minimum");
+            ok(WidgetLayout.transform("Focus", start, "SE", -1000, -1000, false).equals(new Box(100, 100, 280, 192)), "minimum");
             ok(WidgetLayout.transform("Focus", start, "NW", -1000, -1000, false).equals(new Box(0, 0, 500, 420)), "grow to edge");
             ok(WidgetLayout.transform("Focus", start, "NE", Double.NaN, 0, false) == start, "NaN");
         } });
@@ -193,10 +193,27 @@ public final class AndroidTests {
             ok(centred.x == 650, "centre " + centred);
             Box resized = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "SE", 95, 30, java.util.Arrays.asList(new Box(0, 341, 400, 200)), 1856, 576, guides);
             ok(resized.equals(new Box(0, 0, 400, 325)), "resize " + resized);
-            Box squeezed = WidgetLayout.align("Focus", new Box(0, 0, 400, 400), "SE", -98, 0, java.util.Arrays.asList(new Box(0, 420, 290, 100)), 1856, 576, guides);
-            ok(squeezed.width == 296, "minimum " + squeezed);
+            Box squeezed = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "SE", -30, 0, java.util.Arrays.asList(new Box(0, 420, 270, 100)), 1856, 576, guides);
+            ok(squeezed.width == 280, "minimum " + squeezed);
             Box still = WidgetLayout.align("Focus", new Box(0, 0, 300, 300), "", 0, 0, other, 1856, 576, guides);
             ok(still.equals(new Box(0, 0, 300, 300)) && guides.isEmpty(), "no drag");
+        } });
+        check("Edge grips resize one side only and cards fold like the PC", new Action() { public void run() {
+            Box start = new Box(400, 100, 400, 360);
+            ok(WidgetLayout.transform("Media", start, "E", 57, 80, false).equals(new Box(400, 100, 457, 360)), "right edge");
+            ok(WidgetLayout.transform("Media", start, "N", 40, -60, false).equals(new Box(400, 40, 400, 420)), "top edge");
+            ok(WidgetLayout.transform("Media", start, "W", 1000, 0, false).equals(new Box(488, 100, 312, 360)), "left edge minimum");
+            ok(WidgetLayout.transform("Media", start, "S", 0, -1000, false).equals(new Box(400, 100, 400, 200)), "bottom edge minimum");
+            List<WidgetLayout.Guide> guides = new ArrayList<WidgetLayout.Guide>();
+            Box snapped = WidgetLayout.align("Media", start, "S", 0, 30, java.util.Arrays.asList(new Box(900, 0, 300, 486)), 1856, 576, guides);
+            ok(snapped.equals(new Box(400, 100, 400, 386)), "bottom edge snaps alone " + snapped);
+            double[][] windows = { { 280, 192 }, { 312, 200 }, { 200, 152 }, { 320, 224 }, { 260, 280 }, { 232, 152 }, { 360, 360 }, { 240, 152 } };
+            String[] ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
+            for (int i = 0; i < ids.length; i++) ok(java.util.Arrays.equals(WidgetLayout.minimum(ids[i]), windows[i]), ids[i] + " minimum differs from Windows");
+            ok(CardSizing.focusShort(299) && !CardSizing.focusShort(300) && CardSizing.mediaShort(289) && !CardSizing.mediaShort(290), "fold heights");
+            ok(CardSizing.mixer(420) == CardSizing.MIXER_FULL && CardSizing.mixer(300) == CardSizing.MIXER_COMPACT && CardSizing.mixer(299) == CardSizing.MIXER_MASTER, "mixer");
+            ok(CardSizing.emptyDetail(478) == 3 && CardSizing.emptyDetail(262) == 2 && CardSizing.emptyDetail(120) == 1 && CardSizing.emptyDetail(62) == 0, "empty states");
+            ok(CardSizing.focusTime(320, 576) == 84 && CardSizing.mediaArt(552, 310) == 104 && CardSizing.focusTime(280, 192) == 40 && CardSizing.mediaArt(312, 200) == 64, "readings");
         } });
         check("Arrange keeps the reading order and tidies without overlaps", new Action() { public void run() {
             List<Placement> columns = java.util.Arrays.asList(new Placement("Focus", 0, 0, 320, 576, true), new Placement("Shortcuts", 344, 330, 460, 246, true),
@@ -408,8 +425,8 @@ public final class AndroidTests {
         } });
         check("Minimum sizes shrink to about 80% at most on compact canvases", new Action() { public void run() {
             double[] reference = WidgetLayout.minimum("Spotify", 1856, 576), phone = WidgetLayout.minimum("Spotify", 1480, 552), tiny = WidgetLayout.minimum("Spotify", 900, 400);
-            ok(reference[0] == 560 && reference[1] == 500 && phone[0] == 447 && phone[1] == 479 && tiny[0] == 437 && tiny[1] == 390, "minimums " + phone[0] + "," + phone[1]);
-            ok(WidgetLayout.transform("Spotify", new Box(0, 0, 600, 552), "SE", -1000, -1000, false, 1480, 552).equals(new Box(0, 0, 447, 479)), "resize minimum");
+            ok(reference[0] == 360 && reference[1] == 360 && phone[0] == 287 && phone[1] == 345 && tiny[0] == 281 && tiny[1] == 281, "minimums " + phone[0] + "," + phone[1]);
+            ok(WidgetLayout.transform("Spotify", new Box(0, 0, 600, 552), "SE", -1000, -1000, false, 1480, 552).equals(new Box(0, 0, 287, 345)), "resize minimum");
             ok(WidgetLayout.transform("Focus", new Box(0, 0, 300, 300), "", 5000, 5000, false, 2496, 576).equals(new Box(2196, 276, 300, 300)), "move to this canvas's edge");
         } });
         check("Default arrangement fits phones and tablets both ways without overlaps", new Action() { public void run() {

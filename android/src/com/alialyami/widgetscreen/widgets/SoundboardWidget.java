@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcState;
@@ -22,7 +23,7 @@ import java.util.Map;
 public final class SoundboardWidget extends Widget {
     private static final double BUTTON_WIDTH = 148, BUTTON_HEIGHT = 56, GAP = 8;
     private LinearLayout grid, pager, emptyState;
-    private TextView channel, status, pageLabel;
+    private TextView channel, status, pageLabel, heading;
     private GlyphView previousPage, nextPage, reload;
     private int page;
     private String shown, message = "";
@@ -37,8 +38,12 @@ public final class SoundboardWidget extends Widget {
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
-        header.addView(ui.label("SOUNDBOARD"), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 4, 0, 12, 0));
+        heading = ui.label("SOUNDBOARD");
+        header.addView(heading, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 4, 0, 12, 0));
         channel = ui.smallText("");
+        channel.setSingleLine(true); channel.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        // The channel name needs a card of 360 units (CardSizing.soundboardChannelShown, as on the PC).
+        channel.setVisibility(CardSizing.soundboardChannelShown(width) ? View.VISIBLE : View.INVISIBLE);
         header.addView(channel, ui.ll(0, Ui.WRAP, 1));
         pager = ui.row();
         previousPage = ui.iconButton("chevron-left", "Previous sound page", 16, false, new View.OnClickListener() { @Override public void onClick(View v) { page--; shown = null; render(); } });
@@ -66,7 +71,8 @@ public final class SoundboardWidget extends Widget {
         emptyState.addView(heading, ui.ll(Ui.WRAP, Ui.WRAP));
         TextView blurb = Ui.wrap(ui.smallText("Set up Discord on the PC (Settings → Discord) to play soundboard sounds in the voice channel you're in."), 3);
         blurb.setGravity(Gravity.CENTER);
-        emptyState.addView(blurb, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
+        // The sentence goes when the card is too short for it (CardSizing.emptyDetail, as on the PC).
+        if (CardSizing.emptyDetail(height - 90) >= 2) emptyState.addView(blurb, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
         FrameLayout.LayoutParams emptyParams = new FrameLayout.LayoutParams(ui.px(Math.min(380, Math.max(200, width - 40))), Ui.WRAP, Gravity.CENTER);
         root.addView(emptyState, emptyParams);
         return ui.card(root, 20);
@@ -94,6 +100,7 @@ public final class SoundboardWidget extends Widget {
         int size = columns * rows, pages = Math.max(1, (d.sounds.size() + size - 1) / size);
         page = Math.max(0, Math.min(pages - 1, page));
         pager.setVisibility(pages > 1 ? View.VISIBLE : View.GONE);
+        heading.setVisibility(CardSizing.headingShown(width, pages > 1) ? View.VISIBLE : View.GONE);
         Ui.enable(previousPage, page > 0); Ui.enable(nextPage, page < pages - 1);
         pageLabel.setText((page + 1) + "/" + pages);
         boolean ready = d.linked && !d.channel.isEmpty();

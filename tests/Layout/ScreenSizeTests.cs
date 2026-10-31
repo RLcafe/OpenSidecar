@@ -72,10 +72,10 @@ internal static class ScreenSizeTests
         });
         check("Minimum sizes shrink to about 80% at most on compact canvases", () => {
             Assert(WidgetLayout.Minimum("Spotify", WidgetLayout.Reference) == WidgetLayout.Minimum("Spotify") && WidgetLayout.Minimum("Spotify", new Size(2496, 936)) == WidgetLayout.Minimum("Spotify"), "Reference or larger canvases changed minimums.");
-            Assert(WidgetLayout.Minimum("Spotify", new Size(1480, 552)) == new Size(447, 479), "Compact minimum: " + WidgetLayout.Minimum("Spotify", new Size(1480, 552)));
-            Assert(WidgetLayout.Minimum("Spotify", new Size(900, 400)) == new Size(437, 390), "Minimums must also fit the canvas.");
+            Assert(WidgetLayout.Minimum("Spotify", new Size(1480, 552)) == new Size(287, 345), "Compact minimum: " + WidgetLayout.Minimum("Spotify", new Size(1480, 552)));
+            Assert(WidgetLayout.Minimum("Spotify", new Size(900, 400)) == new Size(281, 281), "Minimums must also fit the canvas.");
             var resized = WidgetLayout.Transform("Spotify", new Rect(0, 0, 600, 552), "SE", -1000, -1000, false, new Size(1480, 552));
-            Assert(resized.Width == 447 && resized.Height == 479, "Resizing ignored the compact minimum.");
+            Assert(resized.Width == 287 && resized.Height == 345, "Resizing ignored the compact minimum.");
             var moved = WidgetLayout.Transform("Focus", new Rect(0, 0, 300, 300), "", 5000, 5000, false, new Size(2496, 576));
             Assert(moved.Right == 2496 && moved.Bottom == 576, "Moving stopped at the reference canvas instead of this one.");
         });
