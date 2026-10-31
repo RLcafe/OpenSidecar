@@ -6,6 +6,15 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.14.0 (31 Oct 2026)
+
+Easier widget organizing (user request; Windows and the phone, the same rules on both):
+
+- **Widgets snap to each other.** With Snap on, a card you move or resize lines up with the other widgets' edges, sits one gap beside them, or centres on them when it comes within a few units, and snaps to the screen's edges. Anywhere else it follows the 8-unit grid as before. Resizing never goes under a card's minimum size.
+- **Guide lines** show which edges or centres a card lines up with while you hold it, and disappear when you let go. With Snap off, cards move freely as before.
+- **Arrange** in Edit layout lines up the shown widgets neatly in their current order, column by column, filling the screen without gaps or overlaps. Hidden widgets keep their places. It is one undo step, and nothing is saved until Save layout. Reset layout still goes back to the default widgets.
+- On the phone, Edit layout gets the same snapping, guides and Arrange button, and saves to the PC as before.
+
 ## v0.13.0 (31 Oct 2026)
 
 Keep the game focused (user request; Windows only, the phone is a separate device and never touches the PC's focus):
