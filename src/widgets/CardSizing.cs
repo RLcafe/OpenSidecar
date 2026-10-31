@@ -3,39 +3,50 @@ using System;
 namespace WidgetScreen
 {
     // How each card's content follows its size (docs/design/any-screen-size.md), the same numbers as the Android
-    // app's CardSizing.java. Like the Soundboard, Quick Launch fits as many buttons as its card holds; Focus, Now
+    // app's CardSizing.java. Quick Launch and the Soundboard show six buttons a page that grow with the card; Focus, Now
     // Playing and Weather grow their main reading; Spotify adds columns on wide cards. The mixer list and System
     // stats already fill their cards. Text never goes below the 13-unit caption and buttons keep 48 units.
     public static class CardSizing
     {
-        // A Quick Launch button plus its 4-unit margins.
-        public const double DeckCellWidth = 124, DeckCellHeight = 76;
+        // Quick Launch and the Soundboard always show six buttons a page, at any card size (user request, 31 Oct 2026):
+        // 3 × 2, 2 × 3, 6 × 1 or 1 × 6, whichever keeps 48-unit buttons and gives cells closest to the usual button
+        // shape. Their minimum sizes (WidgetLayout.Minimum) leave room for six.
+        public const int PageButtons = 6;
+        // A Quick Launch button plus its 4-unit margins, and the smallest cell that keeps a 48-unit button.
+        public const double DeckCellWidth = 124, DeckCellHeight = 76, DeckMinimumCellWidth = 76, DeckMinimumCellHeight = 56;
+        // A Soundboard button plus its 8-unit gap, and the smallest cell that keeps a 48-unit button.
+        public const double SoundCellWidth = 156, SoundCellHeight = 64, SoundMinimumCellWidth = 88, SoundMinimumCellHeight = 56;
 
         // Columns and rows of Quick Launch buttons for the grid area (the card less its padding and header).
-        public static int[] DeckGrid(double width, double height)
+        public static int[] DeckGrid(double width, double height) { return DeckGrid(width, height, PageButtons); }
+        public static int[] DeckGrid(double width, double height, int count) { return PageGrid(width, height, count, DeckCellWidth, DeckCellHeight, DeckMinimumCellWidth, DeckMinimumCellHeight); }
+        // Columns and rows of Soundboard buttons for its grid.
+        public static int[] SoundGrid(double width, double height, int count) { return PageGrid(width, height, count, SoundCellWidth, SoundCellHeight, SoundMinimumCellWidth, SoundMinimumCellHeight); }
+        // Six to a page; with fewer than six, the smallest grid that holds them all, so the buttons grow into the card
+        // instead of leaving empty cells. Grids never leave a whole row or column empty.
+        public static int[] PageGrid(double width, double height, int count, double cellWidth, double cellHeight, double minimumWidth, double minimumHeight)
         {
-            int columns = (int)Math.Max(1, Math.Min(8, Math.Floor(Math.Max(0, width) / DeckCellWidth)));
-            int rows = (int)Math.Max(1, Math.Min(6, Math.Floor(Math.Max(0, height) / DeckCellHeight)));
-            return new[] { columns, rows };
-        }
-        // When every button fits on one page, the smallest grid that holds them all, so the buttons grow into the card
-        // instead of leaving empty cells; ties go to cells closest to the usual button shape.
-        public static int[] DeckGrid(double width, double height, int count)
-        {
-            int[] most = DeckGrid(width, height);
-            if (count <= 0 || count >= most[0] * most[1]) return most;
-            int[] best = most; double bestScore = Double.MaxValue;
-            for (int c = 1; c <= most[0]; c++)
-                for (int r = 1; r <= most[1]; r++)
+            int n = count <= 0 ? PageButtons : Math.Min(count, PageButtons);
+            int[] best = new[] { n, 1 }; double bestScore = Double.MaxValue;
+            for (int c = 1; c <= n; c++)
+                for (int r = 1; r <= n; r++)
                 {
-                    if (c * r < count) continue;
-                    double shape = Math.Abs(Math.Log(width / c / (height / r) / (DeckCellWidth / DeckCellHeight)));
-                    double score = (c * r - count) * 10 + shape;
+                    if (c * r < n || c * r >= n + Math.Min(c, r)) continue;
+                    double w = Math.Max(1, width) / c, h = Math.Max(1, height) / r;
+                    double shape = Math.Abs(Math.Log(w / h / (cellWidth / cellHeight)));
+                    double score = (w >= minimumWidth && h >= minimumHeight ? 0 : 1000) + (c * r - n) * 10 + shape;
                     if (score < bestScore) { bestScore = score; best = new[] { c, r }; }
                 }
             return best;
         }
-        // A single row puts the glyph beside the label; otherwise the glyph sits above it and grows with the button.
+        // A Quick Launch button's label goes under its glyph when the cell is tall enough, beside it in a wide short
+        // cell, and into the tooltip and spoken name when the cell has room for the glyph alone.
+        public enum DeckLabelMode { Below, Beside, None }
+        public static DeckLabelMode DeckLabel(double cellWidth, double cellHeight)
+        {
+            return cellHeight >= DeckCellHeight ? DeckLabelMode.Below : cellWidth >= 112 ? DeckLabelMode.Beside : DeckLabelMode.None;
+        }
+        // Beside its label the glyph stays small; otherwise it sits above the label (or alone) and grows with the button.
         public static double DeckGlyph(double cellHeight, bool beside)
         {
             return beside ? Clamp(Math.Round(cellHeight * 0.18), 18, 32) : Clamp(Math.Round(cellHeight * 0.3), 24, 44);

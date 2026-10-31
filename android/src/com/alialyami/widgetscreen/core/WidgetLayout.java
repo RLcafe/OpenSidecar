@@ -62,10 +62,10 @@ public final class WidgetLayout {
             case "Focus": return new double[] { 280, 192 };
             case "Media": return new double[] { 312, 200 };
             case "Spotify": return new double[] { 360, 360 };
-            case "Shortcuts": return new double[] { 200, 152 };
+            case "Shortcuts": return new double[] { 288, 204 };
             case "Mixer": return new double[] { 320, 224 };
             case "System": return new double[] { 260, 280 };
-            case "Soundboard": return new double[] { 240, 152 };
+            case "Soundboard": return new double[] { 300, 240 };
             default: return new double[] { 232, 152 };
         }
     }
@@ -81,9 +81,12 @@ public final class WidgetLayout {
     }
 
     public static double[] minimum(String id, double canvasWidth, double canvasHeight) {
-        double[] m = minimum(id), k = compact(canvasWidth, canvasHeight);
+        // Quick Launch and the Soundboard need their full minimum for six 48-unit buttons (CardSizing.PAGE_BUTTONS).
+        double[] m = minimum(id), k = keepsSix(id) ? new double[] { 1, 1 } : compact(canvasWidth, canvasHeight);
         return new double[] { Math.min(canvasWidth, Math.round(m[0] * k[0])), Math.min(canvasHeight, Math.round(m[1] * k[1])) };
     }
+
+    public static boolean keepsSix(String id) { return id.equals("Shortcuts") || id.equals("Soundboard"); }
 
     // Layouts are kept per canvas size, rounded down to the 8-unit snap grid.
     public static double key(double size) { return Math.max(8, Math.floor(size / 8) * 8); }

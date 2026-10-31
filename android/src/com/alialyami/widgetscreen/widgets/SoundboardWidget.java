@@ -21,7 +21,7 @@ import java.util.Map;
 
 // The PC's Discord soundboard: sounds play through the Discord app on the PC, in the voice channel you're in.
 public final class SoundboardWidget extends Widget {
-    private static final double BUTTON_WIDTH = 148, BUTTON_HEIGHT = 56, GAP = 8;
+    private static final double GAP = 8;
     private LinearLayout grid, pager, emptyState;
     private TextView channel, status, pageLabel, heading;
     private GlyphView previousPage, nextPage, reload;
@@ -94,9 +94,10 @@ public final class SoundboardWidget extends Widget {
         channel.setText(connected ? d.channel : "");
         status.setText(!dash.online() ? dash.offlineText() : !connected ? "" : message.isEmpty() ? d.status : message);
         if (!connected) { pager.setVisibility(View.GONE); return; }
-        // As many 148 × 56 buttons as fit, like the Windows widget.
-        int columns = Math.max(1, (int) Math.floor((width - 40 + GAP) / (BUTTON_WIDTH + GAP)));
-        int rows = Math.max(1, (int) Math.floor((height - 40 - 48 - 36 + GAP) / (BUTTON_HEIGHT + GAP)));
+        // Six sounds a page that grow with the card, like the Windows widget (CardSizing.soundGrid): the card less its
+        // padding, header and status line.
+        int[] shape = CardSizing.soundGrid(width - 40 + GAP, height - 40 - 48 - 36, d.sounds.size());
+        int columns = shape[0], rows = shape[1];
         int size = columns * rows, pages = Math.max(1, (d.sounds.size() + size - 1) / size);
         page = Math.max(0, Math.min(pages - 1, page));
         pager.setVisibility(pages > 1 ? View.VISIBLE : View.GONE);
@@ -115,11 +116,11 @@ public final class SoundboardWidget extends Widget {
             for (int c = 0; c < columns; c++) {
                 int index = page * size + r * columns + c;
                 View cell = index < sounds.size() ? button(sounds.get(index), ready, d.channelGuild) : new View(ui.context);
-                LinearLayout.LayoutParams params = ui.ll(0, ui.px(BUTTON_HEIGHT), 1);
+                LinearLayout.LayoutParams params = ui.ll(0, Ui.MATCH, 1);
                 params.setMargins(ui.px(GAP / 2), ui.px(GAP / 2), ui.px(GAP / 2), ui.px(GAP / 2));
                 line.addView(cell, params);
             }
-            grid.addView(line, ui.ll(Ui.MATCH, Ui.WRAP));
+            grid.addView(line, ui.ll(Ui.MATCH, 0, 1));
         }
     }
 

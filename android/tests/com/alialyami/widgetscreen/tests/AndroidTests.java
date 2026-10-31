@@ -207,7 +207,7 @@ public final class AndroidTests {
             List<WidgetLayout.Guide> guides = new ArrayList<WidgetLayout.Guide>();
             Box snapped = WidgetLayout.align("Media", start, "S", 0, 30, java.util.Arrays.asList(new Box(900, 0, 300, 486)), 1856, 576, guides);
             ok(snapped.equals(new Box(400, 100, 400, 386)), "bottom edge snaps alone " + snapped);
-            double[][] windows = { { 280, 192 }, { 312, 200 }, { 200, 152 }, { 320, 224 }, { 260, 280 }, { 232, 152 }, { 360, 360 }, { 240, 152 } };
+            double[][] windows = { { 280, 192 }, { 312, 200 }, { 288, 204 }, { 320, 224 }, { 260, 280 }, { 232, 152 }, { 360, 360 }, { 300, 240 } };
             String[] ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
             for (int i = 0; i < ids.length; i++) ok(java.util.Arrays.equals(WidgetLayout.minimum(ids[i]), windows[i]), ids[i] + " minimum differs from Windows");
             ok(CardSizing.focusShort(299) && !CardSizing.focusShort(300) && CardSizing.mediaShort(289) && !CardSizing.mediaShort(290), "fold heights");
@@ -479,9 +479,13 @@ public final class AndroidTests {
         } });
         check("Cards size their content like the PC: deck grid, countdown, cover, temperature, Spotify columns", new Action() { public void run() {
             int[] reference = CardSizing.deckGrid(472 - 42, 250 - 90), compact = CardSizing.deckGrid(420 - 42, 190 - 90), big = CardSizing.deckGrid(681 - 42, 328 - 90);
-            ok(reference[0] == 3 && reference[1] == 2 && compact[0] == 3 && compact[1] == 1 && big[0] * big[1] > 6, "deck " + big[0] + "x" + big[1]);
-            int[] six = CardSizing.deckGrid(640 - 42, 360 - 90, 6), many = CardSizing.deckGrid(640 - 42, 360 - 90, 40);
-            ok(six[0] * six[1] == 6 && many[0] == 4 && many[1] == 3, "six buttons fill a big card " + six[0] + "x" + six[1]);
+            ok(reference[0] == 3 && reference[1] == 2 && compact[0] == 3 && compact[1] == 2 && big[0] == 3 && big[1] == 2, "deck " + big[0] + "x" + big[1]);
+            int[] six = CardSizing.deckGrid(640 - 42, 360 - 90, 6), many = CardSizing.deckGrid(640 - 42, 360 - 90, 40), four = CardSizing.deckGrid(430, 160, 4);
+            ok(six[0] * six[1] == 6 && many[0] == 3 && many[1] == 2 && four[0] == 2 && four[1] == 2, "six buttons a page " + many[0] + "x" + many[1]);
+            int[] wide = CardSizing.deckGrid(1500, 114), tall = CardSizing.deckGrid(246, 510), sounds = CardSizing.soundGrid(266, 116, 30), soundRow = CardSizing.soundGrid(900, 90, 30);
+            ok(wide[0] == 6 && wide[1] == 1 && tall[0] == 1 && tall[1] == 6 && sounds[0] == 3 && sounds[1] == 2 && soundRow[0] == 6 && soundRow[1] == 1, "six-button shapes");
+            ok(CardSizing.deckLabel(143, 80) == CardSizing.DECK_LABEL_BELOW && CardSizing.deckLabel(126, 57) == CardSizing.DECK_LABEL_BESIDE && CardSizing.deckLabel(82, 57) == CardSizing.DECK_LABEL_NONE, "deck labels");
+            ok(java.util.Arrays.equals(WidgetLayout.minimum("Shortcuts", 1000, 400), WidgetLayout.minimum("Shortcuts")) && java.util.Arrays.equals(WidgetLayout.minimum("Soundboard", 1000, 400), WidgetLayout.minimum("Soundboard")) && WidgetLayout.minimum("Focus", 1000, 400)[1] < 192, "six-button cards keep their minimum");
             ok(CardSizing.deckGlyph(80, false) == 24 && CardSizing.deckGlyph(100, true) == 18 && CardSizing.deckGlyph(400, false) == 44, "glyphs");
             ok(CardSizing.focusTime(320, 576) == 84 && CardSizing.focusTime(296, 300) == 42 && CardSizing.focusTime(600, 900) > 84, "countdown");
             ok(CardSizing.mediaArt(472, 310) == 104 && CardSizing.mediaArt(600, 500) > 104 && CardSizing.mediaArt(2000, 2000) == 220, "cover");

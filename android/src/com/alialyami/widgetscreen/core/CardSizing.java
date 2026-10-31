@@ -1,38 +1,50 @@
 package com.alialyami.widgetscreen.core;
 
 // How each card's content follows its size, the same numbers as the Windows CardSizing.cs
-// (docs/design/any-screen-size.md). Like the Soundboard, Quick Launch fits as many buttons as its card holds; Focus,
-// Now Playing and Weather grow their main reading; Spotify adds columns on wide cards. The mixer list and System stats
+// (docs/design/any-screen-size.md). Quick Launch and the Soundboard show six buttons a page that grow with the card;
+// Focus, Now Playing and Weather grow their main reading; Spotify adds columns on wide cards. The mixer list and System stats
 // already fill their cards. Text never goes below the 13-unit caption and buttons keep 48 units.
 public final class CardSizing {
-    // A Quick Launch button plus its 4-unit margins.
-    public static final double DECK_CELL_WIDTH = 124, DECK_CELL_HEIGHT = 76;
+    // Quick Launch and the Soundboard always show six buttons a page, at any card size (user request, 31 Oct 2026):
+    // 3 × 2, 2 × 3, 6 × 1 or 1 × 6, whichever keeps 48-unit buttons and gives cells closest to the usual button shape.
+    // Their minimum sizes (WidgetLayout.minimum) leave room for six.
+    public static final int PAGE_BUTTONS = 6;
+    // A Quick Launch button plus its 4-unit margins, and the smallest cell that keeps a 48-unit button.
+    public static final double DECK_CELL_WIDTH = 124, DECK_CELL_HEIGHT = 76, DECK_MINIMUM_CELL_WIDTH = 76, DECK_MINIMUM_CELL_HEIGHT = 56;
+    // A Soundboard button plus its 8-unit gap, and the smallest cell that keeps a 48-unit button.
+    public static final double SOUND_CELL_WIDTH = 156, SOUND_CELL_HEIGHT = 64, SOUND_MINIMUM_CELL_WIDTH = 88, SOUND_MINIMUM_CELL_HEIGHT = 56;
 
     // Columns and rows of Quick Launch buttons for the grid area (the card less its padding and header).
-    public static int[] deckGrid(double width, double height) {
-        int columns = (int) Math.max(1, Math.min(8, Math.floor(Math.max(0, width) / DECK_CELL_WIDTH)));
-        int rows = (int) Math.max(1, Math.min(6, Math.floor(Math.max(0, height) / DECK_CELL_HEIGHT)));
-        return new int[] { columns, rows };
-    }
+    public static int[] deckGrid(double width, double height) { return deckGrid(width, height, PAGE_BUTTONS); }
+    public static int[] deckGrid(double width, double height, int count) { return pageGrid(width, height, count, DECK_CELL_WIDTH, DECK_CELL_HEIGHT, DECK_MINIMUM_CELL_WIDTH, DECK_MINIMUM_CELL_HEIGHT); }
+    // Columns and rows of Soundboard buttons for its grid.
+    public static int[] soundGrid(double width, double height, int count) { return pageGrid(width, height, count, SOUND_CELL_WIDTH, SOUND_CELL_HEIGHT, SOUND_MINIMUM_CELL_WIDTH, SOUND_MINIMUM_CELL_HEIGHT); }
 
-    // When every button fits on one page, the smallest grid that holds them all, so the buttons grow into the card
-    // instead of leaving empty cells; ties go to cells closest to the usual button shape.
-    public static int[] deckGrid(double width, double height, int count) {
-        int[] most = deckGrid(width, height);
-        if (count <= 0 || count >= most[0] * most[1]) return most;
-        int[] best = most;
+    // Six to a page; with fewer than six, the smallest grid that holds them all, so the buttons grow into the card
+    // instead of leaving empty cells. Grids never leave a whole row or column empty.
+    public static int[] pageGrid(double width, double height, int count, double cellWidth, double cellHeight, double minimumWidth, double minimumHeight) {
+        int n = count <= 0 ? PAGE_BUTTONS : Math.min(count, PAGE_BUTTONS);
+        int[] best = new int[] { n, 1 };
         double bestScore = Double.MAX_VALUE;
-        for (int c = 1; c <= most[0]; c++)
-            for (int r = 1; r <= most[1]; r++) {
-                if (c * r < count) continue;
-                double shape = Math.abs(Math.log(width / c / (height / r) / (DECK_CELL_WIDTH / DECK_CELL_HEIGHT)));
-                double score = (c * r - count) * 10 + shape;
+        for (int c = 1; c <= n; c++)
+            for (int r = 1; r <= n; r++) {
+                if (c * r < n || c * r >= n + Math.min(c, r)) continue;
+                double w = Math.max(1, width) / c, h = Math.max(1, height) / r;
+                double shape = Math.abs(Math.log(w / h / (cellWidth / cellHeight)));
+                double score = (w >= minimumWidth && h >= minimumHeight ? 0 : 1000) + (c * r - n) * 10 + shape;
                 if (score < bestScore) { bestScore = score; best = new int[] { c, r }; }
             }
         return best;
     }
 
-    // A single row puts the glyph beside the label; otherwise the glyph sits above it and grows with the button.
+    // A Quick Launch button's label goes under its glyph when the cell is tall enough, beside it in a wide short cell,
+    // and into the spoken name when the cell has room for the glyph alone.
+    public static final int DECK_LABEL_BELOW = 0, DECK_LABEL_BESIDE = 1, DECK_LABEL_NONE = 2;
+    public static int deckLabel(double cellWidth, double cellHeight) {
+        return cellHeight >= DECK_CELL_HEIGHT ? DECK_LABEL_BELOW : cellWidth >= 112 ? DECK_LABEL_BESIDE : DECK_LABEL_NONE;
+    }
+
+    // Beside its label the glyph stays small; otherwise it sits above the label (or alone) and grows with the button.
     public static double deckGlyph(double cellHeight, boolean beside) {
         return beside ? clamp(Math.round(cellHeight * 0.18), 18, 32) : clamp(Math.round(cellHeight * 0.3), 24, 44);
     }
