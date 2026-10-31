@@ -70,7 +70,7 @@ public final class Dashboard {
     private View previousPage, nextPage;
     private boolean listMode, started, refreshNow, offlineShown, askedToPair;
     private int builtWidth = -1, builtHeight = -1;
-    private TextView clockTime, clockPeriod, clockDay, clockDate, statusLine, displayStatus, quietButton, undoButton, redoButton;
+    private TextView clockTime, clockPeriod, clockDay, clockDate, statusLine, displayStatus, quietButton, undoButton, redoButton, arrangeButton;
     private View clockPeriodView, mainActions, editToolbar, widgetsPanel;
     private CheckBox snapChoice;
     private SettingsPanel settingsPanel;
@@ -472,7 +472,10 @@ public final class Dashboard {
         toolbar.addView(undoButton, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 0));
         redoButton = ui.button("Redo", new View.OnClickListener() { @Override public void onClick(View v) { editor.redo(); } });
         toolbar.addView(redoButton, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 0));
-        toolbar.addView(ui.button("Reset layout", new View.OnClickListener() { @Override public void onClick(View v) { editor.reset(); } }), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 18, 0));
+        toolbar.addView(ui.button("Reset layout", new View.OnClickListener() { @Override public void onClick(View v) { editor.reset(); } }), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 0));
+        arrangeButton = ui.button("Arrange", new View.OnClickListener() { @Override public void onClick(View v) { if (!editor.arrange()) say("The widgets are already arranged."); } });
+        arrangeButton.setContentDescription("Arrange widgets: line up the shown widgets neatly in their current order");
+        toolbar.addView(arrangeButton, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 18, 0));
         snapChoice = ui.check("Snap", editor.snap(), new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { editor.setSnap(checked); } });
         toolbar.addView(snapChoice, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 18, 0));
         toolbar.addView(ui.button("Widgets", new View.OnClickListener() { @Override public void onClick(View v) { toggleWidgetsPanel(); } }), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 32, 0));
@@ -705,6 +708,7 @@ public final class Dashboard {
         if (!editing) { if (displayStatus != null) displayStatus.setText(""); return; }
         Ui.enable(undoButton, editor.canUndo() && !editor.gestureActive());
         Ui.enable(redoButton, editor.canRedo() && !editor.gestureActive());
+        Ui.enable(arrangeButton, !editor.gestureActive());
         snapChoice.setChecked(editor.snap(), false);
         String id = editor.selected();
         WidgetLayout.Box b = editor.bounds(id);

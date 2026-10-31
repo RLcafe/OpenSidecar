@@ -149,6 +149,7 @@ namespace WidgetScreen
             Button("UndoLayoutButton", () => Editor.Undo());
             Button("RedoLayoutButton", () => Editor.Redo());
             Button("ResetLayoutButton", () => Editor.Reset());
+            Button("ArrangeLayoutButton", () => { if (!Editor.Arrange()) Notify("The widgets are already arranged."); });
             Button("CancelLayoutButton", CancelLayoutEdit);
             Button("SaveLayoutButton", SaveLayoutEdit);
             InitializeEditPanel();
@@ -404,6 +405,7 @@ namespace WidgetScreen
                 {
                     Control<Button>("UndoLayoutButton").IsEnabled = Editor.CanUndo && !Editor.GestureActive;
                     Control<Button>("RedoLayoutButton").IsEnabled = Editor.CanRedo && !Editor.GestureActive;
+                    Control<Button>("ArrangeLayoutButton").IsEnabled = !Editor.GestureActive;
                     Control<CheckBox>("SnapLayoutChoice").IsChecked = Editor.Snap;
                     UpdateEditPanel();
                     var bounds = Editor.Bounds(Editor.SelectedId);

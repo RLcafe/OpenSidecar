@@ -237,8 +237,9 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal">
               <Button x:Name="UndoLayoutButton" Content="Undo" Margin="0,0,8,0" ToolTip="Undo the last layout change (Ctrl+Z)."/>
               <Button x:Name="RedoLayoutButton" Content="Redo" Margin="0,0,8,0" ToolTip="Redo a layout change (Ctrl+Y)."/>
-              <Button x:Name="ResetLayoutButton" Content="Reset layout" Margin="0,0,18,0" ToolTip="Return every widget to the default arrangement. You can undo this."/>
-              <CheckBox x:Name="SnapLayoutChoice" Content="Snap" Margin="0,0,18,0" ToolTip="Snap movement and resizing to an 8 pixel grid."/>
+              <Button x:Name="ResetLayoutButton" Content="Reset layout" Margin="0,0,8,0" ToolTip="Return every widget to the default arrangement. You can undo this."/>
+              <Button x:Name="ArrangeLayoutButton" Content="Arrange" Margin="0,0,18,0" ToolTip="Line up the shown widgets neatly in their current order, filling the screen without gaps or overlaps. You can undo this." AutomationProperties.Name="Arrange widgets"/>
+              <CheckBox x:Name="SnapLayoutChoice" Content="Snap" Margin="0,0,18,0" ToolTip="Snap to an 8 pixel grid and to other widgets' edges, with guide lines while you drag."/>
               <Button x:Name="EditWidgetsButton" Content="Widgets" ToolTip="Show or hide widgets, and add, rename, order or delete pages." AutomationProperties.Name="Widgets and pages"/>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
@@ -550,7 +551,7 @@
               <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
               <StackPanel Margin="0,0,12,0">
               <TextBlock Text="Layout" FontSize="24" Margin="0,0,0,10"/>
-              <TextBlock Text="Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping and Reset are in the editor." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping to other widgets, Arrange and Reset are in the editor." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               <Button x:Name="OpenLayoutEditor" Content="Edit layout" HorizontalAlignment="Left" MinWidth="200" Margin="0,0,0,12"/>
               <TextBlock Text="Opening the editor closes Settings without saving other changes here." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               </StackPanel>

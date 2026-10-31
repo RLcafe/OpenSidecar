@@ -23,6 +23,8 @@ public final class LayoutEditor {
     private int gestureLayer;
     private boolean editing, snap, gestureMoved;
     private Listener listener;
+    // Alignment guides shown while a drag sits on another widget's edge (WidgetLayout.align); WidgetCanvas draws them.
+    private final List<WidgetLayout.Guide> guides = new ArrayList<WidgetLayout.Guide>();
 
     public void setListener(Listener listener) { this.listener = listener; }
     public boolean editing() { return editing; }
@@ -32,6 +34,7 @@ public final class LayoutEditor {
     public boolean canRedo() { return !redo.isEmpty(); }
     public boolean gestureActive() { return gestureId != null; }
     public Placement[] placements() { return current; }
+    public List<WidgetLayout.Guide> guides() { return guides; }
     public double canvasWidth() { return canvasWidth; }
     public double canvasHeight() { return canvasHeight; }
 
@@ -131,6 +134,23 @@ public final class LayoutEditor {
         changed(true);
     }
 
+    // Lines up the shown widgets neatly in their current order, filling the canvas (WidgetLayout.arrange). One undo
+    // step; returns false when they are already arranged that way.
+    public boolean arrange() {
+        if (!editing || gestureActive()) return false;
+        List<Placement> visible = new ArrayList<Placement>();
+        for (Placement p : current) if (isVisible(p.id)) visible.add(p);
+        List<String> shown = WidgetLayout.arrangeOrder(visible, canvasWidth, canvasHeight);
+        if (shown.isEmpty()) return false;
+        Placement[] next = WidgetLayout.tidy(current, shown, canvasWidth, canvasHeight);
+        boolean same = true;
+        for (int i = 0; i < next.length; i++) if (!next[i].bounds().equals(current[i].bounds()) || next[i].layer != current[i].layer) same = false;
+        if (same) return false;
+        remember(export()); current = next;
+        changed(true);
+        return true;
+    }
+
     public void undo() {
         if (!editing || !canUndo() || gestureActive()) return;
         redo.add(export()); current = undo.remove(undo.size() - 1);
@@ -172,7 +192,11 @@ public final class LayoutEditor {
         if (!gestureMoved && Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
         gestureMoved = true;
         Placement p = WidgetLayout.find(current, gestureId);
-        Box next = WidgetLayout.transform(p.id, gestureBounds, gestureCorner, dx, dy, snap, canvasWidth, canvasHeight);
+        List<Box> others = new ArrayList<Box>();
+        for (Placement o : current) if (!o.id.equals(p.id) && isVisible(o.id)) others.add(o.bounds());
+        Box next;
+        if (snap) next = WidgetLayout.align(p.id, gestureBounds, gestureCorner, dx, dy, others, canvasWidth, canvasHeight, guides);
+        else { guides.clear(); next = WidgetLayout.transform(p.id, gestureBounds, gestureCorner, dx, dy, false, canvasWidth, canvasHeight); }
         p.layer = next.equals(gestureBounds) ? WidgetLayout.find(gestureBefore, p.id).layer : gestureLayer;
         p.setBounds(next);
         changed(false);
@@ -183,7 +207,7 @@ public final class LayoutEditor {
         String id = gestureId;
         boolean moved = !bounds(id).equals(gestureBounds);
         if (moved) remember(gestureBefore);
-        gestureId = null; gestureBefore = null;
+        gestureId = null; gestureBefore = null; guides.clear();
         // The card's content picks its compact or tall arrangement again for its new size.
         changed(moved);
     }

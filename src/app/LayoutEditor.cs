@@ -16,6 +16,9 @@ namespace WidgetScreen
         private readonly Dictionary<string, Border> cards = new Dictionary<string, Border>();
         private readonly Dictionary<string, Grid> chrome = new Dictionary<string, Grid>();
         private readonly Dictionary<string, Border> outlines = new Dictionary<string, Border>();
+        // Alignment guides shown while a drag sits on another widget's edge (WidgetLayout.Align), drawn above the cards.
+        private readonly List<WidgetLayout.Guide> guides = new List<WidgetLayout.Guide>();
+        private readonly List<Border> guideLines = new List<Border>();
         private readonly List<WidgetPlacement[]> undo = new List<WidgetPlacement[]>(), redo = new List<WidgetPlacement[]>();
         private WidgetPlacement[] saved, current, gestureBefore;
         private AppSettings preferences;
@@ -32,6 +35,7 @@ namespace WidgetScreen
         public bool CanUndo { get { return undo.Count > 0; } }
         public bool CanRedo { get { return redo.Count > 0; } }
         public bool GestureActive { get { return gestureId != null; } }
+        public IList<WidgetLayout.Guide> Guides { get { return guides.AsReadOnly(); } }
         public event Action Changed;
         // The canvas the dashboard has on this screen (ScreenFit); layouts are kept per canvas size.
         public Size CanvasSize { get { return canvasSize; } }
@@ -196,6 +200,18 @@ namespace WidgetScreen
                 ShowCpu = preferences.ShowCpu, ShowGpu = preferences.ShowGpu, ShowRam = preferences.ShowRam,
                 ShowNetwork = preferences.ShowNetwork, ShowUptime = preferences.ShowUptime }, canvasSize); Draw();
         }
+        // Lines up the shown widgets neatly in their current order, filling the canvas (WidgetLayout.Arrange). One undo
+        // step; returns false when they are already arranged that way.
+        public bool Arrange()
+        {
+            if (!Editing || GestureActive) return false;
+            var shown = WidgetLayout.ArrangeOrder(current.Where(p => IsVisible(p.Id)), canvasSize);
+            if (shown.Length == 0) return false;
+            var next = WidgetLayout.Tidy(current, shown, canvasSize);
+            if (next.Zip(current, (a, b) => a.Bounds == b.Bounds && a.Layer == b.Layer).All(same => same)) return false;
+            Remember(Export()); current = next; Draw();
+            return true;
+        }
         public void Undo()
         {
             if (!Editing || !CanUndo || GestureActive) return;
@@ -214,6 +230,15 @@ namespace WidgetScreen
             if (next == p.Bounds) return;
             Remember(Export()); p.Layer = current.Max(w => w.Layer) + 1; WidgetLayout.SetBounds(p, next); Draw();
         }
+        // A drag by code, through the same path as a finger or mouse (checks and --render-edit-guides): starts on a widget
+        // (corner "" moves it), moves by dx, dy and, with finish, lets go.
+        public void Drag(string id, string corner, double dx, double dy, bool finish)
+        {
+            if (!Editing || !WidgetLayout.Ids.Contains(id) || (GestureActive && gestureId != id)) return;
+            if (!GestureActive) StartGesture(id, corner, new Point(0, 0));
+            ContinueGesture(new Point(dx, dy));
+            if (finish) EndGesture();
+        }
         private void StartGesture(string id, string corner, Point point)
         {
             gestureBefore = Export(); gestureId = id; gestureCorner = corner;
@@ -228,7 +253,10 @@ namespace WidgetScreen
             if (!gestureMoved && Math.Abs(dx) < 2 && Math.Abs(dy) < 2) return;
             gestureMoved = true;
             var p = current.First(w => w.Id == gestureId);
-            var next = WidgetLayout.Transform(p.Id, gestureBounds, gestureCorner, dx, dy, Snap, canvasSize);
+            var others = current.Where(w => w.Id != p.Id && IsVisible(w.Id)).Select(w => w.Bounds).ToList();
+            var next = Snap ? WidgetLayout.Align(p.Id, gestureBounds, gestureCorner, dx, dy, others, canvasSize, guides)
+                : WidgetLayout.Transform(p.Id, gestureBounds, gestureCorner, dx, dy, false, canvasSize);
+            if (!Snap) guides.Clear();
             p.Layer = next == gestureBounds ? gestureBefore.First(w => w.Id == p.Id).Layer : gestureLayer;
             WidgetLayout.SetBounds(p, next);
             Draw();
@@ -239,7 +267,7 @@ namespace WidgetScreen
             endingGesture = true;
             string id = gestureId;
             if (Bounds(id) != gestureBounds) Remember(gestureBefore);
-            gestureId = null;
+            gestureId = null; guides.Clear();
             if (gestureTouch != null) gestureTouch.Capture(null); else chrome[id].ReleaseMouseCapture();
             gestureTouch = null; gestureBefore = null; endingGesture = false; Draw();
         }
@@ -259,7 +287,26 @@ namespace WidgetScreen
                 outlines[p.Id].BorderThickness = new Thickness(p.Id == SelectedId ? 2 : 1);
                 outlines[p.Id].SetResourceReference(Border.BorderBrushProperty, p.Id == SelectedId ? "Accent" : "Muted");
             }
+            DrawGuides();
             if (Changed != null) Changed();
+        }
+        // Guides are 2-unit accent lines, added after the cards so they sit above the raised selected card.
+        private void DrawGuides()
+        {
+            while (guideLines.Count < guides.Count)
+            {
+                var line = new Border { IsHitTestVisible = false };
+                line.SetResourceReference(Border.BackgroundProperty, "Accent");
+                Panel.SetZIndex(line, Int32.MaxValue); guideLines.Add(line); canvas.Children.Add(line);
+            }
+            for (int i = 0; i < guideLines.Count; i++)
+            {
+                var line = guideLines[i];
+                if (i >= guides.Count) { line.Visibility = Visibility.Collapsed; continue; }
+                var g = guides[i]; line.Visibility = Visibility.Visible;
+                line.Width = g.Vertical ? 2 : Math.Max(2, g.To - g.From); line.Height = g.Vertical ? Math.Max(2, g.To - g.From) : 2;
+                Canvas.SetLeft(line, g.Vertical ? g.At - 1 : g.From); Canvas.SetTop(line, g.Vertical ? g.From : g.At - 1);
+            }
         }
     }
 }

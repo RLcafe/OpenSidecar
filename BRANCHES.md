@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/keep-game-focus` was merged as v0.13.0.
+| `feature/organize-widgets` | Snap to other widgets' edges with guide lines, and an Arrange button in Edit layout, on both apps | `64f0ca0` (v0.13.0) | Ready for review | `.worktrees\organize-widgets` | `.worktrees\organize-widgets\artifacts\app\WidgetScreen.exe`, `.worktrees\organize-widgets\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

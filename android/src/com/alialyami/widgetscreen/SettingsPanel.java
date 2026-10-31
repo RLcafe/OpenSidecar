@@ -261,7 +261,7 @@ public final class SettingsPanel {
         LinearLayout[] c = columns();
         LinearLayout left = c[0], right = c[1];
         add(left, heading("Layout"), 0);
-        add(left, note("Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping and Reset are in the editor."), 10);
+        add(left, note("Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping to other widgets, Arrange and Reset are in the editor."), 10);
         TextView edit = ui.button("Edit layout", new View.OnClickListener() { @Override public void onClick(View v) { dash.editLayoutFromSettings(); } });
         Ui.enable(edit, !dash.listMode());
         left.addView(edit, ui.margins(ui.ll(Ui.WRAP, ui.px(52)), 0, 14, 0, 0));
