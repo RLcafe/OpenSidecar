@@ -6,6 +6,15 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.15.0 (31 Oct 2026)
+
+Much more resizable widgets (user request, designed with the Impeccable skill; Windows and the phone, the same rules on both):
+
+- **Edge grips.** Edit layout adds a grip in the middle of each side, next to the four corner grips. Drag one to change only the width or only the height. They show on sides long enough to keep clear of the corners.
+- **Much smaller cards.** Every widget can now be made a lot smaller: Quick Launch down to 200 × 152 (one button with paging), Weather and the Soundboard to about 240 × 152, Focus to 280 × 192, Now Playing to 312 × 200, the mixer to 320 × 224, Spotify to 360 × 360. Your saved layouts and the default ones don't change.
+- **Cards rearrange instead of cutting off.** Below a card's comfortable size it folds its secondary rows away and keeps its main reading and buttons at full touch size: Focus folds the presets into one length button beside Start that steps through them; Now Playing becomes the song with the cover and the buttons; the mixer moves the microphone beside the master slider and, on a short card, keeps the app list one tap away behind an **Apps** button; System stats drop the graphs and bars on narrow cards so the numbers stay big; Weather drops the details line; Spotify gets a smaller now-playing strip; the Connect Spotify and Connect Discord cards keep their button.
+- Big cards look the same as before.
+
 ## v0.14.0 (31 Oct 2026)
 
 Easier widget organizing (user request; Windows and the phone, the same rules on both):
