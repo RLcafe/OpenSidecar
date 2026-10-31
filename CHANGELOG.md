@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-From `feature/setup-installer` (user request, 31 Oct 2026; Windows only):
+Nothing yet.
+
+## v0.12.0 (31 Oct 2026)
+
+A setup exe (user request; Windows only, the APK is already Android's installer):
 
 - **A setup exe**, `WidgetScreen-Setup-vX.Y.Z.exe`, in every release folder. It installs Widget Screen for the signed-in user in `%LOCALAPPDATA%\Programs\Widget Screen` without administrator rights, adds a Start menu shortcut, starts the app when you sign in (a checkbox, on by default), and adds an entry to Settings → Apps → Installed apps.
 - **Updating**: running a newer setup replaces the installed copy in place, closing it first, and keeps the startup choice. Settings, sign-ins and paired phones stay in `%LOCALAPPDATA%\WidgetScreen` as before.

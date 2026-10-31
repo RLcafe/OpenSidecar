@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/setup-installer` | A setup exe that installs Widget Screen for the user with Start menu and Startup shortcuts, an Installed apps entry and an uninstaller | `aa77c2a` (v0.11.0) | In progress | `.worktrees\setup-installer` | `.worktrees\setup-installer\artifacts\setup\WidgetScreen-Setup-v0.11.0-dirty.exe` (no Android change) |
+None right now. `feature/setup-installer` was merged as v0.12.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
