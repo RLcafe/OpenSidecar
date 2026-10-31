@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.18.0 (31 Oct 2026)
+
+Small, medium and large designs for every widget (user request; Windows and the phone, the same sizes on both). Small is each card's folded layout and Medium is the card you know; Large is new:
+
+- **Focus** draws the session as a ring around the countdown, with the status and today's sessions inside it. The default full-height Focus column opens in this design.
+- **Now Playing** centres a big cover over the song, with the seek bar and buttons underneath.
+- **Sound mixer**: Master, Compact and Full are its small, medium and large designs, and a Full mixer 760 wide or more lists the apps in two columns.
+- **Spotify**, 760 wide or more, moves the song into a side panel with a cover as wide as the panel over the title, artist and Like.
+- **Quick Launch and Soundboard** buttons become tiles on big cards: the icon, the name and what the button does ("Website · www.google.com", "App", "Hotkey · Ctrl+Shift+M"), or where a sound comes from.
+- Not yet tried on a phone or emulator, with a connected Discord, or with a real Spotify account (a labelled test fixture shows the Spotify panel).
+
 ## v0.17.0 (31 Oct 2026)
 
 Small, medium and large designs, starting with System stats and Weather (user request; Windows and the phone, the same sizes on both):
