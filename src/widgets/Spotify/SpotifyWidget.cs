@@ -262,5 +262,32 @@ namespace WidgetScreen
         }
         private Task Start(SpotifyItem parent, SpotifyItem song) { return parent == null ? service.PlayTrackAsync(song.Uri) : service.PlayInCollectionAsync(parent.Uri, song.Position); }
         public void Dispose() { disposed = true; generation++; browseGeneration++; service.Dispose(); images.Dispose(); }
+        // Small, Medium and Large designs (CardSizing.Spotify; docs/design/widget-size-views.md): Small keeps the tabs, list
+        // and a smaller now-playing strip with no idle status row; Medium is the full card; Large moves the song into a side
+        // panel with a cover as wide as the panel over the title, artist and Like.
+        public void Fit(Rect bounds, double textScale)
+        {
+            var design = CardSizing.Spotify(bounds.Width, bounds.Height);
+            bool compact = design == CardSizing.Design.Small, large = design == CardSizing.Design.Large;
+            C<RowDefinition>("SpotifyStatusRow").Height = compact ? GridLength.Auto : new GridLength(36);
+            // Large: the song moves to a side panel, the cover as wide as the panel over the title, artist and Like.
+            double side = large ? Math.Max(260, Math.Min(360, Math.Round((bounds.Width - 48) * 0.32))) : 0;
+            C<ColumnDefinition>("SpotifySideColumn").Width = new GridLength(side);
+            var strip = C<Border>("SpotifyNowStrip"); var now = C<Grid>("SpotifyNowGrid");
+            var text = C<StackPanel>("SpotifyNowText"); var like = C<Button>("SpotifyLike");
+            if (now.RowDefinitions.Count == 0) { now.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); now.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); now.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); }
+            Grid.SetColumn(strip, large ? 1 : 0); Grid.SetRow(strip, large ? 1 : 3); Grid.SetRowSpan(strip, large ? 3 : 1);
+            strip.Margin = large ? new Thickness(16, 4, 0, 4) : new Thickness(0, 4, 0, 0); strip.Padding = new Thickness(compact ? 6 : large ? 14 : 8);
+            now.VerticalAlignment = large ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+            var art = C<Border>("SpotifyArtBox"); art.Width = art.Height = large ? side - 16 - 28 : compact ? 48 : 64;
+            ((TextBlock)((Grid)art.Child).Children[0]).FontSize = large ? Math.Round((side - 44) * 0.3) : 26;
+            art.CornerRadius = new CornerRadius(large ? 16 : 10);
+            Grid.SetColumnSpan(art, large ? 3 : 1);
+            Grid.SetRow(text, large ? 1 : 0); Grid.SetColumn(text, large ? 0 : 1); Grid.SetColumnSpan(text, large ? 3 : 1);
+            text.Margin = large ? new Thickness(2, 14, 2, 0) : new Thickness(12, 0, 8, 0);
+            Grid.SetRow(like, large ? 2 : 0); Grid.SetColumn(like, large ? 0 : 2); Grid.SetColumnSpan(like, large ? 3 : 1);
+            like.Margin = large ? new Thickness(0, 14, 0, 0) : new Thickness(0); like.HorizontalAlignment = large ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+            C<TextBlock>("SpotifyTitle").TextWrapping = large ? TextWrapping.Wrap : TextWrapping.NoWrap; C<TextBlock>("SpotifyTitle").MaxHeight = large ? 56 * textScale : Double.PositiveInfinity;
+        }
     }
 }

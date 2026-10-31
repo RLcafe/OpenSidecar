@@ -433,6 +433,40 @@ internal static class SpotifyTests
             }
             finally { SynchronizationContext.SetSynchronizationContext(context); }
         });
+        check("Spotify's Large design puts the song in a side panel that stays inside the card", () => {
+            var context = SynchronizationContext.Current; SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
+            try
+            {
+                using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+                {
+                    var window = (Window)System.Windows.Markup.XamlReader.Load(stream);
+                    var settings = new AppSettings(); var editor = new LayoutEditor(window); editor.Apply(settings);
+                    editor.Begin(); editor.Select("Spotify"); editor.SetVisible("Spotify", true); editor.TransformSelected("", -2000, -2000, false); editor.TransformSelected("SE", 440, 0, false); editor.Accept();
+                    var handler = new Handler { Send = request => request.RequestUri.AbsolutePath.EndsWith("currently-playing")
+                        ? Reply(HttpStatusCode.OK, "{\"is_playing\":true,\"progress_ms\":60000,\"item\":{\"name\":\"Song · TEST FIXTURE\",\"uri\":\"" + Track + "\",\"duration_ms\":200000,\"artists\":[{\"name\":\"Sample artist\"}]}}")
+                        : Reply(HttpStatusCode.OK, "[true]") };
+                    using (var widget = new SpotifyWidget(window, new SpotifyService(Session(directory, "large", false), handler)))
+                    {
+                        widget.Refresh(false); Pump();
+                        var bounds = editor.Bounds("Spotify");
+                        Assert(CardSizing.Spotify(bounds.Width, bounds.Height) == CardSizing.Design.Large && CardSizing.Spotify(560, 576) == CardSizing.Design.Medium && CardSizing.Spotify(760, 480) == CardSizing.Design.Small, "Spotify designs are picked at the wrong sizes: " + bounds);
+                        widget.Fit(bounds, 1);
+                        var dashboard = (FrameworkElement)window.FindName("Dashboard"); dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                        var card = (FrameworkElement)window.FindName("SpotifyCard"); var strip = (FrameworkElement)window.FindName("SpotifyNowStrip");
+                        Assert(Grid.GetColumn(strip) == 1 && ((FrameworkElement)window.FindName("SpotifyArtBox")).ActualWidth >= 200, "The Large design didn't move the song into a side panel with a big cover.");
+                        foreach (string name in new[] { "SpotifyLike", "SpotifyArtBox", "SpotifyTitle", "SpotifySearch", "SpotifyAccount" })
+                        {
+                            var control = (FrameworkElement)window.FindName(name); var box = control.TransformToAncestor(card).TransformBounds(new Rect(0, 0, control.ActualWidth, control.ActualHeight));
+                            Assert(box.Left >= 20 && box.Top >= 20 && box.Right <= card.ActualWidth - 20 && box.Bottom <= card.ActualHeight - 20, name + " escapes the Large Spotify card: " + box);
+                        }
+                        var bitmap = new RenderTargetBitmap((int)card.ActualWidth, (int)card.ActualHeight, 96, 96, PixelFormats.Pbgra32); bitmap.Render(card); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                        using (var file = File.Create(Path.Combine(directory, "spotify-large-fixture.png"))) encoder.Save(file);
+                    }
+                    window.Close();
+                }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(context); }
+        });
         check("Spotify compact widget shows confirmed likes and keeps actions inside bounds", () => {
             var context = SynchronizationContext.Current; SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
             try

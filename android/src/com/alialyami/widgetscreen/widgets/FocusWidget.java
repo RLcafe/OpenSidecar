@@ -18,6 +18,7 @@ import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ProgressLine;
+import com.alialyami.widgetscreen.views.RingGauge;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ public final class FocusWidget extends Widget {
     private static final int[] PRESETS = { 25, 50, 5 };
     private TextView time, status, sessions, start, custom, lengthLabel, lengthStep;
     private ProgressLine progress;
+    private RingGauge ring;
     private GlyphView reset;
     private final TextView[] presets = new TextView[3];
     private FrameLayout root, picker;
@@ -48,22 +50,35 @@ public final class FocusWidget extends Widget {
         LinearLayout column = ui.column();
         column.addView(ui.label("FOCUS TIMER"), ui.ll(Ui.MATCH, Ui.WRAP));
 
+        // Three designs (CardSizing.focus, as on the PC): SMALL keeps the countdown and the start row; MEDIUM adds the
+        // status, presets and a progress line; LARGE draws the progress as a ring around the countdown, with the status
+        // and today's sessions inside it.
+        boolean large = CardSizing.focus(width, height) == CardSizing.LARGE;
+        double ringSize = large ? CardSizing.focusRing(width, height) : 0;
         LinearLayout middle = ui.column();
         middle.setGravity(Gravity.CENTER_VERTICAL);
         // The countdown grows with the card (CardSizing, as on the PC).
-        time = Ui.tabular(ui.text("25:00", (float) CardSizing.focusTime(width, height), ui.theme.text));
+        time = Ui.tabular(ui.text("25:00", (float) (large ? Math.round(ringSize * 0.22) : CardSizing.focusTime(width, height)), ui.theme.text));
         time.setTypeface(Ui.LIGHT); time.setGravity(Gravity.CENTER);
         middle.addView(time, ui.ll(Ui.MATCH, Ui.WRAP));
         status = Ui.wrap(ui.smallText(""), 2);
         status.setGravity(Gravity.CENTER);
-        if (!folded) middle.addView(status, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, compact ? 2 : 6, 0, compact ? 8 : 12));
+        if (!folded) middle.addView(status, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, large ? 4 : compact ? 2 : 6, 0, large ? 0 : compact ? 8 : 12));
         progress = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track);
         progress.setContentDescription("Focus session progress");
-        middle.addView(progress, folded ? ui.margins(ui.ll(Ui.MATCH, ui.px(5)), 0, 4, 0, 12) : ui.ll(Ui.MATCH, ui.px(5)));
+        if (!large) middle.addView(progress, folded ? ui.margins(ui.ll(Ui.MATCH, ui.px(5)), 0, 4, 0, 12) : ui.ll(Ui.MATCH, ui.px(5)));
         sessions = ui.caption("");
         sessions.setGravity(Gravity.CENTER); sessions.setSingleLine(true);
-        if (!folded) middle.addView(sessions, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
-        column.addView(middle, ui.ll(Ui.MATCH, 0, 1));
+        if (!folded) middle.addView(sessions, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, large ? 4 : 10, 0, 0));
+        ring = null;
+        if (large) {
+            FrameLayout dial = new FrameLayout(ui.context);
+            ring = new RingGauge(ui.context, ui.theme.accent, ui.theme.track, ui.fpx(Math.max(8, Math.min(14, Math.round(ringSize * 0.045)))));
+            ring.setContentDescription("Focus session progress");
+            dial.addView(ring, ui.frame(ui.px(ringSize), ui.px(ringSize), Gravity.CENTER));
+            dial.addView(middle, ui.frame(ui.px(ringSize * 0.74), Ui.WRAP, Gravity.CENTER));
+            column.addView(dial, ui.ll(Ui.MATCH, 0, 1));
+        } else column.addView(middle, ui.ll(Ui.MATCH, 0, 1));
 
         LinearLayout presetRow = ui.row();
         for (int i = 0; i < PRESETS.length; i++) {
@@ -135,7 +150,7 @@ public final class FocusWidget extends Widget {
         boolean online = focus != null;
         for (TextView preset : presets) Ui.enable(preset, online);
         Ui.enable(custom, online); Ui.enable(start, online); Ui.enable(reset, online); Ui.enable(lengthStep, online && !focus.running);
-        if (!online) { time.setText("—:—"); time.setTextColor(ui.theme.text); status.setText(dash.offlineText()); sessions.setText(""); progress.setValue(0); finishedTint.setVisibility(View.GONE); return; }
+        if (!online) { time.setText("—:—"); time.setTextColor(ui.theme.text); status.setText(dash.offlineText()); sessions.setText(""); progress.setValue(0); if (ring != null) ring.setValue(0); finishedTint.setVisibility(View.GONE); return; }
         // Between readings a running timer keeps counting down here.
         long remaining = (long) focus.remainingMs;
         if (focus.running) remaining = Math.max(0, remaining - (SystemClock.elapsedRealtime() - dash.pc.stateAt));
@@ -148,6 +163,7 @@ public final class FocusWidget extends Widget {
         boolean running = focus.running && remaining > 0;
         status.setText(remaining == 0 && focus.finished ? "Done. Take a break. Tap to clear." : Format.focusStatus(remaining, running, fraction, ends));
         progress.setValue(fraction);
+        if (ring != null) ring.setValue(fraction * 100);
         sessions.setText(Format.sessions(focus.sessionsToday, focus.minutesToday));
         String label = Format.focusButton(remaining, running, fraction);
         start.setText(folded && label.equals("Start focus") ? "Start" : label);

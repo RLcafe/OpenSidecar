@@ -39,6 +39,7 @@ public final class MixerWidget extends Widget {
     private TouchSlider master;
     private GlyphView mute, microphoneGlyph, microphoneCompact;
     private LinearLayout sessionList, microphone, outputButton, masterRow, sliderRow;
+    private int appColumns = 1;
     private FrameLayout picker, root, listHost;
     // FULL, COMPACT or MASTER (CardSizing.mixer, as on the PC); a MASTER card shows the app list in place of the
     // master volume while appsOpen is set.
@@ -58,6 +59,7 @@ public final class MixerWidget extends Widget {
     @Override protected View create() {
         rows.clear(); rowSignature = null; picker = null;
         mode = CardSizing.mixer(height);
+        appColumns = CardSizing.mixerColumns(width, height);
         if (mode != CardSizing.MIXER_MASTER) appsOpen = false;
         boolean full = mode == CardSizing.MIXER_FULL, masterOnly = mode == CardSizing.MIXER_MASTER;
         root = new FrameLayout(ui.context);
@@ -253,7 +255,12 @@ public final class MixerWidget extends Widget {
         row.output = ui.iconButton("output", "Output", 18, false, new View.OnClickListener() { @Override public void onClick(View v) { openAppOutputs(row.session); } });
         controls.addView(row.output, ui.margins(ui.ll(ui.px(48), ui.px(48)), 4, 0, 0, 0));
         box.addView(controls, ui.ll(Ui.MATCH, ui.px(48)));
-        sessionList.addView(box, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
+        // A wide LARGE card lists the apps in two columns, 24 apart (CardSizing.mixerColumns, as on the PC).
+        if (appColumns > 1) {
+            LinearLayout line = sessionList.getChildCount() == 0 ? null : (LinearLayout) sessionList.getChildAt(sessionList.getChildCount() - 1);
+            if (line == null || line.getChildCount() >= appColumns) { line = ui.row(); sessionList.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0)); }
+            line.addView(box, ui.margins(ui.ll(0, Ui.WRAP, 1), line.getChildCount() == 0 ? 0 : 24, 0, 0, 0));
+        } else sessionList.addView(box, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         return row;
     }
 

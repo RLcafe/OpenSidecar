@@ -388,7 +388,13 @@ public final class AndroidTests {
         check("Quick Launch glyphs from the PC map to drawn icons", new Action() { public void run() {
             ok(PcState.glyph("E8D6").equals("music") && PcState.glyph("e774").equals("globe") && PcState.glyph("E720").equals("microphone") && PcState.glyph("FFFF").equals("app") && PcState.glyph(null).equals("app"), "glyphs");
         } });
-        check("System stats and Weather pick small, medium and large designs like the PC", new Action() { public void run() {
+        check("Every other card picks small, medium and large designs like the PC", new Action() { public void run() {
+            ok(CardSizing.focus(280, 192) == CardSizing.SMALL && CardSizing.focus(320, 400) == CardSizing.MEDIUM && CardSizing.focus(320, 576) == CardSizing.LARGE && CardSizing.focusRing(320, 576) == 272, "focus");
+            ok(CardSizing.media(312, 200) == CardSizing.SMALL && CardSizing.media(472, 310) == CardSizing.MEDIUM && CardSizing.media(472, 576) == CardSizing.LARGE && CardSizing.mediaCover(472, 576) == 280, "now playing");
+            ok(CardSizing.mixerDesign(250) == CardSizing.SMALL && CardSizing.mixerDesign(350) == CardSizing.MEDIUM && CardSizing.mixerDesign(576) == CardSizing.LARGE && CardSizing.mixerColumns(800, 576) == 2 && CardSizing.mixerColumns(456, 576) == 1 && CardSizing.mixerColumns(800, 350) == 1, "mixer");
+            ok(CardSizing.spotify(1000, 576) == CardSizing.LARGE && CardSizing.spotify(560, 576) == CardSizing.MEDIUM && CardSizing.spotify(760, 480) == CardSizing.SMALL, "spotify");
+            ok(CardSizing.tile(80, 60) == CardSizing.SMALL && CardSizing.tile(140, 76) == CardSizing.MEDIUM && CardSizing.tile(160, 150) == CardSizing.LARGE, "tiles");
+        } });        check("System stats and Weather pick small, medium and large designs like the PC", new Action() { public void run() {
             ok(CardSizing.stats(260, 280) == CardSizing.SMALL && CardSizing.stats(339, 576) == CardSizing.SMALL && CardSizing.stats(472, 310) == CardSizing.MEDIUM && CardSizing.stats(900, 300) == CardSizing.MEDIUM && CardSizing.stats(400, 420) == CardSizing.LARGE && CardSizing.stats(472, 576) == CardSizing.LARGE, "stats");
             ok(CardSizing.weather(232, 152) == CardSizing.SMALL && CardSizing.weather(600, 219) == CardSizing.SMALL && CardSizing.weather(472, 250) == CardSizing.MEDIUM && CardSizing.weather(360, 576) == CardSizing.MEDIUM && CardSizing.weather(400, 340) == CardSizing.LARGE, "weather");
             ok(CardSizing.statsTileColumns(472, 4) == 2 && CardSizing.statsTileColumns(1200, 4) == 4 && CardSizing.statsTileColumns(1200, 1) == 1 && CardSizing.weatherHours(400) == 4 && CardSizing.weatherHours(800) == 5 && CardSizing.weatherHours(300) == 3, "tiles and hours");

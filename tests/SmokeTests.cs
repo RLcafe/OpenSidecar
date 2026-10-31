@@ -532,6 +532,41 @@ internal static class SmokeTests
                 }
             }
         });
+        Check("Every other card picks small, medium and large designs, and the large ones stay inside their cards", () => {
+            Assert(CardSizing.Focus(280, 192) == CardSizing.Design.Small && CardSizing.Focus(320, 400) == CardSizing.Design.Medium && CardSizing.Focus(320, 576) == CardSizing.Design.Large && CardSizing.FocusRing(320, 576) == 272, "Focus designs are picked at the wrong sizes.");
+            Assert(CardSizing.Media(312, 200) == CardSizing.Design.Small && CardSizing.Media(472, 310) == CardSizing.Design.Medium && CardSizing.Media(472, 576) == CardSizing.Design.Large && CardSizing.MediaCover(472, 576) == 280, "Now Playing designs are picked at the wrong sizes.");
+            Assert(CardSizing.MixerDesign(250) == CardSizing.Design.Small && CardSizing.MixerDesign(350) == CardSizing.Design.Medium && CardSizing.MixerDesign(576) == CardSizing.Design.Large && CardSizing.MixerColumns(800, 576) == 2 && CardSizing.MixerColumns(456, 576) == 1 && CardSizing.MixerColumns(800, 350) == 1, "Mixer designs are picked at the wrong sizes.");
+            Assert(CardSizing.Tile(80, 60) == CardSizing.Design.Small && CardSizing.Tile(140, 76) == CardSizing.Design.Medium && CardSizing.Tile(160, 150) == CardSizing.Design.Large, "Button tiles are picked at the wrong sizes.");
+            Assert(DeckActions.Kind(new Shortcut { Action = "Website", Target = "https://www.example.com/a" }) == "Website  ·  www.example.com" && DeckActions.Kind(new Shortcut { Action = "Hotkey", Target = "Ctrl+Shift+M" }) == "Hotkey  ·  Ctrl+Shift+M" && DeckActions.Kind(new Shortcut { Action = "App", Target = "notepad.exe" }) == "App", "Deck tile lines are wrong.");
+            string path = Path.Combine(directory, "large-designs.xml");
+            var settings = new AppSettings { TextScale = 1.4 };
+            var bounds = new System.Collections.Generic.Dictionary<string, System.Windows.Rect> { { "Focus", new System.Windows.Rect(0, 0, 320, 576) }, { "Media", new System.Windows.Rect(336, 0, 472, 576) }, { "Mixer", new System.Windows.Rect(824, 0, 800, 576) } };
+            settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings).Select(p => { System.Windows.Rect b; p.Visible = bounds.TryGetValue(p.Id, out b); if (p.Visible) { p.X = b.X; p.Y = b.Y; p.Width = b.Width; p.Height = b.Height; } return p; }).ToArray();
+            SettingsStore.Save(path, settings);
+            using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
+            {
+                var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
+                try
+                {
+                    using (var controller = new DashboardController(window, path, true))
+                    {
+                        ((System.Windows.Controls.TextBlock)window.FindName("TrackTitle")).Text = "A very long song title that has to stay inside the card";
+                        var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
+                        dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
+                        Assert(((System.Windows.Controls.Primitives.UniformGrid)window.FindName("SessionPanel")).Columns == 2, "A wide Large mixer keeps one app column.");
+                        foreach (var pair in new[] { new[] { "FocusCard", "FocusTime" }, new[] { "FocusCard", "FocusStart" }, new[] { "FocusCard", "Focus25" }, new[] { "MediaCard", "MediaArtBox" }, new[] { "MediaCard", "TrackTitle" }, new[] { "MediaCard", "TrackArtist" }, new[] { "MediaCard", "PlayButton" }, new[] { "MediaCard", "MediaProgress" } })
+                        {
+                            var card = (System.Windows.FrameworkElement)window.FindName(pair[0]); var part = (System.Windows.FrameworkElement)window.FindName(pair[1]);
+                            var box = part.TransformToAncestor(card).TransformBounds(new System.Windows.Rect(0, 0, part.ActualWidth, part.ActualHeight));
+                            Assert(part.ActualWidth > 0 && box.Left >= 23.5 && box.Top >= 23.5 && box.Right <= card.ActualWidth - 23.5 && box.Bottom <= card.ActualHeight - 23.5, pair[1] + " escapes its Large card: " + box);
+                        }
+                        var art = (System.Windows.FrameworkElement)window.FindName("MediaArtBox"); var title = (System.Windows.FrameworkElement)window.FindName("TrackTitle");
+                        Assert(art.ActualWidth >= 200 && title.TransformToAncestor(art.Parent as System.Windows.UIElement).Transform(new System.Windows.Point(0, 0)).Y >= art.ActualHeight, "The Large Now Playing card didn't centre a big cover over the song.");
+                    }
+                }
+                finally { window.Close(); }
+            }
+        });
         Check("System stats grow with their widget", () => {
             Func<double, double, double> cpuHeight = (width, height) => {
                 string path = Path.Combine(directory, "stats-" + width + ".xml");
@@ -654,7 +689,7 @@ internal static class SmokeTests
                     var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                     Action layout = () => { dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout(); };
                     layout();
-                    var panel = (System.Windows.Controls.StackPanel)window.FindName("SessionPanel");
+                    var panel = (System.Windows.Controls.Panel)window.FindName("SessionPanel");
                     var spotifyRow = (System.Windows.Controls.Grid)panel.Children[0];
                     Func<System.Windows.Controls.Grid, System.Windows.Controls.Button> outputOf = row => row.Children.OfType<System.Windows.Controls.Button>().Last();
                     Func<System.Windows.DependencyObject, string> nameOf = element => System.Windows.Automation.AutomationProperties.GetName(element);

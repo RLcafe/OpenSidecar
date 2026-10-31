@@ -298,7 +298,7 @@ namespace WidgetScreen
             Control<Border>("FocusFinished").Visibility = focus.Finished ? Visibility.Visible : Visibility.Collapsed;
             string ends = (DateTime.Now + remaining).ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
             Text("FocusStatus", remaining == TimeSpan.Zero ? (focus.Finished ? "Done. Take a break. Tap to clear." : "Done. Take a break.") : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
-            Control<ProgressBar>("FocusProgress").Value = focus.Progress;
+            Control<ProgressBar>("FocusProgress").Value = focus.Progress; if (focusRing != null) focusRing.Value = focus.Progress * 100;
             Text("FocusSessions", FocusTimer.SessionsText(FocusSessionsToday, FocusMinutesToday));
             Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : CardSizing.FocusShort(Editor.Bounds("Focus").Height) ? "Start" : "Start focus";
             int minutes = (int)focus.Duration.TotalMinutes;
@@ -475,7 +475,18 @@ namespace WidgetScreen
                 if (DeckActions.IsStateful(shortcut)) deckStateButtons.Add(new KeyValuePair<Button, Shortcut>(button, shortcut));
                 var name = new TextBlock { Text = shortcut.Label, FontSize = (compact ? 14 : 15) * settings.TextScale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = compact ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0), MaxWidth = Math.Max(40, compact ? cellWidth - glyphSize - 40 : cellWidth - 24), TextTrimming = TextTrimming.CharacterEllipsis };
                 if (labelMode == CardSizing.DeckLabelMode.None) name.Visibility = Visibility.Collapsed;
-                content.Children.Add(name); button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
+                content.Children.Add(name);
+                // Large cells are tiles: the glyph, the name and what the button does, from the top left.
+                if (CardSizing.Tile(cellWidth, cellHeight) == CardSizing.Design.Large)
+                {
+                    button.Padding = new Thickness(16, 12, 12, 12); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+                    content.HorizontalAlignment = HorizontalAlignment.Left; content.VerticalAlignment = VerticalAlignment.Stretch;
+                    glyph.HorizontalAlignment = HorizontalAlignment.Left; glyph.FontSize = Math.Min(40, glyphSize);
+                    name.HorizontalAlignment = HorizontalAlignment.Left; name.FontWeight = FontWeights.SemiBold; name.FontSize = 17 * settings.TextScale; name.Margin = new Thickness(0, 12, 0, 0); name.MaxWidth = cellWidth - 44;
+                    var kind = new TextBlock { Text = DeckActions.Kind(shortcut), FontSize = 13, Margin = new Thickness(0, 3, 0, 0), MaxWidth = cellWidth - 44, TextTrimming = TextTrimming.CharacterEllipsis };
+                    kind.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); content.Children.Add(kind);
+                }
+                button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
             }
             UpdateDeckStates();
@@ -624,7 +635,7 @@ namespace WidgetScreen
 
         private void UpdateSessions(List<AudioSession> sessions)
         {
-            var panel = Control<StackPanel>("SessionPanel");
+            var panel = Control<System.Windows.Controls.Primitives.UniformGrid>("SessionPanel");
             var stale = sessionRows.Where(pair => !sessions.Any(s => s.Id == pair.Key)).ToList();
             foreach (var session in sessions)
             {
@@ -664,6 +675,7 @@ namespace WidgetScreen
                 var root = sessionRows[sessions[i].Id].Root;
                 if (panel.Children.IndexOf(root) != i) { panel.Children.Remove(root); panel.Children.Insert(i, root); }
             }
+            SpaceSessionColumns();
             Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString()); UpdateMixerApps();
             Control<TextBlock>("NoSessions").Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }

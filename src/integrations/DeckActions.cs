@@ -94,6 +94,15 @@ namespace WidgetScreen
             return shortcut.Confirm || !String.IsNullOrWhiteSpace(shortcut.Arguments) ||
                 (shortcut.Action == "File" && new[] { ".bat", ".cmd", ".ps1", ".vbs", ".js", ".wsf", ".reg", ".msi" }.Contains(extension));
         }
+        // The line under a Large Quick Launch tile (docs/design/widget-size-views.md): the kind of action and, for a
+        // website or hotkey, where it goes. The phone gets it as kind.
+        public static string Kind(Shortcut shortcut)
+        {
+            if (shortcut.Action == "Hotkey") return "Hotkey  ·  " + shortcut.Target;
+            Uri uri;
+            if (shortcut.Action == "Website") return Uri.TryCreate(shortcut.Target ?? "", UriKind.Absolute, out uri) && !String.IsNullOrEmpty(uri.Host) ? "Website  ·  " + uri.Host : "Website";
+            return shortcut.Action ?? "";
+        }
         public static string Describe(Shortcut shortcut)
         {
             var control = Controls.FirstOrDefault(c => shortcut.Action == "Control" && c.Id == shortcut.Target);
