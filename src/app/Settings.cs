@@ -90,6 +90,9 @@ namespace WidgetScreen
         // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
         public int ClipboardSize { get; set; }
         public bool ClipboardKeep { get; set; }
+        // Macros (Settings → Macros): buttons that each run a chain of steps (docs/design/macros.md). Empty by default.
+        [XmlArray("Macros"), XmlArrayItem("Macro")]
+        public Macro[] Macros { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -145,6 +148,7 @@ namespace WidgetScreen
             copy.Shortcuts = Shortcuts == null ? null : Shortcuts.Select(s => s.Copy()).ToList();
             copy.WidgetLayout = WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(WidgetLayout);
             copy.CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray();
+            copy.Macros = Macros == null ? null : Macros.Where(m => m != null).Select(m => m.Copy()).ToArray();
             copy.WorldClocks = WorldClocks == null ? null : WorldClocks.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
             return copy;
@@ -179,6 +183,7 @@ namespace WidgetScreen
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             WorldClocks = WorldClockService.Clean(WorldClocks);
             ClipboardSize = ClipboardHistory.ClampSize(ClipboardSize);
+            Macros = MacroActions.Clean(Macros).ToArray();
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();
             Shortcuts.RemoveAll(s => s == null);

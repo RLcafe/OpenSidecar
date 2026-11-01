@@ -354,6 +354,7 @@ namespace WidgetScreen
             if (parts.Contains("notes")) state["notes"] = RemoteNotes();
             if (parts.Contains("claude")) state["claude"] = RemoteClaude();
             if (parts.Contains("clipboard")) state["clipboard"] = RemoteClipboard();
+            if (parts.Contains("macros")) state["macros"] = RemoteMacros();
             return state;
         }
 
@@ -437,6 +438,7 @@ namespace WidgetScreen
                     return RemoteNotesCommand(action, body);
                 case "clipboard.paste": case "clipboard.pause": case "clipboard.clear":
                     return await RemoteClipboardCommand(action, body);
+                case "macro.run": return await RemoteMacroCommand(body);
                 case "prayer.stop": StopPrayerAlert(); return Done(null);
                 case "quiet.toggle":
                     settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();

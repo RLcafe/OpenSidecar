@@ -456,6 +456,22 @@
                 <Grid x:Name="ClipBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- Macros: six buttons a page, each running a chain of steps (docs/design/macros.md). DashboardController.Macros builds the buttons. -->
+            <Border x:Name="MacrosCard" Grid.Row="1" Style="{StaticResource Card}" Padding="20" AutomationProperties.Name="Macros">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel LastChildFill="True">
+                  <Button x:Name="EditMacros" DockPanel.Dock="Right" Content="Edit" FontSize="14" Padding="10,4" Margin="6,0,0,0" AutomationProperties.Name="Edit macros"/>
+                  <StackPanel x:Name="MacroPages" DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="MacroPrevious" Content="&#xE76B;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Previous macro page"/>
+                    <TextBlock x:Name="MacroPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
+                    <Button x:Name="MacroNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next macro page"/>
+                  </StackPanel>
+                  <TextBlock x:Name="MacroHeading" Text="MACROS" Style="{StaticResource Label}" Margin="4,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+                <UniformGrid x:Name="MacroGrid" Grid.Row="1" Columns="3" Rows="2"/>
+                <Button x:Name="EmptyMacros" Grid.Row="1" Content="Add a macro" Visibility="Collapsed" Margin="4" FontSize="16"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
@@ -717,6 +733,10 @@
                     </StackPanel>
                   </ScrollViewer>
                 </Grid>
+              </TabItem>
+              <TabItem Header="Macros">
+                <!-- MacroEditor builds the list of macros and the step editor here. -->
+                <Grid x:Name="MacroEditorHost"/>
               </TabItem>
               <TabItem Header="Phone">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>

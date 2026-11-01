@@ -8,6 +8,7 @@ import com.alialyami.widgetscreen.core.ClipText;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
+import com.alialyami.widgetscreen.core.MacroText;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.NotesText;
@@ -357,10 +358,11 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null && state.clipboard != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null && state.clipboard != null && state.macros != null, "every part");
             ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
             ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
             ok(state.notes != null && state.notes.text.equals("From the phone") && state.notes.items.size() == 1 && state.notes.items.get(0).text.equals("Bread"), "notes");
+            ok(state.macros != null && state.macros.items.size() == 2 && state.macros.items.get(0).label.equals("Quiet twice") && state.macros.items.get(0).steps.size() == 3 && state.macros.items.get(1).confirm, "macros");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             // The PC's Claude section comes from its labelled fixture: four sessions, the first one needs you.
             ok(state.claude != null && state.claude.sample && state.claude.connected && state.claude.sessions.size() == 4 && "needs".equals(state.claude.sessions.get(0).state) && state.claude.sessions.get(0).project.equals("api-server")
@@ -527,6 +529,13 @@ public final class AndroidTests {
             state.clipboard.paused = true;
             ok(ClipText.status(state.clipboard).equals("PAUSED") && ClipText.empty(state.clipboard).startsWith("Paused"), "paused");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Clipboard").visible && WidgetLayout.title("Clipboard").equals("Clipboard history"), "hidden by default");
+        } });
+        check("Macros read the PC's buttons and steps and keep six buttons a page", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"macros\":{\"running\":1,\"step\":2,\"items\":[{\"label\":\"Stream\",\"glyph\":\"E722\",\"color\":\"Lavender\",\"confirm\":false,\"steps\":[\"Control  ·  Mute / unmute microphone\",\"Wait 0.5 s\"]},{\"label\":\"Break\",\"glyph\":\"E768\",\"confirm\":true,\"steps\":[\"Control  ·  Play / pause\"]}]}}")));
+            ok(state.macros.running == 1 && state.macros.step == 2 && state.macros.items.size() == 2 && state.macros.items.get(0).glyph.equals("camera") && state.macros.items.get(1).confirm, "parse");
+            ok(MacroText.kind(state.macros.items.get(0)).equals("2 steps") && MacroText.kind(state.macros.items.get(1)).equals("1 step  ·  asks first") && MacroText.detail(state.macros.items.get(0).steps).equals("1.  Control  ·  Mute / unmute microphone\n2.  Wait 0.5 s"), "wording");
+            ok(PcState.parse(Json.obj(Json.parse("{\"macros\":{\"items\":[]}}"))).macros.running == -1, "nothing running");
+            ok(!WidgetLayout.find(WidgetLayout.defaults(), "Macros").visible && WidgetLayout.keepsSix("Macros") && WidgetLayout.minimum("Macros")[0] == 288, "like Quick Launch");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");
