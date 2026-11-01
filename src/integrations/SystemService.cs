@@ -45,6 +45,7 @@ namespace WidgetScreen
         private SensorPackage.State? package;
         private readonly bool elevated = HardwareSensors.Elevated;
         private DateTime traceRetry = DateTime.MinValue;
+        private static readonly int ownProcess = System.Diagnostics.Process.GetCurrentProcess().Id;
         public string SensorFolder { get; private set; }
         private readonly object gate = new object();
         private bool disposed;
@@ -126,7 +127,9 @@ namespace WidgetScreen
 
         private void ReadFps(SystemSnapshot snapshot)
         {
+            // The dashboard itself is never the game (it doesn't take the focus, but it's in front right after it starts).
             int process = FrameRate.ForegroundProcess();
+            if (process == ownProcess) process = 0;
             double? fps; string source = null;
             if (RtssReader.Read(process, out fps)) { source = "RTSS"; presents.Stop(); }
             // Windows lets administrators and members of Performance Log Users count frames; anyone else is asked again

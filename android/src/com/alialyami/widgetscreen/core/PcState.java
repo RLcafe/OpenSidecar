@@ -48,7 +48,12 @@ public final class PcState {
         public Double cpu, gpu, memoryPercent, download, upload;
         public double memoryUsedGB, memoryTotalGB, uptimeMs;
         public String gpuStatus = "";
-        public boolean anyShown() { return showCpu || showGpu || showRam || showNetwork || showUptime; }
+        // Hardware sensors (decision 016): each reading with the state that says why it's missing, and the styles.
+        public boolean showCpuTemp, showGpuTemp, showVram, showFps, fahrenheit, fullSensors;
+        public Double cpuTemp, gpuTemp, vramUsedGB, vramTotalGB, fps;
+        public String cpuTempState = "", gpuTempState = "", vramState = "", fpsState = "", fpsSource = "", fpsApp = "", gpuName = "";
+        public final Map<String, String> styles = new LinkedHashMap<String, String>();
+        public boolean anyShown() { return showCpu || showGpu || showRam || showNetwork || showUptime || showCpuTemp || showGpuTemp || showVram || showFps; }
     }
 
     public static final class Button { public String label, glyph, action, describe, color = "", kind = ""; public boolean confirm, enabled, on; }
@@ -301,6 +306,13 @@ public final class PcState {
             system.cpu = maybe(s, "cpu"); system.gpu = maybe(s, "gpu"); system.gpuStatus = text(s, "gpuStatus");
             system.memoryPercent = maybe(s, "memoryPercent"); system.memoryUsedGB = Json.number(s, "memoryUsedGB"); system.memoryTotalGB = Json.number(s, "memoryTotalGB");
             system.download = maybe(s, "download"); system.upload = maybe(s, "upload"); system.uptimeMs = Json.number(s, "uptimeMs");
+            system.showCpuTemp = flag(s, "showCpuTemp"); system.showGpuTemp = flag(s, "showGpuTemp"); system.showVram = flag(s, "showVram"); system.showFps = flag(s, "showFps");
+            system.fahrenheit = flag(s, "fahrenheit"); system.fullSensors = flag(s, "fullSensors");
+            system.cpuTemp = maybe(s, "cpuTemp"); system.cpuTempState = text(s, "cpuTempState"); system.gpuTemp = maybe(s, "gpuTemp"); system.gpuTempState = text(s, "gpuTempState"); system.gpuName = text(s, "gpuName");
+            system.vramUsedGB = maybe(s, "vramUsedGB"); system.vramTotalGB = maybe(s, "vramTotalGB"); system.vramState = text(s, "vramState");
+            system.fps = maybe(s, "fps"); system.fpsState = text(s, "fpsState"); system.fpsSource = text(s, "fpsSource"); system.fpsApp = text(s, "fpsApp");
+            Map<String, Object> styles = Json.obj(Json.value(s, "styles"));
+            for (Map.Entry<String, Object> style : styles.entrySet()) if (style.getValue() instanceof String) system.styles.put(style.getKey(), (String) style.getValue());
             state.system = system;
         }
         if (Json.has(root, "deck")) {

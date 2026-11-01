@@ -125,6 +125,44 @@ public final class CardSizing {
     public static double statsRing(double cellWidth, double height) { return clamp(Math.floor(Math.min(cellWidth - 16, height)), 56, 200); }
     public static double statsTileValue(double tileHeight) { return clamp(Math.round(tileHeight * 0.24), 30, 64); }
     public static int statsTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.min(count, 4) : 2; }
+    // Hardware sensors (SystemStatsCard on the PC): with up to nine readings each design checks they fit, with the same
+    // numbers. Small rows at least statsListRow tall, columns at least 140 wide; { columns, rows, shown }.
+    public static double statsListRow(double textScale) { return Math.ceil(32 + 8 * textScale); }
+    public static int[] statsListGrid(double width, double height, int count, double textScale) {
+        count = Math.max(1, count);
+        int perColumn = Math.max(1, (int) Math.floor((height + 8) / (statsListRow(textScale) + 8)));
+        int most = Math.max(1, (int) Math.floor((width + 16) / (140 + 16)));
+        int columns = Math.min(most, Math.min(count, (count + perColumn - 1) / perColumn));
+        int room = columns * perColumn;
+        if (count <= room) return new int[] { columns, (count + columns - 1) / columns, count };
+        return new int[] { columns, perColumn, Math.max(1, room - 1) };
+    }
+    public static double statsDialText(double textScale) { return Math.ceil(26 + 20 * textScale); }
+    // Medium cells at least 100 wide with room for a 56-unit dial and its text; null when none fit (Small instead).
+    public static int[] statsCellGrid(double width, double height, int count, double textScale) {
+        int[] best = null; double bestDial = 0;
+        for (int columns = 1; columns <= count; columns++) {
+            int rows = (count + columns - 1) / columns;
+            double cellWidth = width / columns, cellHeight = (height - 12 * (rows - 1)) / rows;
+            if (cellWidth < 100 || cellHeight < 56 + statsDialText(textScale)) continue;
+            double dial = Math.min(cellWidth - 16, cellHeight - statsDialText(textScale));
+            if (dial > bestDial + 0.5) { bestDial = dial; best = new int[] { columns, rows }; }
+        }
+        return best;
+    }
+    // Large tiles at least 150 wide and statsTileMinimum tall, shaped closest to 1.6 : 1; null when none fit (Medium).
+    public static double statsTileMinimum(double textScale) { return Math.ceil(108 + 20 * textScale); }
+    public static int[] statsTileGrid(double width, double height, int count, double textScale) {
+        int[] best = null; double bestShape = Double.MAX_VALUE;
+        for (int columns = 1; columns <= Math.min(4, Math.max(1, count)); columns++) {
+            int rows = (Math.max(1, count) + columns - 1) / columns;
+            double tileWidth = (width - 12 * (columns - 1)) / columns, tileHeight = (height - 12 * (rows - 1)) / rows;
+            if (tileWidth < 150 || tileHeight < statsTileMinimum(textScale)) continue;
+            double shape = Math.abs(Math.log(tileWidth / tileHeight / 1.6));
+            if (shape < bestShape) { bestShape = shape; best = new int[] { columns, rows }; }
+        }
+        return best;
+    }
     // The weather temperature for the room left to it (the card less its fixed rows) and the card's width.
     public static double weatherTemperature(int design, double width, double room) {
         if (design == SMALL) return clamp(Math.round(Math.min(room / 1.12, width * 0.26)), 36, 96);

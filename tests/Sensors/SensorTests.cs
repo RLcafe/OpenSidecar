@@ -105,6 +105,9 @@ internal static class SensorTests
             var styles = SystemStyles.Parse("Cpu=Bars;Uptime=Ring;Network=Ring;Fps=Gauge;Nope=Line;Gpu=Auto");
             Assert(styles.Count == 2 && styles["Cpu"] == "Bars" && styles["Fps"] == "Gauge" && SystemStyles.Write(styles) == "Cpu=Bars;Fps=Gauge", "Styles don't parse: " + SystemStyles.Write(styles));
             Assert(SystemStyles.Resolve("Auto", "Cpu", CardSizing.Design.Medium) == "Ring" && SystemStyles.Resolve("Auto", "GpuTemp", CardSizing.Design.Medium) == "Gauge" && SystemStyles.Resolve("Auto", "Fps", CardSizing.Design.Medium) == "Sparkline" && SystemStyles.Resolve("Auto", "Cpu", CardSizing.Design.Large) == "Line" && SystemStyles.Resolve("Bars", "Cpu", CardSizing.Design.Large) == "Bars", "Auto resolves wrongly.");
+            // The same numbers as the phone's CardSizing (AndroidTests).
+            var list = CardSizing.StatsListGrid(212, 196, 9, 1.4); var cells = CardSizing.StatsCellGrid(852, 248, 7, 1.4); var tiles = CardSizing.StatsTileGrid(1152, 492, 8, 1.4);
+            Assert(list[0] == 1 && list[2] == 2 && cells[0] == 7 && tiles[0] == 4 && tiles[1] == 2 && CardSizing.StatsCellGrid(424, 158, 7, 1.4) == null, "Stats sizing differs from the phone's.");
             var settings = new AppSettings();
             Assert(SystemStyles.ShownIds(settings).Length == 9, "New settings don't show all nine readings.");
             foreach (string id in SystemStyles.Ids) SystemStyles.Show(settings, id, false);
