@@ -4,6 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.34.1 (1 Nov 2026)
+
 Resolved Claude threads (Ali's choice; Windows and the phone; decision 020):
 
 - **Threads the Claude app marks "completed" now show as Resolved.** The car is under its cover, dimmed, last in its project, with a "Resolved" chip. "Review ready" and "blocked" threads don't count.
