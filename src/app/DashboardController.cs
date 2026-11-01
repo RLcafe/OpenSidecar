@@ -791,10 +791,18 @@ namespace WidgetScreen
         }
 
         // Runs a mixer change on the audio thread, then reads the mixer again so the dashboard and a phone see it.
+        // The follow-up goes back to the window's thread, even when the await resumed elsewhere (no dispatcher context).
         private async void AudioAction(Action<AudioService> action, bool refresh = true)
         {
-            try { await audio.Run(action); if (!disposed && refresh) RefreshAudio(true); }
-            catch (Exception) { if (!disposed) { Notify("The audio device changed or went away. Reconnecting…"); RefreshAudio(true); } }
+            bool failed = false;
+            try { await audio.Run(action); }
+            catch (Exception) { failed = true; }
+            if (!failed && !refresh) return;
+            window.Dispatcher.BeginInvoke(new Action(() => {
+                if (disposed) return;
+                if (failed) Notify("The audio device changed or went away. Reconnecting…");
+                RefreshAudio(true);
+            }));
         }
 
         // The last audio reading, shared with a phone's /state for a second; fresh reads again (after a change).

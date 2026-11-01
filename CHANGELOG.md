@@ -7,6 +7,8 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 - **The project is on GitHub** at RLcafe/OpenSidecar, with `main`, every tag and the open branches.
 - **CI on GitHub Actions** (`.github/workflows/ci.yml`): every push and pull request builds and tests the Windows app, the setup exe and the Android app on a Windows runner; Markdown-only and docs-only changes skip it. CLAUDE.md and BRANCHES.md now say to push branches and tags and to wait for a green run before merging.
 - **Every merge gets a GitHub Release** (`.github/workflows/release.yml`): pushing a `vX.Y.Z` tag builds and tests it, then publishes the setup exe, a portable zip and the APK with the version's changelog notes. Merges that only touch docs, tests, scripts or CI now get a PATCH version too.
+- **Fixed:** when a mute or volume change hit a missing audio device, the "Reconnecting…" note could be raised off the window's thread and throw. It now always goes back to the window (Windows only; the phone sends these through the PC).
+- **CI:** the three live audio checks say SKIP on a machine with no audio output, such as GitHub's runner, instead of failing. Any other audio error still fails them.
 
 ## v0.35.0 (1 Nov 2026)
 

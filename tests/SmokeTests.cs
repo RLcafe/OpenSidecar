@@ -13,6 +13,18 @@ internal static class SmokeTests
         catch (Exception e) { failures++; Console.WriteLine("FAIL " + name + ": " + e); }
     }
     private static void Assert(bool condition, string message) { if (!condition) throw new Exception(message); }
+    // Live audio checks need an output device. CI runners have none (no default endpoint, E_NOTFOUND); every other error still fails.
+    private static bool? audioOutput;
+    private static void AudioCheck(string name, Action action)
+    {
+        if (audioOutput == null)
+        {
+            try { using (var audio = new AudioService()) audio.Read(); audioOutput = true; }
+            // Any other error lets the check itself run and report it.
+            catch (Exception e) { audioOutput = !(e is System.Runtime.InteropServices.COMException && ((System.Runtime.InteropServices.COMException)e).ErrorCode == unchecked((int)0x80070490)); }
+        }
+        if (audioOutput == true) Check(name, action); else Console.WriteLine("SKIP " + name + ": this machine has no audio output (for example a CI runner).");
+    }
     // Whether an element and every parent up to root are visible (IsVisible needs a shown window).
     private static bool Shown(System.Windows.DependencyObject element, System.Windows.DependencyObject root)
     {
@@ -750,7 +762,7 @@ internal static class SmokeTests
             var ordered = AudioService.Ordered(new System.Collections.Generic.List<AudioSession> { make("system", 0, false), make("idle-a", 1, false), make("playing-a", 2, true), make("idle-b", 3, false), make("playing-b", 4, true) }).Select(s => s.Id).ToArray();
             Assert(String.Join(",", ordered) == "playing-a,playing-b,idle-a,idle-b,system", "Unexpected order: " + String.Join(",", ordered));
         });
-        Check("Audio work runs on its own thread and caches output names", () => {
+        AudioCheck("Audio work runs on its own thread and caches output names", () => {
             using (var worker = new AudioWorker())
             {
                 var thread = worker.Run(a => Thread.CurrentThread.ManagedThreadId);
@@ -762,10 +774,10 @@ internal static class SmokeTests
                 Console.WriteLine("  Outputs through the worker: " + read.Result.Devices.Count + "; routing " + (read.Result.CanRouteApps ? "available" : "unavailable"));
             }
         });
-        Check("Live audio read (does not change volume)", () => {
+        AudioCheck("Live audio read (does not change volume)", () => {
             using (var audio = new AudioService()) { var result = audio.Read(); Assert(result.Volume >= 0 && result.Volume <= 1, "Master volume invalid."); Console.WriteLine("  Output: " + result.Device + "; sessions: " + result.Sessions.Count); }
         });
-        Check("Live output list and app routing lookup (reads only)", () => {
+        AudioCheck("Live output list and app routing lookup (reads only)", () => {
             using (var audio = new AudioService())
             {
                 var result = audio.Read();
