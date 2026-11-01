@@ -48,6 +48,8 @@ namespace WidgetScreen
                     running = controller;
                     // A labelled fixture for the Claude card ("Sample" in its heading) instead of this PC's sessions.
                     if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
+            // Renders Now Playing's empty state (an empty sleeve) whatever plays on this PC; it shows an absence, not a reading.
+            if (renderPath != null && args.Contains("--render-no-media")) controller.IgnoreMedia = true;
                     if (renderPath != null)
                     {
                         // --render-wait N gives live readings longer to arrive (System stats history fills every 2 s).

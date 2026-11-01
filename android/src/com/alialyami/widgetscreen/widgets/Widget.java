@@ -49,6 +49,8 @@ public abstract class Widget {
 
     // The card's label strip in its ink, and a status sticker for its right-hand fact (docs/design/sticker-sheet.md).
     private double stripWidth;
+    // The label strip's natural width, for headers that share their row with more than one sticker or button.
+    protected double stripWidth() { return stripWidth; }
     protected View strip() { Stickers.LabelStrip strip = new Stickers.LabelStrip(ui, id, dash.ink(id), width); stripWidth = strip.naturalUnits(); return strip; }
     // The sticker gets the header's room beside the strip (card less its 24-unit padding and a 12-unit gap), and steps
     // aside when that's under 40 units, as on the PC.

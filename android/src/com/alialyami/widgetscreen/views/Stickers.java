@@ -185,7 +185,7 @@ public final class Stickers {
     public static final class Sticker extends TextView {
         private Ui ui;
         private int ink;
-        public static final double MIN_ROOM = 40, MIN_WARNING_ROOM = 64;
+        public static final double MIN_ROOM = 40, MIN_WARNING_ROOM = 64, MIN_GLYPH_ROOM = 62;
         private double room = Double.MAX_VALUE;
         private boolean warns, filled, cardShown = true, roomy = true;
         private int state = Inks.FACT;
@@ -233,7 +233,7 @@ public final class Stickers {
             state = Inks.stateOf(words == null ? "" : words.toString(), warns);
             boolean warning = state == Inks.WARNING;
             // A warning also carries its stripes and glyph.
-            roomy = room >= (warning ? MIN_WARNING_ROOM : MIN_ROOM);
+            roomy = room >= (warning ? MIN_WARNING_ROOM : state == Inks.FACT && glyphName != null ? MIN_GLYPH_ROOM : MIN_ROOM);
             boolean glyphShown = state == Inks.FACT && glyphName != null;
             int left = warning ? ui.px(14 + 6 + 12 + 6) : glyphShown ? ui.px(10 + 12 + 6) : ui.px(10);
             setPadding(left, 0, ui.px(10), 0);

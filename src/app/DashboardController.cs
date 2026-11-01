@@ -886,13 +886,15 @@ namespace WidgetScreen
             finally { systemBusy = false; if (!disposed && requested != settings) RefreshSystem(); }
         }
 
+        // Render mode's --render-no-media: the card shows nothing playing (Program.Main).
+        public bool IgnoreMedia { get; set; }
         private async void RefreshMedia(bool fresh = false)
         {
             if (disposed || !Editor.IsVisible("Media")) return;
             if (mediaBusy || mediaCommandBusy || mediaScrubber.Active) return; mediaBusy = true;
             try
             {
-                var snapshot = await ReadMediaAsync(fresh); if (disposed) return;
+                var snapshot = IgnoreMedia ? new MediaSnapshot() : await ReadMediaAsync(fresh); if (disposed) return;
                 Text("TrackTitle", snapshot.Available ? snapshot.Title : "Nothing playing");
                 Text("TrackArtist", snapshot.Available ? (snapshot.Artist ?? "") : "Start music or a video in any app.");
                 Text("MediaSource", !snapshot.Available ? "" : MediaService.SourceName(snapshot.Source).ToUpperInvariant());

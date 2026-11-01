@@ -87,6 +87,8 @@ public final class MixerWidget extends Widget {
         status.setGravity(Gravity.END); status.setSingleLine(true); status.setEllipsize(android.text.TextUtils.TruncateAt.END);
         header.addView(status, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
         micState = sticker(false);
+        // The badge shares the heading with the strip and, on MASTER and LARGE cards, the Apps button (about 90 units).
+        micState.setRoom(width - 48 - stripWidth() - 12 - (masterOnly || full ? 90 : 0));
         header.addView(micState, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
         // On a MASTER card the app list is one tap away: this swaps the master rows for the list and back.
         appsButton = ui.button("Apps", new View.OnClickListener() { @Override public void onClick(View v) { appsOpen = !appsOpen; closePicker(); showApps(); } });

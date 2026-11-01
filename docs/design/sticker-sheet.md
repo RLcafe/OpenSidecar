@@ -112,3 +112,42 @@ A phase is done when:
 - **Widget colours** is in Settings → Theme on both apps. The phone sends its change to the PC with `layout.inks`.
 - **Renders:** `tests\sticker-renders.ps1` writes `artifacts\sticker-sheet\`: the default layout and two pages with the other widgets in Midnight, Slate and Warm, text at 140%, Accent only, changed inks, narrow cards and the ink picker.
 - **Performance check** (1 Nov 2026, 16 logical cores): the default layout, windowed with isolated settings, measured for 60 s after 10 s warm-up. The v0.33.2 release used 0.05% CPU and 123.2 MB private memory; this branch used 0.07% CPU and 122.9 MB. That's within the targets (CPU within 0.5 points, memory within 10%).
+
+## What phase 2 built
+
+Branch `feature/sticker-defaults`. The default five, on both apps unless a line says otherwise:
+
+- **Focus**
+  - Large: a kitchen-timer dial (`TimerDial`, `StickerParts.TimerDial`). The time left is a wedge in the ink, sweeping clockwise from a knob at the top, over 60 minute ticks (every fifth longer), with a 3-unit keyline and a solid lift. The countdown and its end time sit in the dial's inner disc (62%).
+  - Medium and Large: today's sessions as tomato pips (`PipRow`), filled ones done and dashed ones still to go, out of the day's four and up to eight. Under them, the Today chip (the finished sessions' minutes, already kept as `FocusMinutesToday`) and the Next break chip (the end time while running, otherwise "In 25 min"), when the card has room (`FocusTimer.MinutesText`/`BreakText`, `Format.focusMinutes`/`focusBreak`).
+  - The status sticker reads DONE (filled), FOCUSING (filled), PAUSED or "2 TODAY" (`FocusTimer.StateText`, `Format.focusState`).
+  - The pips replace the sessions line, which stays as their spoken description.
+- **Now Playing**
+  - The cover is a sleeve with a 2-unit keyline. While something plays, a record (`DiscPeek`) peeks out of it by 30% of the cover (not on the folded Small card).
+  - Nothing playing leaves an empty dashed sleeve.
+  - The card's top takes 22% of the cover's average colour, which is decoded once per cover to a single pixel (`MediaService.AverageColour`, `Blend`). Even a white cover keeps the text at 7:1 or better.
+  - An album line comes from the Windows media session. The Length and Left chips show when the text column is roomy.
+  - The phone link's `media` section adds `album` and `tint` ("#RRGGBB"), so the phone tints the same without decoding the cover again.
+- **Quick Launch**
+  - Keycaps (`Keycap` style; `Stickers.keycap` on the phone): the cap sits on a 4-unit darker skirt and drops 2 units while pressed.
+  - An LED dot in the ink lights for a button that's on.
+  - Large tiles show a hotkey's keys as the cap's secondary legend at the top right (`Format.hotkeyLegend` on the phone, from the `kind` the PC already sends).
+  - The six-a-page grid is unchanged.
+- **Sound mixer**
+  - Large (the Full mixer, at least 420 tall) shows channel strips. The master strip comes first (112 units, an LED ladder beside its slider, then mute and the output device). Then one 88-unit strip per app that fits (`CardSizing.MixerStripSlots`), each with a badge in the ink, name, percent, slider, mute and output.
+  - Strips use upright sliders that keep the 48 × 48 thumb (`VerticalSlider` style, `TouchSlider` reads y; `TouchSlider.vertical()` on the phone).
+  - Apps (now on Large cards too) opens the full list, and Done goes back.
+  - The heading shows an ON AIR badge (filled, with the microphone glyph) while the microphone is live, and MUTED while it's muted. A badge with a glyph needs 62 units of room, or it steps aside.
+  - Medium and Large cards run the level meter, now LED segments (`LedMeter`; top two segments Amber), on the existing level timer.
+  - **Phone:** the phone link doesn't carry output levels, so the phone's mixer has the strips and the badge but no LED meter. Adding one would need polling the PC several times a second.
+- **Spotify**
+  - Crate tabs (`CrateTab` style): dividers with rounded tops on an ink line, with the chosen one filled in the ink.
+  - Each album, playlist or song row adds a caption chip built from the reply already fetched: "11 songs · 2024", "Ali · 24 songs" or a song's year (`SpotifyService.CaptionOf`). The phone gets it as `caption` on each item.
+  - The Large side panel takes 30% of the playing song's cover colour.
+- **Render flag** `--render-no-media` shows Now Playing's empty state whatever plays on the PC. `tests\sticker-renders.ps1` adds the five cards at Small, Medium, Large and Wide in each palette, at 140%, and with nothing playing.
+- **Not rendered:**
+  - Spotify's Large design with a library, which needs an account (`SpotifyTests` covers it with fixtures).
+  - The mixer with the microphone muted, which would mean muting the real microphone. The badge words are checked.
+- **Performance check** (1 Nov 2026): the default layout for 60 s after a 10 s warm-up, windowed with isolated settings.
+  - v0.35.1 release: 0.07% CPU, 126.7 MB private memory.
+  - This branch: 0.05% CPU, 125.6 MB.

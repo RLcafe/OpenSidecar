@@ -49,3 +49,19 @@ Ali approved the "Widget redesign: dense, characterful widgets" doc on 1 Nov 202
 - **The sticker text is 13 bold, not 12.5,** so the 13-unit caption floor holds.
 - **Weather, World clocks and Smart home** use Glacier until their live inks arrive (phases 3 and 5).
 - **Not verified on hardware:** the phone views (strips, stickers, the ink picker and the Theme choice) were checked on the JVM and by building the APK, not on a device or emulator. Physical touch on the PC's touchscreen is still unverified, as before.
+
+## Phase 2: the default five
+
+The insides of Focus, Now Playing, Quick Launch, the mixer and Spotify, on both apps (branch `feature/sticker-defaults`). The details are in "What phase 2 built" in `docs/design/sticker-sheet.md`. The choices behind them:
+
+- **Data the apps already had is preferred.**
+  - Focus's Today chip reuses `FocusMinutesToday`.
+  - Spotify's captions come from fields in replies already fetched (`total_tracks`, `release_date`, `owner`, `tracks.total`). There are no new requests.
+  - The album comes from the same Windows media session read.
+- **The cover's colour is decoded once, to one pixel,** when the cover changes (the decoder averages as it scales). The PC sends it to the phone as `tint`, which is cheaper than the phone decoding its own copy.
+- **The mixer's channel strips replace the app list on Large cards** (the existing Full mode, at least 420 tall). Apps opens the full list, as it already did on Master cards, so every app stays reachable. The strip count is `CardSizing.MixerStripSlots`, the same on both apps.
+- **Upright sliders keep the 48 × 48 thumb and touch capture.** They're a second slider style on Windows (the touch helper reads y when vertical) and a `vertical()` option on the phone's `TouchSlider`.
+- **The level meter becomes LED segments.** It runs on Medium cards too, on the same level timer (still off in Quiet mode, while hidden, and with Show live output levels off).
+- **The phone has no level meter or ladder.** The link doesn't carry output levels, and sending them would mean polling several times a second. The Large phone card shows the strips without the ladder.
+- **ON AIR is a status sticker with a glyph.** A glyph sticker needs 62 units of room, or it steps aside, so small cards keep just the microphone button.
+- **`--render-no-media`** renders Now Playing's empty state on a PC that's playing something. It shows an absence, not a made-up reading, so it needs no label.

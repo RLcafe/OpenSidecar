@@ -267,7 +267,9 @@ namespace WidgetScreen
         // With less room than its padding and an ellipsis, the sticker steps aside rather than leave the card.
         // A warning also carries its stripes and glyph.
         public const double MinRoom = 40, MinWarningRoom = 64;
-        private double Room { get { return State == Inks.StickerState.Warning ? MinWarningRoom : MinRoom; } }
+        // A fact with a glyph (ON AIR) needs the glyph's room too, or it would shrink to the glyph and an ellipsis.
+        public const double MinGlyphRoom = 62;
+        private double Room { get { return State == Inks.StickerState.Warning ? MinWarningRoom : State == Inks.StickerState.Fact && !String.IsNullOrEmpty(factGlyph) ? MinGlyphRoom : MinRoom; } }
         protected override Size MeasureOverride(Size constraint)
         {
             // Collapsing the parts (not the sticker, whose visibility follows its words) keeps them out of the layout.
@@ -301,7 +303,7 @@ namespace WidgetScreen
             Visibility = words.Length == 0 || Caption.Visibility != Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             State = Inks.StateOf(words, warns); InvalidateMeasure();
             bool warning = State == Inks.StickerState.Warning;
-            bool factGlyphShown = State == Inks.StickerState.Fact && !String.IsNullOrEmpty(factGlyph);
+            bool factGlyphShown = State == Inks.StickerState.Fact && !String.IsNullOrEmpty(factGlyph); InvalidateMeasure();
             stripes.Visibility = warning ? Visibility.Visible : Visibility.Collapsed;
             glyph.Visibility = warning || factGlyphShown ? Visibility.Visible : Visibility.Collapsed;
             glyph.Text = factGlyphShown ? factGlyph : "";
