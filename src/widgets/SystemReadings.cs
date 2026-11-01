@@ -127,13 +127,14 @@ namespace WidgetScreen
         public static Dictionary<string, StatReading> From(SystemSnapshot s, bool fahrenheit, double fpsScale)
         {
             var r = new Dictionary<string, StatReading>();
-            r["Cpu"] = Percent(s != null && s.CpuAvailable ? (double?)s.Cpu : null, null, "Unavailable");
-            r["Gpu"] = Percent(s == null ? null : s.Gpu, s == null ? "" : s.GpuStatus ?? "Unavailable", "Unavailable");
+            // The processor's and graphics card's short names under their readings (Sticker Sheet phase 3).
+            r["Cpu"] = Percent(s != null && s.CpuAvailable ? (double?)s.Cpu : null, s == null ? null : SystemService.ShortModel(s.CpuName), "Unavailable");
+            r["Gpu"] = Percent(s == null ? null : s.Gpu, s == null ? "" : s.Gpu.HasValue && !String.IsNullOrEmpty(SystemService.ShortModel(s.GpuName)) ? SystemService.ShortModel(s.GpuName) : s.GpuStatus ?? "Unavailable", "Unavailable");
             r["Ram"] = Percent(s != null && s.MemoryAvailable ? (double?)s.MemoryPercent : null, s == null || !s.MemoryAvailable ? "Unavailable" : s.UsedMemoryGB.ToString("0.0") + " / " + s.TotalMemoryGB.ToString("0.0") + " GB", "Unavailable");
             bool vram = s != null && s.VramUsedGB.HasValue && s.VramTotalGB > 0;
             r["Vram"] = Percent(vram ? (double?)(100 * s.VramUsedGB.Value / s.VramTotalGB.Value) : null, vram ? s.VramUsedGB.Value.ToString("0.0") + " / " + s.VramTotalGB.Value.ToString("0") + " GB" : "", s == null ? "Unavailable" : s.VramState);
             r["CpuTemp"] = Temperature(s == null ? null : s.CpuTemperature, s == null ? "Unavailable" : s.CpuTemperatureState, "CpuTemp", fahrenheit, "Package");
-            r["GpuTemp"] = Temperature(s == null ? null : s.GpuTemperature, s == null ? "Unavailable" : s.GpuTemperatureState, "GpuTemp", fahrenheit, s == null ? "" : s.GpuName ?? "");
+            r["GpuTemp"] = Temperature(s == null ? null : s.GpuTemperature, s == null ? "Unavailable" : s.GpuTemperatureState, "GpuTemp", fahrenheit, s == null ? "" : SystemService.ShortModel(s.GpuName));
             var fps = new StatReading();
             if (s != null && s.Fps.HasValue)
             {
@@ -148,6 +149,32 @@ namespace WidgetScreen
             r["Network"] = network;
             r["Uptime"] = new StatReading { Text = s == null ? "—" : SystemStatsCard.Uptime(s.Uptime, 3, false) };
             return r;
+        }
+
+        // The status sticker's peak (Sticker Sheet phase 3): the busiest of CPU, GPU, RAM and VRAM among those shown,
+        // as "GPU 92%"; null when none has a value. The sticker fills from 80% (Strained).
+        public const double Strained = 80;
+        public static string PeakId(Dictionary<string, StatReading> readings, Func<string, bool> shown)
+        {
+            string best = null; double top = -1;
+            foreach (string id in new[] { "Cpu", "Gpu", "Ram", "Vram" })
+            {
+                StatReading reading;
+                if (!shown(id) || !readings.TryGetValue(id, out reading) || !reading.Value.HasValue) continue;
+                if (reading.Percent > top) { top = reading.Percent; best = id; }
+            }
+            return best;
+        }
+        public static string PeakText(string id, StatReading reading) { return id == null ? "" : SystemStyles.Title(id) + " " + Math.Round(reading.Percent) + "%"; }
+        // A temperature badge on a ring: "58°" in the chosen unit, no letter.
+        public static string Badge(StatReading temperature) { return temperature == null || !temperature.Value.HasValue ? "" : temperature.Text.Replace("°C", "°").Replace("°F", "°"); }
+        // "min 12% · max 87%" from a reading's history, or "" before two readings.
+        public static string Range(string id, IList<double> history, bool fahrenheit)
+        {
+            if (history == null || history.Count < 2) return "";
+            double low = history.Min(), high = history.Max();
+            Func<double, string> show = v => id == "CpuTemp" || id == "GpuTemp" ? Degrees(v, fahrenheit).Replace("°C", "°").Replace("°F", "°") : id == "Fps" ? Math.Round(v).ToString(CultureInfo.InvariantCulture) : Math.Round(v) + "%";
+            return "min " + show(low) + " · max " + show(high);
         }
 
         private static StatReading Percent(double? value, string detail, string state)

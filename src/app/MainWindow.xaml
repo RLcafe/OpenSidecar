@@ -480,7 +480,7 @@
 
             <Border x:Name="SystemCard" Style="{StaticResource Card}" Margin="0,0,0,16">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><Border x:Name="SystemStrip"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><TextBlock x:Name="SystemUptime" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed"/><TextBlock x:Name="SystemStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="12,0,0,0"/></StackPanel></DockPanel>
+                <DockPanel><Border x:Name="SystemStrip"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><TextBlock x:Name="SystemPeak" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBlock x:Name="SystemUptime" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed"/><TextBlock x:Name="SystemStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="12,0,0,0"/></StackPanel></DockPanel>
                 <!-- SystemStatsCard builds the Small, Medium or Large design here for the card's size (docs/design/widget-size-views.md). -->
                 <Grid x:Name="SystemBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>

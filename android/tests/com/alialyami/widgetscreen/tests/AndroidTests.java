@@ -907,6 +907,33 @@ public final class AndroidTests {
                 } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
             }
         } });
+
+        // Sticker Sheet phase 3, the readings (docs/design/sticker-sheet.md): the same values as the PC's ReadingsTests.
+        check("System stats: processor and graphics card names shorten like the PC", new Action() { public void run() {
+            ok(SystemText.shortModel("AMD Ryzen 7 7800X3D 8-Core Processor").equals("Ryzen 7 7800X3D"), "Ryzen " + SystemText.shortModel("AMD Ryzen 7 7800X3D 8-Core Processor"));
+            ok(SystemText.shortModel("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz").equals("i7-12700K"), "Intel " + SystemText.shortModel("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz"));
+            ok(SystemText.shortModel("NVIDIA GeForce RTX 4070").equals("RTX 4070") && SystemText.shortModel("AMD Radeon RX 7900 XTX").equals("Radeon RX 7900 XTX"), "graphics");
+            ok(SystemText.shortModel("AMD Ryzen 5 5600G with Radeon Graphics").equals("Ryzen 5 5600G") && SystemText.shortModel(null).isEmpty() && SystemText.shortModel("  ").isEmpty(), "APU and empty");
+        } });
+        check("System stats: the peak sticker, temperature badges and min/max lines match the PC", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"system\":{\"cpu\":41,\"gpu\":92,\"gpuName\":\"NVIDIA GeForce RTX 4070\",\"cpuName\":\"AMD Ryzen 7 7700 8-Core Processor\",\"memoryPercent\":55,\"memoryUsedGB\":17.6,\"memoryTotalGB\":32,\"cpuTemp\":58.4,\"gpuTemp\":71,\"showCpu\":true,\"showGpu\":true,\"showRam\":true}}")));
+            ok(state.system != null && state.system.cpuName.equals("AMD Ryzen 7 7700 8-Core Processor"), "cpuName parsed");
+            Map<String, SystemText.Reading> readings = SystemText.readings(state.system, 60);
+            ok(readings.get("Cpu").detail.equals("Ryzen 7 7700") && readings.get("Gpu").detail.equals("RTX 4070"), "details " + readings.get("Cpu").detail + " / " + readings.get("Gpu").detail);
+            String peak = SystemText.peakId(readings, state.system);
+            ok("Gpu".equals(peak) && SystemText.peakText(peak, readings.get(peak)).equals("GPU 92%") && readings.get(peak).percent >= SystemText.STRAINED, "peak " + peak);
+            ok(SystemText.badge(readings.get("CpuTemp")).equals("58°") && SystemText.badge(new SystemText.Reading()).isEmpty(), "badges");
+            ok(SystemText.range("Cpu", Arrays.asList(12.2, 87.4, 40.0), false).equals("min 12% · max 87%"), "percent range");
+            ok(SystemText.range("CpuTemp", Arrays.asList(41.0, 42.4), true).equals("min 106° · max 108°"), "temperature range " + SystemText.range("CpuTemp", Arrays.asList(41.0, 42.4), true));
+            ok(SystemText.range("Fps", Arrays.asList(58.6, 144.0), false).equals("min 59 · max 144") && SystemText.range("Ram", Arrays.asList(50.0), false).isEmpty() && SystemText.range("Ram", null, false).isEmpty(), "fps and short ranges");
+            String path = System.getProperty("widgetscreen.sample");
+            if (path != null && new File(path).exists()) {
+                try {
+                    PcState sample = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+                    ok(sample.system == null || sample.system.error || sample.system.cpuName != null, "sample cpuName");
+                } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
+            }
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

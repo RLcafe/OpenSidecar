@@ -82,13 +82,13 @@ public final class SystemText {
     public static Map<String, Reading> readings(PcState.System s, double fpsScale) {
         Map<String, Reading> r = new LinkedHashMap<String, Reading>();
         boolean ok = s != null && !s.error;
-        r.put("Cpu", percent(ok ? s.cpu : null, null, null));
-        r.put("Gpu", percent(ok ? s.gpu : null, ok ? s.gpuStatus : "Unavailable", null));
+        r.put("Cpu", percent(ok ? s.cpu : null, ok ? shortModel(s.cpuName) : null, null));
+        r.put("Gpu", percent(ok ? s.gpu : null, !ok ? "Unavailable" : s.gpu != null && !shortModel(s.gpuName).isEmpty() ? shortModel(s.gpuName) : s.gpuStatus, null));
         r.put("Ram", percent(ok ? s.memoryPercent : null, ok && s.memoryPercent != null ? String.format(Locale.US, "%.1f / %.1f GB", s.memoryUsedGB, s.memoryTotalGB) : "Unavailable", null));
         boolean vram = ok && s.vramUsedGB != null && s.vramTotalGB != null && s.vramTotalGB > 0;
         r.put("Vram", percent(vram ? 100 * s.vramUsedGB / s.vramTotalGB : null, vram ? String.format(Locale.US, "%.1f / %.0f GB", s.vramUsedGB, s.vramTotalGB) : "", ok ? s.vramState : null));
         r.put("CpuTemp", temperature(ok ? s.cpuTemp : null, ok ? s.cpuTempState : null, "CpuTemp", ok && s.fahrenheit, "Package"));
-        r.put("GpuTemp", temperature(ok ? s.gpuTemp : null, ok ? s.gpuTempState : null, "GpuTemp", ok && s.fahrenheit, ok ? s.gpuName : ""));
+        r.put("GpuTemp", temperature(ok ? s.gpuTemp : null, ok ? s.gpuTempState : null, "GpuTemp", ok && s.fahrenheit, ok ? shortModel(s.gpuName) : ""));
         Reading fps = new Reading();
         if (ok && s.fps != null) {
             fps.value = s.fps; fps.text = String.valueOf(Math.round(s.fps)); fps.percent = Math.min(100, 100 * s.fps / fpsScale);
@@ -103,6 +103,46 @@ public final class SystemText {
         Reading uptime = new Reading(); uptime.text = ok ? Format.uptime((long) s.uptimeMs, 3) : "—";
         r.put("Uptime", uptime);
         return r;
+    }
+
+    // The status sticker's peak (Sticker Sheet phase 3): the busiest of CPU, GPU, RAM and VRAM among those shown,
+    // as "GPU 92%"; null when none has a value. The sticker fills from 80% (STRAINED). Same as SystemReadings.PeakId.
+    public static final double STRAINED = 80;
+    public static String peakId(Map<String, Reading> readings, PcState.System s) {
+        String best = null; double top = -1;
+        for (String id : new String[] { "Cpu", "Gpu", "Ram", "Vram" }) {
+            Reading reading = readings.get(id);
+            if (!shown(s, id) || reading == null || reading.value == null) continue;
+            if (reading.percent > top) { top = reading.percent; best = id; }
+        }
+        return best;
+    }
+    public static String peakText(String id, Reading reading) { return id == null || reading == null ? "" : title(id) + " " + Math.round(reading.percent) + "%"; }
+    // A temperature badge on a ring: "58°" in the chosen unit, no letter.
+    public static String badge(Reading temperature) { return temperature == null || temperature.value == null ? "" : temperature.text.replace("°C", "°").replace("°F", "°"); }
+    // "min 12% · max 87%" from a reading's history, or "" before two readings.
+    public static String range(String id, List<Double> history, boolean fahrenheit) {
+        if (history == null || history.size() < 2) return "";
+        double low = Double.MAX_VALUE, high = -Double.MAX_VALUE;
+        for (double v : history) { low = Math.min(low, v); high = Math.max(high, v); }
+        return "min " + rangeValue(id, low, fahrenheit) + " · max " + rangeValue(id, high, fahrenheit);
+    }
+    private static String rangeValue(String id, double v, boolean fahrenheit) {
+        if (id.equals("CpuTemp") || id.equals("GpuTemp")) return degrees(v, fahrenheit).replace("°C", "°").replace("°F", "°");
+        return id.equals("Fps") ? String.valueOf(Math.round(v)) : Math.round(v) + "%";
+    }
+
+    // "AMD Ryzen 7 7800X3D 8-Core Processor" → "Ryzen 7 7800X3D"; "NVIDIA GeForce RTX 4070" → "RTX 4070".
+    // The PC's SystemService.ShortModel does the same.
+    public static String shortModel(String name) {
+        if (name == null || name.trim().isEmpty()) return "";
+        String s = name.replace("(R)", "").replace("(TM)", "").replace("(tm)", "").replace("(r)", "");
+        s = s.replaceAll("(?i)\\s*@\\s*[\\d.]+\\s*GHz", "");
+        s = s.replaceAll("(?i)\\b\\d+-Core\\b", "");
+        s = s.replaceAll("(?i)\\b(Processor|CPU|with Radeon Graphics|Graphics)\\b", "");
+        s = s.replaceAll("(?i)^\\s*(AMD|Intel|NVIDIA)\\s+", "");
+        s = s.replaceAll("(?i)^\\s*(Core|GeForce)\\s+", "");
+        return s.replaceAll("\\s+", " ").trim();
     }
 
     private static Reading percent(Double value, String detail, String state) {

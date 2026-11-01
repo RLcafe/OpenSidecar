@@ -85,7 +85,7 @@ namespace WidgetScreen
             outputPicker = new OutputPicker(window);
             confirm = new ConfirmSheet(window);
             InitializeStickers();
-            systemCard =new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime"));
+            systemCard = new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime")); systemCard.Peak = Control<TextBlock>("SystemPeak");
             weatherCard = new WeatherCard(window, Control<Grid>("WeatherBody"));
             InitializeStorage();
             InitializeClocks();

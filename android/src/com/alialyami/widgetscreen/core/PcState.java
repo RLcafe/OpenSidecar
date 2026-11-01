@@ -53,7 +53,7 @@ public final class PcState {
         // Hardware sensors (decision 016): each reading with the state that says why it's missing, and the styles.
         public boolean showCpuTemp, showGpuTemp, showVram, showFps, fahrenheit, fullSensors;
         public Double cpuTemp, gpuTemp, vramUsedGB, vramTotalGB, fps;
-        public String cpuTempState = "", gpuTempState = "", vramState = "", fpsState = "", fpsSource = "", fpsApp = "", gpuName = "";
+        public String cpuTempState = "", gpuTempState = "", vramState = "", fpsState = "", fpsSource = "", fpsApp = "", gpuName = "", cpuName = "";
         public final Map<String, String> styles = new LinkedHashMap<String, String>();
         public boolean anyShown() { return showCpu || showGpu || showRam || showNetwork || showUptime || showCpuTemp || showGpuTemp || showVram || showFps; }
     }
@@ -360,7 +360,7 @@ public final class PcState {
             system.download = maybe(s, "download"); system.upload = maybe(s, "upload"); system.uptimeMs = Json.number(s, "uptimeMs");
             system.showCpuTemp = flag(s, "showCpuTemp"); system.showGpuTemp = flag(s, "showGpuTemp"); system.showVram = flag(s, "showVram"); system.showFps = flag(s, "showFps");
             system.fahrenheit = flag(s, "fahrenheit"); system.fullSensors = flag(s, "fullSensors");
-            system.cpuTemp = maybe(s, "cpuTemp"); system.cpuTempState = text(s, "cpuTempState"); system.gpuTemp = maybe(s, "gpuTemp"); system.gpuTempState = text(s, "gpuTempState"); system.gpuName = text(s, "gpuName");
+            system.cpuTemp = maybe(s, "cpuTemp"); system.cpuTempState = text(s, "cpuTempState"); system.gpuTemp = maybe(s, "gpuTemp"); system.gpuTempState = text(s, "gpuTempState"); system.gpuName = text(s, "gpuName"); system.cpuName = text(s, "cpuName");
             system.vramUsedGB = maybe(s, "vramUsedGB"); system.vramTotalGB = maybe(s, "vramTotalGB"); system.vramState = text(s, "vramState");
             system.fps = maybe(s, "fps"); system.fpsState = text(s, "fpsState"); system.fpsSource = text(s, "fpsSource"); system.fpsApp = text(s, "fpsApp");
             Map<String, Object> styles = Json.obj(Json.value(s, "styles"));
