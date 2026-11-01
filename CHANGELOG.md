@@ -6,6 +6,19 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.23.0 (1 Nov 2026)
+
+A Claude Code widget (user request; Windows and the phone, the same designs on both):
+
+- **Your Claude Code sessions as critters.** Each session on this PC is a little drawn creature, the same shape and colour for the same project every time: dozing when it's ready, eyes darting while it works, a happy face when it's done. Turn it on in Edit layout's Widgets list; it starts hidden.
+- **It lights up when Claude needs you.** A session waiting for a permission or an answer turns Amber, throws its arms up and hops; the card gets an Amber border and the heading names the project ("api-server needs you"). If the card is on another page, a "Claude needs you" pill appears in the header and takes you there. An optional chime (Settings → Claude, off by default, silent in Quiet mode); the phone taps once.
+- **Your plan's limits.** The 5-hour and weekly meters (Amber from 80%, "Limit reached · back 3:40 pm" at 100%), from Claude Code's status line and a read-only check of your plan's usage every 5 minutes with Claude Code's own sign-in. It uses no credits, and the sign-in is never stored, changed or sent anywhere else; the phone gets only the percentages. Settings → Claude can turn the check off.
+- **Usage per project and per session**, counted from Claude Code's logs on this PC, for the 5-hour window, today or the week.
+- **Tap a session to bring its terminal or editor to the front** (from the phone too).
+- **Small, medium and large designs**: one big critter with its project and state; a lineup of critters over the two meters; and a row per session (title, project, model, how long, tokens) beside a panel with the meters, a period switch and usage by project.
+- **Settings → Claude → Connect Claude Code** adds Widget Screen's hooks and status line to Claude Code's `settings.json`, after saving a backup next to it (`settings.json.widgetscreen-backup`). Your own hooks stay, and a status line you already had keeps showing. Disconnect takes out exactly what Connect added. The bridge, `ClaudeHook.exe`, comes with the app and the setup exe.
+- Not yet tried with real Claude Code hooks firing, bringing a real terminal forward, the live usage check, or on a phone (labelled sample data shows the designs).
+
 ## v0.22.0 (1 Nov 2026)
 
 A Notes and to-do widget (user request; Windows and the phone, the same designs on both):

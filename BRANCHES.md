@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/claude-watcher` | Claude Code widget on both apps: critters, needs-you light-up, plan limits, usage per project and session; ClaudeHook.exe bridge and Settings → Claude (decision 014) | `d99188c` (v0.19.0) | In progress | `.worktrees\claude-watcher` | `.worktrees\claude-watcher\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-watcher\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/claude-watcher` was merged as v0.23.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
