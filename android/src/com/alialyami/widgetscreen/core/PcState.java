@@ -109,6 +109,12 @@ public final class PcState {
         public boolean limitsKnown() { return fiveHour != null || week != null; }
         public int needsYou() { int n = 0; for (ClaudeSession s : sessions) if ("needs".equals(s.state)) n++; return n; }
     }
+    // The PC's clipboard history (docs/design/clipboard-history.md): short previews, newest first.
+    public static final class Clip { public String id = "", text = ""; public int length; public double at; }
+    public static final class Clipboard {
+        public boolean watching, paused;
+        public final List<Clip> items = new ArrayList<Clip>();
+    }
 
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
@@ -159,6 +165,7 @@ public final class PcState {
     public Clocks clocks;
     public Prayer prayer;
     public Notes notes;
+    public Clipboard clipboard;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -286,6 +293,18 @@ public final class PcState {
             state.prayer = prayer;
         }
         if (Json.has(root, "notes")) state.notes = parseNotes(Json.obj(Json.value(root, "notes")));
+        if (Json.has(root, "clipboard")) {
+            Map<String, Object> c = Json.obj(Json.value(root, "clipboard"));
+            Clipboard clipboard = new Clipboard();
+            clipboard.watching = flag(c, "watching"); clipboard.paused = flag(c, "paused");
+            for (Object item : Json.array(c, "items")) {
+                Map<String, Object> m = Json.obj(item);
+                Clip clip = new Clip();
+                clip.id = text(m, "id"); clip.text = text(m, "text"); clip.length = (int) Json.number(m, "length"); clip.at = Json.number(m, "at");
+                if (!clip.id.isEmpty()) clipboard.items.add(clip);
+            }
+            state.clipboard = clipboard;
+        }
         return state;
     }
 

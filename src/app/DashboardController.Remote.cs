@@ -353,6 +353,7 @@ namespace WidgetScreen
             if (parts.Contains("prayer")) state["prayer"] = RemotePrayer();
             if (parts.Contains("notes")) state["notes"] = RemoteNotes();
             if (parts.Contains("claude")) state["claude"] = RemoteClaude();
+            if (parts.Contains("clipboard")) state["clipboard"] = RemoteClipboard();
             return state;
         }
 
@@ -434,6 +435,8 @@ namespace WidgetScreen
                 case "focus.dismiss": DismissFocus(); return Done(null);
                 case "notes.text": case "notes.add": case "notes.toggle": case "notes.delete": case "notes.clearDone": case "notes.move":
                     return RemoteNotesCommand(action, body);
+                case "clipboard.paste": case "clipboard.pause": case "clipboard.clear":
+                    return await RemoteClipboardCommand(action, body);
                 case "prayer.stop": StopPrayerAlert(); return Done(null);
                 case "quiet.toggle":
                     settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();

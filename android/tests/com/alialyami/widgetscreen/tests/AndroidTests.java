@@ -4,6 +4,7 @@ import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.core.Critter;
+import com.alialyami.widgetscreen.core.ClipText;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
@@ -356,7 +357,7 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null && state.clipboard != null, "every part");
             ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
             ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
             ok(state.notes != null && state.notes.text.equals("From the phone") && state.notes.items.size() == 1 && state.notes.items.get(0).text.equals("Bread"), "notes");
@@ -517,6 +518,15 @@ public final class AndroidTests {
             ok(ClaudeText.heading(c).equals("2 sessions need you") && ClaudeText.flag(c, 1700000000 + 60, true, true).equals("2 RUNNING") && ClaudeText.flag(c, 1700000000 + 3600, true, true).startsWith("2 RUNNING · AS OF ") && ClaudeText.source(c, true).endsWith("checked online"), "heading and flag");
             PcState empty = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":false,\"noPlan\":true,\"sessions\":[]}}")));
             ok(!empty.claude.limitsKnown() && ClaudeText.limitsMissing(empty.claude).equals("Plan limits need a Claude Pro or Max login.") && empty.claudePage == -1 && ClaudeText.heading(empty.claude).equals("CLAUDE CODE"), "empty");
+        } });
+        check("Clipboard history picks the PC's designs and reads the PC's previews", new Action() { public void run() {
+            ok(CardSizing.clip(240, 200) == CardSizing.SMALL && CardSizing.clip(472, 310) == CardSizing.MEDIUM && CardSizing.clip(439, 576) == CardSizing.MEDIUM && CardSizing.clip(440, 400) == CardSizing.LARGE, "designs");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"clipboard\":{\"watching\":true,\"paused\":false,\"items\":[{\"id\":\"a\",\"text\":\"Hello\",\"length\":5,\"at\":1000},{\"text\":\"no id\"}]}}")));
+            ok(state.clipboard.watching && state.clipboard.items.size() == 1 && state.clipboard.items.get(0).length == 5 && ClipText.status(state.clipboard).equals("1"), "parse");
+            ok(ClipText.ago(0, 30000).equals("just now") && ClipText.ago(0, 4 * 60000).equals("4 min ago") && ClipText.ago(0, 2 * 3600000L).equals("2 h ago") && ClipText.ago(0, 30 * 3600000L).equals("yesterday") && ClipText.length(1).equals("1 character"), "wording");
+            state.clipboard.paused = true;
+            ok(ClipText.status(state.clipboard).equals("PAUSED") && ClipText.empty(state.clipboard).startsWith("Paused"), "paused");
+            ok(!WidgetLayout.find(WidgetLayout.defaults(), "Clipboard").visible && WidgetLayout.title("Clipboard").equals("Clipboard history"), "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

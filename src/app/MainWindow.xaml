@@ -449,6 +449,13 @@
                 <Grid x:Name="NotesBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- The last texts copied on this PC; a tap pastes one again. ClipboardCard builds the Small, Medium or Large design in ClipBody (docs/design/clipboard-history.md). -->
+            <Border x:Name="ClipboardCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Clipboard history">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="CLIPBOARD" Style="{StaticResource Label}"/><TextBlock x:Name="ClipStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="ClipBody" Grid.Row="1" Margin="0,8,0,0"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
@@ -561,6 +568,14 @@
                 <TextBox x:Name="ClockName2" Grid.Row="3" Grid.Column="2" MaxLength="24" Margin="0,0,0,8" AutomationProperties.Name="City name 3" ToolTip="The name the card shows"/>
               </Grid>
               <TextBlock Text="Choose None to remove a clock. An empty name uses the zone's first city." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="Clipboard history" FontSize="24" Margin="0,8,0,10"/>
+              <TextBlock Text="The Clipboard widget keeps the last texts you copy on this PC, only while it's on a page. Tap one to paste it into the app you're using. Text that password managers mark as private is never kept." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                <Slider x:Name="ClipSizeChoice" Minimum="5" Maximum="50" SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1" AutomationProperties.Name="Texts to keep"/>
+                <TextBlock x:Name="ClipSizeLabel" Grid.Column="1" Text="10 texts" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+              </Grid>
+              <CheckBox x:Name="ClipKeepChoice" Content="Keep the history when Widget Screen closes" Margin="0,8,0,0"/>
+              <TextBlock Text="Off, the history is only in memory and is gone when the app closes. On, it's saved encrypted for your Windows account." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
               <TextBlock Text="Storage" FontSize="24" Margin="0,8,0,10"/>
               <TextBlock Text="The Storage widget shows free space on this PC's drives. A drive with less free space than this turns to the warning colour." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
               <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>

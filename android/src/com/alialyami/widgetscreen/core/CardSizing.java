@@ -199,6 +199,8 @@ public final class CardSizing {
     }
     // The Small critter: as tall as the card allows, at most 42% of its width.
     public static double claudeSmallCritter(double bodyWidth, double bodyHeight) { return clamp(Math.floor(Math.min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
+    // Clipboard history (docs/design/clipboard-history.md): the same numbers as CardSizing.cs.
+    public static int clip(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 400 ? LARGE : MEDIUM; }
 
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

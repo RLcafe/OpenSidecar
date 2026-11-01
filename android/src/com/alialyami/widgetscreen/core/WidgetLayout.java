@@ -14,7 +14,7 @@ public final class WidgetLayout {
     // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
     private static final double MINIMUM_SHRINK = 0.78;
     // The same widgets as the Windows dashboard, which the phone mirrors.
-    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude" };
+    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard" };
 
     public static final class Box {
         public final double x, y, width, height;
@@ -56,6 +56,7 @@ public final class WidgetLayout {
             case "Prayer": return "Prayer times";
             case "Notes": return "Notes and to-do";
             case "Claude": return "Claude Code";
+            case "Clipboard": return "Clipboard history";
             default: return id;
         }
     }
@@ -76,6 +77,7 @@ public final class WidgetLayout {
             case "Prayer": return new double[] { 240, 152 };
             case "Notes": return new double[] { 260, 200 };
             case "Claude": return new double[] { 260, 180 };
+            case "Clipboard": return new double[] { 240, 200 };
             default: return new double[] { 232, 152 };
         }
     }
@@ -119,7 +121,8 @@ public final class WidgetLayout {
             new Placement("Clocks", 1384, 0, 472, 250, false),
             new Placement("Prayer", 1384, 326, 472, 250, false),
             new Placement("Notes", 1384, 0, 472, 310, false),
-            new Placement("Claude", 1384, 0, 472, 310, false)
+            new Placement("Claude", 1384, 0, 472, 310, false),
+            new Placement("Clipboard", 1384, 0, 472, 310, false)
         };
     }
 
