@@ -58,6 +58,8 @@ namespace WidgetScreen
     public sealed class ClaudeLimits
     {
         public ClaudeLimitWindow FiveHour, Week;
+        // Narrower weekly windows the usage check may add ("Opus week", "Sonnet week", a model's own), for the Large panel.
+        public List<KeyValuePair<string, ClaudeLimitWindow>> Extra = new List<KeyValuePair<string, ClaudeLimitWindow>>();
         public DateTime UpdatedAt;
         public string Source = "statusline";
         // When Claude Code last answered without rate limits (an API key or a logged-out session).
@@ -154,6 +156,14 @@ namespace WidgetScreen
             {
                 case "SessionStart": next = ClaudeJson.Str(o, "source") == "compact" ? (ClaudeState?)null : ClaudeState.Ready; break;
                 case "UserPromptSubmit": case "PostToolUse": case "PreToolUse": next = ClaudeState.Working; break;
+                // A permission dialog is showing (the desktop app's Code tab sends no permission Notification).
+                case "PermissionRequest":
+                    {
+                        string tool = ClaudeJson.Str(o, "tool_name") ?? "";
+                        message = tool.Length > 0 ? "Claude needs your permission to use " + tool : "Claude needs your permission";
+                        next = ClaudeState.NeedsYou;
+                        break;
+                    }
                 case "Stop": next = ClaudeState.Done; break;
                 case "Notification":
                     {
@@ -271,12 +281,26 @@ namespace WidgetScreen
         }
 
         // The read-only usage check's answer (GET api.anthropic.com/api/oauth/usage, undocumented): five_hour and
-        // seven_day, each utilization 0–100 and resets_at as ISO-8601; either may be null. Null when nothing is usable.
+        // seven_day, each utilization 0–100 and resets_at as ISO-8601; either may be null. seven_day_opus,
+        // seven_day_sonnet and model_scoped ([{display_name, utilization, resets_at}]) become the extra windows. Null
+        // when nothing is usable.
         public static ClaudeLimits ParseUsageResponse(string json, DateTime now)
         {
             object parsed; if (!ClaudeJson.TryParse(json, out parsed)) return null;
             var o = ClaudeJson.Obj(parsed); if (o == null) return null;
             var limits = new ClaudeLimits { FiveHour = ParseWindow(ClaudeJson.Obj(o, "five_hour"), "utilization"), Week = ParseWindow(ClaudeJson.Obj(o, "seven_day"), "utilization"), UpdatedAt = now, Source = "online" };
+            foreach (var pair in new[] { new[] { "seven_day_opus", "Opus week" }, new[] { "seven_day_sonnet", "Sonnet week" } })
+            {
+                var window = ParseWindow(ClaudeJson.Obj(o, pair[0]), "utilization");
+                if (window != null) limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(pair[1], window));
+            }
+            foreach (var scoped in (ClaudeJson.List(o, "model_scoped") ?? new List<object>()).OfType<JsonObject>())
+            {
+                string name = ClaudeJson.Str(scoped, "display_name");
+                var window = ParseWindow(scoped, "utilization");
+                if (!String.IsNullOrWhiteSpace(name) && window != null && !limits.Extra.Any(p => p.Key.StartsWith(name.Trim() + " ", StringComparison.OrdinalIgnoreCase)))
+                    limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(name.Trim() + " week", window));
+            }
             return limits.Known ? limits : null;
         }
 

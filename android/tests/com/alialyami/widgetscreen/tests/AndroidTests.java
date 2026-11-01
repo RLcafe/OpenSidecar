@@ -522,8 +522,24 @@ public final class AndroidTests {
             ok(state.claudeNeeds == 2 && state.claudePage == 1 && c.connected && c.sessions.size() == 2 && c.sessions.get(0).tokens[2] == 7 && c.sessions.get(0).canFocus && c.sessions.get(0).shown().equals("api"), "sessions");
             ok(c.fiveHour.pct == 23.5 && c.fiveHour.resetsAt == 1738425600 && c.week == null && c.limitsKnown() && c.usage[0].size() == 1 && c.usage[2].isEmpty() && c.source.equals("online"), "limits and usage");
             ok(ClaudeText.heading(c).equals("2 sessions need you") && ClaudeText.flag(c, 1700000000 + 60, true, true).equals("2 RUNNING") && ClaudeText.flag(c, 1700000000 + 3600, true, true).startsWith("2 RUNNING · AS OF ") && ClaudeText.source(c, true).endsWith("checked online"), "heading and flag");
-            PcState empty = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":false,\"noPlan\":true,\"sessions\":[]}}")));
+            PcState empty = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":false,\"noPlan\":true,\"plan\":\"current\",\"sessions\":[]}}")));
             ok(!empty.claude.limitsKnown() && ClaudeText.limitsMissing(empty.claude).equals("Plan limits need a Claude Pro or Max login.") && empty.claudePage == -1 && ClaudeText.heading(empty.claude).equals("CLAUDE CODE"), "empty");
+        } });
+        check("Claude plan sign-in states, cost and extra windows read like the PC's", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"logsRead\":true,\"plan\":\"failed\",\"sessions\":[{\"id\":\"a\",\"project\":\"api\",\"state\":\"working\",\"where\":\"Desktop\",\"tokens\":{\"week\":9},\"cost\":{\"fiveHour\":0.5,\"today\":1.25,\"week\":12.6}}],"
+                + "\"limits\":{\"fiveHour\":{\"pct\":40},\"week\":{\"pct\":60},\"updatedAt\":1700000000,\"source\":\"online\",\"extra\":[{\"name\":\"Opus week\",\"pct\":12},{\"name\":\"\",\"pct\":3},{\"name\":\"Fable week\"}]},"
+                + "\"usage\":{\"week\":[{\"project\":\"api\",\"tokens\":1800000,\"cost\":2.01}]}}}")));
+            PcState.Claude c = state.claude;
+            ok(c.plan.equals("failed") && c.sessions.get(0).where.equals("Desktop") && c.sessions.get(0).cost[1] == 1.25 && c.sessions.get(0).cost[2] == 12.6 && c.usage[2].get(0).cost == 2.01, "cost and where");
+            ok(c.extra.size() == 1 && c.extra.get(0).name.equals("Opus week") && c.extra.get(0).pct == 12, "extra windows");
+            ok(ClaudeText.source(c, true).startsWith("Plan limits as of ") && ClaudeText.old(c, 1700000000 + 60) && ClaudeText.flag(c, 1700000000 + 60, true, true).contains("AS OF "), "failed check shows old numbers");
+            ok(ClaudeText.money(0.4219).equals("≈ $0.42") && ClaudeText.money(12.6).equals("≈ $13") && ClaudeText.money(1234).equals("≈ $1.2k") && ClaudeText.money(0).equals("≈ $0") && ClaudeText.usage(1800000, 2.01).equals("1.8M · ≈ $2.01"), "money");
+            PcState.Claude signedOut = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[]}}"))).claude;
+            PcState.Claude expired = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"plan\":\"expired\",\"sessions\":[]}}"))).claude;
+            ok(signedOut.plan.equals("signedOut") && ClaudeText.limitsMissing(signedOut).equals(ClaudeText.SIGN_IN) && ClaudeText.limitsMissing(expired).equals(ClaudeText.SIGN_IN_ENDED), "sign-in messages");
+            // The same thresholds as the PC's CardSizing.
+            ok(CardSizing.claudeMediumBeside(424) && !CardSizing.claudeMediumBeside(399) && CardSizing.claudeMediumColumn(424) == 195 && CardSizing.claudeMediumColumn(1000) == 300 && CardSizing.claudeMediumProjects(130, 1, true, true) == 2 && CardSizing.claudeMediumProjects(130, 1, false, true) == 0, "medium projects");
+            ok(!CardSizing.claudeSmallPercent(132, 1.4) && CardSizing.claudeSmallPercent(132, 1) && CardSizing.claudeExtras(592, 1) >= 1 && CardSizing.claudeProjects(400, 1, 2) < CardSizing.claudeProjects(400, 1), "small caption and extras");
         } });
         check("Clipboard history picks the PC's designs and reads the PC's previews", new Action() { public void run() {
             ok(CardSizing.clip(240, 200) == CardSizing.SMALL && CardSizing.clip(472, 310) == CardSizing.MEDIUM && CardSizing.clip(439, 576) == CardSizing.MEDIUM && CardSizing.clip(440, 400) == CardSizing.LARGE, "designs");

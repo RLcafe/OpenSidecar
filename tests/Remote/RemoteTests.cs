@@ -152,6 +152,10 @@ internal static class RemoteTests
                     Assert((bool)claudeState["connected"] && (bool)claudeState["sample"] && claudeSessions.Length == 4 && (string)firstSession["state"] == "needs" && (string)firstSession["project"] == "api-server"
                         && Convert.ToInt64(((Dictionary<string, object>)firstSession["tokens"])["fiveHour"]) == 412000 && Convert.ToDouble(claudeFive["pct"]) == 84 && Convert.ToDouble(claudeFive["resetsAt"]) > 1e9
                         && ((object[])((Dictionary<string, object>)claudeState["usage"])["week"]).Length == 5 && !claudeState.ContainsKey("token") && !state.Item2.Contains("accessToken"), "Claude state wrong.");
+                    var weekProjects = (object[])((Dictionary<string, object>)claudeState["usage"])["week"];
+                    Assert((string)claudeState["plan"] == "current" && (string)firstSession["where"] == "Desktop" && Convert.ToDouble(((Dictionary<string, object>)firstSession["cost"])["week"]) > 0
+                        && Convert.ToDouble(((Dictionary<string, object>)weekProjects[0])["cost"]) > 0 && ((object[])claudeLimits["extra"]).Length == 1 && (string)((Dictionary<string, object>)((object[])claudeLimits["extra"])[0])["name"] == "Opus week"
+                        && !get("/state?parts=claude", token).Item2.Contains("Bearer"), "Claude cost, plan state or extra windows missing from the phone's section.");
                     Assert(post("/command", "{\"action\":\"claude.focus\",\"id\":\"sample-2\"}", token).Item1 == 200 && post("/command", "{\"action\":\"claude.focus\",\"id\":\"gone\"}", token).Item1 == 409, "Focusing a Claude session from the phone failed.");
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
                     var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];

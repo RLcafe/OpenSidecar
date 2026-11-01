@@ -196,10 +196,30 @@ namespace WidgetScreen
         public static double ClaudePanel(double bodyWidth) { return Clamp(Math.Round(bodyWidth * 0.38), 240, 380); }
         public static double ClaudeMeterBlock(double textScale) { return Math.Ceiling(Math.Max(20 * textScale, 34) + 42); }
         public static double ClaudeProjectRow(double textScale) { return Math.Ceiling(16 + 20 * textScale); }
-        public static int ClaudeProjects(double panelHeight, double textScale)
+        public static int ClaudeProjects(double panelHeight, double textScale, int extras = 0)
         {
-            double used = 2 * ClaudeMeterBlock(textScale) + 14 + 48 + 16 + Math.Ceiling(20 * textScale) + 8 + 22;
-            return (int)Clamp(Math.Floor((panelHeight - used) / ClaudeProjectRow(textScale)), 0, 6);
+            return (int)Clamp(Math.Floor((panelHeight - ClaudePanelUsed(textScale, extras)) / ClaudeProjectRow(textScale)), 0, 6);
+        }
+        private static double ClaudePanelUsed(double textScale, int extras) { return 2 * ClaudeMeterBlock(textScale) + 14 + 48 + 16 + Math.Ceiling(20 * textScale) + 8 + 22 + (extras > 0 ? 10 + extras * 26 : 0); }
+        // The Large panel's extra weekly windows (Opus, Sonnet, a model's own), one 26-unit line each, at most three,
+        // as long as two project rows still fit under them.
+        public static int ClaudeExtras(double panelHeight, double textScale)
+        {
+            return (int)Clamp(Math.Floor((panelHeight - ClaudePanelUsed(textScale, 0) - 10 - 2 * ClaudeProjectRow(textScale)) / 26), 0, 3);
+        }
+        // The Small card's caption line under its critter (the 5-hour percentage, or what the meter needs): only when
+        // the project, state, count and Sample flag still fit beside the critter above it.
+        public static bool ClaudeSmallPercent(double bodyHeight, double textScale) { return bodyHeight >= 8 + 104 * textScale; }
+        // Medium usage by project: beside the lineup from 400 units of body width (a column of 190–300), otherwise
+        // under it when the lineup keeps a critter and its name; up to four rows beside, three under.
+        public static bool ClaudeMediumBeside(double bodyWidth) { return bodyWidth >= 400; }
+        public static double ClaudeMediumColumn(double bodyWidth) { return Clamp(Math.Round(bodyWidth * 0.46), 190, 300); }
+        public static int ClaudeMediumProjects(double room, double textScale, bool beside, bool sessions)
+        {
+            double row = ClaudeProjectRow(textScale);
+            if (beside) return (int)Clamp(Math.Floor((room - 26) / row), 0, 4);
+            double lineup = sessions ? 40 + 20 * textScale + 18 : 56;
+            return (int)Clamp(Math.Floor((room - lineup - 26) / row), 0, 3);
         }
         // The Small critter: as tall as the card allows, at most 42% of its width.
         public static double ClaudeSmallCritter(double bodyWidth, double bodyHeight) { return Clamp(Math.Floor(Math.Min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }

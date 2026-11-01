@@ -13,6 +13,8 @@
 **/spotify-session.dat.tmp
 **/discord-session.dat
 **/discord-session.dat.tmp
+**/claude-session.dat
+**/claude-session.dat.tmp
 
 # Build leftovers outside artifacts/
 *.pdb

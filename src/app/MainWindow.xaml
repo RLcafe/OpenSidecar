@@ -841,22 +841,31 @@
               <TabItem Header="Claude">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Your Claude plan" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="ClaudePlanStatus" Text="Not signed in" TextWrapping="Wrap" Margin="0,0,0,8" FontSize="{DynamicResource BodySize}"/>
+                    <WrapPanel><Button x:Name="ClaudeSignInButton" Content="Sign in with Claude" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8" AutomationProperties.Name="Sign in with Claude"/><Button x:Name="ClaudeSignOutButton" Content="Sign out" Margin="0,0,8,8" Visibility="Collapsed"/></WrapPanel>
+                    <TextBlock Text="Opens Claude's sign-in page in your browser. Widget Screen gets its own sign-in, which can only read your profile and your plan's usage: no chats, no credits. It's kept encrypted on this PC, renews itself, and checks your 5-hour and weekly limits every 5 minutes, whether or not Claude Code is open. Your phone gets only the percentages." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,24"/>
                     <TextBlock Text="Claude Code" FontSize="24" Margin="0,0,0,12"/>
                     <TextBlock x:Name="ClaudeConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,6" FontSize="{DynamicResource BodySize}"/>
                     <TextBlock x:Name="ClaudeFolderText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <WrapPanel><Button x:Name="ClaudeConnectButton" Content="Connect Claude Code" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="ClaudeDisconnectButton" Content="Disconnect" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock x:Name="ClaudeTelemetryText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                     <TextBlock Text="Connect and Disconnect take effect right away; you don't need to save. Claude Code picks up the change in sessions you start afterwards." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
                     <CheckBox x:Name="ClaudeChimeChoice" Content="Chime when a session needs me"/>
-                    <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
-                    <CheckBox x:Name="ClaudeOnlineChoice" Content="Check my plan's limits online every 5 minutes"/>
-                    <TextBlock Text="Asks api.anthropic.com for your plan's 5-hour and weekly use with Claude Code's own sign-in, even when no session is open. It uses no credits, and the sign-in isn't stored, changed or sent anywhere else. Your phone gets only the percentages." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
+                    <TextBlock Text="Projects" FontSize="24" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ClaudeShowNewChoice" Content="Show new projects automatically"/>
+                    <TextBlock Text="Unticked projects leave the card's sessions and usage, here and on your phone. The plan meters always show your whole plan." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,12"/>
+                    <StackPanel x:Name="ClaudeProjectsList"/>
+                    <TextBlock x:Name="ClaudeProjectsEmpty" Text="Projects show here once Claude Code has run on this PC." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                   <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
                     <TextBlock Text="What Connect changes" FontSize="24" Margin="0,0,0,12"/>
-                    <TextBlock Text="It adds hooks to Claude Code's settings.json, so each session tells the dashboard when it starts, works, finishes or needs you, and sets its status line, which brings your plan's limits to the card." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="It adds hooks to Claude Code's settings.json, so each session tells the dashboard when it starts, works, finishes or needs you, and sets its status line." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="It also turns on Claude Code's telemetry and sends it only to Widget Screen on this PC (127.0.0.1, port 43832): token counts, cost and event names for live usage per session. Prompts, replies and tool details are never included. If settings.json already sends telemetry somewhere, that's left as it is." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="Your own hooks stay as they are. If you had a status line, it keeps showing: Widget Screen runs it and passes on what it prints." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="A backup is saved next to it as settings.json.widgetscreen-backup. Disconnect takes out exactly what Connect added and puts your earlier status line back." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                    <TextBlock Text="Usage per project and per session is counted from Claude Code's logs on this PC. Tap a session on the card to bring its window to the front." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Sessions in the Claude app's Code tab, a terminal or an editor all show, including ones started before you connected. Usage per project is counted from Claude Code's logs and telemetry on this PC, with what it would cost at API prices (your plan doesn't pay those). Tap a session on the card to bring its window to the front." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="Turn on the Claude Code widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                 </Grid>

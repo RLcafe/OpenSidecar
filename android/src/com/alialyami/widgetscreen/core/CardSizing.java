@@ -193,9 +193,28 @@ public final class CardSizing {
     public static double claudePanel(double bodyWidth) { return clamp(Math.round(bodyWidth * 0.38), 240, 380); }
     public static double claudeMeterBlock(double textScale) { return Math.ceil(Math.max(20 * textScale, 34) + 42); }
     public static double claudeProjectRow(double textScale) { return Math.ceil(16 + 20 * textScale); }
-    public static int claudeProjects(double panelHeight, double textScale) {
-        double used = 2 * claudeMeterBlock(textScale) + 14 + 48 + 16 + Math.ceil(20 * textScale) + 8 + 22;
-        return (int) clamp(Math.floor((panelHeight - used) / claudeProjectRow(textScale)), 0, 6);
+    public static int claudeProjects(double panelHeight, double textScale) { return claudeProjects(panelHeight, textScale, 0); }
+    public static int claudeProjects(double panelHeight, double textScale, int extras) {
+        return (int) clamp(Math.floor((panelHeight - claudePanelUsed(textScale, extras)) / claudeProjectRow(textScale)), 0, 6);
+    }
+    private static double claudePanelUsed(double textScale, int extras) { return 2 * claudeMeterBlock(textScale) + 14 + 48 + 16 + Math.ceil(20 * textScale) + 8 + 22 + (extras > 0 ? 10 + extras * 26 : 0); }
+    // The Large panel's extra weekly windows (Opus, Sonnet, a model's own), one 26-unit line each, at most three,
+    // as long as two project rows still fit under them.
+    public static int claudeExtras(double panelHeight, double textScale) {
+        return (int) clamp(Math.floor((panelHeight - claudePanelUsed(textScale, 0) - 10 - 2 * claudeProjectRow(textScale)) / 26), 0, 3);
+    }
+    // The Small card's caption line under its critter (the 5-hour percentage, or what the meter needs): only when the
+    // project, state, count and Sample flag still fit beside the critter above it.
+    public static boolean claudeSmallPercent(double bodyHeight, double textScale) { return bodyHeight >= 8 + 104 * textScale; }
+    // Medium usage by project: beside the lineup from 400 units of body width (a column of 190–300), otherwise under
+    // it when the lineup keeps a critter and its name; up to four rows beside, three under.
+    public static boolean claudeMediumBeside(double bodyWidth) { return bodyWidth >= 400; }
+    public static double claudeMediumColumn(double bodyWidth) { return clamp(Math.round(bodyWidth * 0.46), 190, 300); }
+    public static int claudeMediumProjects(double room, double textScale, boolean beside, boolean sessions) {
+        double row = claudeProjectRow(textScale);
+        if (beside) return (int) clamp(Math.floor((room - 26) / row), 0, 4);
+        double lineup = sessions ? 40 + 20 * textScale + 18 : 56;
+        return (int) clamp(Math.floor((room - lineup - 26) / row), 0, 3);
     }
     // The Small critter: as tall as the card allows, at most 42% of its width.
     public static double claudeSmallCritter(double bodyWidth, double bodyHeight) { return clamp(Math.floor(Math.min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }

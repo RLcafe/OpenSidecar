@@ -90,18 +90,24 @@ public final class PcState {
     // Claude Code on the PC (docs/design/claude-watcher.md): its sessions, the plan's limits and usage by project.
     // Periods are 0 five hours, 1 today, 2 the week. Times are Unix seconds.
     public static final class ClaudeSession {
-        public String id = "", project = "", title = "", state = "ready", message = "", model = "";
+        public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
         public double since;
         public boolean canFocus;
         public final long[] tokens = new long[3];
+        // What the tokens would cost at API prices ("≈ $"), per period.
+        public final double[] cost = new double[3];
         public String shown() { return title == null || title.trim().isEmpty() ? project : title; }
     }
-    public static final class ClaudeWindow { public double pct; public double resetsAt; }
-    public static final class ClaudeProject { public String project = ""; public long tokens; }
+    public static final class ClaudeWindow { public double pct; public double resetsAt; public String name = ""; }
+    public static final class ClaudeProject { public String project = ""; public long tokens; public double cost; }
     public static final class Claude {
         public boolean connected, sample, logsFailed, logsRead, noPlan;
+        // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed or expired.
+        public String plan = "signedOut";
         public final List<ClaudeSession> sessions = new ArrayList<ClaudeSession>();
         public ClaudeWindow fiveHour, week;
+        // Narrower weekly windows ("Opus week", "Sonnet week", a model's own), for the Large panel.
+        public final List<ClaudeWindow> extra = new ArrayList<ClaudeWindow>();
         public double updatedAt;
         public String source = "";
         @SuppressWarnings("unchecked")
@@ -381,23 +387,28 @@ public final class PcState {
     public static Claude parseClaude(Map<String, Object> c) {
         Claude claude = new Claude();
         claude.connected = flag(c, "connected"); claude.sample = flag(c, "sample"); claude.logsFailed = flag(c, "logsFailed"); claude.logsRead = flag(c, "logsRead"); claude.noPlan = flag(c, "noPlan");
+        if (!text(c, "plan").isEmpty()) claude.plan = text(c, "plan");
         for (Object item : Json.array(c, "sessions")) {
             Map<String, Object> s = Json.obj(item);
             ClaudeSession session = new ClaudeSession();
             session.id = text(s, "id"); session.project = text(s, "project"); session.title = text(s, "title"); session.state = text(s, "state");
-            session.message = text(s, "message"); session.model = text(s, "model"); session.since = Json.number(s, "since"); session.canFocus = flag(s, "canFocus");
-            Map<String, Object> tokens = Json.obj(Json.value(s, "tokens"));
-            for (int i = 0; i < 3; i++) session.tokens[i] = (long) Json.number(tokens, PERIODS[i]);
+            session.message = text(s, "message"); session.model = text(s, "model"); session.since = Json.number(s, "since"); session.canFocus = flag(s, "canFocus"); session.where = text(s, "where");
+            Map<String, Object> tokens = Json.obj(Json.value(s, "tokens")), cost = Json.obj(Json.value(s, "cost"));
+            for (int i = 0; i < 3; i++) { session.tokens[i] = (long) Json.number(tokens, PERIODS[i]); session.cost[i] = Json.number(cost, PERIODS[i]); }
             if (!session.id.isEmpty()) claude.sessions.add(session);
         }
         Map<String, Object> limits = Json.obj(Json.value(c, "limits"));
         claude.fiveHour = window(Json.value(limits, "fiveHour")); claude.week = window(Json.value(limits, "week"));
         claude.updatedAt = Json.number(limits, "updatedAt"); claude.source = text(limits, "source");
+        for (Object item : Json.array(limits, "extra")) {
+            ClaudeWindow extra = window(item);
+            if (extra != null) { extra.name = text(Json.obj(item), "name"); if (!extra.name.isEmpty()) claude.extra.add(extra); }
+        }
         Map<String, Object> usage = Json.obj(Json.value(c, "usage"));
         for (int i = 0; i < 3; i++)
             for (Object item : Json.array(usage, PERIODS[i])) {
                 Map<String, Object> u = Json.obj(item);
-                ClaudeProject project = new ClaudeProject(); project.project = text(u, "project"); project.tokens = (long) Json.number(u, "tokens");
+                ClaudeProject project = new ClaudeProject(); project.project = text(u, "project"); project.tokens = (long) Json.number(u, "tokens"); project.cost = Json.number(u, "cost");
                 if (!project.project.isEmpty()) claude.usage[i].add(project);
             }
         return claude;

@@ -71,19 +71,40 @@ public final class ClaudeText {
         List<String> parts = new ArrayList<String>();
         if (claude.sample) parts.add("SAMPLE");
         if (!claude.sessions.isEmpty()) parts.add(claude.sessions.size() + " RUNNING");
-        if (withAge && claude.limitsKnown() && claude.updatedAt > 0 && now - claude.updatedAt > STALE) parts.add("AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
+        if (withAge && old(claude, now)) parts.add("AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
         StringBuilder text = new StringBuilder();
         for (String part : parts) { if (text.length() > 0) text.append(" · "); text.append(part); }
         return text.toString();
     }
+    public static final String SIGN_IN = "Sign in to Claude in Settings → Claude on the PC to see plan limits.", SIGN_IN_ENDED = "The PC's Claude sign-in has ended. Sign in again in Settings → Claude on the PC.";
+    // The meters' empty states: the PC's own Claude sign-in is what fills them (decision 015).
     public static String limitsMissing(PcState.Claude claude) {
-        return claude.noPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
+        if ("expired".equals(claude.plan)) return SIGN_IN_ENDED;
+        if ("reading".equals(claude.plan)) return "Reading your plan's limits…";
+        if ("failed".equals(claude.plan)) return "Couldn't read your plan's limits. Trying again in 5 minutes.";
+        if ("current".equals(claude.plan)) return claude.noPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
+        return SIGN_IN;
     }
-    // "as of 10:42 · from Claude Code" under the Large panel.
+    // The meters show numbers that may have moved since: older than 15 minutes, or the last check didn't go through.
+    public static boolean old(PcState.Claude claude, double now) {
+        return claude.limitsKnown() && claude.updatedAt > 0 && (now - claude.updatedAt > STALE || "failed".equals(claude.plan) || "expired".equals(claude.plan));
+    }
+    // "as of 10:42 · checked online" under the Large panel; "Plan limits as of 10:42" when a check failed.
     public static String source(PcState.Claude claude, boolean use24) {
         if (!claude.limitsKnown() || claude.updatedAt <= 0) return "";
+        if ("expired".equals(claude.plan)) return "as of " + clock(claude.updatedAt, use24) + " · sign in again on the PC";
+        if ("failed".equals(claude.plan)) return "Plan limits as of " + clock(claude.updatedAt, use24);
         return "as of " + clock(claude.updatedAt, use24) + " · " + ("online".equals(claude.source) ? "checked online" : "from Claude Code");
     }
+    // "≈ $0.42", "≈ $12", "≈ $1.2k": what the tokens would cost at API prices.
+    public static String money(double dollars) {
+        if (Double.isNaN(dollars) || dollars <= 0) return "≈ $0";
+        if (dollars < 10) return String.format(Locale.US, "≈ $%.2f", dollars);
+        if (dollars < 1000) return "≈ $" + Math.round(dollars);
+        return "≈ $" + shortNumber(dollars / 1e3) + "k";
+    }
+    // A project row's or session's usage: "1.8M · ≈ $2.01".
+    public static String usage(long tokens, double cost) { return tokens(tokens) + " · " + money(cost); }
 
     // 950, 12.4k, 1.2M, 3.4B.
     public static String tokens(long tokens) {

@@ -1021,7 +1021,7 @@ namespace WidgetScreen
             candidate.WorldClocks = ClockChoices();
             SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray();
             candidate.ShowSteamGames = Control<CheckBox>("SteamGamesChoice").IsChecked == true; candidate.ShowEpicGames = Control<CheckBox>("EpicGamesChoice").IsChecked == true; candidate.ShowXboxGames = Control<CheckBox>("XboxGamesChoice").IsChecked == true;
-            candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true; candidate.ClaudeOnlineLimits = Control<CheckBox>("ClaudeOnlineChoice").IsChecked == true;
+            SaveClaudeChoices(candidate);
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             candidate.WeatherUnits = Control<ComboBox>("WeatherUnitsChoice").SelectedIndex == 1 ? "imperial" : "metric";

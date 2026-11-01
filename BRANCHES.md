@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/game-launcher` was merged as v0.27.0.
+| `fix/claude-watcher` | Make the Claude Code watcher work with the desktop Code tab: sessions from Claude Code's own session list, the widget's own Claude sign-in for plan limits, OpenTelemetry on loopback for live tokens and cost | `aa76aa4` (v0.27.0) | In progress | `.worktrees\claude-watcher-fix` | `.worktrees\claude-watcher-fix\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-watcher-fix\artifacts\android\WidgetScreen.apk` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

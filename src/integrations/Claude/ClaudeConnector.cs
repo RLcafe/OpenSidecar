@@ -6,8 +6,9 @@ using System.Text;
 
 namespace WidgetScreen
 {
-    // Settings → Claude → Connect Claude Code (docs/design/claude-watcher.md, decision 014): adds Widget Screen's hooks
-    // and status line to Claude Code's settings.json, and Disconnect takes exactly those out again. Other hooks are
+    // Settings → Claude → Connect Claude Code (docs/design/claude-watcher.md, decisions 014 and 015): adds Widget Screen's
+    // hooks, status line and telemetry settings (the env block) to Claude Code's settings.json, and Disconnect takes
+    // exactly those out again. Other hooks are
     // never replaced, other keys stay where they were, a backup is saved next to the file first, and a file that
     // isn't valid JSON is left alone. Only the user's tap on Connect or Disconnect runs this against the real folder;
     // the checks run it in temporary folders.
@@ -17,10 +18,23 @@ namespace WidgetScreen
         // The events the bridge listens to. Notification only for questions (a permission or an elicitation).
         public static readonly string[][] Events = {
             new[] { "SessionStart", null }, new[] { "UserPromptSubmit", null }, new[] { "PostToolUse", "*" },
-            new[] { "Notification", "permission_prompt|elicitation_dialog" }, new[] { "Stop", null }, new[] { "SessionEnd", null } };
+            new[] { "Notification", "permission_prompt|elicitation_dialog" }, new[] { "PermissionRequest", "*" }, new[] { "Stop", null }, new[] { "SessionEnd", null } };
+        // Claude Code's OpenTelemetry export, to Widget Screen's loopback receiver (ClaudeTelemetry). Usage numbers and
+        // event names only: prompts, responses and tool details stay off (OTEL_LOG_USER_PROMPTS, OTEL_LOG_TOOL_DETAILS
+        // are never set).
+        public static string[][] Telemetry(int port)
+        {
+            return new[] {
+                new[] { "CLAUDE_CODE_ENABLE_TELEMETRY", "1" }, new[] { "OTEL_METRICS_EXPORTER", "otlp" }, new[] { "OTEL_LOGS_EXPORTER", "otlp" },
+                new[] { "OTEL_EXPORTER_OTLP_PROTOCOL", "http/json" }, new[] { "OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:" + port },
+                new[] { "OTEL_METRIC_EXPORT_INTERVAL", "10000" }, new[] { "OTEL_METRICS_INCLUDE_REPOSITORY", "true" } };
+        }
+        public readonly int TelemetryPort;
 
         public readonly string ConfigFolder, BridgeFolder;
-        public ClaudeConnector(string configFolder, string bridgeFolder) { ConfigFolder = configFolder; BridgeFolder = bridgeFolder; }
+        public ClaudeConnector(string configFolder, string bridgeFolder, int telemetryPort = ClaudeTelemetry.DefaultPort) { ConfigFolder = configFolder; BridgeFolder = bridgeFolder; TelemetryPort = telemetryPort; }
+        // The env keys Connect added (so Disconnect removes exactly those), beside the bridge.
+        public string EnvRecordPath { get { return Path.Combine(BridgeFolder, "connected-env.json"); } }
 
         // %USERPROFILE%\.claude, or CLAUDE_CONFIG_DIR when Claude Code is set up to use another folder.
         public static string DefaultConfigFolder
@@ -59,6 +73,62 @@ namespace WidgetScreen
             catch (Exception) { return false; }
         }
 
+        // Telemetry settings the user already has in settings.json's env with other values: Connect leaves telemetry out
+        // rather than overwrite them, and Settings → Claude names them.
+        public List<string> TelemetryConflicts()
+        {
+            try
+            {
+                var env = File.Exists(SettingsPath) ? ClaudeJson.Obj(ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(SettingsPath, Encoding.UTF8))), "env") : null;
+                return Conflicts(env, OurEnv());
+            }
+            catch (Exception) { return new List<string>(); }
+        }
+        private static string Text(object value) { return Convert.ToString(value is JsonNumber ? (object)((JsonNumber)value).Value : value, System.Globalization.CultureInfo.InvariantCulture); }
+        private static List<string> Conflicts(JsonObject env, HashSet<string> ours)
+        {
+            var result = new List<string>();
+            if (env == null) return result;
+            foreach (var pair in env)
+            {
+                bool related = pair.Key.StartsWith("OTEL_", StringComparison.Ordinal) || pair.Key == "CLAUDE_CODE_ENABLE_TELEMETRY";
+                if (!related || ours.Contains(pair.Key)) continue;
+                string wanted = null;
+                foreach (var t in Telemetry(0)) if (t[0] == pair.Key) wanted = t[1];
+                // The same value the widget would set is no conflict, except an endpoint somewhere else.
+                if (wanted != null && pair.Key != "OTEL_EXPORTER_OTLP_ENDPOINT" && Text(pair.Value) == wanted) continue;
+                result.Add(pair.Key);
+            }
+            return result;
+        }
+        private HashSet<string> OurEnv()
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            try { if (File.Exists(EnvRecordPath)) foreach (var key in (ClaudeJson.List(ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(EnvRecordPath, Encoding.UTF8))), "keys") ?? new List<object>()).OfType<string>()) keys.Add(key); }
+            catch (Exception) { }
+            return keys;
+        }
+
+        // Whether a connection made by an older Widget Screen lacks something this one adds (a hook event, the
+        // telemetry settings). Settings → Claude then offers Update connection.
+        public bool NeedsUpdate()
+        {
+            try
+            {
+                if (!IsConnected()) return false;
+                var root = ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(SettingsPath, Encoding.UTF8)));
+                var hooks = ClaudeJson.Obj(root, "hooks");
+                foreach (var entry in Events)
+                    if (!((hooks == null ? null : hooks.Get(entry[0]) as List<object>) ?? new List<object>()).OfType<JsonObject>().Any(g => (ClaudeJson.List(g, "hooks") ?? new List<object>()).Any(h => Ours(h) && ClaudeJson.Str(h as JsonObject, "command") == Command("hook")))) return true;
+                var env = ClaudeJson.Obj(root, "env");
+                if (Conflicts(env, OurEnv()).Count > 0) return false;
+                foreach (var t in Telemetry(TelemetryPort))
+                    if (env == null || Text(env.Get(t[0])) != t[1]) return true;
+                return false;
+            }
+            catch (Exception) { return false; }
+        }
+
         // Copies the bridge into its stable folder, then adds the hooks and status line. hookSource is the
         // ClaudeHook.exe that came with this app. Throws InvalidOperationException with a message for the user.
         public void Connect(string hookSource)
@@ -92,7 +162,23 @@ namespace WidgetScreen
             var ours = new JsonObject(); ours["type"] = "command"; ours["command"] = Command("statusline");
             if (line != null && line.Contains("padding")) ours["padding"] = line.Get("padding");
             root["statusLine"] = ours;
+
+            // Telemetry to the loopback receiver, unless the user already sends it somewhere: then it's left alone.
+            var env = ClaudeJson.Obj(root, "env");
+            var previouslyOurs = OurEnv();
+            var added = new List<object>();
+            if (Conflicts(env, previouslyOurs).Count == 0)
+            {
+                if (env == null) { env = new JsonObject(); root["env"] = env; }
+                foreach (var t in Telemetry(TelemetryPort))
+                {
+                    if (env.Contains(t[0]) && !previouslyOurs.Contains(t[0])) continue;
+                    env[t[0]] = t[1]; added.Add(t[0]);
+                }
+            }
             Save(root);
+            var record = new JsonObject(); record["keys"] = added;
+            ClaudeBridge.WriteAtomic(EnvRecordPath, ClaudeJson.Write(record));
         }
 
         // Takes out exactly Widget Screen's entries and puts the earlier status line back.
@@ -102,6 +188,19 @@ namespace WidgetScreen
             var root = Load();
             Backup();
             RemoveOurs(root);
+            // Exactly the env keys Connect added, and only while they still hold its values.
+            var env = ClaudeJson.Obj(root, "env");
+            if (env != null)
+            {
+                var ours = OurEnv();
+                foreach (var t in Telemetry(TelemetryPort))
+                {
+                    if (!ours.Contains(t[0]) || !env.Contains(t[0])) continue;
+                    string value = Text(env.Get(t[0]));
+                    if (t[0] == "OTEL_EXPORTER_OTLP_ENDPOINT" ? value.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) : value == t[1]) env.Remove(t[0]);
+                }
+                if (env.Count == 0) root.Remove("env");
+            }
             if (Ours(ClaudeJson.Obj(root, "statusLine")))
             {
                 JsonObject restored = null;
@@ -135,7 +234,11 @@ namespace WidgetScreen
             catch (IOException) { File.Delete(temp); throw new InvalidOperationException("Claude Code is using the bridge right now. Try again in a moment."); }
         }
 
-        private void ForgetPrevious() { try { string previous = ClaudeBridge.PreviousStatusLinePath(BridgeFolder); if (File.Exists(previous)) File.Delete(previous); } catch (Exception) { } }
+        private void ForgetPrevious()
+        {
+            try { string previous = ClaudeBridge.PreviousStatusLinePath(BridgeFolder); if (File.Exists(previous)) File.Delete(previous); } catch (Exception) { }
+            try { if (File.Exists(EnvRecordPath)) File.Delete(EnvRecordPath); } catch (Exception) { }
+        }
 
         private JsonObject Load()
         {
