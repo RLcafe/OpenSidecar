@@ -877,6 +877,36 @@ public final class AndroidTests {
             ok(Inks.compact(199) && !Inks.compact(200) && Inks.shortName("Clipboard").equals("CLIPS"), "compact strips");
         } });
 
+        // Sticker Sheet phase 2, the default five (docs/design/sticker-sheet.md): the same values as the PC's DefaultFiveTests.
+        check("Focus facts read like the PC: today's minutes, the next break and the status sticker", new Action() { public void run() {
+            ok(Format.focusMinutes(0).equals("0 min") && Format.focusMinutes(50).equals("50 min") && Format.focusMinutes(100).equals("1 h 40 min"), "minutes");
+            LocalDateTime now = LocalDateTime.of(2026, 11, 1, 15, 0, 0);
+            ok(Format.focusBreak(true, 25 * 60000, 25 * 60000, now, false).equals("3:25 PM") && Format.focusBreak(true, 25 * 60000, 25 * 60000, now, true).equals("15:25"), "running break " + Format.focusBreak(true, 25 * 60000, 25 * 60000, now, false));
+            ok(Format.focusBreak(false, 25 * 60000, 25 * 60000, now, false).equals("In 25 min") && Format.focusBreak(false, (long) (10.2 * 60000), 25 * 60000, now, false).equals("In 11 min"), "stopped break");
+            ok(Format.focusState(false, true, false, 3).equals("DONE") && Format.focusState(true, false, false, 3).equals("FOCUSING") && Format.focusState(false, false, true, 0).equals("PAUSED") && Format.focusState(false, false, false, 2).equals("2 TODAY") && Format.focusState(false, false, false, 0).isEmpty(), "sticker words");
+        } });
+        check("Keycap legends, mixer strips, device names and cover tints match the PC", new Action() { public void run() {
+            ok("CTRL+SHIFT+M".equals(Format.hotkeyLegend("Hotkey  ·  Ctrl+Shift+M")) && Format.hotkeyLegend("Website  ·  example.com") == null && Format.hotkeyLegend("App") == null, "hotkey legend");
+            ok(CardSizing.mixerStripSlots(456) == 3 && CardSizing.mixerStripSlots(820) == 6 && CardSizing.mixerStripSlots(300) == 1 && CardSizing.mixerStripSlots(200) == 0, "strip slots");
+            ok(Format.shortDevice("Speakers (Logi Z407)").equals("Z407") && Format.shortDevice("Headset").equals("Headset") && Format.shortDevice("Realtek (R) Audio").equals("Audio") && Format.shortDevice("").isEmpty(), "device names");
+            ok(Theme.parseTint("#7A4FB0") == 0xFF7A4FB0 && Theme.parseTint("") == 0 && Theme.parseTint("nope") == 0, "tint parse");
+            ok(Theme.blend(0xFF161A22, 0xFFFF0000, 0.22) == 0xFF49141B, "blend " + Integer.toHexString(Theme.blend(0xFF161A22, 0xFFFF0000, 0.22)));
+            ok(CardSizing.ledLit(0, 10) == 0 && CardSizing.ledLit(1, 10) == 10 && CardSizing.ledLit(0.25, 10) == 5 && CardSizing.ledLit(0.01, 10) == 1, "LED segments");
+            ok(CardSizing.pipsShown(0) == 4 && CardSizing.pipsShown(6) == 6 && CardSizing.pipsShown(20) == 8, "pips shown");
+        } });
+        check("The phone link brings the album, the cover tint and Spotify captions", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"media\":{\"available\":true,\"title\":\"Golden Hour\",\"album\":\"Night Lines\",\"tint\":\"#7A4FB0\"}}")));
+            ok(state.media != null && state.media.album.equals("Night Lines") && Theme.parseTint(state.media.tint) == 0xFF7A4FB0, "media album and tint");
+            com.alialyami.widgetscreen.core.Spotify.Item item = PcState.item(Json.parse("{\"id\":\"1\",\"uri\":\"spotify:album:4aawyAB9vmqN3uQ7FjRGTy\",\"name\":\"Dune Sea\",\"subtitle\":\"Lumen\",\"caption\":\"11 songs · 2024\"}"));
+            ok(item != null && item.caption.equals("11 songs · 2024"), "Spotify caption");
+            String path = System.getProperty("widgetscreen.sample");
+            if (path != null && new File(path).exists()) {
+                try {
+                    PcState sample = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+                    ok(sample.media == null || sample.media.error || (sample.media.album != null && sample.media.tint != null), "sample media fields");
+                } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
+            }
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

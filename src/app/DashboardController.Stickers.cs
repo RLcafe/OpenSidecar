@@ -22,7 +22,7 @@ namespace WidgetScreen
             new[] { "Calendar", "CalendarStrip" }, new[] { "Games", "GamesHeading" }, new[] { "Home", "HomeStrip" }, new[] { "Clocks", "ClocksStrip" } };
         // The right-hand captions that become status stickers. Those drawn in the warning colour only speak up for problems.
         private static readonly string[][] StatusCaptions = {
-            new[] { "Media", "MediaSource", "" }, new[] { "Mixer", "AudioStatus", "warns" }, new[] { "System", "SystemUptime", "" }, new[] { "System", "SystemStatus", "warns" },
+            new[] { "Focus", "FocusState", "" }, new[] { "Media", "MediaSource", "" }, new[] { "Mixer", "MicState", "" }, new[] { "Mixer", "AudioStatus", "warns" }, new[] { "System", "SystemUptime", "" }, new[] { "System", "SystemStatus", "warns" },
             new[] { "Storage", "StorageStatus", "warns" }, new[] { "Prayer", "PrayerStatus", "" }, new[] { "Notes", "NotesStatus", "" }, new[] { "Clipboard", "ClipStatus", "" },
             new[] { "Calendar", "CalendarStatus", "warns" }, new[] { "Home", "HomeStatus", "warns" }, new[] { "Clocks", "ClocksStatus", "" } };
 

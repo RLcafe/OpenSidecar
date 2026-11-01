@@ -22,15 +22,38 @@ namespace WidgetScreen
                 e.Handled = true;
                 if (touch != null || !slider.IsEnabled) return;
                 touch = e.TouchDevice; slider.CaptureTouch(touch);
-                slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position.X);
+                slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position);
             };
-            slider.PreviewTouchMove += (s, e) => { if (e.TouchDevice == touch) { slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position.X); e.Handled = true; } };
+            slider.PreviewTouchMove += (s, e) => { if (e.TouchDevice == touch) { slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position); e.Handled = true; } };
             slider.PreviewTouchUp += (s, e) => {
                 if (e.TouchDevice != touch) return;
-                slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position.X); e.Handled = true;
+                slider.Value = ValueAt(slider, e.GetTouchPoint(slider).Position); e.Handled = true;
                 var device = touch; touch = null; slider.ReleaseTouchCapture(device);
             };
             slider.LostTouchCapture += (s, e) => { if (e.TouchDevice == touch) touch = null; };
+        }
+
+        // A vertical slider (the mixer's channel strips) reads the y position, with the minimum at the bottom.
+        public static double ValueAt(Slider slider, Point point)
+        {
+            return slider.Orientation == Orientation.Vertical ? ValueAtY(slider, point.Y) : ValueAt(slider, point.X);
+        }
+        public static double ValueAtY(Slider slider, double y)
+        {
+            double thumb = 48, start = 0, length = slider.ActualHeight;
+            var track = slider.Template == null ? null : slider.Template.FindName("PART_Track", slider) as Track;
+            if (track != null && track.ActualHeight > 0)
+            {
+                if (track.Thumb != null && track.Thumb.ActualHeight > 0) thumb = track.Thumb.ActualHeight;
+                start = track.TranslatePoint(new Point(0, 0), slider).Y; length = track.ActualHeight;
+            }
+            double range = Math.Max(1, length - thumb);
+            double fraction = 1 - Math.Max(0, Math.Min(1, (y - start - thumb / 2) / range));
+            if (track != null && track.IsDirectionReversed) fraction = 1 - fraction;
+            double value = slider.Minimum + fraction * (slider.Maximum - slider.Minimum);
+            if (slider.IsSnapToTickEnabled && slider.TickFrequency > 0)
+                value = slider.Minimum + Math.Round((value - slider.Minimum) / slider.TickFrequency) * slider.TickFrequency;
+            return Math.Max(slider.Minimum, Math.Min(slider.Maximum, value));
         }
 
         // Maps an x position (slider coordinates) to a value using the rendered track and thumb sizes.

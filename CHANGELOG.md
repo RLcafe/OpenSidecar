@@ -6,6 +6,31 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.36.0 (1 Nov 2026)
+
+Sticker Sheet, phase 2: the default five (Ali's approved redesign; Windows and the phone; decision 021).
+
+- **Focus:**
+  - Large cards show a kitchen-timer dial, with the time left as a wedge in the card's ink, minute ticks, and the end time in the middle.
+  - Today's sessions show as tomato dots, with a Today minutes chip and a Next break chip.
+  - The status sticker reads FOCUSING, PAUSED, DONE or "2 TODAY".
+- **Now Playing:**
+  - The cover is a sleeve with a record peeking out while something plays, or an empty dashed sleeve when nothing does.
+  - The card is tinted with the cover's colour.
+  - New album line, and Length and Left chips when there's room.
+- **Quick Launch:** buttons are keycaps that drop when pressed, with an LED dot for buttons that are on. Big buttons show a hotkey's keys.
+- **Sound mixer:**
+  - Large cards show channel strips: the master first with an LED ladder, then one strip per app. Apps opens the full list.
+  - An ON AIR badge shows while the microphone is live, and MUTED while it's muted.
+  - The level meter is LED segments and also shows on medium cards.
+  - The phone has the strips and the badge but no level meter: the phone link doesn't carry output levels.
+- **Spotify:**
+  - Tabs look like record-crate dividers.
+  - Albums and playlists show their song count, owner or year.
+  - On Large cards the side panel is tinted with the cover's colour.
+- **The phone shows the same.** The phone link adds `album` and `tint` to Now Playing and `caption` to Spotify items.
+- No new timers, polling, network requests or effects.
+
 ## v0.35.3 (1 Nov 2026)
 
 Claude watcher review fixes (Ali's review, 1 Nov 2026; Windows and the phone; decision 022):

@@ -81,6 +81,7 @@ internal static class SmokeTests
         HomeTests.Run(directory, Check);
         SensorTests.Run(directory, Check);
         StickerTests.Run(directory, Check);
+        DefaultFiveTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -723,6 +724,21 @@ internal static class SmokeTests
                     update.Invoke(controller, new object[] { new System.Collections.Generic.List<AudioSession> { session("1", "Spotify", "b", 5), session("2", "Discord", "a", 6) } });
                     var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                     Action layout = () => { dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout(); };
+                    layout();
+                    // A Large card shows channel strips first (Sticker Sheet phase 2): their output buttons keep the 48 floor
+                    // inside the card too. Apps then opens the list, where the rows below are checked.
+                    typeof(DashboardController).GetField("audioAvailable", flags).SetValue(controller, true);
+                    typeof(DashboardController).GetMethod("UpdateStrips", flags).Invoke(controller, new object[] { new AudioSnapshot { Device = "Speakers", Volume = .4f, Sessions = new System.Collections.Generic.List<AudioSession> { session("1", "Spotify", "b", 5), session("2", "Discord", "a", 6) } } });
+                    layout();
+                    var mixerCard = (System.Windows.FrameworkElement)window.FindName("MixerCard");
+                    var stripOutputs = Descendants((System.Windows.DependencyObject)window.FindName("MixerStrips")).OfType<System.Windows.Controls.Button>().Where(bt => (System.Windows.Automation.AutomationProperties.GetName(bt) ?? "").StartsWith("Output for")).ToList();
+                    Assert(controller.MixerStripsShown && stripOutputs.Count == 2, "The Large mixer card doesn't show a strip per app.");
+                    foreach (var strip in stripOutputs)
+                    {
+                        var at = strip.TransformToAncestor(mixerCard).TransformBounds(new System.Windows.Rect(0, 0, strip.ActualWidth, strip.ActualHeight));
+                        Assert(strip.ActualHeight >= 48 && strip.ActualWidth >= 48 && at.Right <= mixerCard.ActualWidth && at.Bottom <= mixerCard.ActualHeight, "A strip's output button is under 48 or leaves the card: " + at);
+                    }
+                    ((System.Windows.Controls.Button)window.FindName("MixerApps")).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                     layout();
                     var panel = (System.Windows.Controls.Panel)window.FindName("SessionPanel");
                     var spotifyRow = (System.Windows.Controls.Grid)panel.Children[0];

@@ -59,7 +59,7 @@ namespace WidgetScreen
             Status(Connected ? "" : "Connect Spotify in Settings to use your library.");
             // Until an account is connected, one empty state replaces the tabs, list, now-playing strip and status line.
             var connected = Connected ? Visibility.Visible : Visibility.Collapsed;
-            foreach (string name in new[] { "SpotifyTabs", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
+            foreach (string name in new[] { "SpotifyTabs", "SpotifyCrateLine", "SpotifyLibraryView", "SpotifyNowStrip", "SpotifyAccount" }) C<FrameworkElement>(name).Visibility = connected;
             C<FrameworkElement>("SpotifyEmpty").Visibility = Connected ? Visibility.Collapsed : Visibility.Visible;
             // The first list loads on the first visible tick: never from the constructor, and never while hidden.
             C<Panel>("SpotifyResults").Children.Clear(); Select(kind, false); libraryPending = Connected && kind != "Search"; UpdateMode();
@@ -69,13 +69,15 @@ namespace WidgetScreen
             browseGeneration++; kind = selected; offset = 0; collection = null; libraryPending = false;
             C<DockPanel>("SpotifySearchRow").Visibility = selected == "Search" ? Visibility.Visible : Visibility.Collapsed;
             C<DockPanel>("SpotifyCollectionRow").Visibility = Visibility.Collapsed;
-            // Same selected look as the Focus presets and Quiet mode.
+            // Crate tabs (docs/design/sticker-sheet.md, phase 2): the chosen divider is filled with the widget's ink.
             foreach (string tab in new[] { "Albums", "Playlists", "Search" })
             {
                 var button = C<Button>("Spotify" + tab); bool on = tab == selected;
-                button.SetResourceReference(Button.BorderBrushProperty, on ? "Accent" : "ControlBorder");
-                button.SetResourceReference(Button.BackgroundProperty, on ? "Selected" : "Raised");
-                button.BorderThickness = new Thickness(on ? 2 : 1);
+                button.SetResourceReference(Button.BorderBrushProperty, on ? Stickers.InkKey("Spotify") : "ControlBorder");
+                button.SetResourceReference(Button.BackgroundProperty, on ? Stickers.InkKey("Spotify") : "Raised");
+                button.SetResourceReference(Button.ForegroundProperty, on ? "InkText" : "Text");
+                button.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+                button.BorderThickness = new Thickness(on ? 0 : 1);
                 AutomationProperties.SetName(button, tab + (on ? ", selected" : ""));
             }
             C<Panel>("SpotifyResults").Children.Clear(); Paging(false, false); Text("SpotifyPageLabel", "");
@@ -127,6 +129,15 @@ namespace WidgetScreen
             title.SetResourceReference(TextBlock.FontSizeProperty, "BodySize"); label.Children.Add(title);
             var sub = new TextBlock { Text = item.Subtitle, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) };
             sub.SetResourceReference(TextBlock.FontSizeProperty, "SmallSize"); sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); label.Children.Add(sub);
+            // The caption chip: song count, owner or year from the reply already fetched.
+            if (!String.IsNullOrEmpty(item.Caption))
+            {
+                var words = new TextBlock { Text = item.Caption, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+                words.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+                var chip = new Border { Child = words, CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 1, 7, 2), Margin = new Thickness(0, 5, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+                chip.SetResourceReference(Border.BackgroundProperty, "Surface");
+                label.Children.Add(chip);
+            }
             layout.Children.Add(label);
             var row = new Button { Content = layout, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 70, Padding = new Thickness(10, 8, 12, 8), Margin = new Thickness(3, 0, 3, 6), ToolTip = item.Name };
             var selected = item; var parent = collection;
@@ -156,9 +167,9 @@ namespace WidgetScreen
             }
             catch (Exception) { }
         }
-        private async Task<BitmapSource> Download(string url, int width)
+        private async Task<BitmapSource> Download(string url, int width) { return Decode(await images.GetByteArrayAsync(new Uri(url)), width); }
+        private static BitmapSource Decode(byte[] data, int width)
         {
-            byte[] data = await images.GetByteArrayAsync(new Uri(url));
             using (var stream = new MemoryStream(data))
             {
                 var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = width; bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
@@ -199,14 +210,16 @@ namespace WidgetScreen
                 string requestedArt = item == null ? null : item.ImageUrl;
                 if (active && requestedArt != artUrl)
                 {
-                    artUrl = requestedArt; C<Image>("SpotifyArt").Source = null;
+                    artUrl = requestedArt; C<Image>("SpotifyArt").Source = null; tint = null; ApplyTint();
                     if (SpotifyService.IsImageUrl(requestedArt))
                     {
                         try
                         {
-                            var bitmap = await Download(requestedArt, 128);
+                            byte[] data = await images.GetByteArrayAsync(new Uri(requestedArt));
                             if (disposed || !Connected || artUrl != requestedArt || version != generation) return;
-                            C<Image>("SpotifyArt").Source = bitmap;
+                            C<Image>("SpotifyArt").Source = Decode(data, 128);
+                            // The Large side panel takes the cover's colour (decoded once to a single pixel).
+                            tint = MediaService.AverageColour(data); ApplyTint();
                         }
                         catch (Exception) { artUrl = null; }
                     }
@@ -288,6 +301,17 @@ namespace WidgetScreen
             Grid.SetRow(like, large ? 2 : 0); Grid.SetColumn(like, large ? 0 : 2); Grid.SetColumnSpan(like, large ? 3 : 1);
             like.Margin = large ? new Thickness(0, 14, 0, 0) : new Thickness(0); like.HorizontalAlignment = large ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
             C<TextBlock>("SpotifyTitle").TextWrapping = large ? TextWrapping.Wrap : TextWrapping.NoWrap; C<TextBlock>("SpotifyTitle").MaxHeight = large ? 56 * textScale : Double.PositiveInfinity;
+            largeDesign = large; ApplyTint();
+        }
+        // Large: the side panel is Raised with 30% of the cover's colour at the top; otherwise plain Raised.
+        private Color? tint; private bool largeDesign;
+        public Color? Tint { get { return tint; } }
+        public void ApplyTint()
+        {
+            var strip = C<Border>("SpotifyNowStrip"); var raised = window.Resources["Raised"] as SolidColorBrush;
+            if (!largeDesign || !tint.HasValue || raised == null) { strip.SetResourceReference(Border.BackgroundProperty, "Raised"); return; }
+            var brush = new LinearGradientBrush(MediaService.Blend(raised.Color, tint.Value, 0.3), raised.Color, 90); brush.Freeze();
+            strip.Background = brush;
         }
     }
 }

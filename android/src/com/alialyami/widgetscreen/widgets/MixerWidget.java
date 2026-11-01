@@ -11,6 +11,7 @@ import android.widget.TextView;
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.CardSizing;
+import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcState;
@@ -18,6 +19,7 @@ import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.integrations.Async;
 import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.GlyphView;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
 import java.util.ArrayList;
@@ -51,6 +53,17 @@ public final class MixerWidget extends Widget {
     private final Map<String, Float> pendingVolume = new HashMap<String, Float>();
     private long lastSent;
     private boolean sendQueued;
+    // Sticker Sheet phase 2 (docs/design/sticker-sheet.md): channel strips on LARGE cards (master first, one 88-unit
+    // strip per app that fits; Apps opens the list) and the ON AIR badge. The phone link doesn't carry output levels,
+    // so the phone has no LED meter.
+    private final class Strip { TextView badge, name, percent, device; TouchSlider slider; GlyphView mute, output; PcState.Session session; View root; }
+    private final List<Strip> strips = new ArrayList<Strip>();
+    private LinearLayout stripsHost;
+    private TouchSlider masterStrip;
+    private TextView masterStripPercent, masterStripDevice;
+    private GlyphView masterStripMute;
+    private View appsHeaderView;
+    private Stickers.Sticker micState;
 
     public MixerWidget(Dashboard dash) { super("Mixer", dash); }
 
@@ -60,7 +73,9 @@ public final class MixerWidget extends Widget {
         rows.clear(); rowSignature = null; picker = null;
         mode = CardSizing.mixer(height);
         appColumns = CardSizing.mixerColumns(width, height);
-        if (mode != CardSizing.MIXER_MASTER) appsOpen = false;
+        // A MASTER card opens the list over the master volume; a LARGE one switches between strips and the list.
+        if (mode == CardSizing.MIXER_COMPACT) appsOpen = false;
+        strips.clear(); masterStrip = null;
         boolean full = mode == CardSizing.MIXER_FULL, masterOnly = mode == CardSizing.MIXER_MASTER;
         root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
@@ -71,12 +86,19 @@ public final class MixerWidget extends Widget {
         
         status.setGravity(Gravity.END); status.setSingleLine(true); status.setEllipsize(android.text.TextUtils.TruncateAt.END);
         header.addView(status, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
+        micState = sticker(false);
+        // The badge shares the heading with the strip and, on MASTER and LARGE cards, the Apps button (about 90 units).
+        micState.setRoom(width - 48 - stripWidth() - 12 - (masterOnly || full ? 90 : 0));
+        header.addView(micState, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
         // On a MASTER card the app list is one tap away: this swaps the master rows for the list and back.
         appsButton = ui.button("Apps", new View.OnClickListener() { @Override public void onClick(View v) { appsOpen = !appsOpen; closePicker(); showApps(); } });
         appsButton.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.fpx(14));
         appsButton.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));
-        if (masterOnly) header.addView(appsButton, ui.margins(ui.ll(Ui.WRAP, ui.px(48)), 8, 0, 0, 0));
-        column.addView(header, ui.ll(Ui.MATCH, ui.px(masterOnly ? 48 : 34)));
+        if (masterOnly || full) header.addView(appsButton, ui.margins(ui.ll(Ui.WRAP, ui.px(48)), 8, 0, 0, 0));
+        column.addView(header, ui.ll(Ui.MATCH, ui.px(masterOnly || full ? 48 : 34)));
+        stripsHost = ui.row();
+        stripsHost.setGravity(Gravity.TOP | Gravity.START);
+        if (full) { buildStrips(); column.addView(stripsHost, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 10)); }
 
         masterRow = ui.row();
         outputButton = ui.column();
@@ -114,6 +136,7 @@ public final class MixerWidget extends Widget {
         appsHeader.addView(ui.label("APPS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
         sessionCount = ui.smallText("");
         appsHeader.addView(sessionCount, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
+        appsHeaderView = appsHeader;
         if (full) column.addView(appsHeader, ui.margins(ui.ll(Ui.MATCH, ui.px(24)), 0, 18, 0, 0));
         listHost = new FrameLayout(ui.context);
         ScrollView scroll = new ScrollView(ui.context);
@@ -145,9 +168,12 @@ public final class MixerWidget extends Widget {
 
     private void showApps() {
         boolean masterOnly = mode == CardSizing.MIXER_MASTER, list = !masterOnly || appsOpen;
-        masterRow.setVisibility(masterOnly && appsOpen ? View.GONE : View.VISIBLE);
-        sliderRow.setVisibility(masterOnly && appsOpen ? View.GONE : View.VISIBLE);
-        listHost.setVisibility(list ? View.VISIBLE : View.GONE);
+        boolean stripsShown = mode == CardSizing.MIXER_FULL && !appsOpen;
+        masterRow.setVisibility((masterOnly && appsOpen) || stripsShown ? View.GONE : View.VISIBLE);
+        sliderRow.setVisibility((masterOnly && appsOpen) || stripsShown ? View.GONE : View.VISIBLE);
+        listHost.setVisibility(list && !stripsShown ? View.VISIBLE : View.GONE);
+        appsHeaderView.setVisibility(stripsShown ? View.GONE : View.VISIBLE);
+        stripsHost.setVisibility(stripsShown ? View.VISIBLE : View.GONE);
         String count = sessionCount.getText().toString();
         appsButton.setText(appsOpen ? "Done" : count.isEmpty() ? "Apps" : "Apps · " + count);
         appsButton.setContentDescription(appsOpen ? "Back to master volume" : "Show app volumes");
@@ -160,7 +186,7 @@ public final class MixerWidget extends Widget {
         slider.setListener(new TouchSlider.Listener() {
             @Override public void changed(TouchSlider s, float value, boolean done) {
                 pendingVolume.put(sessionId == null ? "" : sessionId, value);
-                if (sessionId == null) percent.setText(Math.round(value) + "%");
+                if (sessionId == null) { percent.setText(Math.round(value) + "%"); if (masterStripPercent != null) masterStripPercent.setText(Math.round(value) + "%"); }
                 else { Row row = rows.get(sessionId); if (row != null) row.percent.setText(Math.round(value) + "%"); }
                 flush(done);
             }
@@ -206,7 +232,11 @@ public final class MixerWidget extends Widget {
         microphone.setContentDescription(microphoneLabel.getText());
         Ui.enable(microphoneCompact, mic != null);
         microphoneCompact.setColor(micColor); microphoneCompact.setContentDescription(microphoneLabel.getText());
+        // The heading's microphone badge: ON AIR (filled) while it's live, MUTED while muted.
+        micState.setText(mic == null ? "" : mic ? "MUTED" : "ON AIR");
+        micState.setFilled(Boolean.FALSE.equals(mic)); micState.setGlyph(mic == null ? null : "microphone");
         renderSessions(available ? a : null);
+        renderStrips(available ? a : null);
         if (picker != null && !available) closePicker();
     }
 
@@ -234,6 +264,98 @@ public final class MixerWidget extends Widget {
         showApps();
         noSessions.setVisibility(sessions.isEmpty() ? View.VISIBLE : View.GONE);
         noSessions.setText(a == null ? "" : !a.sessionsAvailable ? "App volumes aren't available right now. Master volume still works." : "Apps show up here when they play sound on the PC.");
+    }
+
+    // ----- Channel strips (LARGE) -----
+
+    private LinearLayout stripBox() {
+        LinearLayout box = ui.column();
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
+        box.setPadding(ui.px(6), ui.px(10), ui.px(6), ui.px(6));
+        return box;
+    }
+    private TextView stripText(String value, double size, int colour) {
+        TextView text = ui.text(value, (float) size, colour);
+        text.setGravity(Gravity.CENTER);
+        return text;
+    }
+
+    private void buildStrips() {
+        LinearLayout master = stripBox();
+        TextView label = stripText("MASTER", 13, ui.theme.muted); label.setTypeface(Ui.MEDIUM); label.setLetterSpacing(0.08f);
+        master.addView(label, ui.ll(Ui.MATCH, Ui.WRAP));
+        masterStripPercent = Ui.tabular(stripText("—", 30 * Math.min(1.2, ui.textScale), ui.theme.text)); masterStripPercent.setTypeface(Ui.LIGHT);
+        master.addView(masterStripPercent, ui.ll(Ui.MATCH, Ui.WRAP));
+        masterStrip = slider(null).vertical();
+        masterStrip.setContentDescription("Master volume");
+        master.addView(masterStrip, ui.margins(ui.ll(ui.px(48), 0, 1), 0, 6, 0, 6));
+        masterStripMute = ui.iconButton("volume", "Mute output", 18, false, new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "audio.mute")); } });
+        master.addView(masterStripMute, ui.ll(Ui.MATCH, ui.px(48)));
+        masterStripDevice = stripText("", 13, ui.theme.muted);
+        masterStripDevice.setMinHeight(ui.px(48));
+        masterStripDevice.setBackground(ui.pressable(0x00000000, 0, 0, 10));
+        masterStripDevice.setClickable(true); masterStripDevice.setContentDescription("Choose output device");
+        masterStripDevice.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { openMasterOutputs(); } }));
+        master.addView(masterStripDevice, ui.ll(Ui.MATCH, ui.px(48)));
+        stripsHost.addView(master, ui.ll(ui.px(CardSizing.MASTER_STRIP_WIDTH), Ui.MATCH));
+        int slots = CardSizing.mixerStripSlots(width);
+        for (int i = 0; i < slots; i++) {
+            final Strip strip = new Strip();
+            LinearLayout box = stripBox();
+            strip.badge = stripText("", 14, Theme.INK_TEXT); strip.badge.setTypeface(Stickers.BLACK);
+            strip.badge.setBackground(ui.shape(dash.ink(id), 0, 0, 15));
+            box.addView(strip.badge, ui.ll(ui.px(30), ui.px(30)));
+            strip.name = stripText("", 13 * ui.textScale, ui.theme.text); strip.name.setTypeface(Ui.MEDIUM);
+            box.addView(strip.name, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
+            strip.percent = Ui.tabular(stripText("", 22 * Math.min(1.2, ui.textScale), ui.theme.text)); strip.percent.setTypeface(Ui.LIGHT);
+            box.addView(strip.percent, ui.ll(Ui.MATCH, Ui.WRAP));
+            strip.slider = new TouchSlider(ui.context, ui).range(0, 100, 0).vertical();
+            strip.slider.setListener(new TouchSlider.Listener() {
+                @Override public void changed(TouchSlider s, float value, boolean done) {
+                    if (strip.session == null) return;
+                    pendingVolume.put(strip.session.id, value); strip.percent.setText(Math.round(value) + "%"); flush(done);
+                }
+            });
+            box.addView(strip.slider, ui.margins(ui.ll(ui.px(48), 0, 1), 0, 6, 0, 6));
+            strip.mute = ui.iconButton("volume", "Mute", 18, false, new View.OnClickListener() { @Override public void onClick(View v) { if (strip.session != null) dash.command(Json.map("action", "audio.session.mute", "id", strip.session.id)); } });
+            box.addView(strip.mute, ui.ll(Ui.MATCH, ui.px(48)));
+            strip.device = stripText("", 13, ui.theme.muted);
+            strip.device.setMinHeight(ui.px(48));
+            strip.device.setBackground(ui.pressable(0x00000000, 0, 0, 10));
+            strip.device.setClickable(true);
+            strip.device.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { if (strip.session != null) openAppOutputs(strip.session); } }));
+            box.addView(strip.device, ui.ll(Ui.MATCH, ui.px(48)));
+            strip.root = box;
+            stripsHost.addView(box, ui.margins(ui.ll(ui.px(CardSizing.APP_STRIP_WIDTH), Ui.MATCH), CardSizing.STRIP_GAP, 0, 0, 0));
+            strips.add(strip);
+        }
+    }
+
+    private void renderStrips(PcState.Audio a) {
+        if (masterStrip == null) return;
+        boolean available = a != null;
+        Ui.enable(masterStrip, available); Ui.enable(masterStripMute, available); Ui.enable(masterStripDevice, available && !a.devices.isEmpty());
+        if (available && !masterStrip.dragging()) { masterStrip.setValue((float) (a.volume * 100)); masterStripPercent.setText(Math.round(a.volume * 100) + "%"); }
+        if (!available) masterStripPercent.setText("—");
+        masterStripMute.setGlyph(available && a.muted ? "mute" : "volume");
+        masterStripMute.setContentDescription(available && a.muted ? "Unmute output" : "Mute output");
+        masterStripDevice.setText(available ? Format.shortDevice(a.device) + " ▾" : "No output");
+        List<PcState.Session> sessions = available ? a.sessions : new ArrayList<PcState.Session>();
+        for (int i = 0; i < strips.size(); i++) {
+            Strip strip = strips.get(i); PcState.Session s = i < sessions.size() ? sessions.get(i) : null;
+            strip.session = s; strip.root.setVisibility(s == null ? View.INVISIBLE : View.VISIBLE);
+            if (s == null) continue;
+            strip.badge.setText(s.name.isEmpty() ? "?" : s.name.substring(0, 1).toUpperCase(java.util.Locale.ROOT));
+            strip.name.setText(s.name);
+            if (!strip.slider.dragging()) { strip.slider.setValue((float) (s.volume * 100)); strip.percent.setText(Math.round(s.volume * 100) + "%"); }
+            strip.slider.setContentDescription(s.name + " volume");
+            strip.mute.setGlyph(s.muted ? "mute" : "volume"); strip.mute.setColor(s.muted ? Theme.WARNING : ui.theme.text);
+            strip.mute.setContentDescription((s.muted ? "Unmute " : "Mute ") + s.name);
+            PcState.Device output = a.find(s.deviceId);
+            strip.device.setText(Format.shortDevice(output == null ? "Output" : output.name));
+            strip.device.setContentDescription("Output for " + s.name + ": " + (output == null ? "unknown" : output.name));
+        }
     }
 
     private Row createRow(final PcState.Session session) {

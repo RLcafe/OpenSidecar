@@ -45,6 +45,11 @@ public final class SpotifyWidget extends Widget {
     private String kind = "Albums", searchQuery = "", likedUri, artUrl, statusText = "", pageError;
     private Boolean liked;
     private Bitmap artBitmap;
+    // Sticker Sheet phase 2 (docs/design/sticker-sheet.md): the ink line under the crate tabs, the LARGE side panel's
+    // tint from the cover (decoded once to one pixel per cover) and whether this build is LARGE.
+    private View crateLine;
+    private int coverTint, shownTint = -1;
+    private boolean largeDesign;
     private boolean busy, likeBusy, commandBusy, libraryPending = true, loading;
     private int generation, browseGeneration, offset;
     private long nextPoll, lastLikeCheck;
@@ -90,6 +95,7 @@ public final class SpotifyWidget extends Widget {
         compact = CardSizing.spotifyCompact(height);
         // LARGE moves the song into a side panel with a cover as wide as the panel (CardSizing.spotify, as on the PC).
         boolean large = CardSizing.spotify(width, height) == CardSizing.LARGE;
+        largeDesign = large; shownTint = -1;
         double side = large ? Math.max(260, Math.min(360, Math.round((width - 48) * 0.32))) : 0;
         int detail = CardSizing.emptyDetail(height - 98);
         FrameLayout root = new FrameLayout(ui.context);
@@ -112,7 +118,10 @@ public final class SpotifyWidget extends Widget {
             tabButtons[i].setPadding(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
             tabs.addView(tabButtons[i], ui.margins(ui.ll(0, Ui.MATCH, 1), 0, 0, i < 2 ? 4 : 0, 0));
         }
-        left.addView(tabs, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 4, 0, 4));
+        left.addView(tabs, ui.margins(ui.ll(Ui.MATCH, ui.px(48)), 0, 4, 0, 0));
+        // The crate dividers stand on an ink line.
+        crateLine = new View(ui.context); crateLine.setBackgroundColor(dash.ink(id));
+        left.addView(crateLine, ui.margins(ui.ll(Ui.MATCH, ui.px(2)), 0, 0, 0, 2));
 
         library = ui.column();
         searchRow = ui.row();
@@ -259,12 +268,21 @@ public final class SpotifyWidget extends Widget {
         if (!built()) return;
         boolean connected = service().connected();
         int shown = connected ? View.VISIBLE : View.GONE;
-        tabs.setVisibility(shown); library.setVisibility(shown); strip.setVisibility(shown); account.setVisibility(shown);
+        tabs.setVisibility(shown); crateLine.setVisibility(shown); library.setVisibility(shown); strip.setVisibility(shown); account.setVisibility(shown);
         showStatus();
         emptyState.setVisibility(connected ? View.GONE : View.VISIBLE);
         for (int i = 0; i < KINDS.length; i++) {
             boolean on = KINDS[i].equals(kind);
-            ui.select(tabButtons[i], on);
+            // Crate tabs: the chosen divider is filled with the widget's ink, with rounded tops (as on the PC).
+            android.graphics.drawable.GradientDrawable divider = ui.shape(on ? dash.ink(id) : ui.theme.raised, on ? 0 : ui.theme.controlBorder, on ? 0 : 1, 0);
+            float corner = ui.fpx(12); divider.setCornerRadii(new float[] { corner, corner, corner, corner, 0, 0, 0, 0 });
+            android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+            android.graphics.drawable.GradientDrawable overlay = ui.shape(0x21FFFFFF, 0, 0, 0); overlay.setCornerRadii(new float[] { corner, corner, corner, corner, 0, 0, 0, 0 });
+            states.addState(new int[] { android.R.attr.state_pressed }, new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[] { divider, overlay }));
+            states.addState(new int[0], divider);
+            tabButtons[i].setBackground(states); tabButtons[i].setSelected(on);
+            tabButtons[i].setTextColor(on ? com.alialyami.widgetscreen.core.Theme.INK_TEXT : ui.theme.text);
+            tabButtons[i].setTypeface(on ? Ui.MEDIUM : Ui.REGULAR);
             tabButtons[i].setContentDescription(KINDS[i] + (on ? ", selected" : ""));
         }
         searchRow.setVisibility(kind.equals("Search") && collection == null ? View.VISIBLE : View.GONE);
@@ -302,6 +320,17 @@ public final class SpotifyWidget extends Widget {
         else if (playback == null) { songTitle.setText("Loading…"); songArtist.setText("Checking what's playing."); }
         else { songTitle.setText(item == null ? "Nothing playing" : item.name); songArtist.setText(item == null ? "Play something in Spotify on any device." : item.subtitle); }
         art.setImageBitmap(artBitmap);
+        // LARGE: the side panel takes 30% of the cover's colour at the top; otherwise plain Raised.
+        int tint = largeDesign && artBitmap != null ? coverTint : 0;
+        if (tint != shownTint) {
+            shownTint = tint;
+            if (tint == 0) strip.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
+            else {
+                android.graphics.drawable.GradientDrawable panel = new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[] { com.alialyami.widgetscreen.core.Theme.blend(ui.theme.raised, tint, 0.3), ui.theme.raised });
+                panel.setCornerRadius(ui.fpx(14)); strip.setBackground(panel);
+            }
+        }
         boolean canLike = item != null && item.isTrack() && liked != null && !likeBusy;
         View likeButton = (View) like.getParent();
         Ui.enable(likeButton, canLike);
@@ -362,6 +391,13 @@ public final class SpotifyWidget extends Widget {
         });
     }
 
+    // The cover scaled to one pixel: its average colour (once per cover).
+    private static int average(Bitmap bitmap) {
+        if (bitmap == null) return 0;
+        try { Bitmap pixel = Bitmap.createScaledBitmap(bitmap, 1, 1, true); int colour = pixel.getPixel(0, 0) | 0xFF000000; if (pixel != bitmap) pixel.recycle(); return colour; }
+        catch (RuntimeException e) { return 0; }
+    }
+
     private View row(final Spotify.Item item) {
         LinearLayout row = ui.row();
         row.setBackground(ui.pressable(ui.theme.raised, ui.theme.controlBorder, 1, 12));
@@ -380,6 +416,13 @@ public final class SpotifyWidget extends Widget {
         name.setTypeface(Ui.MEDIUM);
         label.addView(name, ui.ll(Ui.MATCH, Ui.WRAP));
         label.addView(ui.smallText(item.subtitle == null ? "" : item.subtitle), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 3, 0, 0));
+        // The caption chip: song count, owner or year from the PC's reply.
+        if (item.caption != null && !item.caption.isEmpty()) {
+            TextView chip = ui.caption(item.caption);
+            chip.setBackground(ui.shape(ui.theme.surface, 0, 0, 8));
+            chip.setPadding(ui.px(7), ui.px(1), ui.px(7), ui.px(2));
+            label.addView(chip, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 5, 0, 0));
+        }
         row.addView(label, ui.margins(ui.ll(0, Ui.WRAP, 1), 12, 0, 0, 0));
         final Spotify.Item parent = collection;
         final boolean playsInCollection = parent != null && item.isTrack() && item.position >= 0 && service().canControl();
@@ -437,7 +480,7 @@ public final class SpotifyWidget extends Widget {
                 if (requested == null ? artUrl != null : !requested.equals(artUrl)) {
                     artUrl = requested; artBitmap = null;
                     if (Spotify.isImageUrl(requested)) dash.images.load(requested, 128, new Images.Loaded() {
-                        @Override public void loaded(Bitmap bitmap) { if (version == generation && requested.equals(artUrl)) { artBitmap = bitmap; if (built()) renderNow(); } }
+                        @Override public void loaded(Bitmap bitmap) { if (version == generation && requested.equals(artUrl)) { artBitmap = bitmap; coverTint = average(bitmap); if (built()) renderNow(); } }
                     });
                 }
                 if (built()) renderNow();

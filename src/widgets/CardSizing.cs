@@ -173,6 +173,10 @@ namespace WidgetScreen
         // The mixer's Master, Compact and Full arrangements are its Small, Medium and Large; a Large card 760 wide lists
         // the apps in two columns.
         public static Design MixerDesign(double height) { var mode = Mixer(height); return mode == MixerMode.Master ? Design.Small : mode == MixerMode.Compact ? Design.Medium : Design.Large; }
+        // Large mixer cards show channel strips (Sticker Sheet phase 2): a 112-unit master strip, then one 88-unit app
+        // strip and an 8-unit gap for each that fits in the card less its 24-unit padding.
+        public const double MasterStripWidth = 112, AppStripWidth = 88, StripGap = 8;
+        public static int MixerStripSlots(double cardWidth) { return Math.Max(0, (int)Math.Floor((cardWidth - 48 - MasterStripWidth) / (AppStripWidth + StripGap))); }
         public static int MixerColumns(double width, double height) { return Mixer(height) == MixerMode.Full && width >= 760 ? 2 : 1; }
         // Spotify: Small is the compact card under 500 tall; Large (the song in a side panel with a big cover) from 760 wide.
         public static Design Spotify(double width, double height) { return SpotifyCompact(height) ? Design.Small : width >= 760 ? Design.Large : Design.Medium; }

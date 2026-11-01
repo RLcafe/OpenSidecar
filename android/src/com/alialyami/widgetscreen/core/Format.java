@@ -64,4 +64,39 @@ public final class Format {
     public static String gigabytes(long bytes) { return String.format(Locale.US, "%.1f", bytes / 1073741824.0); }
 
     public static String percent(double value) { return Math.round(value) + "%"; }
+
+    // The Sticker Sheet's Focus facts (docs/design/sticker-sheet.md, phase 2), the same as the PC's FocusTimer.
+    public static String focusMinutes(int minutes) {
+        minutes = Math.max(0, minutes);
+        return minutes >= 60 ? (minutes / 60) + " h " + (minutes % 60) + " min" : minutes + " min";
+    }
+    // Next break: when a running session ends, otherwise how long the next session is.
+    public static String focusBreak(boolean running, long remainingMs, long durationMs, LocalDateTime now, boolean use24) {
+        if (running && remainingMs > 0) return endsAt(now.plusNanos(remainingMs * 1000000L), use24);
+        long left = remainingMs > 0 && remainingMs < durationMs ? remainingMs : durationMs;
+        return "In " + Math.max(1, (long) Math.ceil(left / 60000.0)) + " min";
+    }
+    // "Speakers (Logi Z407)" reads "Z407" on a mixer strip (as on the PC): the part in brackets, or its last word.
+    public static String shortDevice(String name) {
+        if (name == null || name.trim().isEmpty()) return "";
+        int open = name.lastIndexOf('('), close = name.lastIndexOf(')');
+        String inner = open >= 0 && close > open ? name.substring(open + 1, close).trim() : "";
+        if (inner.length() < 3) inner = name.trim();
+        String[] words = inner.split(" +");
+        String last = words.length == 0 ? inner : words[words.length - 1];
+        return last.length() >= 3 ? last : inner;
+    }
+    // A hotkey button's keys for its keycap legend, from the PC's "Hotkey  ·  Ctrl+Shift+M"; null for other buttons.
+    public static String hotkeyLegend(String kind) {
+        if (kind == null || !kind.startsWith("Hotkey")) return null;
+        int dot = kind.indexOf('·');
+        String keys = dot < 0 ? "" : kind.substring(dot + 1).trim();
+        return keys.isEmpty() ? null : keys.toUpperCase(Locale.ROOT);
+    }
+    public static String focusState(boolean running, boolean finished, boolean paused, int sessionsToday) {
+        if (finished) return "DONE";
+        if (running) return "FOCUSING";
+        if (paused) return "PAUSED";
+        return sessionsToday > 0 ? sessionsToday + " TODAY" : "";
+    }
 }

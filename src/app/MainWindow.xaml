@@ -105,7 +105,65 @@
       <Setter Property="FontSize" Value="22"/>
       <Setter Property="Padding" Value="10"/>
     </Style>
-    <Style TargetType="Slider">
+    <!-- Quick Launch keycaps (docs/design/sticker-sheet.md, phase 2): the cap sits on a 4-unit darker skirt and drops 2 units while pressed; an LED dot in the widget's ink lights for a button that's on (Tag = True). -->
+    <Style x:Key="Keycap" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Template">
+        <Setter.Value><ControlTemplate TargetType="Button">
+          <Grid>
+            <Border x:Name="Skirt" Background="{DynamicResource Input}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="12" Margin="0,4,0,0"/>
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="{TemplateBinding Padding}" Margin="0,0,0,4">
+              <Grid>
+                <Border x:Name="Hover" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
+                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                <Ellipse x:Name="Led" Width="8" Height="8" Fill="{DynamicResource InkOfShortcuts}" Stroke="{DynamicResource Page}" StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" Visibility="Collapsed" IsHitTestVisible="False"/>
+              </Grid>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.06"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.13"/><Setter TargetName="Chrome" Property="Margin" Value="0,2,0,2"/></Trigger>
+            <Trigger Property="Tag"><Trigger.Value><sys:Boolean>True</sys:Boolean></Trigger.Value><Setter TargetName="Led" Property="Visibility" Value="Visible"/></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Text}"/><Setter TargetName="Chrome" Property="BorderThickness" Value="2"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.35"/><Setter TargetName="Skirt" Property="Opacity" Value="0.35"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value>
+      </Setter>
+    </Style>    <!-- The mixer's channel strips (docs/design/sticker-sheet.md, phase 2): the same slider standing up, filling from the bottom, with the 48 × 48 thumb. -->
+    <Style x:Key="VerticalSlider" TargetType="Slider">
+      <Setter Property="Orientation" Value="Vertical"/>
+      <Setter Property="Minimum" Value="0"/><Setter Property="Maximum" Value="100"/>
+      <Setter Property="MinWidth" Value="48"/><Setter Property="IsMoveToPointEnabled" Value="True"/>
+      <Setter Property="SmallChange" Value="1"/><Setter Property="LargeChange" Value="5"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+        <Border x:Name="SliderChrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="10" Padding="0,2"><Track x:Name="PART_Track" HorizontalAlignment="Center">
+          <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Width="6" CornerRadius="3" Background="{DynamicResource Accent}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+          <Track.Thumb><Thumb Width="48" Height="48"><Thumb.Template><ControlTemplate><Grid Background="Transparent"><Border Width="30" Height="30" Background="{DynamicResource Accent}" BorderBrush="{DynamicResource Surface}" BorderThickness="3" CornerRadius="15"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+          <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Width="6" CornerRadius="3" Background="{DynamicResource Track}"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+        </Track></Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="SliderChrome" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SliderChrome" Property="Opacity" Value="0.3"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>    <!-- Spotify's crate tabs (docs/design/sticker-sheet.md, phase 2): dividers with rounded tops; the chosen one is filled with the widget's ink over an ink line. -->
+    <Style x:Key="CrateTab" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Template">
+        <Setter.Value><ControlTemplate TargetType="Button">
+          <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12,12,0,0" Padding="{TemplateBinding Padding}">
+            <Grid>
+              <Border x:Name="Hover" Background="White" Opacity="0" CornerRadius="8,8,0,0" IsHitTestVisible="False"/>
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.06"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.13"/></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Text}"/><Setter TargetName="Chrome" Property="BorderThickness" Value="2"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.35"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value>
+      </Setter>
+    </Style>    <Style TargetType="Slider">
       <Setter Property="Minimum" Value="0"/><Setter Property="Maximum" Value="100"/>
       <Setter Property="MinHeight" Value="48"/><Setter Property="IsMoveToPointEnabled" Value="True"/>
       <Setter Property="SmallChange" Value="1"/><Setter Property="LargeChange" Value="5"/>
@@ -261,15 +319,17 @@
               <Grid>
                 <!-- A finished session tints the whole card until it's tapped or a minute passes. -->
                 <Border x:Name="FocusFinished" Background="{DynamicResource Accent}" Opacity="0.15" Margin="-24" CornerRadius="{DynamicResource CardRadius}" Visibility="Collapsed" IsHitTestVisible="False"/>
-                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                   <!-- Label strips: DashboardController.Stickers fills each in the widget's ink (docs/design/sticker-sheet.md). -->
-                  <Border x:Name="FocusStrip"/>
+                  <DockPanel><Border x:Name="FocusStrip"/><TextBlock x:Name="FocusState" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                   <!-- A large card draws the progress as a ring around the countdown (FocusDial, CardSizing.Focus). --><Grid x:Name="FocusDial" Grid.Row="1"><StackPanel x:Name="FocusMiddle" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/><TextBlock x:Name="FocusSessions" Text="" Style="{StaticResource Caption}" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,10,0,0"/></StackPanel></Grid>
-                  <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <!-- Today's sessions as tomato pips, and the Today and Next break chips (docs/design/sticker-sheet.md, phase 2). FocusCard fills them. -->
+                  <StackPanel x:Name="FocusFacts" Grid.Row="2" Margin="0,0,0,12"><Border x:Name="FocusPipHost" Height="24"/><Grid x:Name="FocusChips" Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions></Grid></StackPanel>
+                  <Grid x:Name="FocusPresets" Grid.Row="3" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="5 minutes"/><Button x:Name="FocusCustom" Grid.Column="3" Content="…" Padding="5" FontSize="16" ToolTip="Choose another length" AutomationProperties.Name="Choose another length"/>
                   </Grid>
                   <!-- On a short card the presets fold into FocusLength, which steps through them (CardSizing.FocusShort). -->
-                  <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="FocusLength" Content="25m" Width="64" Padding="4" Margin="0,0,8,0" FontSize="16" Visibility="Collapsed" ToolTip="Tap for the next length" AutomationProperties.Name="Session length"/><Button x:Name="FocusStart" Grid.Column="1" Content="Start focus" Style="{StaticResource AccentButton}" Margin="0,0,8,0"/><Button x:Name="FocusReset" Grid.Column="2" Content="&#xE777;" Style="{StaticResource IconButton}" ToolTip="Reset timer" AutomationProperties.Name="Reset timer"/></Grid>
+                  <Grid Grid.Row="4"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><Button x:Name="FocusLength" Content="25m" Width="64" Padding="4" Margin="0,0,8,0" FontSize="16" Visibility="Collapsed" ToolTip="Tap for the next length" AutomationProperties.Name="Session length"/><Button x:Name="FocusStart" Grid.Column="1" Content="Start focus" Style="{StaticResource AccentButton}" Margin="0,0,8,0"/><Button x:Name="FocusReset" Grid.Column="2" Content="&#xE777;" Style="{StaticResource IconButton}" ToolTip="Reset timer" AutomationProperties.Name="Reset timer"/></Grid>
                 </Grid>
                 <!-- The fourth preset's length, picked inside the card (5 to 180 minutes). -->
                 <Border x:Name="FocusPicker" Background="{DynamicResource Surface}" Visibility="Collapsed" Margin="-8,0,-8,0" Padding="8,0">
@@ -290,8 +350,8 @@
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition x:Name="MediaMainRow" Height="*" MinHeight="86"/><RowDefinition x:Name="MediaSeekRow" Height="48"/><RowDefinition Height="54"/><RowDefinition x:Name="MediaHintRow" Height="26"/></Grid.RowDefinitions>
                 <DockPanel><Border x:Name="MediaStrip"/><TextBlock x:Name="MediaSource" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right" MaxWidth="220" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="MediaMain" Grid.Row="1" Margin="0,12,0,4"><Grid.ColumnDefinitions><ColumnDefinition x:Name="MediaArtColumn" Width="116"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <Border x:Name="MediaArtBox" Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" MaxHeight="104" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
-                  <StackPanel x:Name="MediaText" Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="TrackTitle" Text="Nothing playing" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="NoWrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackArtist" Text="Start music or a video in any app." FontSize="{DynamicResource SmallSize}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel>
+                  <!-- The sleeve: a record peeks out of it while something plays; nothing playing leaves an empty dashed sleeve (docs/design/sticker-sheet.md, phase 2). --><Grid x:Name="MediaDiscHost" IsHitTestVisible="False"/><Border x:Name="MediaArtBox" Background="{DynamicResource ClockSurface}" BorderBrush="{DynamicResource Text}" CornerRadius="14" Margin="0,0,12,0" MaxHeight="104" ClipToBounds="True"><Grid><Rectangle x:Name="MediaEmptySleeve" Stroke="{DynamicResource Muted}" StrokeThickness="1.5" StrokeDashArray="3 2" RadiusX="12" RadiusY="12" Visibility="Collapsed"/><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
+                  <StackPanel x:Name="MediaText" Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="TrackTitle" Text="Nothing playing" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="NoWrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackArtist" Text="Start music or a video in any app." FontSize="{DynamicResource SmallSize}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackAlbum" Text="" Style="{StaticResource Small}" Margin="0,2,0,0" Visibility="Collapsed" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><Grid x:Name="MediaChips" Margin="0,10,0,0" Visibility="Collapsed"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions></Grid></StackPanel>
                 </Grid>
                 <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions><TextBlock x:Name="MediaPosition" Text="—:—" Style="{StaticResource Small}" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/><Slider x:Name="MediaProgress" Grid.Column="1" VerticalAlignment="Center" Maximum="1" IsEnabled="False" AutomationProperties.Name="Seek current Windows media" ToolTip="Drag or tap to seek when your media app supports it."/><TextBlock x:Name="MediaDuration" Text="—:—" Grid.Column="2" Style="{StaticResource Small}" VerticalAlignment="Center" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/></Grid>
                 <!-- Centred on the card, clear of the volume button; a narrow card draws the buttons closer (CardSizing.MediaNarrow). -->
@@ -335,10 +395,11 @@
               <!-- A large card moves the now-playing strip into this column as a panel with a big cover (CardSizing.Spotify). -->
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition x:Name="SpotifySideColumn" Width="0"/></Grid.ColumnDefinitions>
               <DockPanel Grid.ColumnSpan="2" LastChildFill="True"><Button x:Name="SpotifyAccount" DockPanel.Dock="Right" Content="Account" Padding="12,4" FontSize="{DynamicResource SmallSize}" ToolTip="Spotify account and setup in Settings"/><Border x:Name="SpotifyStrip"/></DockPanel>
+              <Border x:Name="SpotifyCrateLine" Grid.Row="1" Height="2" VerticalAlignment="Bottom" Margin="0,0,0,2" Background="{DynamicResource InkOfSpotify}"/>
               <UniformGrid x:Name="SpotifyTabs" Grid.Row="1" Columns="3" Margin="0,4,0,4">
-                <Button x:Name="SpotifyAlbums" Content="Albums" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
-                <Button x:Name="SpotifyPlaylists" Content="Playlists" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
-                <Button x:Name="SpotifySearch" Content="Search" Padding="4" FontSize="{DynamicResource SmallSize}"/>
+                <Button x:Name="SpotifyAlbums" Style="{StaticResource CrateTab}" Content="Albums" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
+                <Button x:Name="SpotifyPlaylists" Style="{StaticResource CrateTab}" Content="Playlists" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
+                <Button x:Name="SpotifySearch" Style="{StaticResource CrateTab}" Content="Search" Padding="4" FontSize="{DynamicResource SmallSize}"/>
               </UniformGrid>
               <Grid x:Name="SpotifyLibraryView" Grid.Row="2" Margin="0,8,0,4">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -392,7 +453,7 @@
             <!-- Full, Compact and Master arrangements (CardSizing.Mixer): rows fold away as the card gets shorter. -->
             <Grid><Grid.RowDefinitions><RowDefinition x:Name="MixerHeaderRow" Height="34"/><RowDefinition x:Name="MixerMasterRow" Height="66"/><RowDefinition x:Name="MixerSliderRow" Height="52"/><RowDefinition x:Name="LevelRow" Height="28"/><RowDefinition x:Name="MixerAppsHeaderRow" Height="42"/><RowDefinition x:Name="MixerAppsRow" Height="*"/><RowDefinition x:Name="MixerMicrophoneRow" Height="56"/></Grid.RowDefinitions>
               <!-- On a Master card the app list is one tap away: MixerApps swaps the master rows for the list and back. -->
-              <DockPanel><Button x:Name="MixerApps" DockPanel.Dock="Right" Content="Apps" FontSize="14" Padding="12,4" Margin="8,0,0,0" Visibility="Collapsed" AutomationProperties.Name="Show app volumes"/><Border x:Name="MixerStrip"/><TextBlock x:Name="AudioStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0,0,0"/></DockPanel>
+              <DockPanel><Button x:Name="MixerApps" DockPanel.Dock="Right" Content="Apps" FontSize="14" Padding="12,4" Margin="8,0,0,0" Visibility="Collapsed" AutomationProperties.Name="Show app volumes"/><Border x:Name="MixerStrip"/><TextBlock x:Name="MicState" Text="" Style="{StaticResource Caption}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock x:Name="AudioStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0,0,0"/></DockPanel>
               <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><Button x:Name="OutputDeviceButton" Background="Transparent" BorderThickness="0" Padding="8,0" Margin="-8,0,8,0" HorizontalContentAlignment="Left" ToolTip="Choose the output device" AutomationProperties.Name="Choose output device"><StackPanel HorizontalAlignment="Left"><TextBlock Text="Master volume" FontSize="{DynamicResource TitleSize}"/><StackPanel Orientation="Horizontal" Margin="0,5,0,0"><TextBlock x:Name="AudioDevice" Text="Connecting to audio…" Style="{StaticResource Small}" MaxWidth="300"/><TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Muted}" Margin="8,2,0,0" VerticalAlignment="Center"/></StackPanel></StackPanel></Button><TextBlock x:Name="MasterPercent" Grid.Column="1" Text="—" FontSize="36" FontWeight="Light" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
               <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition/><ColumnDefinition x:Name="MicrophoneCompactColumn" Width="0"/><ColumnDefinition x:Name="SoundSettingsColumn" Width="60"/></Grid.ColumnDefinitions><Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Mute output" AutomationProperties.Name="Mute output"/><Slider x:Name="MasterSlider" Grid.Column="1" Margin="8,0" AutomationProperties.Name="Master volume"/><Button x:Name="MicrophoneCompact" Grid.Column="2" Content="&#xE720;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" HorizontalAlignment="Right" Visibility="Collapsed" AutomationProperties.Name="Microphone"/><Button x:Name="SoundSettingsButton" Grid.Column="3" Content="&#xE713;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Open Windows sound settings" AutomationProperties.Name="Open Windows sound settings"/></Grid>
               <!-- Live output levels sit under the master slider, where the sound is; the row collapses when they're off or paused. -->
@@ -400,6 +461,7 @@
               <DockPanel x:Name="MixerAppsHeader" Grid.Row="4" Margin="0,14,0,0"><TextBlock Text="APPS" Style="{StaticResource Label}"/><TextBlock x:Name="SessionCount" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right"/></DockPanel>
               <Grid Grid.Row="5"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><UniformGrid x:Name="SessionPanel" Columns="1" VerticalAlignment="Top"/></ScrollViewer><TextBlock x:Name="NoSessions" Text="Apps appear here when they use audio." Style="{StaticResource Small}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="12"/></Grid>
               <Button x:Name="MicrophoneButton" Grid.Row="6" FontSize="16" HorizontalContentAlignment="Left" MinHeight="48" VerticalAlignment="Bottom" AutomationProperties.Name="Microphone"><StackPanel Orientation="Horizontal"><TextBlock x:Name="MicrophoneGlyph" Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="18" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="MicrophoneLabel" Text="Checking microphone…" FontSize="16" VerticalAlignment="Center"/></StackPanel></Button>
+              <!-- Large cards: channel strips over the master and app rows, master first; Apps opens the list (DashboardController.Mixer). --><Grid x:Name="MixerStrips" Grid.Row="1" Grid.RowSpan="5" Margin="0,8,0,10" Visibility="Collapsed"/>
               <Border x:Name="OutputPicker" Grid.Row="1" Grid.RowSpan="6" Margin="-8,0,-8,0" Padding="8,0" Background="{DynamicResource Surface}" Visibility="Collapsed">
                 <DockPanel>
                   <Grid DockPanel.Dock="Top"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

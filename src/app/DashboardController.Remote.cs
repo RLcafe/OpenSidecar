@@ -307,7 +307,7 @@ namespace WidgetScreen
                     string app = m.Available ? MediaService.SourceName(m.Source) : "";
                     state["media"] = D("available", m.Available, "playing", m.Playing, "canPlayPause", m.CanPlayPause, "canPrevious", m.CanPrevious, "canNext", m.CanNext, "canSeek", m.CanSeek,
                         "title", m.Title, "artist", m.Artist ?? "", "key", m.Key, "positionMs", m.Position.TotalMilliseconds, "durationMs", m.Duration.TotalMilliseconds, "art", m.Artwork != null,
-                        "source", app.ToUpperInvariant(), "app", app);
+                        "source", app.ToUpperInvariant(), "app", app, "album", m.Available ? m.Album ?? "" : "", "tint", m.Available ? MediaService.Hex(m.Tint) : "");
                 }
                 catch (Exception) { remoteMedia = null; state["media"] = D("error", true); }
             }
@@ -498,7 +498,7 @@ namespace WidgetScreen
 
         private static Dictionary<string, object> Item(SpotifyItem item)
         {
-            return item == null ? null : D("id", item.Id, "uri", item.Uri, "name", item.Name, "subtitle", item.Subtitle, "imageUrl", item.ImageUrl, "albumUrl", item.AlbumUrl, "position", item.Position);
+            return item == null ? null : D("id", item.Id, "uri", item.Uri, "name", item.Name, "subtitle", item.Subtitle, "imageUrl", item.ImageUrl, "albumUrl", item.AlbumUrl, "position", item.Position, "caption", item.Caption ?? "");
         }
         private static Dictionary<string, object> Page(SpotifyPage page) { return D("items", page.Items.Select(Item).ToArray(), "hasMore", page.HasMore); }
 

@@ -17,6 +17,8 @@ public final class PcState {
     public static final class Media {
         public boolean error, available, playing, canPlayPause, canPrevious, canNext, canSeek, art;
         public String title = "", artist = "", source = "", key = "", app = "";
+        // The album, and the cover's average colour ("#7A4FB0", "" without a cover) for the card's tint (phase 2).
+        public String album = "", tint = "";
         public double positionMs, durationMs;
     }
 
@@ -322,7 +324,7 @@ public final class PcState {
             Media media = new Media();
             media.error = flag(m, "error"); media.available = flag(m, "available"); media.playing = flag(m, "playing");
             media.canPlayPause = flag(m, "canPlayPause"); media.canPrevious = flag(m, "canPrevious"); media.canNext = flag(m, "canNext"); media.canSeek = flag(m, "canSeek");
-            media.art = flag(m, "art"); media.title = text(m, "title"); media.artist = text(m, "artist"); media.source = text(m, "source"); media.key = text(m, "key"); media.app = text(m, "app");
+            media.art = flag(m, "art"); media.title = text(m, "title"); media.artist = text(m, "artist"); media.source = text(m, "source"); media.key = text(m, "key"); media.app = text(m, "app"); media.album = text(m, "album"); media.tint = text(m, "tint");
             media.positionMs = Json.number(m, "positionMs"); media.durationMs = Json.number(m, "durationMs");
             state.media = media;
         }
@@ -699,7 +701,7 @@ public final class PcState {
         if (Spotify.webUrl(uri) == null) return null;
         Spotify.Item item = new Spotify.Item();
         item.id = Json.field(m, "id"); item.uri = uri; item.name = Json.field(m, "name") == null ? "Untitled" : Json.field(m, "name");
-        item.subtitle = text(m, "subtitle"); item.imageUrl = Json.field(m, "imageUrl"); item.albumUrl = Json.field(m, "albumUrl");
+        item.subtitle = text(m, "subtitle"); item.imageUrl = Json.field(m, "imageUrl"); item.albumUrl = Json.field(m, "albumUrl"); item.caption = text(m, "caption");
         item.position = Json.has(m, "position") ? (int) Json.number(m, "position") : -1;
         return item;
     }

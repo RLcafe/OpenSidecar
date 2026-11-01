@@ -45,6 +45,9 @@ namespace WidgetScreen
     public sealed class SpotifyItem
     {
         public string Id, Uri, Name, Subtitle, ImageUrl, AlbumUrl;
+        // A short caption from the reply already fetched (docs/design/sticker-sheet.md, phase 2): "11 songs · 2024" for
+        // an album, "Ali · 24 songs" for a playlist, the album's year for a song; empty when the reply has none.
+        public string Caption = "";
         // Zero-based place in its album or playlist, counting items this app cannot show; -1 outside a collection.
         public int Position = -1;
         public string WebUrl { get { return SpotifyService.WebUrl(Uri); } }
@@ -421,7 +424,23 @@ namespace WidgetScreen
             var images = Array(root, "images"); if (images.Length == 0) images = Array(album, "images");
             string subtitle = System.String.Join(", ", Array(root, "artists").Select(a => Field(Object(a), "name")).Where(a => !System.String.IsNullOrEmpty(a)));
             if (System.String.IsNullOrEmpty(subtitle)) subtitle = Field(show, "name") ?? Field(Object(Value(root, "owner")), "display_name") ?? Field(root, "type");
-            return new SpotifyItem { Id = Field(root, "id"), Uri = uri, Name = Field(root, "name") ?? "Untitled", Subtitle = subtitle, ImageUrl = images.Length > 0 ? Field(Object(images[images.Length - 1]), "url") : null, AlbumUrl = WebUrl(Field(album, "uri")) };
+            return new SpotifyItem { Id = Field(root, "id"), Uri = uri, Name = Field(root, "name") ?? "Untitled", Subtitle = subtitle, ImageUrl = images.Length > 0 ? Field(Object(images[images.Length - 1]), "url") : null, AlbumUrl = WebUrl(Field(album, "uri")), Caption = CaptionOf(root, uri) };
+        }
+        public static string CaptionOf(Dictionary<string, object> root, string uri)
+        {
+            Func<int, string> songs = n => n + (n == 1 ? " song" : " songs");
+            Func<string, string> year = date => date != null && date.Length >= 4 && Char.IsDigit(date[0]) ? date.Substring(0, 4) : null;
+            if (uri.StartsWith("spotify:album:", StringComparison.Ordinal))
+                return Join(Number(root, "total_tracks") > 0 ? songs((int)Number(root, "total_tracks")) : null, year(Field(root, "release_date")));
+            if (uri.StartsWith("spotify:playlist:", StringComparison.Ordinal))
+            {
+                double total = Number(Object(Value(root, "tracks")), "total");
+                return Join(Field(Object(Value(root, "owner")), "display_name"), total > 0 ? songs((int)total) : null);
+            }
+            if (uri.StartsWith("spotify:track:", StringComparison.Ordinal)) return year(Field(Object(Value(root, "album")), "release_date")) ?? "";
+            return "";
+        }
+        private static string Join(params string[] parts) { return String.Join(" · ", parts.Where(p => !String.IsNullOrWhiteSpace(p)));
         }
         private static Dictionary<string, object> Object(object value) { return value as Dictionary<string, object> ?? new Dictionary<string, object>(); }
         private static object Value(Dictionary<string, object> value, string key) { object result; return value.TryGetValue(key, out result) ? result : null; }

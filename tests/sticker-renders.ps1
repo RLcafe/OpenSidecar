@@ -1,7 +1,10 @@
 # Renders the Sticker Sheet foundations (docs/design/sticker-sheet.md) at 1920 × 720 with isolated settings, into
 # artifacts\sticker-sheet\: the default layout and two pages with the other widgets in Midnight, Slate and Warm, text
 # at 140%, Widget colours → Accent only, changed inks, and Edit layout's list with the ink picker. Readings are live
-# (this PC's stats, audio and media, Open-Meteo's weather for London); Spotify and Discord aren't connected.
+# (this PC's stats, audio and media, Open-Meteo's weather for London); Spotify and Discord aren't connected. Phase 2 adds
+# the default five (Focus, Now Playing, Quick Launch, the mixer and Spotify) at their Small, Medium, Large and Wide
+# designs in each palette, at 140%, and with nothing playing (--render-no-media). Spotify's Large design with a library
+# needs an account; tests\Spotify\SpotifyTests.cs renders it with labelled fixtures.
 param([string]$AppDirectory = (Join-Path $PSScriptRoot '..\artifacts\app'), [int]$Wait = 20, [string[]]$Only = @())
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -16,7 +19,14 @@ $pages = [ordered]@{
     'readings' = @{ Weather = @(0, 0, 472, 576); System = @(488, 0, 456, 280); Storage = @(488, 296, 456, 280); Prayer = @(960, 0, 420, 280); Clocks = @(960, 296, 420, 280); Calendar = @(1396, 0, 460, 576) }
     'lists' = @{ Notes = @(0, 0, 472, 576); Clipboard = @(488, 0, 420, 280); Macros = @(488, 296, 420, 280); Games = @(924, 0, 456, 280); Home = @(924, 296, 456, 280); Soundboard = @(1396, 0, 460, 300); Claude = @(1396, 316, 460, 260) }
     'narrow' = @{ Clocks = @(0, 0, 196, 184); Storage = @(212, 0, 240, 152); Calendar = @(468, 0, 240, 152); Prayer = @(724, 0, 240, 152); Focus = @(980, 0, 280, 192); Media = @(1276, 0, 312, 200); Weather = @(1604, 0, 252, 300) }
+    # Phase 2, the default five at their Small, Medium, Large and Wide designs.
+    'five-small' = @{ Focus = @(0, 0, 280, 192); Media = @(296, 0, 312, 200); Shortcuts = @(624, 0, 288, 204); Mixer = @(928, 0, 320, 224); Spotify = @(1264, 0, 400, 300) }
+    'five-medium' = @{ Focus = @(0, 0, 320, 420); Media = @(336, 0, 472, 310); Shortcuts = @(336, 326, 472, 250); Mixer = @(824, 0, 456, 380); Spotify = @(1296, 0, 560, 576) }
+    'five-large' = @{ Focus = @(0, 0, 340, 576); Media = @(356, 0, 480, 576); Mixer = @(852, 0, 600, 576); Shortcuts = @(1468, 0, 388, 576) }
+    'five-wide' = @{ Mixer = @(0, 0, 820, 420); Shortcuts = @(836, 0, 1020, 400) }
 }
+# Today's focus sessions for the pips and chips: two sessions, 50 minutes.
+$sessions = '<FocusSessionDate>' + (Get-Date -Format 'yyyy-MM-dd') + '</FocusSessionDate><FocusSessionsToday>2</FocusSessionsToday><FocusMinutesToday>50</FocusMinutesToday>'
 # Scenes: a page with a theme and extra settings.
 $scenes = [ordered]@{}
 foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'default', 'readings', 'lists') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = '' } } }
@@ -26,6 +36,11 @@ $scenes['midnight-narrow'] = @{ Page = 'narrow'; Theme = 'Midnight'; Extra = '' 
 $scenes['slate-default-accent-only'] = @{ Page = 'default'; Theme = 'Slate'; Extra = '<Accent>Glacier</Accent><WidgetColours>Accent</WidgetColours>' }
 $scenes['warm-default-changed-inks'] = @{ Page = 'default'; Theme = 'Warm'; Extra = '<WidgetInks>Focus=Lemon;Media=Mint;Mixer=Lavender;Spotify=Rose</WidgetInks>' }
 $scenes['midnight-edit-ink-picker'] = @{ Page = 'default'; Theme = 'Midnight'; Extra = ''; Args = @('--render-edit', '--render-edit-panel') }
+# Phase 2: the five cards at each size in each palette, at 140%, and their empty states (nothing playing, Spotify not connected).
+foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'five-small', 'five-medium', 'five-large', 'five-wide') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = $sessions } } }
+foreach ($page in 'five-medium', 'five-large') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = $sessions + '<TextScale>1.4</TextScale>' } }
+$scenes['midnight-default-nothing-playing'] = @{ Page = 'default'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
+$scenes['midnight-five-large-nothing-playing'] = @{ Page = 'five-large'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
 
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }

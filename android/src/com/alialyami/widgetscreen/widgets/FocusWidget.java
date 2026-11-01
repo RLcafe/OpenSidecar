@@ -18,7 +18,8 @@ import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ProgressLine;
-import com.alialyami.widgetscreen.views.RingGauge;
+import com.alialyami.widgetscreen.views.StickerParts;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
 import java.time.LocalDateTime;
@@ -29,7 +30,13 @@ public final class FocusWidget extends Widget {
     private static final int[] PRESETS = { 25, 50, 5 };
     private TextView time, status, sessions, start, custom, lengthLabel, lengthStep;
     private ProgressLine progress;
-    private RingGauge ring;
+    // Sticker Sheet phase 2 (docs/design/sticker-sheet.md): the kitchen-timer dial on Large, today's sessions as
+    // tomato pips with the Today and Next break chips, and the status sticker.
+    private StickerParts.TimerDial dial;
+    private StickerParts.PipRow pips;
+    private TextView todayChip, breakChip;
+    private Stickers.Sticker stateSticker;
+    private static final double PIPS_HEIGHT = 24 + 12, CHIPS_HEIGHT = 10 + 52;
     private GlyphView reset;
     private final TextView[] presets = new TextView[3];
     private FrameLayout root, picker;
@@ -48,17 +55,24 @@ public final class FocusWidget extends Widget {
         folded = CardSizing.focusShort(height);
         selectedPreset = -1; selectedCustom = -1; picker = null;
         LinearLayout column = ui.column();
-        column.addView(strip(), ui.ll(Ui.MATCH, Ui.WRAP));
+        FrameLayout header = new FrameLayout(ui.context);
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        stateSticker = sticker(false);
+        header.addView(stateSticker, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
+        column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 
         // Three designs (CardSizing.focus, as on the PC): SMALL keeps the countdown and the start row; MEDIUM adds the
         // status, presets and a progress line; LARGE draws the progress as a ring around the countdown, with the status
         // and today's sessions inside it.
         boolean large = CardSizing.focus(width, height) == CardSizing.LARGE;
         double ringSize = large ? CardSizing.focusRing(width, height) : 0;
+        // The dial gives up room to the pips first, then to the chips (which fold away under a 160-unit dial).
+        boolean chipsShown = !folded && (large ? Math.min(ringSize, height - 186 - PIPS_HEIGHT - CHIPS_HEIGHT) >= 160 : height >= 400 + 48 * (ui.textScale - 1));
+        if (large) ringSize = Math.max(120, Math.min(ringSize, height - 186 - PIPS_HEIGHT - (chipsShown ? CHIPS_HEIGHT : 0)));
         LinearLayout middle = ui.column();
         middle.setGravity(Gravity.CENTER_VERTICAL);
         // The countdown grows with the card (CardSizing, as on the PC).
-        time = Ui.tabular(ui.text("25:00", (float) (large ? Math.round(ringSize * 0.22) : CardSizing.focusTime(width, height)), ui.theme.text));
+        time = Ui.tabular(ui.text("25:00", (float) (large ? Math.round(ringSize * 0.17) : CardSizing.focusTime(width, height)), ui.theme.text));
         time.setTypeface(Ui.LIGHT); time.setGravity(Gravity.CENTER);
         middle.addView(time, ui.ll(Ui.MATCH, Ui.WRAP));
         status = Ui.wrap(ui.smallText(""), 2);
@@ -67,18 +81,31 @@ public final class FocusWidget extends Widget {
         progress = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track);
         progress.setContentDescription("Focus session progress");
         if (!large) middle.addView(progress, folded ? ui.margins(ui.ll(Ui.MATCH, ui.px(5)), 0, 4, 0, 12) : ui.ll(Ui.MATCH, ui.px(5)));
+        // The sessions line gave way to the pips; it stays as their spoken description.
         sessions = ui.caption("");
-        sessions.setGravity(Gravity.CENTER); sessions.setSingleLine(true);
-        if (!folded) middle.addView(sessions, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, large ? 4 : 10, 0, 0));
-        ring = null;
+        dial = null;
         if (large) {
-            FrameLayout dial = new FrameLayout(ui.context);
-            ring = new RingGauge(ui.context, ui.theme.accent, ui.theme.track, ui.fpx(Math.max(8, Math.min(14, Math.round(ringSize * 0.045)))));
-            ring.setContentDescription("Focus session progress");
-            dial.addView(ring, ui.frame(ui.px(ringSize), ui.px(ringSize), Gravity.CENTER));
-            dial.addView(middle, ui.frame(ui.px(ringSize * 0.74), Ui.WRAP, Gravity.CENTER));
-            column.addView(dial, ui.ll(Ui.MATCH, 0, 1));
+            FrameLayout face = new FrameLayout(ui.context);
+            dial = new StickerParts.TimerDial(ui, dash.ink(id));
+            dial.setContentDescription("Focus session progress");
+            face.addView(dial, ui.frame(ui.px(ringSize), ui.px(ringSize + Stickers.LIFT), Gravity.CENTER));
+            FrameLayout.LayoutParams inside = ui.frame(ui.px(ringSize * StickerParts.TimerDial.HOLE * 0.92), Ui.WRAP, Gravity.CENTER);
+            inside.bottomMargin = ui.px(Stickers.LIFT);
+            face.addView(middle, inside);
+            column.addView(face, ui.ll(Ui.MATCH, 0, 1));
         } else column.addView(middle, ui.ll(Ui.MATCH, 0, 1));
+        pips = new StickerParts.PipRow(ui, dash.ink(id), 22);
+        if (!folded) {
+            LinearLayout facts = ui.column();
+            facts.addView(pips, ui.ll(Ui.MATCH, ui.px(24)));
+            LinearLayout chips = ui.row();
+            LinearLayout today = Stickers.factChip(ui, "Today", "—"), next = Stickers.factChip(ui, "Next break", "—");
+            todayChip = (TextView) today.getChildAt(1); breakChip = (TextView) next.getChildAt(1);
+            chips.addView(today, ui.margins(ui.ll(0, Ui.WRAP, 1), 0, 0, 8, 0));
+            chips.addView(next, ui.ll(0, Ui.WRAP, 1));
+            if (chipsShown) facts.addView(chips, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
+            column.addView(facts, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 0, 0, 12));
+        } else { todayChip = null; breakChip = null; }
 
         LinearLayout presetRow = ui.row();
         for (int i = 0; i < PRESETS.length; i++) {
@@ -150,7 +177,7 @@ public final class FocusWidget extends Widget {
         boolean online = focus != null;
         for (TextView preset : presets) Ui.enable(preset, online);
         Ui.enable(custom, online); Ui.enable(start, online); Ui.enable(reset, online); Ui.enable(lengthStep, online && !focus.running);
-        if (!online) { time.setText("—:—"); time.setTextColor(ui.theme.text); status.setText(dash.offlineText()); sessions.setText(""); progress.setValue(0); if (ring != null) ring.setValue(0); finishedTint.setVisibility(View.GONE); return; }
+        if (!online) { time.setText("—:—"); time.setTextColor(ui.theme.text); status.setText(dash.offlineText()); sessions.setText(""); progress.setValue(0); if (dial != null) dial.setLeft(0); finishedTint.setVisibility(View.GONE); stateSticker.setText(dash.online() ? "" : "PC OFFLINE"); return; }
         // Between readings a running timer keeps counting down here.
         long remaining = (long) focus.remainingMs;
         if (focus.running) remaining = Math.max(0, remaining - (SystemClock.elapsedRealtime() - dash.pc.stateAt));
@@ -163,8 +190,12 @@ public final class FocusWidget extends Widget {
         boolean running = focus.running && remaining > 0;
         status.setText(remaining == 0 && focus.finished ? "Done. Take a break. Tap to clear." : Format.focusStatus(remaining, running, fraction, ends));
         progress.setValue(fraction);
-        if (ring != null) ring.setValue(fraction * 100);
+        if (dial != null) dial.setLeft(1 - fraction);
         sessions.setText(Format.sessions(focus.sessionsToday, focus.minutesToday));
+        pips.setCount(focus.sessionsToday); pips.setContentDescription(Format.sessions(focus.sessionsToday, focus.minutesToday));
+        if (todayChip != null) { todayChip.setText(Format.focusMinutes(focus.minutesToday)); breakChip.setText(Format.focusBreak(running, remaining, (long) focus.durationMs, LocalDateTime.now(), dash.use24())); }
+        stateSticker.setText(Format.focusState(running, focus.finished, focus.paused, focus.sessionsToday));
+        stateSticker.setFilled(focus.finished || running);
         String label = Format.focusButton(remaining, running, fraction);
         start.setText(folded && label.equals("Start focus") ? "Start" : label);
         int length = (int) Math.round(focus.durationMs / 60000);
