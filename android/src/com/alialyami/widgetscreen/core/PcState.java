@@ -70,6 +70,15 @@ public final class PcState {
         public final List<Clock> clocks = new ArrayList<Clock>();
     }
 
+    // The PC's prayer times (docs/design/prayer-times.md): today's five as moments, the next and the current prayer.
+    public static final class Prayer {
+        public boolean located, alerting;
+        public String city = "", method = "", hijri = "";
+        public int pcOffset, next, current;
+        public double nextAt, previousAt, sunrise;
+        public final double[] times = new double[5];
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -113,6 +122,7 @@ public final class PcState {
     public Discord discord;
     public Storage storage;
     public Clocks clocks;
+    public Prayer prayer;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -223,6 +233,19 @@ public final class PcState {
                 if (Math.abs(clock.offset) <= 18 * 60) clocks.clocks.add(clock);
             }
             state.clocks = clocks;
+        }
+        if (Json.has(root, "prayer")) {
+            Map<String, Object> p = Json.obj(Json.value(root, "prayer"));
+            Prayer prayer = new Prayer();
+            prayer.located = flag(p, "located"); prayer.alerting = flag(p, "alerting");
+            prayer.city = text(p, "city"); prayer.method = text(p, "method"); prayer.hijri = text(p, "hijri");
+            prayer.pcOffset = (int) Json.number(p, "pcOffset");
+            prayer.next = Math.max(0, Math.min(4, (int) Json.number(p, "next"))); prayer.current = Math.max(0, Math.min(4, (int) Json.number(p, "current")));
+            prayer.nextAt = Json.number(p, "nextAt"); prayer.previousAt = Json.number(p, "previousAt"); prayer.sunrise = Json.number(p, "sunrise");
+            List<Object> times = Json.array(p, "times");
+            for (int i = 0; i < 5 && i < times.size(); i++) prayer.times[i] = times.get(i) instanceof Number ? ((Number) times.get(i)).doubleValue() : 0;
+            if (prayer.located && (times.size() != 5 || prayer.nextAt <= 0)) prayer.located = false;
+            state.prayer = prayer;
         }
         return state;
     }

@@ -27,6 +27,7 @@ import com.alialyami.widgetscreen.views.ScaledHost;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.MediaWidget;
+import com.alialyami.widgetscreen.widgets.PrayerWidget;
 import com.alialyami.widgetscreen.widgets.QuickLaunchWidget;
 import com.alialyami.widgetscreen.widgets.MixerWidget;
 import com.alialyami.widgetscreen.widgets.SoundboardWidget;
@@ -96,6 +97,7 @@ public final class Dashboard {
         widgets.put("Soundboard", new SoundboardWidget(this));
         widgets.put("Storage", new StorageWidget(this));
         widgets.put("Clocks", new ClocksWidget(this));
+        widgets.put("Prayer", new PrayerWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
         if (warning[0] != null) say(warning[0], true);
@@ -525,6 +527,7 @@ public final class Dashboard {
             case "Weather": return 270;
             case "Storage": return 300;
             case "Clocks": return 280;
+            case "Prayer": return 300;
             default: return 640;
         }
     }

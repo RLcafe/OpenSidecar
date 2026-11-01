@@ -161,5 +161,13 @@ public final class CardSizing {
     public static double clockTileTime(double tileWidth, double tileHeight, boolean use24) { return clamp(Math.round(Math.min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
     public static double clockStackedTime(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
 
+    // Prayer times (docs/design/prayer-times.md): the same numbers as CardSizing.cs.
+    public static int prayer(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 360 ? LARGE : MEDIUM; }
+    public static double prayerTime(double width, double height) { return clamp(Math.round(Math.min(width * 0.24, (height - 60) * 0.7)), 28, 96); }
+    public static double prayerNextColumn(double width) { return Math.floor(width * 0.46); }
+    public static boolean prayerTilesAcross(double width) { return width >= 860; }
+    public static double prayerLargeTop(double height, boolean across) { return across ? clamp(height - 120, 140, 260) : clamp(Math.round(height * 0.38), 140, 220); }
+    public static double prayerTileTime(double tileWidth, boolean use24) { return clamp(Math.round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

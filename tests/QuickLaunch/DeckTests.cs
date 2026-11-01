@@ -54,7 +54,7 @@ internal static class DeckTests
             var window = Window();
             using (var controller = new DashboardController(window, path, true))
             {
-                Click(window, "EditDeck"); Assert(((TabControl)window.FindName("SettingsTabs")).SelectedIndex == 5, "Edit does not open Quick Launch settings.");
+                Click(window, "EditDeck"); Assert((string)((TabItem)((TabControl)window.FindName("SettingsTabs")).SelectedItem).Header == "Quick Launch", "Edit does not open Quick Launch settings.");
                 Click(window, "DeckAdd");
                 ((TextBox)window.FindName("DeckName")).Text = "My site";
                 ((ComboBox)window.FindName("DeckAction")).SelectedItem = DeckActions.Types.First(t => t.Id == "Website");

@@ -91,7 +91,7 @@ internal static class RemoteTests
         check("Phone link pairs, answers with state and commands, and refuses strangers", () => {
             string path = Path.Combine(directory, "remote-settings.xml");
             string store = RemotePairing.StorePath(path); if (File.Exists(store)) File.Delete(store);
-            SettingsStore.Save(path, new AppSettings { RemoteEnabled = true, HideToTrayWithPhone = true, WorldClocks = new[] { new WorldClock { Zone = "Tokyo Standard Time", Label = "Tokyo" }, new WorldClock { Zone = "UTC", Label = "" } } });
+            SettingsStore.Save(path, new AppSettings { PrayerLocation = "Riyadh", PrayerLatitude = 24.7136, PrayerLongitude = 46.6753, PrayerMethod = "Makkah", RemoteEnabled = true, HideToTrayWithPhone = true, WorldClocks = new[] { new WorldClock { Zone = "Tokyo Standard Time", Label = "Tokyo" }, new WorldClock { Zone = "UTC", Label = "" } } });
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
                 var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
@@ -142,13 +142,16 @@ internal static class RemoteTests
                     Assert(live.Item1 == 200, "Live state failed: " + live.Item2);
                     var liveState = Json(live.Item2);
                     // The Android checks parse this real answer, so both apps agree on the format.
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer", token).Item2);
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
                     var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];
                     Assert(Convert.ToInt32(storageState["lowPercent"]) == 10 && ((object[])storageState["drives"]).Length > 0 && ((Dictionary<string, object>)((object[])storageState["drives"])[0]).ContainsKey("free"), "Storage state wrong.");
                     var clockState = (Dictionary<string, object>)Json(get("/state?parts=clocks", token).Item2)["clocks"];
                     var clockList = (object[])clockState["clocks"];
                     Assert(clockList.Length == 2 && (string)((Dictionary<string, object>)clockList[0])["label"] == "Tokyo" && Convert.ToInt32(((Dictionary<string, object>)clockList[0])["offset"]) == 540 && Convert.ToInt32(((Dictionary<string, object>)clockList[1])["offset"]) == 0 && clockState.ContainsKey("pcOffset"), "Clocks state wrong.");
+                    var prayerState = (Dictionary<string, object>)Json(get("/state?parts=prayer", token).Item2)["prayer"];
+                    Assert((bool)prayerState["located"] && (string)prayerState["city"] == "Riyadh" && ((object[])prayerState["times"]).Length == 5 && !(bool)prayerState["alerting"] && Convert.ToDouble(prayerState["nextAt"]) > 0, "Prayer state wrong.");
+                    Assert(post("/command", "{\"action\":\"prayer.stop\"}", token).Item1 == 200, "Stopping the prayer alert from the phone failed.");
                     int art = get("/art", token).Item1;
                     Assert(art == 200 || art == 404, "Artwork request failed.");
 
@@ -201,7 +204,7 @@ internal static class RemoteTests
                     controller.Editor.Cancel();
                     Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
                     Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,layout", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,layout", token).Item2);
                     Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");

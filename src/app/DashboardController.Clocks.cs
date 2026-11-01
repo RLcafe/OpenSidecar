@@ -28,7 +28,7 @@ namespace WidgetScreen
             // A tap on the empty card opens the zone picker.
             Action tapped = () => {
                 if (Editor.Editing || !clocksCard.Empty) return;
-                OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 2; window.UpdateLayout();
+                OpenSettingsTab("Widgets"); window.UpdateLayout();
                 Control<ComboBox>("ClockZone0").BringIntoView(); Control<ComboBox>("ClockZone0").Focus();
             };
             Control<Border>("ClocksCard").PreviewMouseLeftButtonUp += (sender, e) => tapped();

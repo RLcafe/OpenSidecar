@@ -162,6 +162,15 @@ namespace WidgetScreen
         public static bool ClockTilesAcross(double width, int count) { return count <= 1 || (width - 12 * (count - 1)) / count >= 170; }
         public static double ClockTileTime(double tileWidth, double tileHeight, bool use24) { return Clamp(Math.Round(Math.Min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
         public static double ClockStackedTime(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
+        // Prayer times (docs/design/prayer-times.md): the next prayer under 340 wide or 220 tall, the next prayer beside
+        // today's five times at the reference 472 × 250, and from 440 × 360 the next prayer with its progress over the
+        // times, as rows or (with a body 860 wide) six tiles across.
+        public static Design Prayer(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 360 ? Design.Large : Design.Medium; }
+        public static double PrayerTime(double width, double height) { return Clamp(Math.Round(Math.Min(width * 0.24, (height - 60) * 0.7)), 28, 96); }
+        public static double PrayerNextColumn(double width) { return Math.Floor(width * 0.46); }
+        public static bool PrayerTilesAcross(double width) { return width >= 860; }
+        public static double PrayerLargeTop(double height, bool across) { return across ? Clamp(height - 120, 140, 260) : Clamp(Math.Round(height * 0.38), 140, 220); }
+        public static double PrayerTileTime(double tileWidth, bool use24) { return Clamp(Math.Round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

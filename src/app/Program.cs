@@ -67,9 +67,11 @@ namespace WidgetScreen
                             if (args.Contains("--render-settings"))
                             {
                                 ((System.Windows.Controls.Button)window.FindName("SettingsButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                                int tabIndex;
-                                if (Int32.TryParse(Argument(args, "--render-tab"), out tabIndex) && tabIndex >= 0 && tabIndex < ((System.Windows.Controls.TabControl)window.FindName("SettingsTabs")).Items.Count)
+                                // --render-tab takes the tab's position or its header ("Prayer").
+                                int tabIndex; string tab = Argument(args, "--render-tab");
+                                if (Int32.TryParse(tab, out tabIndex) && tabIndex >= 0 && tabIndex < ((System.Windows.Controls.TabControl)window.FindName("SettingsTabs")).Items.Count)
                                     ((System.Windows.Controls.TabControl)window.FindName("SettingsTabs")).SelectedIndex = tabIndex;
+                                else if (tab != null) DashboardController.SelectSettingsTab(window, tab);
                             }
                             var dashboard = (FrameworkElement)window.FindName("Dashboard");
                             dashboard.UpdateLayout();

@@ -429,6 +429,15 @@
                 <Grid x:Name="StorageBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- Prayer times worked out on this PC. PrayerCard builds the Small, Medium or Large design in PrayerBody (docs/design/prayer-times.md). -->
+            <Border x:Name="PrayerCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Prayer times">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="PRAYER TIMES" Style="{StaticResource Label}"/><TextBlock x:Name="PrayerStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="PrayerBody" Grid.Row="1" Margin="0,8,0,0"/>
+                <!-- Shown while the alert plays. -->
+                <Button x:Name="PrayerStop" Grid.Row="1" Content="Stop" Style="{StaticResource AccentButton}" MinWidth="120" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="Collapsed" AutomationProperties.Name="Stop the prayer alert"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
@@ -592,6 +601,37 @@
               <Button x:Name="ClearCityButton" Content="Turn weather off" Margin="0,14,0,16" HorizontalAlignment="Left" FontSize="15"/>
               <TextBlock Text="Search sends the city name to Open-Meteo. No account is needed. Once saved, weather updates every 15 minutes, and a tap on the card updates it now." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               </StackPanel>
+              </TabItem>
+              <TabItem Header="Prayer">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Prayer times" FontSize="24" Margin="0,0,0,10"/>
+                    <TextBlock Text="Today's five prayers for one city, worked out on this PC from the sun's position. The Prayer times widget starts hidden; turn it on in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <TextBlock Text="City" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+                      <TextBox x:Name="PrayerCitySearch" AutomationProperties.Name="Search prayer city" ToolTip="City name"/>
+                      <Button x:Name="PrayerSearchButton" Grid.Column="1" Content="Search" Margin="10,0,0,0" FontSize="16"/>
+                    </Grid>
+                    <ComboBox x:Name="PrayerCityResults" Margin="0,12,0,0" AutomationProperties.Name="Prayer city results" Visibility="Collapsed"/>
+                    <TextBlock x:Name="PrayerCityNote" Text="" TextWrapping="Wrap" Margin="0,12,0,8"/>
+                    <Button x:Name="PrayerUseWeather" Content="Use the weather city" HorizontalAlignment="Left" FontSize="15" Margin="0,0,0,16"/>
+                    <TextBlock Text="Calculation method" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="PrayerMethodChoice" AutomationProperties.Name="Prayer calculation method"/>
+                    <TextBlock Text="Asr" Style="{StaticResource Small}" Margin="0,14,0,6"/>
+                    <ComboBox x:Name="PrayerAsrChoice" AutomationProperties.Name="Asr school"/>
+                    <TextBlock Text="Search sends the city name to Open-Meteo, like the weather city. The times themselves are worked out here, with no account and no internet." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,16,0,16"/>
+                  </StackPanel></ScrollViewer>
+                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Alert" FontSize="24" Margin="0,0,0,10"/>
+                    <CheckBox x:Name="PrayerAlertChoice" Content="Play a sound on this PC at each prayer time"/>
+                    <TextBlock Text="Quiet mode keeps it silent. A Stop button shows on the card while it plays, and on your phone." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <TextBlock Text="Sound" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                    <TextBox x:Name="PrayerSoundPath" IsReadOnly="True" AutomationProperties.Name="Prayer alert sound file"/>
+                    <WrapPanel Margin="0,10,0,0"><Button x:Name="PrayerSoundBrowse" Content="Choose a file…" Margin="0,0,8,8"/><Button x:Name="PrayerSoundDefault" Content="Use the chime" Margin="0,0,8,8"/><Button x:Name="PrayerSoundTest" Content="Play" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock Text="An MP3, WAV, WMA, M4A or AAC file of your choice, such as an adhan recording. With none, a short chime plays." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,16"/>
+                    <TextBlock Text="Calculated times can differ by a minute or two from your mosque's timetable." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
+                </Grid>
               </TabItem>
                             <TabItem Header="Spotify">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
