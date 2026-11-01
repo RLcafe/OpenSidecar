@@ -31,6 +31,7 @@ namespace WidgetScreen
             clipCard.Fit(Editor.Bounds("Clipboard"));
             FitMacros();
             calendarCard.Fit(Editor.Bounds("Calendar"));
+            FitGames();
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
             Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;

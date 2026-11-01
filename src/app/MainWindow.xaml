@@ -479,6 +479,22 @@
                 <Grid x:Name="CalendarBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- Games: installed games from Steam, Epic and the Xbox app, six a page (docs/design/games.md). DashboardController.Games builds the buttons. -->
+            <Border x:Name="GamesCard" Grid.Row="1" Style="{StaticResource Card}" Padding="20" AutomationProperties.Name="Games">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel LastChildFill="True">
+                  <Button x:Name="GamesRefresh" DockPanel.Dock="Right" Content="&#xE72C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" Margin="6,0,0,0" ToolTip="Look for games again" AutomationProperties.Name="Look for games again"/>
+                  <StackPanel x:Name="GamesPages" DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="GamesPrevious" Content="&#xE76B;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Previous games page"/>
+                    <TextBlock x:Name="GamesPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
+                    <Button x:Name="GamesNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next games page"/>
+                  </StackPanel>
+                  <TextBlock x:Name="GamesHeading" Text="GAMES" Style="{StaticResource Label}" Margin="4,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+                <UniformGrid x:Name="GamesGrid" Grid.Row="1" Columns="3" Rows="2"/>
+                <TextBlock x:Name="GamesEmpty" Grid.Row="1" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
@@ -599,7 +615,12 @@
               </Grid>
               <CheckBox x:Name="ClipKeepChoice" Content="Keep the history when Widget Screen closes" Margin="0,8,0,0"/>
               <TextBlock Text="Off, the history is only in memory and is gone when the app closes. On, it's saved encrypted for your Windows account." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
-              <TextBlock Text="Storage" FontSize="24" Margin="0,8,0,10"/>
+              <TextBlock Text="Games" FontSize="24" Margin="0,8,0,10"/>
+              <TextBlock Text="The Games widget lists the games installed from these stores, recently played first, and a tap starts one. Playtime shows where the store keeps it on this PC (Steam); Epic and the Xbox app keep it online, so their games show none." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <CheckBox x:Name="SteamGamesChoice" Content="Steam"/>
+              <CheckBox x:Name="EpicGamesChoice" Content="Epic Games"/>
+              <CheckBox x:Name="XboxGamesChoice" Content="Xbox app and Microsoft Store"/>
+              <TextBlock Text="Storage" FontSize="24" Margin="0,24,0,10"/>
               <TextBlock Text="The Storage widget shows free space on this PC's drives. A drive with less free space than this turns to the warning colour." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
               <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
                 <Slider x:Name="StorageLowChoice" Minimum="1" Maximum="50" SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1" AutomationProperties.Name="Low space warning"/>
