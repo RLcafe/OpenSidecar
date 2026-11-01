@@ -51,6 +51,7 @@ internal static class SmokeTests
         OrganizeTests.Run(directory, Check);
         StorageTests.Run(directory, Check);
         ClockTests.Run(directory, Check);
+        PrayerTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -110,7 +111,7 @@ internal static class SmokeTests
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     click("SettingsButton");
-                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 8, "Settings tabs missing.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 9, "Settings tabs missing.");
                     ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
                     var preview = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
                     click("CancelSettings");
@@ -243,7 +244,8 @@ internal static class SmokeTests
                     click((System.Windows.Controls.Button)window.FindName("HintDismiss"));
                     Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
                     var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
-                    Assert((string)((System.Windows.Controls.TabItem)tabs.Items[6]).Header == "Phone" && (string)((System.Windows.Controls.TabItem)tabs.Items[7]).Header == "Discord", "The Phone tab doesn't come before Discord.");
+                    var headers = tabs.Items.OfType<System.Windows.Controls.TabItem>().Select(t => (string)t.Header).ToList();
+                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Phone", "Discord" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
                     Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
                 }
                 window.Close();

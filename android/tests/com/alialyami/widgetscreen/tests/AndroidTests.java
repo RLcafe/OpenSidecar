@@ -8,6 +8,7 @@ import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.PcState;
+import com.alialyami.widgetscreen.core.PrayerText;
 import com.alialyami.widgetscreen.core.StorageText;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.core.Theme;
@@ -352,8 +353,9 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null, "every part");
             ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
+            ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
@@ -431,6 +433,19 @@ public final class AndroidTests {
             ok(state.clocks != null && state.clocks.pcOffset == 180 && state.clocks.clocks.size() == 1 && state.clocks.clocks.get(0).label.equals("Tokyo"), "parse");
             WidgetLayout.Placement clocks = WidgetLayout.find(WidgetLayout.defaults(), "Clocks");
             ok(clocks != null && !clocks.visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Clocks").visible && WidgetLayout.title("Clocks").equals("World clocks"), "hidden by default");
+        } });
+        check("Prayer times pick the PC's designs and show the PC's times and countdown", new Action() { public void run() {
+            ok(CardSizing.prayer(240, 152) == CardSizing.SMALL && CardSizing.prayer(600, 219) == CardSizing.SMALL && CardSizing.prayer(472, 250) == CardSizing.MEDIUM && CardSizing.prayer(439, 576) == CardSizing.MEDIUM && CardSizing.prayer(440, 360) == CardSizing.LARGE, "designs");
+            ok(CardSizing.prayerTilesAcross(860) && !CardSizing.prayerTilesAcross(859) && CardSizing.prayerNextColumn(424) == 195 && CardSizing.prayerTime(195, 166) == 47 && CardSizing.prayerLargeTop(492, false) == 187 && CardSizing.prayerTileTime(120, false) == 25, "sizes");
+            ok(PrayerText.countdown(72 * 60000L + 12000).equals("in 1 h 13 m") && PrayerText.countdown(12 * 60000L).equals("in 12 m") && PrayerText.countdown(20000).equals("in under a minute"), "countdown");
+            // 11:50 UTC is 14:50 on a PC three hours ahead.
+            long asr = java.time.LocalDateTime.of(2026, 11, 1, 11, 50).toEpochSecond(java.time.ZoneOffset.UTC) * 1000;
+            ok(PrayerText.time(asr, 180, false).equals("2:50 PM") && PrayerText.time(asr, 180, true).equals("14:50") && PrayerText.time(0, 180, true).equals("—"), "times");
+            ok(PrayerText.justStarted(asr + 5 * 60000, asr) && !PrayerText.justStarted(asr + 25 * 60000, asr) && Math.abs(PrayerText.progress(asr + 30 * 60000, asr, asr + 60 * 60000) - 0.5) < 1e-9, "now and progress");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":true,\"city\":\"Riyadh\",\"pcOffset\":180,\"next\":3,\"current\":2,\"nextAt\":" + (asr + 3600000) + ",\"previousAt\":" + asr + ",\"alerting\":true,\"times\":[1,2,3,4,5]}}")));
+            ok(state.prayer.located && state.prayer.next == 3 && state.prayer.current == 2 && state.prayer.alerting && state.prayer.times[4] == 5 && state.prayer.city.equals("Riyadh"), "parse");
+            ok(!PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":true,\"times\":[1]}}"))).prayer.located && !PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":false}}"))).prayer.located, "incomplete");
+            ok(!WidgetLayout.find(WidgetLayout.defaults(), "Prayer").visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Prayer").visible && WidgetLayout.title("Prayer").equals("Prayer times"), "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

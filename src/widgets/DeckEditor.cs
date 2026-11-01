@@ -226,7 +226,7 @@ namespace WidgetScreen
                 // An unavailable drive/app in an unchanged assignment must not block other settings.
                 string original;
                 if (!String.IsNullOrWhiteSpace(draft[i].Label) && originalTargets.TryGetValue(draft[i], out original) && original == TargetIdentity(draft[i])) error = null;
-                if (error != null) { Select(i); C<TabControl>("SettingsTabs").SelectedIndex = 5; status("Button " + (i + 1) + " (" + draft[i].Label + "): " + error); return false; }
+                if (error != null) { Select(i); DashboardController.SelectSettingsTab(window, "Quick Launch"); status("Button " + (i + 1) + " (" + draft[i].Label + "): " + error); return false; }
             }
             result = draft.Select(s => s.Copy()).ToList();
             foreach (var item in result) { item.Label = item.Label.Trim(); item.Target = item.Target.Trim(); }

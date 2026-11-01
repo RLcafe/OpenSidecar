@@ -75,6 +75,15 @@ namespace WidgetScreen
         public int StorageLowPercent { get; set; }
         // World clocks: up to three time zones and the city names shown for them (Settings → Widgets).
         public WorldClock[] WorldClocks { get; set; }
+        // Prayer times (Settings → Prayer): a city of its own (empty follows the weather city), the calculation method,
+        // the Asr school, and the alert at each prayer with an audio file (empty plays the built-in chime).
+        public string PrayerLocation { get; set; }
+        public double PrayerLatitude { get; set; }
+        public double PrayerLongitude { get; set; }
+        public string PrayerMethod { get; set; }
+        public bool PrayerHanafi { get; set; }
+        public bool PrayerAlert { get; set; }
+        public string PrayerSound { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -115,6 +124,8 @@ namespace WidgetScreen
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
+            PrayerLocation = ""; PrayerSound = "";
+            PrayerMethod = PrayerService.RegionMethod();
             Shortcuts = DefaultShortcuts();
         }
 
@@ -173,6 +184,9 @@ namespace WidgetScreen
             }
             if (Double.IsNaN(Latitude) || Double.IsInfinity(Latitude) || Double.IsNaN(Longitude) || Double.IsInfinity(Longitude) || Math.Abs(Latitude) > 90 || Math.Abs(Longitude) > 180) WeatherLocation = "";
             WeatherLocation = WeatherLocation ?? "";
+            if (Double.IsNaN(PrayerLatitude) || Double.IsInfinity(PrayerLatitude) || Double.IsNaN(PrayerLongitude) || Double.IsInfinity(PrayerLongitude) || Math.Abs(PrayerLatitude) > 90 || Math.Abs(PrayerLongitude) > 180) PrayerLocation = "";
+            PrayerLocation = PrayerLocation ?? ""; PrayerSound = PrayerSound ?? "";
+            if (!PrayerService.KnownMethod(PrayerMethod)) PrayerMethod = PrayerService.RegionMethod();
             if (WeatherUnits != "metric" && WeatherUnits != "imperial") WeatherUnits = RegionWeatherUnits();
             var pages = WidgetScreen.WidgetLayout.Pages(this).Take(WidgetScreen.WidgetLayout.MaxPages).ToList();
             for (int i = 0; i < pages.Count; i++) WidgetScreen.WidgetLayout.NormalizePage(pages[i], this, i);

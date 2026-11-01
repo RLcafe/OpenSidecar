@@ -85,6 +85,7 @@ namespace WidgetScreen
             weatherCard = new WeatherCard(window, Control<Grid>("WeatherBody"));
             InitializeStorage();
             InitializeClocks();
+            InitializePrayer();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -146,8 +147,8 @@ namespace WidgetScreen
             Button("EmptyDeck", OpenDeckSettings);
             Button("DeckPrevious", () => { deckPage--; BuildShortcuts(); });
             Button("DeckNext", () => { deckPage++; BuildShortcuts(); });
-            Button("SpotifyAccount", () => { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 4; });
-            Button("SpotifySetup", () => { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 4; });
+            Button("SpotifyAccount", () => OpenSettingsTab("Spotify"));
+            Button("SpotifySetup", () => OpenSettingsTab("Spotify"));
             Button("EditLayoutButton", BeginLayoutEdit);
             Button("OpenLayoutEditor", () => { CloseSettings(); BeginLayoutEdit(); });
             Button("UndoLayoutButton", () => Editor.Undo());
@@ -202,7 +203,7 @@ namespace WidgetScreen
                 if (Editor.Editing) return;
                 if (String.IsNullOrWhiteSpace(settings.WeatherLocation))
                 {
-                    OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 3; window.UpdateLayout(); Control<TextBox>("CitySearch").BringIntoView(); Control<TextBox>("CitySearch").Focus();
+                    OpenSettingsTab("Weather"); window.UpdateLayout(); Control<TextBox>("CitySearch").BringIntoView(); Control<TextBox>("CitySearch").Focus();
                 }
                 else RefreshWeather();
             };
@@ -237,6 +238,7 @@ namespace WidgetScreen
             UpdateTray();
             spotify.Tick(Showing && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
             soundboard.Tick(Showing && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
+            TickPrayer();
             // Minimized or in the tray: the dashboard isn't visible, so it doesn't poll (a phone still gets answers).
             if (!Showing) return;
             int interval = settings.QuietMode ? 5 : 2;
@@ -338,7 +340,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -525,8 +527,16 @@ namespace WidgetScreen
         // The button grid: the Quick Launch card less its 20-unit padding, border and 48-unit header.
         private Size DeckArea() { var b = Editor.Bounds("Shortcuts"); return new Size(Math.Max(0, b.Width - 42), Math.Max(0, b.Height - 90)); }
         private string DeckShape() { var a = DeckArea(); var s = CardSizing.DeckGrid(a.Width, a.Height, settings.Shortcuts.Count); return s[0] + "x" + s[1] + "|" + Math.Round(a.Width) + "x" + Math.Round(a.Height); }
-        private void OpenDeckSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 5; }
-        private void OpenDiscordSettings() { OpenSettings(); Control<TabControl>("SettingsTabs").SelectedIndex = 7; }
+        private void OpenDeckSettings() { OpenSettingsTab("Quick Launch"); }
+        private void OpenDiscordSettings() { OpenSettingsTab("Discord"); }
+        // Opens Settings on a tab by its header, so tabs can be added without renumbering.
+        private void OpenSettingsTab(string header) { OpenSettings(); SelectSettingsTab(window, header); }
+        public static void SelectSettingsTab(Window window, string header)
+        {
+            var tabs = (TabControl)window.FindName("SettingsTabs");
+            var tab = tabs.Items.OfType<TabItem>().FirstOrDefault(t => (string)t.Header == header);
+            if (tab != null) tabs.SelectedItem = tab;
+        }
         // A phone that runs a button has already asked the user, so it passes confirmed.
         private async void RunDeckAction(Shortcut shortcut) { await RunDeckActionAsync(shortcut, false); }
         // Returns null on success, or the message the dashboard showed.
@@ -960,7 +970,7 @@ namespace WidgetScreen
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
-            OpenClockSettings();
+            OpenClockSettings(); OpenPrayerSettings();
             Text("SettingsStatus", ""); UpdateRemoteSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
@@ -992,6 +1002,7 @@ namespace WidgetScreen
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
             candidate.WorldClocks = ClockChoices();
+            SavePrayerChoices(candidate);
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             candidate.WeatherUnits = Control<ComboBox>("WeatherUnitsChoice").SelectedIndex == 1 ? "imperial" : "metric";
@@ -1081,7 +1092,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
+            weather.Dispose(); prayerAlert.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }
