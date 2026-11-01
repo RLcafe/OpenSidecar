@@ -94,6 +94,10 @@ namespace WidgetScreen
         public bool ShowSteamGames { get; set; }
         public bool ShowEpicGames { get; set; }
         public bool ShowXboxGames { get; set; }
+        // Smart home (Settings → Home): the Home Assistant devices the card shows, in order. The address and token are
+        // kept in home-assistant.dat, never here.
+        [XmlArray("HomeEntities"), XmlArrayItem("Entity")]
+        public string[] HomeEntities { get; set; }
         // Macros (Settings → Macros): buttons that each run a chain of steps (docs/design/macros.md). Empty by default.
         [XmlArray("Macros"), XmlArrayItem("Macro")]
         public Macro[] Macros { get; set; }
@@ -188,6 +192,7 @@ namespace WidgetScreen
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             WorldClocks = WorldClockService.Clean(WorldClocks);
             ClipboardSize = ClipboardHistory.ClampSize(ClipboardSize);
+            HomeEntities = (HomeEntities ?? new string[0]).Where(id => !String.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct().Take(HomeAssistantService.MaxEntities).ToArray();
             Macros = MacroActions.Clean(Macros).ToArray();
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();

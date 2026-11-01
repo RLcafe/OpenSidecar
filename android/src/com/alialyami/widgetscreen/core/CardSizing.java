@@ -98,6 +98,24 @@ public final class CardSizing {
     public static final int SMALL = 0, MEDIUM = 1, LARGE = 2;
     // System stats: a list of readings under 340 wide (or 240 tall), rings at the reference 472 × 310, and tiles with
     // history graphs from 400 × 420.
+    // Smart home (HomeCard on the PC): a scrolling list of 56-unit rows under 340 wide or 220 tall, tiles at the
+    // reference size, and tiles with dimmer sliders from 560 x 360. A tile is at least 180 wide and homeCell tall;
+    // controls go under it from homeTile. With more devices than fit, a 56-wide pager column takes the right edge.
+    public static int home(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 560 && height >= 360 ? LARGE : MEDIUM; }
+    public static double homeContent(double textScale) { return Math.ceil(24 + 44 * textScale); }
+    public static double homeCell(double textScale) { return Math.max(108, homeContent(textScale)); }
+    public static double homeTile(double textScale) { return homeContent(textScale) + 56; }
+    public static final double HOME_PAGER = 56;
+    // { columns, rows, paged (1 or 0) } for the tiles' area.
+    public static int[] homeGrid(double width, double height, double textScale, int count) {
+        count = Math.max(1, count);
+        int rows = (int) clamp(Math.floor(height / homeCell(textScale)), 1, 4), columns = (int) clamp(Math.floor(width / 180), 1, 5);
+        boolean paged = columns * rows < count;
+        if (paged) columns = (int) clamp(Math.floor((width - HOME_PAGER) / 180), 1, 5);
+        else { columns = Math.min(columns, count); rows = Math.min(rows, (count + columns - 1) / columns); }
+        return new int[] { columns, rows, paged ? 1 : 0 };
+    }
+
     public static int stats(double width, double height) { return width < 340 || height < 240 ? SMALL : width >= 400 && height >= 420 ? LARGE : MEDIUM; }
     // Weather: a glance under 340 wide (or 220 tall), today's reading with three facts at the reference 472 × 250, and a
     // forecast with five hours from 400 × 340.

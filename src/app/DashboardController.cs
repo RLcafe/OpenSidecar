@@ -92,6 +92,7 @@ namespace WidgetScreen
             InitializeMacros();
             InitializeCalendar();
             InitializeGames();
+            InitializeHome();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -256,7 +257,7 @@ namespace WidgetScreen
             if (ticks % (settings.QuietMode ? 6 : 3) == 0) RefreshMedia();
             else if (lastMedia != null && lastMedia.Playing && Editor.IsVisible("Media")) mediaScrubber.Advance(1000);
             if (!String.IsNullOrWhiteSpace(settings.WeatherLocation) && DateTime.UtcNow - lastWeatherAttempt >= TimeSpan.FromMinutes(15)) RefreshWeather();
-            TickStorage(); TickClocks(); TickCalendar(); TickGames();
+            TickStorage(); TickClocks(); TickCalendar(); TickGames(); TickHome();
             TickClaude();
         }
 
@@ -982,7 +983,7 @@ namespace WidgetScreen
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
-            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros); OpenCalendarSettings();
+            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros); OpenCalendarSettings(); OpenHomeSettings();
             Control<CheckBox>("SteamGamesChoice").IsChecked = settings.ShowSteamGames; Control<CheckBox>("EpicGamesChoice").IsChecked = settings.ShowEpicGames; Control<CheckBox>("XboxGamesChoice").IsChecked = settings.ShowXboxGames;
             Text("SettingsStatus", ""); UpdateRemoteSettings(); UpdateClaudeSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
@@ -1019,7 +1020,7 @@ namespace WidgetScreen
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
             candidate.WorldClocks = ClockChoices();
-            SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray();
+            SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray(); candidate.HomeEntities = HomeChoicesToSave();
             candidate.ShowSteamGames = Control<CheckBox>("SteamGamesChoice").IsChecked == true; candidate.ShowEpicGames = Control<CheckBox>("EpicGamesChoice").IsChecked == true; candidate.ShowXboxGames = Control<CheckBox>("XboxGamesChoice").IsChecked == true;
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true; candidate.ClaudeOnlineLimits = Control<CheckBox>("ClaudeOnlineChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
@@ -1029,7 +1030,7 @@ namespace WidgetScreen
             catch (Exception e) { Text("SettingsStatus", "Could not save settings: " + e.Message); return; }
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude || settings.WeatherUnits != candidate.WeatherUnits;
             bool storesChanged = settings.ShowSteamGames != candidate.ShowSteamGames || settings.ShowEpicGames != candidate.ShowEpicGames || settings.ShowXboxGames != candidate.ShowXboxGames;
-            settings = candidate; CloseSettings(); if (storesChanged) ApplyGames(); RefreshSystem();
+            settings = candidate; CloseSettings(); if (storesChanged) ApplyGames(); lastHomeAttempt = DateTime.MinValue; ShowHome(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
             FitScreen();
             if (locationChanged) { weatherGeneration++; weatherCard.Forget(); RefreshWeather(); }
@@ -1112,7 +1113,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             SaveNotesDraft(); disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); calendar.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
+            weather.Dispose(); calendar.Dispose(); home.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }

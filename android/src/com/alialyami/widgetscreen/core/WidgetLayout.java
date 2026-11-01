@@ -14,7 +14,7 @@ public final class WidgetLayout {
     // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
     private static final double MINIMUM_SHRINK = 0.78;
     // The same widgets as the Windows dashboard, which the phone mirrors.
-    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros", "Calendar", "Games" };
+    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros", "Calendar", "Games", "Home" };
 
     public static final class Box {
         public final double x, y, width, height;
@@ -60,6 +60,7 @@ public final class WidgetLayout {
             case "Macros": return "Macros";
             case "Calendar": return "Calendar";
             case "Games": return "Games";
+            case "Home": return "Smart home";
             default: return id;
         }
     }
@@ -84,6 +85,7 @@ public final class WidgetLayout {
             case "Macros": return new double[] { 288, 204 };
             case "Calendar": return new double[] { 240, 152 };
             case "Games": return new double[] { 288, 204 };
+            case "Home": return new double[] { 240, 152 };
             default: return new double[] { 232, 152 };
         }
     }
@@ -131,7 +133,8 @@ public final class WidgetLayout {
             new Placement("Clipboard", 1384, 0, 472, 310, false),
             new Placement("Macros", 336, 326, 472, 250, false),
             new Placement("Calendar", 1384, 0, 472, 310, false),
-            new Placement("Games", 336, 326, 472, 250, false)
+            new Placement("Games", 336, 326, 472, 250, false),
+            new Placement("Home", 1384, 0, 472, 310, false)
         };
     }
 

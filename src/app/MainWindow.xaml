@@ -495,6 +495,13 @@
                 <TextBlock x:Name="GamesEmpty" Grid.Row="1" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4"/>
               </Grid>
             </Border>
+            <!-- Smart home: the Home Assistant devices chosen in Settings → Home. HomeCard builds the Small, Medium or Large design in HomeBody (docs/design/smart-home.md). -->
+            <Border x:Name="HomeCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Smart home">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="SMART HOME" Style="{StaticResource Label}"/><TextBlock x:Name="HomeStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="HomeBody" Grid.Row="1" Margin="-4,4,-4,-4"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
@@ -711,6 +718,25 @@
                     <TextBlock Text="Outlook: on the web, open Settings → Calendar → Shared calendars, publish a calendar, and copy its ICS link." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="Anyone with the address can read that calendar, so treat it like a password. The widget only reads; it can't change your calendar. Signing in with a Google or Microsoft account instead would need an app registered with them." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Home">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="640"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Home Assistant" FontSize="24" Margin="0,0,0,10"/>
+                    <TextBlock Text="The Smart home widget turns your Home Assistant lights, switches and plugs on and off, dims lights and sets thermostats. It starts hidden; turn it on in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="HomeConnectionStatus" Text="Not connected." TextWrapping="Wrap" Margin="0,0,0,12" FontSize="{DynamicResource BodySize}"/>
+                    <TextBlock Text="Address" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                    <TextBox x:Name="HomeAddress" MaxLength="200" AutomationProperties.Name="Home Assistant address" ToolTip="For example http://homeassistant.local:8123"/>
+                    <TextBlock Text="Long-lived access token" Style="{StaticResource Small}" Margin="0,12,0,6"/>
+                    <PasswordBox x:Name="HomeToken" MaxLength="1000" AutomationProperties.Name="Home Assistant long-lived access token"/>
+                    <WrapPanel Margin="0,12,0,0"><Button x:Name="HomeConnect" Content="Connect" Style="{StaticResource AccentButton}" MinHeight="52" MinWidth="140" Margin="0,0,8,8"/><Button x:Name="HomeDisconnect" Content="Disconnect" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock Text="Connecting takes effect right away. Make the token in Home Assistant under your profile → Security → Long-lived access tokens. It's kept encrypted for your Windows account and only sent to Home Assistant on your home network; addresses on the internet are refused." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+                  </StackPanel></ScrollViewer>
+                  <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+                    <StackPanel><TextBlock Text="Devices on the card" FontSize="24" Margin="0,0,0,8"/><TextBlock Text="Tick up to 24 lights, switches (plugs are switches) and thermostats. Saved with Save changes." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,8"/></StackPanel>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel x:Name="HomeChoices" Margin="0,0,12,0"/></ScrollViewer>
+                  </Grid>
                 </Grid>
               </TabItem>
                             <TabItem Header="Spotify">
