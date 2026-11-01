@@ -31,6 +31,10 @@ namespace WidgetScreen
     {
         public int Version { get; set; }
         public string Accent { get; set; }
+        // Sticker Sheet inks (decision 021): "Focus=Coral;…" for widgets whose ink was changed in Edit layout, and
+        // Settings → Theme → Widget colours: "Each" (every widget its own ink) or "Accent" (every ink is the accent).
+        public string WidgetInks { get; set; }
+        public string WidgetColours { get; set; }
         public string SpotifyClientId { get; set; }
         public string Theme { get; set; }
         public double CornerRadius { get; set; }
@@ -160,6 +164,7 @@ namespace WidgetScreen
         {
             Version = 1;
             Accent = "Lime";
+            WidgetInks = ""; WidgetColours = Inks.EachOwn;
             Theme = "Midnight";
             CornerRadius = 20;
             StartFullscreen = true;
@@ -225,6 +230,7 @@ namespace WidgetScreen
             TextScale = Math.Max(0.9, Math.Min(1.4, Double.IsNaN(TextScale) ? 1 : TextScale));
             if (Accent != "Lime" && Accent != "Glacier" && Accent != "Lavender" && Accent != "Amber") Accent = "Lime";
             if (Theme != "Midnight" && Theme != "Slate" && Theme != "Warm") Theme = "Midnight";
+            WidgetInks = Inks.Clean(WidgetInks); WidgetColours = Inks.Mode(WidgetColours);
             CornerRadius = Clamp(CornerRadius, 0, 24, 20);
             ClockWidth = Clamp(ClockWidth, 0, 10, 1); MediaWidth = Clamp(MediaWidth, 0, 10, 3);
             MixerWidth = Clamp(MixerWidth, 0, 10, 3); SystemWidth = Clamp(SystemWidth, 0, 10, 2);

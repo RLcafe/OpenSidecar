@@ -21,7 +21,8 @@ import java.util.List;
 public final class QuickLaunchWidget extends Widget {
     private int page;
     private LinearLayout grid, pager;
-    private TextView pageLabel, empty, heading;
+    private TextView pageLabel, empty;
+    private View heading;
     private GlyphView previousPage, nextPage;
     private String shown;
 
@@ -34,8 +35,7 @@ public final class QuickLaunchWidget extends Widget {
         shown = null;
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
-        heading = ui.label("QUICK LAUNCH");
-        heading.setSingleLine(true); heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        heading = strip();
         header.addView(heading, ui.margins(ui.ll(0, Ui.WRAP, 1), 4, 0, 4, 0));
         pager = ui.row();
         previousPage = ui.iconButton("chevron-left", "Previous button page", 16, false, new View.OnClickListener() { @Override public void onClick(View v) { page--; shown = null; render(); } });

@@ -23,7 +23,8 @@ import java.util.Map;
 public final class SoundboardWidget extends Widget {
     private static final double GAP = 8;
     private LinearLayout grid, pager, emptyState;
-    private TextView channel, status, pageLabel, heading;
+    private TextView channel, status, pageLabel;
+    private View heading;
     private GlyphView previousPage, nextPage, reload;
     private int page;
     private String shown, message = "";
@@ -38,7 +39,7 @@ public final class SoundboardWidget extends Widget {
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
-        heading = ui.label("SOUNDBOARD");
+        heading = strip();
         header.addView(heading, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 4, 0, 12, 0));
         channel = ui.smallText("");
         channel.setSingleLine(true); channel.setEllipsize(android.text.TextUtils.TruncateAt.END);

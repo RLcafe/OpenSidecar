@@ -4,6 +4,7 @@ import android.view.View;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.views.Stickers;
 
 // One dashboard card, mirroring the same card on the PC. Its state lives here and survives rebuilds (theme, text
 // size, rotation); build() creates fresh views for the card's current size, then render() fills them from the
@@ -45,4 +46,15 @@ public abstract class Widget {
     public void tick(int ticks, boolean quiet) { }
 
     protected boolean active() { return built() && dash.isActive(id); }
+
+    // The card's label strip in its ink, and a status sticker for its right-hand fact (docs/design/sticker-sheet.md).
+    private double stripWidth;
+    protected View strip() { Stickers.LabelStrip strip = new Stickers.LabelStrip(ui, id, dash.ink(id), width); stripWidth = strip.naturalUnits(); return strip; }
+    // The sticker gets the header's room beside the strip (card less its 24-unit padding and a 12-unit gap), and steps
+    // aside when that's under 40 units, as on the PC.
+    protected Stickers.Sticker sticker(boolean warns) {
+        Stickers.Sticker sticker = new Stickers.Sticker(ui, dash.ink(id), warns);
+        sticker.setRoom(width - 48 - stripWidth - 12);
+        return sticker;
+    }
 }

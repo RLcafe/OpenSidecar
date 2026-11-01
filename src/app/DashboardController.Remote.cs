@@ -482,7 +482,7 @@ namespace WidgetScreen
                     }
                 case "claude.focus": return RemoteClaudeFocus(body);
                 case "claude.collapse": return RemoteClaudeCollapse(body);
-                case "page.show": case "layout.save": case "page.add": case "page.rename": case "page.delete": case "page.move":
+                case "page.show": case "layout.save": case "layout.inks": case "page.add": case "page.rename": case "page.delete": case "page.move":
                     return RemotePages(Str(body, "action"), body);
                 default: throw new ArgumentException("Unknown command. Update Widget Screen on the phone or the PC.");
             }

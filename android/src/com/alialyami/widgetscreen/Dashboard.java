@@ -14,6 +14,7 @@ import android.widget.TextView;
 import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
+import com.alialyami.widgetscreen.core.Inks;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
@@ -279,6 +280,14 @@ public final class Dashboard {
 
     public AppSettings look() { return appearance != null ? appearance : settings; }
 
+    // The ink a card wears (decision 021): the PC's choice, or the one picked in Edit layout until it's saved or
+    // cancelled, and the accent everywhere with Widget colours → Accent only.
+    private String editInks;
+    public int ink(String id) {
+        AppSettings look = look();
+        return Theme.ink(Inks.resolve(id, Inks.parse(editInks != null ? editInks : settings.inks), look.widgetColours, look.accent));
+    }
+
     // Live preview from Settings; null restores the saved appearance.
     public void preview(AppSettings draft) { appearance = draft; rebuild(); }
 
@@ -511,17 +520,22 @@ public final class Dashboard {
     public void saveLayout(WidgetLayout.Placement[] layout, double canvasWidth, double canvasHeight, String done) {
         settings.store(canvasWidth, canvasHeight, layout);
         persist();
-        layoutCommand(Json.map("action", "layout.save", "index", settings.page, "page", settings.pageName(), "width", canvasWidth, "height", canvasHeight, "widgets", PcState.json(layout)), done);
+        Map<String, Object> inks = new LinkedHashMap<String, Object>();
+        for (String id : WidgetLayout.IDS) if (Inks.inScope(id)) inks.put(id, Inks.chosen(id, Inks.parse(settings.inks)));
+        layoutCommand(Json.map("action", "layout.save", "index", settings.page, "page", settings.pageName(), "width", canvasWidth, "height", canvasHeight, "widgets", PcState.json(layout), "inks", inks), done);
     }
 
     // The PC sent its layout: show it, unless an edit is open (the edit saves to the PC and the layout is read again).
     private void mirror(PcState.Layout layout, String version) {
         if (version.equals(mirroredVersion) || editor.editing()) return;
         mirroredVersion = version;
+        String inksBefore = settings.inks, coloursBefore = settings.widgetColours;
         settings.mirror(layout);
         persist();
         editor.apply(settings);
-        if (listMode) rebuild();
+        // New inks from the PC repaint every card (strips and stickers take their ink when built).
+        boolean repaint = !settings.inks.equals(inksBefore) || !settings.widgetColours.equals(coloursBefore);
+        if (listMode || repaint) rebuild();
         else { editorChanged(true); updatePages(); }
         if (editAfterMirror) { editAfterMirror = false; beginEdit(); }
     }
@@ -697,10 +711,17 @@ public final class Dashboard {
         if (!online()) { say("Connect to " + pc.name() + " to edit its layout. The phone shows the PC's layout."); return; }
         if (pc.state != null && pc.state.layout != null && pc.state.layout.editing) { say("The layout is being edited on the PC. Try again once it's saved there."); return; }
         editor.begin();
+        editInks = settings.inks;
         updatePages();
     }
 
-    private void cancelEdit() { closeWidgetsPanel(); editor.cancel(); updatePages(); say("Layout changes discarded."); }
+    private void cancelEdit() {
+        closeWidgetsPanel(); editor.cancel();
+        boolean inksChanged = editInks != null && !editInks.equals(settings.inks);
+        editInks = null;
+        if (inksChanged) rebuild();
+        updatePages(); say("Layout changes discarded.");
+    }
 
     private void saveEdit() {
         closeWidgetsPanel();
@@ -708,6 +729,9 @@ public final class Dashboard {
         settings.snapWidgets = editor.snap();
         WidgetLayout.Placement[] layout = editor.export();
         boolean overlaps = editor.hasOverlaps();
+        // Inks belong to the widget, not the page or screen shape, and go to the PC with the layout.
+        if (editInks != null) settings.inks = Inks.format(Inks.parse(editInks));
+        editInks = null;
         editor.accept();
         updatePages();
         saveLayout(layout, editor.canvasWidth(), editor.canvasHeight(), overlaps ? "Layout saved on the PC. Some widgets overlap." : "Layout saved on the PC.");
@@ -798,6 +822,41 @@ public final class Dashboard {
         if (widgetsPanel != null) refreshWidgetsPanel();
     }
 
+    // Edit layout's ink picker for the selected widget (decision 021): seven inks (Amber stays for warnings), saved
+    // with the layout on the PC, dropped by Cancel.
+    private void addInkPicker(LinearLayout panel) {
+        final String id = editor.selected();
+        boolean inScope = Inks.inScope(id);
+        panel.addView(ui.label("INK FOR " + WidgetLayout.title(id).toUpperCase(java.util.Locale.ROOT)), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 4, 0, 8));
+        String chosen = Inks.chosen(id, Inks.parse(editInks != null ? editInks : settings.inks));
+        LinearLayout swatches = ui.row();
+        for (final String name : Inks.CHOICES) {
+            boolean on = inScope && name.equals(chosen);
+            GlyphView swatch = new GlyphView(activity, on ? "check" : "", Theme.INK_TEXT, ui.fpx(20));
+            swatch.setBackground(ui.pressable(Theme.ink(name), on ? ui.theme.text : ui.theme.controlBorder, on ? 3 : 1, 12));
+            swatch.setContentDescription(name + " ink" + (on ? ", chosen" : ""));
+            swatch.setClickable(true); swatch.setFocusable(true);
+            swatch.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { chooseInk(id, name); } }));
+            Ui.enable(swatch, inScope);
+            swatches.addView(swatch, ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 4, 0));
+        }
+        panel.addView(swatches, ui.ll(Ui.MATCH, Ui.WRAP));
+        String note = !inScope ? "Claude Code keeps its own colours."
+            : Inks.ACCENT_ONLY.equals(look().widgetColours) ? "Widget colours is Accent only (Settings → Theme), so every card wears the accent until you choose Each its own."
+            : "Saved with the layout on the PC.";
+        panel.addView(Ui.wrap(ui.smallText(note), 3), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 4, 0, 0));
+    }
+
+    private void chooseInk(String id, String name) {
+        if (!editor.editing() || !Inks.inScope(id) || !Inks.choice(name)) return;
+        java.util.Map<String, String> inks = Inks.parse(editInks != null ? editInks : settings.inks);
+        inks.put(id, name);
+        editInks = Inks.format(inks);
+        if (canvas != null && editor.isVisible(id)) attachCard(id);
+        if (widgetsPanel != null) refreshWidgetsPanel();
+        say(WidgetLayout.title(id) + " in " + name + ". Save layout to keep it.");
+    }
+
     private void toggleWidgetsPanel() { if (widgetsPanel != null) closeWidgetsPanel(); else openWidgetsPanel(); }
 
     private void closeWidgetsPanel() {
@@ -832,12 +891,18 @@ public final class Dashboard {
     private void refreshWidgetsPanel() {
         LinearLayout panel = (LinearLayout) widgetsPanel.findViewWithTag("panel");
         panel.removeAllViews();
-        panel.addView(ui.label("SHOW ON THE DASHBOARD"), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 4, 0, 8));
+        // The selected card's ink first, where it's seen without scrolling (decision 021).
+        addInkPicker(panel);
+        panel.addView(ui.label("SHOW ON THE DASHBOARD"), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 20, 0, 8));
         for (final String id : WidgetLayout.IDS) {
             CheckBox box = ui.check(WidgetLayout.title(id), editor.isEnabled(id), new CheckBox.Listener() {
                 @Override public void changed(CheckBox b, boolean checked) { editor.setVisible(id, checked); if (checked) editor.select(id); }
             });
             if (id.equals(editor.selected())) box.setBackground(ui.shape(ui.theme.selected, ui.theme.accent, 1, 10));
+            // A dot in the widget's ink before its name, as on the PC.
+            View dot = new View(activity);
+            if (Inks.inScope(id)) dot.setBackground(ui.shape(ink(id), 0, 0, 6));
+            box.addView(dot, 1, ui.margins(ui.ll(ui.px(12), ui.px(12)), 0, 0, 10, 0));
             panel.addView(box, ui.ll(Ui.MATCH, Ui.WRAP));
         }
         // Nudge arrows: one-unit moves and resizes of the selected card, which a finger can't do on a phone (the PC

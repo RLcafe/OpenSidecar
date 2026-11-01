@@ -66,9 +66,9 @@ public final class MixerWidget extends Widget {
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(ui.label("SOUND MIXER"), ui.ll(Ui.WRAP, Ui.WRAP));
-        status = ui.caption("");
-        status.setTextColor(Theme.WARNING);
+        header.addView(strip(), ui.ll(Ui.WRAP, Ui.WRAP));
+        status = sticker(true);
+        
         status.setGravity(Gravity.END); status.setSingleLine(true); status.setEllipsize(android.text.TextUtils.TruncateAt.END);
         header.addView(status, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
         // On a MASTER card the app list is one tap away: this swaps the master rows for the list and back.

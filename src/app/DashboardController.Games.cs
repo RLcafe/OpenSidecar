@@ -71,7 +71,7 @@ namespace WidgetScreen
             grid.Columns = shape[0]; grid.Rows = shape[1];
             double cardWidth = Editor.Bounds("Games").Width;
             Control<StackPanel>("GamesPages").Visibility = pages > 1 ? Visibility.Visible : Visibility.Collapsed;
-            Control<TextBlock>("GamesHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
+            Control<FrameworkElement>("GamesHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("GamesPrevious").IsEnabled = gamePage > 0; Control<Button>("GamesNext").IsEnabled = gamePage < pages - 1;
             Text("GamesPageLabel", (gamePage + 1) + "/" + pages);
             Control<Button>("GamesRefresh").IsEnabled = !gamesBusy;

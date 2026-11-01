@@ -95,7 +95,7 @@ public final class SpotifyWidget extends Widget {
         FrameLayout root = new FrameLayout(ui.context);
         LinearLayout column = ui.column();
         LinearLayout header = ui.row();
-        header.addView(ui.label("SPOTIFY"), ui.ll(0, Ui.WRAP, 1));
+        header.addView(strip(), ui.ll(0, Ui.WRAP, 1));
         account = ui.button("Account", new View.OnClickListener() { @Override public void onClick(View v) { dash.say("Spotify is connected on the PC. Manage it there in Settings → Spotify."); } });
         account.setTextSize(TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
         account.setPadding(ui.px(12), ui.px(4), ui.px(12), ui.px(4));

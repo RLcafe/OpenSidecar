@@ -70,8 +70,11 @@ namespace WidgetScreen
         public void Show(IList<ClipItem> next, bool paused)
         {
             items = next ?? new ClipItem[0]; this.paused = paused;
+            // Paused is a warning on the status sticker (docs/design/sticker-sheet.md).
+            var sticker = StatusSticker.For(status);
+            if (sticker != null) sticker.Warns = paused;
             status.Text = paused ? "PAUSED" : items.Count == 0 ? "" : items.Count.ToString();
-            status.SetResourceReference(TextBlock.ForegroundProperty, paused ? "Warning" : "Muted");
+            if (sticker == null) status.SetResourceReference(TextBlock.ForegroundProperty, paused ? "Warning" : "Muted");
             if (rows == null) return;
             bool small = design == CardSizing.Design.Small;
             pause.Content = small ? (paused ? "" : "") : (paused ? "Resume" : "Pause");

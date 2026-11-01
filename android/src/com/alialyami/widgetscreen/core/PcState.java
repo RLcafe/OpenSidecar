@@ -256,6 +256,9 @@ public final class PcState {
         public double canvasWidth, canvasHeight;
         public WidgetLayout.Placement[] shown;
         public final Map<String, WidgetLayout.Placement[]> layouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
+        // Each widget's ink and Settings → Theme → Widget colours on the PC (decision 021). Null from a PC before them.
+        public Map<String, String> inks;
+        public String colours;
         public String pageName() { return page >= 0 && page < pages.size() ? pages.get(page) : ""; }
         // Every layout the phone can stretch from: the saved ones, and the PC screen's own when that size isn't saved.
         public Map<String, WidgetLayout.Placement[]> sources() {
@@ -616,6 +619,12 @@ public final class PcState {
         for (Object name : Json.array(l, "pages")) layout.pages.add(name instanceof String ? (String) name : "");
         layout.page = Math.max(0, Math.min(Math.max(0, layout.pages.size() - 1), (int) Json.number(l, "page")));
         layout.snap = flag(l, "snap"); layout.editing = flag(l, "editing");
+        if (Json.has(l, "inks")) {
+            layout.inks = new LinkedHashMap<String, String>();
+            for (Map.Entry<String, Object> ink : Json.obj(Json.value(l, "inks")).entrySet())
+                if (ink.getValue() instanceof String && Inks.inScope(ink.getKey()) && Inks.choice((String) ink.getValue())) layout.inks.put(ink.getKey(), (String) ink.getValue());
+        }
+        if (Json.has(l, "colours")) layout.colours = Inks.mode(text(l, "colours"));
         Map<String, Object> canvas = Json.obj(Json.value(l, "canvas"));
         layout.canvasWidth = Json.number(canvas, "width"); layout.canvasHeight = Json.number(canvas, "height");
         if (Json.has(l, "shown")) layout.shown = placements(Json.array(l, "shown"));

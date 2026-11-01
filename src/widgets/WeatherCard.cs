@@ -30,14 +30,18 @@ namespace WidgetScreen
         private FrameworkElement hoursFrame;
         private double glyphSize;
 
-        public WeatherCard(FrameworkElement scope, Grid host) { this.host = host; names = new PartNames(scope); }
+        public WeatherCard(FrameworkElement scope, Grid host) { this.host = host; names = new PartNames(scope); TextScale = 1; }
 
         public CardSizing.Design Current { get { return design; } }
+        // The label strip of the Medium and Large designs (Small has no heading), and the text size it follows.
+        public LabelStrip Strip { get; private set; }
+        public double TextScale { get; set; }
 
         public void Fit(Rect card)
         {
             bounds = card;
             string key = Math.Round(card.Width) + "x" + Math.Round(card.Height);
+            if (Strip != null) Strip.Fit(card.Width, TextScale);
             if (key == built) return;
             built = key; Build(); Render();
         }
@@ -58,7 +62,7 @@ namespace WidgetScreen
 
         private void Build()
         {
-            host.Children.Clear(); names.Clear(); facts = null; hours = null; hoursFrame = null; condition = null; described = null;
+            host.Children.Clear(); names.Clear(); facts = null; hours = null; hoursFrame = null; condition = null; described = null; Strip = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Weather(bounds.Width, bounds.Height);
             FrameworkElement view = design == CardSizing.Design.Small ? BuildGlance(width, height) : BuildToday(width, height, design == CardSizing.Design.Large);
@@ -89,12 +93,15 @@ namespace WidgetScreen
         {
             bool showHours = large || height >= 300 - 48;
             var view = Rows(Auto, Star, Auto, Auto, Auto);
-            var header = Columns(Auto, Star); header.MinHeight = 26; header.Children.Add(Label("WEATHER").Centered());
-            condition = names.Add(Caption(""), "WeatherCondition"); condition.HorizontalAlignment = HorizontalAlignment.Right; condition.VerticalAlignment = VerticalAlignment.Center; condition.Margin = new Thickness(12, 0, 0, 0);
+            // The label strip and the condition as a status sticker (docs/design/sticker-sheet.md).
+            var header = Columns(Auto, Star); header.MinHeight = Stickers.StripHeight;
+            Strip = LabelStrip.Create("Weather"); Strip.Fit(bounds.Width, TextScale); header.Children.Add(names.Add(Strip.Host, "WeatherStrip"));
+            condition = names.Add(Caption(""), "WeatherCondition"); condition.HorizontalAlignment = HorizontalAlignment.Right; condition.Margin = new Thickness(12, 0, 0, 0);
             header.Children.Add(At(condition, 0, 1));
+            StatusSticker.Wrap(condition, "Weather", false);
             view.Children.Add(header);
             double hoursHeight = !showHours ? 0 : large ? 104 + 12 : 64 + 10;
-            double size = CardSizing.WeatherTemperature(design, bounds.Width, height - 26 - 62 - hoursHeight - 26);
+            double size = CardSizing.WeatherTemperature(design, bounds.Width, height - Stickers.StripHeight - 62 - hoursHeight - 26);
             glyphSize = Math.Round(size * (large ? 0.8 : 0.85));
             var hero = Columns(Auto, Auto, Star); hero.VerticalAlignment = VerticalAlignment.Center;
             glyph = new ContentControl { Width = glyphSize, Height = glyphSize, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, large ? 20 : 16, 0), Focusable = false, IsTabStop = false };

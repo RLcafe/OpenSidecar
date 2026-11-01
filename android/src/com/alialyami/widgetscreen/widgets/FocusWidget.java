@@ -48,7 +48,7 @@ public final class FocusWidget extends Widget {
         folded = CardSizing.focusShort(height);
         selectedPreset = -1; selectedCustom = -1; picker = null;
         LinearLayout column = ui.column();
-        column.addView(ui.label("FOCUS TIMER"), ui.ll(Ui.MATCH, Ui.WRAP));
+        column.addView(strip(), ui.ll(Ui.MATCH, Ui.WRAP));
 
         // Three designs (CardSizing.focus, as on the PC): SMALL keeps the countdown and the start row; MEDIUM adds the
         // status, presets and a progress line; LARGE draws the progress as a ring around the countdown, with the status

@@ -42,9 +42,9 @@ public final class CalendarWidget extends Widget {
         design = CardSizing.calendar(width, height);
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("CALENDAR"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        status = ui.caption("");
-        status.setTextColor(Theme.WARNING);
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        status = sticker(true);
+        
         header.addView(status, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
         body = new FrameLayout(ui.context);

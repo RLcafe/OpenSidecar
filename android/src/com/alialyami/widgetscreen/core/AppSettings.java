@@ -48,6 +48,11 @@ public final class AppSettings {
     public double pcCanvasWidth = WidgetLayout.REFERENCE_WIDTH, pcCanvasHeight = WidgetLayout.REFERENCE_HEIGHT;
     // Layouts saved on canvases of other shapes, keyed "WxH" (docs/design/any-screen-size.md).
     public final Map<String, WidgetLayout.Placement[]> canvasLayouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
+    // The PC's widget inks ("Focus=Coral;Media=Mint", only those changed from their default) and its Widget colours, Each or
+    // Accent (decision 021). The phone shows them and sends its changes to the PC.
+    public String inks = "", widgetColours = Inks.EACH_OWN;
+
+    public int ink(String id) { return Theme.ink(Inks.resolve(id, Inks.parse(inks), widgetColours, accent)); }
 
     // Every saved layout by canvas key, the reference one included.
     public Map<String, WidgetLayout.Placement[]> savedLayouts() {
@@ -82,6 +87,8 @@ public final class AppSettings {
         canvasLayouts.putAll(layout.sources());
         pages.clear(); pages.addAll(layout.pages);
         page = layout.page; snapWidgets = layout.snap;
+        if (layout.inks != null) inks = Inks.format(layout.inks);
+        if (layout.colours != null) widgetColours = layout.colours;
         if (layout.canvasWidth >= 64 && layout.canvasHeight >= 64) { pcCanvasWidth = WidgetLayout.key(layout.canvasWidth); pcCanvasHeight = WidgetLayout.key(layout.canvasHeight); }
         normalize();
     }
@@ -97,6 +104,7 @@ public final class AppSettings {
         if (!Theme.contains(Theme.THEMES, theme)) theme = "Midnight";
         if (!Theme.contains(LAYOUT_MODES, layoutMode)) layoutMode = "Auto";
         if (!Theme.contains(KEEP_SCREEN_MODES, keepScreenOn)) keepScreenOn = "Charging";
+        inks = Inks.format(Inks.parse(inks)); widgetColours = Inks.mode(widgetColours);
         cornerRadius = Double.isNaN(cornerRadius) || Double.isInfinite(cornerRadius) ? 20 : Math.max(0, Math.min(24, cornerRadius));
         String reference = WidgetLayout.keyName(WidgetLayout.REFERENCE_WIDTH, WidgetLayout.REFERENCE_HEIGHT);
         Map<String, WidgetLayout.Placement[]> layouts = new LinkedHashMap<String, WidgetLayout.Placement[]>();
@@ -148,6 +156,7 @@ public final class AppSettings {
         p.setProperty("LayoutMode", layoutMode);
         p.setProperty("Use24Hour", Boolean.toString(use24));
         p.setProperty("HintDismissed", Boolean.toString(hintDismissed));
+        p.setProperty("Inks", inks); p.setProperty("WidgetColours", widgetColours);
         // The reference layout keeps its old keys (Layout.Focus); other canvases add theirs (Layout.1480x552.Focus).
         if (widgetLayout != null) putLayout(p, "Layout.", widgetLayout);
         for (int i = 0; i < pages.size(); i++) p.setProperty("Page." + i, pages.get(i));
@@ -177,6 +186,7 @@ public final class AppSettings {
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         s.use24 = readBool(p, "Use24Hour", false);
         s.hintDismissed = readBool(p, "HintDismissed", false);
+        s.inks = p.getProperty("Inks", s.inks); s.widgetColours = p.getProperty("WidgetColours", s.widgetColours);
         s.widgetLayout = readLayout(p, "Layout.");
         for (int i = 0; p.getProperty("Page." + i) != null && i < 8; i++) s.pages.add(p.getProperty("Page." + i));
         s.page = (int) readNumber(p, "CurrentPage", 0);

@@ -146,7 +146,10 @@ namespace WidgetScreen
             if (key == rendered) return;
             rendered = key;
             status.Text = alerting || next.JustStarted ? (PrayerService.Names[next.CurrentIndex] + " now").ToUpperInvariant() : schedule.City.Split(',')[0].Trim();
-            status.SetResourceReference(TextBlock.ForegroundProperty, alerting || next.JustStarted ? "Accent" : "Muted");
+            // A prayer starting now fills the status sticker (docs/design/sticker-sheet.md).
+            var sticker = StatusSticker.For(status);
+            if (sticker != null) sticker.Filled = alerting || next.JustStarted;
+            else status.SetResourceReference(TextBlock.ForegroundProperty, alerting || next.JustStarted ? "Accent" : "Muted");
             nextName.Text = PrayerService.Names[next.Index];
             nextTime.Text = PrayerService.Time(next.At.ToLocalTime(), use24);
             countdown.Text = left;

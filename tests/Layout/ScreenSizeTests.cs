@@ -192,7 +192,7 @@ internal static class ScreenSizeTests
                 var content = (System.Windows.Controls.StackPanel)window.FindName("EditPanelContent");
                 Func<string, System.Windows.Controls.Button> button = text => content.Children.OfType<FrameworkElement>().SelectMany(e => e is System.Windows.Controls.Grid ? ((System.Windows.Controls.Grid)e).Children.OfType<FrameworkElement>() : new[] { e })
                     .OfType<System.Windows.Controls.Button>().First(b => (b.Content is string ? (string)b.Content : b.Content is System.Windows.Controls.TextBlock ? ((System.Windows.Controls.TextBlock)b.Content).Text : "") == text);
-                Func<string, System.Windows.Controls.CheckBox> tick = title => content.Children.OfType<System.Windows.Controls.Border>().Select(b => b.Child).OfType<System.Windows.Controls.CheckBox>().First(c => (string)c.Content == title);
+                Func<string, System.Windows.Controls.CheckBox> tick = title => content.Children.OfType<System.Windows.Controls.Border>().Select(b => b.Child).OfType<System.Windows.Controls.CheckBox>().First(c => System.Windows.Automation.AutomationProperties.GetName(c) == title);
                 click("EditLayoutButton"); click("EditWidgetsButton");
                 Assert(controller.EditPanelOpen && ((FrameworkElement)window.FindName("EditPanelLayer")).Visibility == Visibility.Visible, "The list didn't open.");
                 Assert(tick("Sound mixer").IsChecked == true && tick("System stats").IsChecked == false && tick("Sound mixer").MinHeight >= 52, "Check marks don't match the layout, or rows are under 52.");

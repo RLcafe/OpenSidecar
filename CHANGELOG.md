@@ -4,7 +4,19 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Sticker Sheet, phase 1: foundations (Ali's approved redesign; Windows and the phone; decision 021). Waiting on `feature/sticker-foundations`; it gets the next MINOR tag when merged.
+
+- **Every card but Claude Code wears an ink,** one of eight colours: the four accents plus Coral, Mint, Rose and Lemon. Each widget has its own by default, for example Focus Coral, Now Playing Rose, the mixer Lime and Spotify Mint. Amber stays for warnings.
+- **Label strips replace the grey card titles.** Each is a bold pill in the card's ink with dark text. Narrow cards show an ink dot and a short name.
+- **Status stickers replace the right-hand captions:** Now Playing's source, the mixer, System stats, Storage, Prayer, Notes, Clipboard, Calendar, Smart home, World clocks and Weather's condition.
+  - A fact is outlined in the ink, and a prayer starting now fills it.
+  - Warnings are Amber with caution stripes and a glyph.
+  - UNAVAILABLE is a dashed outline, OFFLINE is a stamp, and loading is a plain outline.
+- **Choose a card's ink in Edit layout:** "Ink for …" at the top of the Widgets list, with seven swatches. It shows at once; Save layout keeps it and Cancel drops it.
+- **Settings → Theme → Widget colours:** Each its own, or Accent only (every card in the accent, like before).
+- **The phone shows the same inks and stickers.** Inks changed on the phone are saved on the PC with its layout. The phone's Theme settings change Widget colours on the PC. The phone link sends the inks with the layout it already sends: no new port, endpoint or polling.
+- Card bodies are unchanged in this phase. There are no new timers, effects or animation.
+- Docs: `DESIGN.md`, `docs/design/sticker-sheet.md` and decision 021. Renders: `tests\sticker-renders.ps1`.
 
 ## v0.34.1 (1 Nov 2026)
 
