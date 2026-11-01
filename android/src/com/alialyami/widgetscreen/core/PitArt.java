@@ -127,12 +127,6 @@ public final class PitArt {
         // light, a trail when heavy; the frame rate follows the burn), and the ground dashes scrolling back.
         if (state == WORK) {
             for (double x = -12 + (f % 3) * 4; x < 140; x += 12) ops.add(r(x, cy + wr + 1, 6, 1, alpha(0xFF606D81, 0.9)));
-            int puffs = look.fast ? 3 : 1;
-            for (double wx : new double[] { fw, rw })
-                for (int j = 0; j < puffs; j++) {
-                    double q = ((f + j * 2) % 4) / 4.0;
-                    ops.add(c(wx + wr * 0.7 + q * 14, cy + wr - 2 - q * 5, 1.5 + q * 2.5, alpha(0xFFB8A88E, 0.85 - q * 0.6)));
-                }
         }
         if (state == STUCK) for (int j = 0; j < 3; j++) { double q = ((f + j * 3) % 8) / 8.0; ops.add(c(rw + 6 + q * 22, cy + 6 - q * 12, 5 + q * 8, alpha(0xFFC9D0DA, 0.85 - q * 0.75))); }
         double dy = spins && f % 2 == 1 ? 1 : 0;
@@ -150,6 +144,17 @@ public final class PitArt {
             if (tilt) ops.add(pop());
             ops.add(pop());
             wheel(ops, fw, cy, wr, rot, look.hot); wheel(ops, rw, cy, wr, rot, look.hot);
+        }
+        if (state == WORK) {
+            // Dust over the car, big enough to read at ledger size (Ali, 1 Nov 2026): two puffs a tyre, four when heavy,
+            // each born at the back of the tyre's contact point, then drifting back, rising, growing and thinning away
+            // over eight frames.
+            int puffs = look.fast ? 4 : 2;
+            for (double wx : new double[] { fw, rw })
+                for (int j = 0; j < puffs; j++) {
+                    double q = ((f + j * 8 / puffs) % 8) / 8.0;
+                    ops.add(c(wx + wr * 0.8 + q * 18, cy + wr - 1 - q * 7, 2 + q * 4.5, alpha(0xFFEDE3CF, 0.95 - q * 0.8)));
+                }
         }
         if (state == END) {
             double drop = f < 7 ? -(7 - f) * 4 : 0;

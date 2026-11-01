@@ -128,13 +128,6 @@ namespace WidgetScreen
             if (state == PitState.Work)
             {
                 for (double x = -12 + (f % 3) * 4; x < 140; x += 12) ops.Add(R(x, cy + K.Wheel + 1, 6, 1, Alpha(0xFF606D81, 0.9)));
-                int puffs = look.Fast ? 3 : 1;
-                foreach (double wx in new[] { K.FrontWheel, K.RearWheel })
-                    for (int j = 0; j < puffs; j++)
-                    {
-                        double q = ((f + j * 2) % 4) / 4.0;
-                        ops.Add(C(wx + K.Wheel * 0.7 + q * 14, cy + K.Wheel - 2 - q * 5, 1.5 + q * 2.5, Alpha(0xFFB8A88E, 0.85 - q * 0.6)));
-                    }
             }
             if (state == PitState.Stuck) for (int j = 0; j < 3; j++) { double q = ((f + j * 3) % 8) / 8.0; ops.Add(C(K.RearWheel + 6 + q * 22, cy + 6 - q * 12, 5 + q * 8, Alpha(0xFFC9D0DA, 0.85 - q * 0.75))); }
             double dy = spins && f % 2 == 1 ? 1 : 0;
@@ -156,6 +149,19 @@ namespace WidgetScreen
                 if (tilt) ops.Add(Pop());
                 ops.Add(Pop());
                 Wheel(ops, K.FrontWheel, cy, K.Wheel, rot, look.Hot); Wheel(ops, K.RearWheel, cy, K.Wheel, rot, look.Hot);
+            }
+            if (state == PitState.Work)
+            {
+                // Dust over the car, big enough to read at ledger size (Ali, 1 Nov 2026): two puffs a tyre, four when heavy,
+                // each born at the back of the tyre's contact point, then drifting back, rising, growing and thinning
+                // away over eight frames.
+                int puffs = look.Fast ? 4 : 2;
+                foreach (double wx in new[] { K.FrontWheel, K.RearWheel })
+                    for (int j = 0; j < puffs; j++)
+                    {
+                        double q = ((f + j * 8 / puffs) % 8) / 8.0;
+                        ops.Add(C(wx + K.Wheel * 0.8 + q * 18, cy + K.Wheel - 1 - q * 7, 2 + q * 4.5, Alpha(0xFFEDE3CF, 0.95 - q * 0.8)));
+                    }
             }
             if (state == PitState.End)
             {
