@@ -219,7 +219,7 @@
             <Button x:Name="NextPageButton" Content="&#xE76C;" Style="{StaticResource IconButton}" ToolTip="Next page" AutomationProperties.Name="Next page"/>
             <!-- Shown while a Claude Code session needs you and the Claude card is on another page; a tap shows that page. -->
             <Button x:Name="ClaudePill" Visibility="Collapsed" Margin="20,0,0,0" Padding="10,4,16,4" BorderBrush="{DynamicResource Warning}" BorderThickness="2" ToolTip="A Claude Code session needs you. Tap to show its page." AutomationProperties.Name="Claude needs you. Show the Claude page.">
-              <StackPanel Orientation="Horizontal"><Grid x:Name="ClaudePillCritter" Width="32" Height="32" VerticalAlignment="Center"/><TextBlock Text="Claude needs you" Foreground="{DynamicResource Warning}" FontSize="{DynamicResource SmallSize}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/></StackPanel>
+              <StackPanel Orientation="Horizontal"><Grid x:Name="ClaudePillCar" Width="40" Height="32" VerticalAlignment="Center"/><TextBlock Text="Claude needs you" Foreground="{DynamicResource Warning}" FontSize="{DynamicResource SmallSize}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/></StackPanel>
             </Button>
           </StackPanel>
           <!-- A one-time hint for what the dashboard doesn't show by itself; Got it puts it away for good. -->

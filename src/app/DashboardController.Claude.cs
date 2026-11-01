@@ -20,7 +20,7 @@ namespace WidgetScreen
         private ClaudeService claude;
         private ClaudeCard claudeCard;
         private ClaudeView claudeView;
-        private ClaudeCritter pillCritter;
+        private PitSprite pillCar;
         private Task claudeScan;
         private DateTime lastClaudeScan = DateTime.MinValue, lastClaudeRead = DateTime.MinValue, lastClaudeAlive = DateTime.MinValue;
         private bool claudeSample, claudeOnlineBusy, claudeDirty = true;
@@ -40,8 +40,10 @@ namespace WidgetScreen
             claude = new ClaudeService(SettingsStore.ClaudePath(settingsPath), ClaudeConnector.DefaultConfigFolder, SettingsStore.ClaudeSignInPath(settingsPath));
             claudeCard = new ClaudeCard(window, Control<Grid>("ClaudeBody"), Control<Border>("ClaudeCard"), id => FocusClaudeSession(id), SetClaudeCollapsed, ChooseClaudePeriod);
             claude.PlanEvery = TimeSpan.FromSeconds(settings.ClaudePlanSeconds);
-            pillCritter = new ClaudeCritter { State = ClaudeState.NeedsYou, Project = "pill" };
-            Control<Grid>("ClaudePillCritter").Children.Add(pillCritter);
+            // The pill's car waits with its hazards on (one still frame: the header never animates).
+            pillCar = new PitSprite { Width = 40, Height = 17, VerticalAlignment = VerticalAlignment.Center };
+            string pillKey; pillCar.Show("pill", PitSprite.CarFrames(PitArt.Amber, PitState.Need, new PitArt.CarLook { Car = PitCar.Sports }, 40, out pillKey), PitSprite.CarOverflow, 0, false);
+            Control<Grid>("ClaudePillCar").Children.Add(pillCar);
             Button("ClaudePill", ShowClaudePage);
             Button("ClaudeConnectButton", ConnectClaude);
             Button("ClaudeDisconnectButton", DisconnectClaude);
@@ -109,7 +111,8 @@ namespace WidgetScreen
         private void TickClaude()
         {
             bool shown = Editor.IsVisible("Claude") && !Editor.Editing;
-            if (claudeSample) { if (shown) claudeCard.Tick(ticks % 2 == 0, settings.QuietMode); pillCritter.Phase = ticks % 2 == 0 && !settings.QuietMode; return; }
+            claudeCard.SetLive(shown && window.WindowState != WindowState.Minimized && !settings.QuietMode);
+            if (claudeSample) { if (shown) claudeCard.Tick(settings.QuietMode); return; }
             // Renders never read this PC's sessions or logs, or ask for the plan's usage; they use the labelled sample.
             if (Program.Rendering) return;
             if (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage) { if (claudeView != null && claudeView.NeedsYou > 0) { claudeView = null; UpdateClaudePill(); } return; }
@@ -132,8 +135,7 @@ namespace WidgetScreen
                 if (claude.Connected) claude.Telemetry.Start(); else claude.Telemetry.Stop();
             }
             if (changed || claudeDirty) RefreshClaudeView();
-            if (shown) claudeCard.Tick(ticks % 2 == 0, settings.QuietMode);
-            pillCritter.Phase = ticks % 2 == 0 && !settings.QuietMode;
+            if (shown) claudeCard.Tick(settings.QuietMode);
         }
 
         // The plan check runs on its interval while the widget is signed in to Claude, in the tray too (Ali, 1 Nov 2026).
@@ -382,13 +384,22 @@ namespace WidgetScreen
             // Every thread of the week once, and the projects of each period as their folders' thread ids, so the phone
             // groups babies under their project critters the same way. Titles are the Claude app's; never prompts.
             Func<ClaudePeriod, object[]> groups = period => view.Groups(period).Select(g => (object)D("key", g.Folder, "project", g.Name, "collapsed", g.Collapsed,
-                "tokens", g.Tokens, "cost", Math.Round(g.Cost, 4), "threads", g.Threads.Select(t => (object)t.Id).ToArray())).ToArray();
+                "tokens", g.Tokens, "cost", Math.Round(g.Cost, 4), "threads", g.Threads.Select(t => (object)t.Id).ToArray(),
+                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed)).ToArray();
+            // The pit wall (decision 017): each thread's car and what it does, its burn, mix and lines per period.
+            Func<ClaudeSession, Func<ClaudePeriod, object>, object> per = (t, value) => D("fiveHour", value(ClaudePeriod.FiveHour), "today", value(ClaudePeriod.Today), "week", value(ClaudePeriod.Week));
             return D("connected", view.Connected, "sample", view.Sample, "logsFailed", view.LogsFailed, "logsRead", view.LogsRead, "noPlan", view.NoPlan, "plan", ClaudeText.PlanName(view.Plan),
                 "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod,
                 "threads", view.Threads.Select(t => (object)D("id", t.Id, "project", t.ProjectName, "title", t.Title, "running", t.Running, "state", ClaudeSessionFile.StateName(t.Running ? t.State : ClaudeState.Ready),
                     "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus,
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
-                    "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)))).ToArray(),
+                    "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
+                    "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),
+                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()))).ToArray(),
+                "burn", D("rate", Math.Round(view.Rate), "scale", view.Scale, "minutes", view.Burn.Select(v => (object)Math.Round(v)).ToArray()),
+                "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
+                "facts", D("tokens", view.Facts.Tokens, "cost", Math.Round(view.Facts.Cost, 4), "prompt", view.Facts.Prompt, "cacheRead", view.Facts.CacheRead, "tools", view.Facts.Tools, "asked", view.Facts.Asked,
+                    "denied", view.Facts.Denied, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry),
                 "groups", D("fiveHour", groups(ClaudePeriod.FiveHour), "today", groups(ClaudePeriod.Today), "week", groups(ClaudePeriod.Week)),
                 "sessions", view.Sessions.Select(s => (object)D("id", s.Id, "project", s.ProjectName, "title", s.Title, "state", ClaudeSessionFile.StateName(s.State),
                     "since", ClaudeBridge.Epoch(s.Since) / 1000.0, "message", s.Message, "model", s.Model, "where", s.Where, "canFocus", s.CanFocus,
@@ -398,6 +409,7 @@ namespace WidgetScreen
                     "extra", limits.Extra.Select(p => (object)D("name", p.Key, "pct", p.Value.Percent, "resetsAt", p.Value.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(p.Value.ResetsAt.Value) / 1000.0) : null)).ToArray()),
                 "usage", D("fiveHour", Projects(view, ClaudePeriod.FiveHour), "today", Projects(view, ClaudePeriod.Today), "week", Projects(view, ClaudePeriod.Week)));
         }
+        private static object[] Shares(double[] mix) { return mix.Select(v => (object)Math.Round(v, 3)).ToArray(); }
         private static object[] Projects(ClaudeView view, ClaudePeriod period) { return view.UsageFor(period).Select(p => (object)D("project", p.Name, "tokens", p.Tokens, "cost", Math.Round(p.Cost, 4))).ToArray(); }
 
         // The phone folds a project into its critter or lets it out; the card follows (with its motion).

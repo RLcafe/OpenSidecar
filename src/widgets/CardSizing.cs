@@ -221,45 +221,34 @@ namespace WidgetScreen
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.
         public static Design Notes(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 700 && height >= 300 ? Design.Large : Design.Medium; }
         public static double NotesListColumn(double width) { return Clamp(Math.Floor(width * 0.46), 300, 520); }
-        // Claude Code (docs/design/claude-watcher.md): one loud critter under 360 wide or 280 tall, a row of project
-        // critters with a few of their threads over the plan meters between, and project columns (a big critter with
-        // its threads as babies under it) under a meter strip from 640 × 420. Heights that hold text follow the text
-        // size, so nothing leaves the card at 140%.
+        // Claude Code (docs/design/claude-watcher-v2.html; decision 017): the car that needs you over the 5-hour meter
+        // under 360 wide or 280 tall, the two plan meters over the top garages between, and the pit wall (plan row, pit
+        // stop strip, ledger, and from 1000 units of body the 5-hour lanes and facts) from 640 × 420. Heights that hold
+        // text follow the text size, so nothing leaves the card at 140%. The phone's CardSizing has the same numbers.
         public static Design Claude(double width, double height) { return width < 360 || height < 280 ? Design.Small : width >= 640 && height >= 420 ? Design.Large : Design.Medium; }
-        // The meter strip: two meters side by side, each a label line, a 10-unit bar and a reset line.
-        public static double ClaudeStrip(double textScale) { return Math.Ceiling(60 + 24 * textScale); }
-        // Large project columns: at least 216 units each, as many as fit (the rest are counted in the last one).
-        public const double ClaudeColumnMin = 216;
-        public static int ClaudeColumns(double bodyWidth, int projects) { return projects <= 0 ? 0 : (int)Clamp(Math.Floor((bodyWidth + 16) / (ClaudeColumnMin + 16)), 1, projects); }
-        // A column's head: the project critter over its name and its "3 threads · 1.2M · ≈ $2.01" line.
-        public static double ClaudeHeadText(double textScale) { return 6 + Math.Ceiling(24 * textScale) + 18; }
-        public static double ClaudeParent(double columnWidth, double areaHeight, double textScale) { return Clamp(Math.Floor(Math.Min(columnWidth * 0.4, (areaHeight - ClaudeHeadText(textScale)) * 0.45)), 48, 104); }
-        // A baby's cell: the critter, its title and its tokens; as many cells a row as the column holds.
-        public static double ClaudeBabyCell(double textScale) { return Math.Ceiling(70 + 14 * textScale); }
-        public static int ClaudeBabiesPerRow(double columnWidth, double textScale) { return Math.Max(1, (int)Math.Floor((columnWidth + 6) / (ClaudeBabyCell(textScale) + 6))); }
-        // The title takes up to two lines.
-        public static double ClaudeBabyHeight(double baby, double textScale) { return baby + 4 + 2 * Math.Ceiling(20 * textScale) + 18; }
-        // Medium: a project critter per 136 units, at most six, with up to three babies in a row under its name when
-        // the card is tall enough for babies of at least 16 units beside a 40-unit parent.
-        public static int ClaudeMediumColumns(double bodyWidth, int projects) { return projects <= 0 ? 0 : (int)Clamp(Math.Floor((bodyWidth + 12) / 136), 1, Math.Min(6, projects)); }
-        public static double ClaudeMediumName(double textScale) { return 6 + Math.Ceiling(20 * textScale); }
-        public static bool ClaudeMediumBabies(double room, double textScale) { return Math.Floor((room - ClaudeMediumName(textScale) - 8) / 1.4) >= 40; }
-        public static double ClaudeMediumParent(double room, double columnWidth, double textScale, bool babies)
+        // Large: the plan row's tiles, the rev counter from 860 units of body, the side panel from 1000, and the
+        // ledger's models and lines columns when the table is wide enough for them.
+        public const double ClaudePlanHeight = 124, ClaudeSideWidth = 300;
+        public static bool ClaudeRevs(double bodyWidth) { return bodyWidth >= 860; }
+        public static bool ClaudeSide(double bodyWidth) { return bodyWidth >= 1000; }
+        public static bool ClaudeModels(double tableWidth) { return tableWidth >= 560; }
+        public static bool ClaudeLines(double tableWidth) { return tableWidth >= 660; }
+        // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
+        // beside the project's name when they leave it 110 units.
+        public const double ClaudeMiniHeight = 80;
+        public static double ClaudeMediumRow(double textScale) { return Math.Max(44, Math.Ceiling(Math.Round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
+        public static int ClaudeInlineCars(double nameRoom, int threads)
         {
-            double space = room - ClaudeMediumName(textScale);
-            return Clamp(Math.Floor(Math.Min(babies ? (space - 8) / 1.4 : space, columnWidth * 0.55)), 32, 88);
-        }
-        public static int ClaudeMediumBabyCount(double columnWidth, double baby, int threads)
-        {
-            int fit = (int)Math.Max(0, Math.Floor((columnWidth + 4) / (baby + 4)));
+            int fit = (int)Math.Max(0, Math.Floor((nameRoom - 110) / 32));
             if (threads <= Math.Min(3, fit)) return threads;
             return (int)Clamp(Math.Min(3, fit - 1), 0, 3);
         }
-        // The Small card's caption line under its critter (the 5-hour percentage, or what the meter needs): only when
-        // the project, state, count and Sample flag still fit beside the critter above it.
-        public static bool ClaudeSmallPercent(double bodyHeight, double textScale) { return bodyHeight >= 8 + 104 * textScale; }
-        // The Small critter: as tall as the card allows, at most 42% of its width.
-        public static double ClaudeSmallCritter(double bodyWidth, double bodyHeight) { return Clamp(Math.Floor(Math.Min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
+        // Small: the 5-hour meter (its line and bar) only when the project, state, count and Sample flag still fit
+        // beside the car above it.
+        public const double ClaudeSmallMeterHeight = 52;
+        public static bool ClaudeSmallMeter(double bodyHeight, double textScale) { return bodyHeight >= ClaudeSmallMeterHeight + Math.Ceiling(Math.Round(17 * textScale) * 1.33) + 34 + 17; }
+        // The Small car: a third of the card's width, as long as the room above the meter allows.
+        public static double ClaudeSmallCar(double bodyWidth, double room) { return Clamp(Math.Floor(Math.Min(bodyWidth * 0.34, room * 140 / 60)), 48, 120); }
         // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
         // each text was copied at the reference size, and two-line previews with their length from 440 × 400.
         public static Design Clip(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 400 ? Design.Large : Design.Medium; }

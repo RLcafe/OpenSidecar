@@ -15,6 +15,9 @@ namespace WidgetScreen
         public DateTime At;
         public string Session = "", Folder = "", Model = "", Request = "";
         public long Tokens;
+        // The input side of the reply (fresh input, cache writes and cache reads) and how much of it came from the
+        // cache, for the card's cache hit rate.
+        public long Prompt, CacheRead;
         public double Cost;
         // Telemetry's cost is Claude Code's own; a log line's is worked out from ClaudePrices.
         public bool FromTelemetry;
@@ -150,6 +153,7 @@ namespace WidgetScreen
                 {
                     known.Cost = entry.Cost; known.FromTelemetry = true;
                     if (known.Model.Length == 0) known.Model = entry.Model;
+                    if (known.Prompt == 0) { known.Prompt = entry.Prompt; known.CacheRead = entry.CacheRead; }
                     return;
                 }
                 if (entry.At < now - Kept) return;
@@ -224,7 +228,7 @@ namespace WidgetScreen
                 var cache = ClaudeJson.Obj(usage, "cache_creation");
                 long hour = Math.Min(creation, Count(cache, "ephemeral_1h_input_tokens"));
                 string model = ClaudeJson.Str(message, "model") ?? "";
-                var entry = new ClaudeUsageEntry { At = at.Value, Session = id, Folder = folder ?? "", Model = model, Request = request, Tokens = tokens, Cost = ClaudePrices.Cost(model, input, output, creation - hour, hour, read) };
+                var entry = new ClaudeUsageEntry { At = at.Value, Session = id, Folder = folder ?? "", Model = model, Request = request, Tokens = tokens, Prompt = input + creation + read, CacheRead = read, Cost = ClaudePrices.Cost(model, input, output, creation - hour, hour, read) };
                 if (key.Length > 0) replies[key] = entry;
                 result.Add(entry);
             }
