@@ -4,6 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.34.0 (1 Nov 2026)
+
 Archived and idle Claude threads (Ali's request; Windows and the phone; decision 020):
 
 - **Archived threads stand apart.** A thread you archived in the Claude app now shows as **Archived**: its car is under its cover, dimmed more than an ended one, and it sits last in its project. Before, archived threads were left out completely.
