@@ -7,7 +7,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
 | `feature/sticker-defaults` | Sticker Sheet phase 2 (paused; checkpoint 00463a5 doesn't build yet) | b3c6e0c | In progress | `.worktrees\sticker-defaults` | `.worktrees\sticker-defaults\artifacts\app\WidgetScreen.exe` |
-| `fix/claude-review` | Claude watcher fixes for v0.35.1 (paused, no commits yet) | b3c6e0c | In progress | `.worktrees\claude-review` | `.worktrees\claude-review\artifacts\app\WidgetScreen.exe` |
+| `fix/claude-review` | Claude watcher review fixes 1–11, both apps (decision 022), for v0.35.2 | f07ef68 | In progress (waiting for CI) | `.worktrees\claude-review` | `.worktrees\claude-review\artifacts\app\WidgetScreen.exe` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
