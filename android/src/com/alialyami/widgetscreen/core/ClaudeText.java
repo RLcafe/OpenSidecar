@@ -117,9 +117,22 @@ public final class ClaudeText {
         java.time.ZonedDateTime local = Instant.ofEpochMilli((long) (at * 1000)).atZone(ZoneId.systemDefault()), today = Instant.ofEpochMilli((long) (now * 1000)).atZone(ZoneId.systemDefault());
         return local.toLocalDate().equals(today.toLocalDate()) ? clock(at, use24) : local.format(DateTimeFormatter.ofPattern("EEE", Locale.US));
     }
-    // A baby's label: the title the Claude app (or the user) gave the thread; never its prompts.
+    // A thread's name (decision 018): the one the PC picked (a rename, a generated title or the first line of its first
+    // request), else a label from its id. Placeholders such as "Remote Control session (from a project)" never show.
     public static String threadTitle(PcState.ClaudeThread thread, double now, boolean use24) {
-        return thread.title != null && !thread.title.trim().isEmpty() ? thread.title.trim() : "Untitled · " + ago(thread.lastActive, now, use24);
+        return !placeholder(thread.title) ? thread.title.trim() : idLabel(thread.id);
+    }
+    private static final java.util.regex.Pattern GENERIC = java.util.regex.Pattern.compile("^(remote control|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\\(.*\\))?$");
+    // An empty title, or one that names the kind of thread rather than the thread (the same rule as the PC's).
+    public static boolean placeholder(String title) {
+        if (title == null || title.trim().isEmpty()) return true;
+        return GENERIC.matcher(title.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ")).matches();
+    }
+    // The last resort: "Thread 1b2187".
+    public static String idLabel(String id) {
+        StringBuilder letters = new StringBuilder();
+        for (char c : (id == null ? "" : id).toCharArray()) if (Character.isLetterOrDigit(c) && letters.length() < 6) letters.append(Character.toLowerCase(c));
+        return letters.length() == 0 ? "Thread" : "Thread " + letters;
     }
     // The heading's live summary: "1 needs you · 2 running · 6 threads today".
     public static String summary(PcState.Claude claude, int period, boolean threads) {
@@ -171,7 +184,7 @@ public final class ClaudeText {
     }
     // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").
     public static String where(PcState.ClaudeThread thread, double now) {
-        if (!thread.running) return "ended " + duration(now - thread.lastActive) + " ago";
+        if (!thread.running) return (thread.where.isEmpty() ? "" : thread.where + " · ") + "ended " + duration(now - thread.lastActive) + " ago";
         String age = duration(now - thread.since);
         return thread.where.isEmpty() ? age : thread.where + " · " + age;
     }

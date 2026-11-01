@@ -2,6 +2,10 @@
 
 The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
 
+## Thread names (decision 018)
+
+Ali reported (1 Nov 2026) that threads had no names: the Claude app titles every Remote Control thread "Remote Control session (from a project)". Placeholders now count as no title. A thread is named by a rename, then a generated title (Claude Code's or the app's), then the first line of its first request (60 characters, cut at a word). An id label ("Thread 1b2187") is the last resort. Remote Control shows as where it runs ("Remote Control · ended 1 h ago"), in the ledger, the Pit stop strip and tooltips, on both apps. The name is picked again on every refresh, so a better title replaces the request.
+
 ## v2: the pit wall (decision 017)
 
 Ali approved the v2 design on 1 Nov 2026: [claude-watcher-v2.html](claude-watcher-v2.html) is the spec (its layouts, sample data, drawing code and animation table). He chose the drawn pixel-art cars over generated art, so the page's image-prompt pack and its "one thing to confirm" panel don't apply. This section supersedes the critters described below; the sources, the project filter, the refresh intervals and folding per project stay as they were. The technical choices are in [decision 017](../decisions/017-claude-pit-wall.md).
