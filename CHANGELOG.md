@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.19.0 (1 Nov 2026)
+
+A Storage widget (user request; Windows and the phone, the same designs on both):
+
+- **Free space on the PC's drives.** Each fixed drive shows how much is free, with a bar or ring of used space. Network, removable and optical drives aren't listed. Turn it on in Edit layout's Widgets list; it starts hidden, so your layout doesn't change.
+- **A warning when a drive runs low.** A drive with less free space than the threshold in Settings → Widgets → Storage (1–50%, default 10%) turns to the warning colour, and the card's heading names it ("C: LOW", or "2 DRIVES LOW").
+- **Small, medium and large designs**: a list of letters and free space; rows with each drive's name and "used of total" (dropping that line to fit four drives on the usual card); and a tile per drive with a ring and the free percentage. Drives that don't fit are counted in a last line ("+3 more drives").
+- Drives are read once a minute while the card is shown (every two minutes in Quiet mode), off the dashboard's thread, and the phone shares the same reading.
+- Not yet tried on a phone or emulator.
+
 ## v0.18.0 (31 Oct 2026)
 
 Small, medium and large designs for every widget (user request; Windows and the phone, the same sizes on both). Small is each card's folded layout and Medium is the card you know; Large is new:

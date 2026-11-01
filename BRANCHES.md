@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/storage-overview` | Storage widget: free space per fixed drive, low-space warning (Windows and phone) | `b0ca472` (v0.18.0) | Ready for review | `.worktrees\storage-overview` | `.worktrees\storage-overviewrtifactspp\WidgetScreen.exe`, `.worktrees\storage-overviewrtifactsndroid\WidgetScreen.apk` |
+None right now. `feature/storage-overview` was merged as v0.19.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
