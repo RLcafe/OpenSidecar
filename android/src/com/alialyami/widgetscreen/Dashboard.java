@@ -24,6 +24,7 @@ import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ScaledHost;
+import com.alialyami.widgetscreen.widgets.ClocksWidget;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.MediaWidget;
 import com.alialyami.widgetscreen.widgets.QuickLaunchWidget;
@@ -94,6 +95,7 @@ public final class Dashboard {
         widgets.put("Spotify", new SpotifyWidget(this));
         widgets.put("Soundboard", new SoundboardWidget(this));
         widgets.put("Storage", new StorageWidget(this));
+        widgets.put("Clocks", new ClocksWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
         if (warning[0] != null) say(warning[0], true);
@@ -522,6 +524,7 @@ public final class Dashboard {
             case "System": return 330;
             case "Weather": return 270;
             case "Storage": return 300;
+            case "Clocks": return 280;
             default: return 640;
         }
     }

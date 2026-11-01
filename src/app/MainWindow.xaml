@@ -429,6 +429,13 @@
                 <Grid x:Name="StorageBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
+            <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="WORLD CLOCKS" Style="{StaticResource Label}"/><TextBlock x:Name="ClocksStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="ClocksBody" Grid.Row="1" Margin="0,8,0,0"/>
+              </Grid>
+            </Border>
           </Grid>
         </Grid>
 
@@ -531,6 +538,20 @@
               <TextBlock Text="Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping to other widgets, Arrange and Reset are in the editor." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               <Button x:Name="OpenLayoutEditor" Content="Edit layout" HorizontalAlignment="Left" MinWidth="200" Margin="0,0,0,12"/>
               <TextBlock Text="Opening the editor closes Settings without saving other changes here." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="World clocks" FontSize="24" Margin="0,8,0,10"/>
+              <TextBlock Text="Up to three time zones for the World clocks widget, each with the city name it shows. Times come from Windows, so nothing is looked up online." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <TextBlock Text="Time zone" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                <TextBlock Grid.Column="2" Text="City name" Style="{StaticResource Small}" Margin="0,0,0,6"/>
+                <ComboBox x:Name="ClockZone0" Grid.Row="1" Margin="0,0,0,8" AutomationProperties.Name="Time zone 1"/>
+                <TextBox x:Name="ClockName0" Grid.Row="1" Grid.Column="2" MaxLength="24" Margin="0,0,0,8" AutomationProperties.Name="City name 1" ToolTip="The name the card shows"/>
+                <ComboBox x:Name="ClockZone1" Grid.Row="2" Margin="0,0,0,8" AutomationProperties.Name="Time zone 2"/>
+                <TextBox x:Name="ClockName1" Grid.Row="2" Grid.Column="2" MaxLength="24" Margin="0,0,0,8" AutomationProperties.Name="City name 2" ToolTip="The name the card shows"/>
+                <ComboBox x:Name="ClockZone2" Grid.Row="3" Margin="0,0,0,8" AutomationProperties.Name="Time zone 3"/>
+                <TextBox x:Name="ClockName2" Grid.Row="3" Grid.Column="2" MaxLength="24" Margin="0,0,0,8" AutomationProperties.Name="City name 3" ToolTip="The name the card shows"/>
+              </Grid>
+              <TextBlock Text="Choose None to remove a clock. An empty name uses the zone's first city." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               <TextBlock Text="Storage" FontSize="24" Margin="0,8,0,10"/>
               <TextBlock Text="The Storage widget shows free space on this PC's drives. A drive with less free space than this turns to the warning colour." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
               <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>

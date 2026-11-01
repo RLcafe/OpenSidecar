@@ -73,6 +73,8 @@ namespace WidgetScreen
         public bool HideToTrayWithPhone { get; set; }
         // Storage: a drive with less free space than this percentage shows in the warning colour (Settings → Widgets).
         public int StorageLowPercent { get; set; }
+        // World clocks: up to three time zones and the city names shown for them (Settings → Widgets).
+        public WorldClock[] WorldClocks { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -124,6 +126,7 @@ namespace WidgetScreen
             copy.Shortcuts = Shortcuts == null ? null : Shortcuts.Select(s => s.Copy()).ToList();
             copy.WidgetLayout = WidgetLayout == null ? null : WidgetScreen.WidgetLayout.Copy(WidgetLayout);
             copy.CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray();
+            copy.WorldClocks = WorldClocks == null ? null : WorldClocks.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
             return copy;
         }
@@ -155,6 +158,7 @@ namespace WidgetScreen
             MixerHeight = Clamp(MixerHeight, 476, 576, 576);
             if (FocusCustomMinutes != 0) FocusCustomMinutes = Math.Max(5, Math.Min(180, FocusCustomMinutes));
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
+            WorldClocks = WorldClockService.Clean(WorldClocks);
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();
             Shortcuts.RemoveAll(s => s == null);

@@ -149,5 +149,17 @@ public final class CardSizing {
     public static double storageRing(double tileWidth, double tileHeight) { return clamp(Math.floor(Math.min(tileWidth - 24, tileHeight - 24 - 72)), 56, 200); }
     public static double storageListValue(double rowHeight) { return clamp(Math.round(rowHeight * 0.5), 18, 32); }
 
+    // World clocks (docs/design/world-clocks.md): rows under 340 wide or 200 tall, cities side by side at the reference
+    // 472 × 250, and tiles from 440 × 300 (side by side while each is 170 wide, stacked otherwise). The same numbers as
+    // CardSizing.cs.
+    public static int clocks(double width, double height) { return width < 340 || height < 200 ? SMALL : width >= 440 && height >= 300 ? LARGE : MEDIUM; }
+    public static final double CLOCK_ROW = 32, CLOCK_DETAIL_ROW = 46;
+    public static int clockRows(double height) { return Math.max(1, (int) Math.floor((height + 8) / (CLOCK_ROW + 8))); }
+    public static double clockListTime(double rowHeight) { return clamp(Math.round(rowHeight * 0.55), 18, 40); }
+    public static double clockColumnTime(double column, double height, boolean use24) { return clamp(Math.round(Math.min((column - (use24 ? 4 : 34)) * 0.36, (height - 80) * 0.75)), 22, 72); }
+    public static boolean clockTilesAcross(double width, int count) { return count <= 1 || (width - 12 * (count - 1)) / count >= 170; }
+    public static double clockTileTime(double tileWidth, double tileHeight, boolean use24) { return clamp(Math.round(Math.min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
+    public static double clockStackedTime(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }
