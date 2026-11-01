@@ -5,6 +5,7 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 ## Unreleased
 
 - **Fixed: GitHub Releases weren't published.** The release workflow's last step stopped on gh's "release not found" message, which Windows PowerShell treats as an error, so v0.35.1 built and passed its checks but got no release. The step now checks gh's exit codes itself.
+- **CI:** the workflows use checkout, setup-java and upload-artifact v5, which GitHub runs on Node 24, so the deprecation warnings are gone.
 
 ## v0.35.1 (1 Nov 2026)
 
