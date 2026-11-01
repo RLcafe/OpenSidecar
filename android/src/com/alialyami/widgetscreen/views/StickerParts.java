@@ -8,6 +8,7 @@ import android.graphics.RectF;
 import android.view.View;
 
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Theme;
 
 // Drawn parts of the Sticker Sheet's default five (docs/design/sticker-sheet.md, phase 2), the same as the PC's
@@ -83,7 +84,7 @@ public final class StickerParts {
             empty.setStyle(Paint.Style.STROKE); empty.setColor(ui.theme.muted); empty.setStrokeWidth(ui.fpx(1.5));
             empty.setPathEffect(new DashPathEffect(new float[] { ui.fpx(2), ui.fpx(2) }, 0));
         }
-        public static int shown(int count) { return Math.max(GOAL, Math.min(MOST_SHOWN, count)); }
+        public static int shown(int count) { return CardSizing.pipsShown(count); }
         public void setCount(int value) { if (value != count) { count = Math.max(0, value); requestLayout(); invalidate(); } }
         public int count() { return count; }
 
@@ -141,15 +142,13 @@ public final class StickerParts {
         }
         // 0 to 1, as the PC's output peak.
         public void setLevel(double value) { float next = (float) Math.max(0, Math.min(1, Double.isNaN(value) ? 0 : value)); if (next != level) { level = next; invalidate(); } }
-        public static int lit(double level, int count) {
-            if (Double.isNaN(level) || level <= 0.005) return 0;
-            return Math.max(1, Math.min(count, (int) Math.round(Math.sqrt(Math.min(1, level)) * count)));
-        }
+        public static int lit(double level, int count) { return CardSizing.ledLit(level, count); }
         public int count() { float length = vertical ? getHeight() : getWidth(); return Math.max(4, (int) Math.floor((length + gap) / (segment + gap))); }
         @Override protected void onDraw(Canvas canvas) {
             if (getWidth() <= 0 || getHeight() <= 0) return;
             int count = count(), on = lit(level, count);
             float length = vertical ? getHeight() : getWidth(), size = (length - gap * (count - 1)) / count;
+            if (size <= 0) return;
             for (int i = 0; i < count; i++) {
                 float at = i * (size + gap);
                 if (vertical) cell.set(0, getHeight() - at - size, getWidth(), getHeight() - at); else cell.set(at, 0, at + size, getHeight());

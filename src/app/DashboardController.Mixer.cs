@@ -150,12 +150,14 @@ namespace WidgetScreen
             Text("SessionCount", sessions.Count == 0 ? "" : sessions.Count.ToString()); UpdateMixerApps();
         }
 
-        // "Speakers (Logi Z407)" reads "Z407" on a strip: the part in brackets, or the first word.
+        // "Speakers (Logi Z407)" reads "Z407" on a strip: the last word of the part in brackets (or of the whole name when
+        // that's shorter than 3 letters, as in "Realtek (R) Audio"), unless that word is under 3 letters.
         public static string ShortDevice(string name)
         {
             if (String.IsNullOrWhiteSpace(name)) return "";
             int open = name.LastIndexOf('('), close = name.LastIndexOf(')');
-            string inner = open >= 0 && close > open ? name.Substring(open + 1, close - open - 1).Trim() : name.Trim();
+            string inner = open >= 0 && close > open ? name.Substring(open + 1, close - open - 1).Trim() : "";
+            if (inner.Length < 3) inner = name.Trim();
             var words = inner.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             return words.Length == 0 ? inner : words[words.Length - 1].Length >= 3 ? words[words.Length - 1] : inner;
         }
@@ -163,10 +165,12 @@ namespace WidgetScreen
         // The heading's microphone badge: ON AIR (filled) while it's live, MUTED while muted, nothing without one.
         private void ShowMicState(bool? muted)
         {
-            Text("MicState", !muted.HasValue ? "" : muted.Value ? "MUTED" : "ON AIR");
+            Text("MicState", MicText(muted));
             var sticker = StatusSticker.For(Control<TextBlock>("MicState"));
             if (sticker != null) { sticker.Filled = muted == false; sticker.Glyph = muted.HasValue ? (muted.Value ? "" : "") : null; }
         }
+
+        public static string MicText(bool? muted) { return !muted.HasValue ? "" : muted.Value ? "MUTED" : "ON AIR"; }
 
         // The level meter's newest reading: the row under the master slider, or the master strip's ladder.
         private void PushLevel(double peak)

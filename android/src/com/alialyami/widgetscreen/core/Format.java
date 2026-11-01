@@ -80,7 +80,8 @@ public final class Format {
     public static String shortDevice(String name) {
         if (name == null || name.trim().isEmpty()) return "";
         int open = name.lastIndexOf('('), close = name.lastIndexOf(')');
-        String inner = open >= 0 && close > open ? name.substring(open + 1, close).trim() : name.trim();
+        String inner = open >= 0 && close > open ? name.substring(open + 1, close).trim() : "";
+        if (inner.length() < 3) inner = name.trim();
         String[] words = inner.split(" +");
         String last = words.length == 0 ? inner : words[words.length - 1];
         return last.length() >= 3 ? last : inner;

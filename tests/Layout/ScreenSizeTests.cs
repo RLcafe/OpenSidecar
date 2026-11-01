@@ -241,7 +241,8 @@ internal static class ScreenSizeTests
                 Assert(grid.Columns == 3 && grid.Rows == 2 && grid.Children.Count == 6, "A big Quick Launch card should keep six bigger buttons: " + grid.Columns + " x " + grid.Rows);
                 foreach (System.Windows.Controls.Button button in grid.Children) Assert(button.ActualHeight > 200, "Six buttons should grow into a big card.");
                 foreach (System.Windows.Controls.Button button in grid.Children) Assert(button.ActualWidth >= 48 && button.ActualHeight >= 48, "A deck button is under 48.");
-                Assert(((System.Windows.Controls.TextBlock)window.FindName("FocusTime")).FontSize == 60 && CardSizing.Focus(320, 576) == CardSizing.Design.Large, "Focus countdown on the reference card (the Large ring design).");
+                // Sticker Sheet phase 2: the countdown sits in the kitchen-timer dial's inner disc, 17% of a 272-unit dial.
+                Assert(((System.Windows.Controls.TextBlock)window.FindName("FocusTime")).FontSize == Math.Round(CardSizing.FocusRing(320, 576) * 0.17) && CardSizing.Focus(320, 576) == CardSizing.Design.Large, "Focus countdown on the reference card (the Large dial design).");
             }
             window.Close();
         });

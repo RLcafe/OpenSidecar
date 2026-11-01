@@ -203,6 +203,8 @@ namespace WidgetScreen
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
             int count = Count, lit = Lit(Level, count);
             double gap = 3, length = Vertical ? ActualHeight : ActualWidth, cell = (length - gap * (count - 1)) / count, thick = Vertical ? ActualWidth : ActualHeight;
+            // A meter too small for its segments draws nothing rather than negative ones.
+            if (cell <= 0 || thick <= 0) return;
             for (int i = 0; i < count; i++)
             {
                 Brush brush = i >= lit ? Unlit : i >= count - 2 ? Hot : Ink;
