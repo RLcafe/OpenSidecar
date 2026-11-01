@@ -8,9 +8,11 @@ The Claude Code widget on both apps, built from the design brief below (kept as 
 - **Ended:** the car is under its cover.
 - **Archived:** the thread was archived in the Claude app (`isArchived`, the only such flag on the PC; there is no "resolved" one). The car is under its cover, dimmed the most, with an "Archived" chip, and it parks last in its project.
 
+- **Resolved** (since v0.34.1, Ali's choice): the Claude app's summary of the latest reply says "completed". It looks like Archived, with a "Resolved" chip. Live state wins: if it works, needs you or compacts, that shows instead. "Review ready" and "blocked" don't count.
+
 Settings → Claude has two choices:
 
-- **Hide archived threads** (on by default).
+- **Hide resolved and archived threads** (on by default).
 - **Hide idle threads** (off by default).
 
 They apply to the Large ledger, the Medium rows, the phone and the heading's thread count. Hidden threads still count in their project's tokens, cache reads, replies, models and lines, and the project line ends "+N hidden". See [decision 020](../decisions/020-claude-archived-and-hidden.md).

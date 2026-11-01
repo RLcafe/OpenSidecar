@@ -183,11 +183,13 @@ public final class ClaudeText {
         for (int i = 0; i < 7; i++) days[i] = Instant.ofEpochMilli((long) ((start + i * 86400) * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE", Locale.US));
         return days;
     }
+    // Archived or resolved: under the cover, dimmed the most, last in its project (decision 020).
+    public static boolean parked(String pit) { return "archived".equals(pit) || "resolved".equals(pit); }
     // A thread's chip: what its car is doing.
     public static String chip(String pit) {
         switch (pit == null ? "" : pit) {
             case "need": return "Needs you"; case "work": return "Working"; case "rev": return "Tool run"; case "pit": return "Compacting";
-            case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; case "archived": return "Archived"; default: return "Idle";
+            case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; case "archived": return "Archived"; case "resolved": return "Resolved"; default: return "Idle";
         }
     }
     // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").

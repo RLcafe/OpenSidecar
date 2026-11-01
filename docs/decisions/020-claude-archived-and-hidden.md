@@ -36,3 +36,20 @@ So **Archived means `isArchived` only**. Treating a "completed" thread, or one t
 
 - Hiding idle threads hides open sessions too. A project whose only running thread is idle then looks asleep (its garage dims) until that thread works again. That's what "hide idle" asks for, and the thread is one setting away.
 - No guessed "resolved" rule: with no flag on the PC, an ended thread stays Ended until Ali archives it in the Claude app or picks a rule.
+
+## Resolved (Ali's choice, 1 Nov 2026, v0.34.1)
+
+Ali chose that threads the Claude app marks "completed" count as resolved, as well as archived ones.
+
+- **Resolved** (`PitState.Resolved`, `"resolved"` on the phone link with a `resolved` flag) is set when all of these hold:
+  - the app's record has `postTurnSummary.status_category` "completed";
+  - its `summarizes_uuid` matches `lastAssistantUuid`, so the summary is about the latest reply;
+  - the thread isn't archived;
+  - Claude Code's logs show nothing more than two minutes newer than the record's `lastActivityAt` (`ClaudeService.ResolvedSlack`). A new prompt un-resolves it until the app writes a new summary.
+
+  Only the category and the two ids are read, never the summary's text (`ClaudeAppThread.Completed`).
+- It looks like Archived: under the cover, dimmed the most, last in its project, with a "Resolved" chip (`ClaudePace.Parked`, `ClaudeText.parked`).
+- **Live state wins.** A resolved thread that is working, needs Ali or is compacting shows that state and isn't hidden. A running thread whose turn has ended and whose latest reply was "completed" is Resolved.
+- "Review ready" and "blocked" are not resolved; an ended one stays Ended.
+- The setting is renamed **Hide resolved and archived threads**. It's the same stored value (`ClaudeShowArchived`), still on by default.
+- On Ali's PC that is the 25 records marked "completed" (of 45), less any whose logs show newer work.

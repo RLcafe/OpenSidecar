@@ -467,7 +467,7 @@ public final class ClaudeWidget extends Widget {
             final String tid = thread.id;
             fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
                 PcState.ClaudeThread t = c.thread(tid); if (t == null) return;
-                tap.setAlpha(t.running ? 1f : "archived".equals(t.pit) ? 0.45f : 0.62f);
+                tap.setAlpha(ClaudeText.parked(t.pit) ? 0.45f : t.running ? 1f : 0.62f);
                 chip.setText(ClaudeText.chip(t.pit).toUpperCase(Locale.ROOT));
                 chip(chip, t.pit);
                 name2.setText(ClaudeText.threadTitle(t, now, dash.use24())); name2.setTextColor("need".equals(t.pit) ? Theme.WARNING : ui.theme.text);
@@ -485,7 +485,7 @@ public final class ClaudeWidget extends Widget {
         if ("done".equals(pit)) { chip.setBackground(ui.shape(Ui.alpha(PitArt.ACCENTS[1], 0.14f), 0, 0, 6)); chip.setTextColor(PitArt.ACCENTS[1]); return; }
         if ("stuck".equals(pit)) { chip.setBackground(ui.shape(Ui.alpha(Theme.WARNING, 0.16f), 0, 0, 6)); chip.setTextColor(Theme.WARNING); return; }
         if ("end".equals(pit) || "idle".equals(pit)) { chip.setBackground(ui.shape(0x00000000, ui.theme.controlBorder, 1, 6)); chip.setTextColor(ui.theme.muted); return; }
-        if ("archived".equals(pit)) { chip.setBackground(null); chip.setTextColor(Ui.alpha(ui.theme.muted, 0.7f)); return; }
+        if (ClaudeText.parked(pit)) { chip.setBackground(null); chip.setTextColor(Ui.alpha(ui.theme.muted, 0.7f)); return; }
         chip.setBackground(ui.shape(Ui.alpha(ui.theme.accent, 0.16f), 0, 0, 6)); chip.setTextColor(ui.theme.accent);
     }
 
@@ -732,8 +732,8 @@ public final class ClaudeWidget extends Widget {
         part.sprite.once = PitArt.once(state);
         part.sprite.show(key, frames, PitArt.still(state), restart);
         if (!live) part.sprite.hold();
-        // Idle has its engine off, dimmed; an ended or archived car (drawn the same, under its cover) is dimmed where its row isn't.
-        boolean archived = t != null && "archived".equals(t.pit);
+        // Idle has its engine off, dimmed; an ended, archived or resolved car (drawn the same, under its cover) is dimmed where its row isn't.
+        boolean archived = t != null && ClaudeText.parked(t.pit);
         part.sprite.setAlpha(state == PitArt.IDLE ? 0.7f : part.dim && archived ? 0.45f : part.dim && state == PitArt.END ? 0.6f : 1f);
     }
     private void renderGarage(PcState.Claude c, GaragePart part, PcState.ClaudeGroup group) {

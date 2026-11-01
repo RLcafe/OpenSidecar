@@ -24,8 +24,9 @@ namespace WidgetScreen
         // The v2 card (decision 017): its car and what the car does, its tokens a minute right now, its model mix
         // (Opus, Sonnet, Haiku shares) and lines added and removed per period.
         public bool Compacting;
-        // Archived in the Claude app (its isArchived flag).
-        public bool Archived;
+        // Archived in the Claude app (its isArchived flag), or resolved: its latest reply completed the job and
+        // nothing newer has happened (decision 020).
+        public bool Archived, Resolved;
         public PitState Pit = PitState.Idle;
         public PitCar Car = PitCar.Sports;
         public double Rate;
@@ -128,7 +129,7 @@ namespace WidgetScreen
                 .GroupBy(t => t.Project, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new ClaudeProjectGroup {
                     Folder = g.Key, Name = g.First().ProjectName, Collapsed = Collapsed.Contains(g.Key),
-                    Threads = g.Where(Shows).OrderBy(t => t.Running ? Rank(t.State) : t.Pit == PitState.Archived ? 5 : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
+                    Threads = g.Where(Shows).OrderBy(t => ClaudePace.Parked(t.Pit) ? 5 : t.Running ? Rank(t.State) : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
                     Hidden = g.Count(t => !Shows(t)), Seen = g.Max(t => t.LastActive),
                     Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)), Mix = GroupMix(g, period), Models = GroupModels(g, period),
                     Added = g.Sum(t => t.LinesFor(period)[0]), Removed = g.Sum(t => t.LinesFor(period)[1]), Replies = g.Sum(t => t.RepliesFor(period)), CacheReads = g.Sum(t => t.CacheReadsFor(period)) })
@@ -189,7 +190,7 @@ namespace WidgetScreen
                 make("sample-3", "photo-manager", "Face grouping", ClaudeState.Done, 6, "Sonnet 5.5", 96400),
                 make("sample-11", "photo-manager", "Thumbnail cache", null, 260, "Sonnet 5.5", 58000) };
             if (needsYou) threads[0].Message = "Claude needs your permission to use Bash";
-            threads[7].Archived = true;
+            threads[7].Archived = true; threads[5].Resolved = true;
             // The pit wall's sample readings: each thread's mix, lines and live burn, and what its car does.
             var mixes = new Dictionary<string, double[]> { { "Opus 5.5", new[] { 1.0, 0, 0 } }, { "Sonnet 5.5", new[] { 0, 1.0, 0 } } };
             var lines = new Dictionary<string, long[]> { { "sample-1", new long[] { 412, 96 } }, { "sample-2", new long[] { 880, 120 } }, { "sample-7", new long[] { 590, 180 } }, { "sample-8", new long[] { 38, 0 } }, { "sample-3", new long[] { 120, 34 } }, { "sample-5", new long[] { 50, 30 } } };
@@ -500,6 +501,8 @@ namespace WidgetScreen
             return folder => { bool shown; return map.TryGetValue(ClaudeUsage.Key(folder), out shown) ? shown : showNew; };
         }
 
+        // How much later than the Claude app's record the logs may run before a completed thread counts as active again.
+        public static readonly TimeSpan ResolvedSlack = TimeSpan.FromMinutes(2);
         public ClaudeView View(DateTime now, List<ClaudeUsageEntry> usage, Func<string, bool> shown = null)
         {
             var view = new ClaudeView { Connected = Connected, Limits = Limits, LogsFailed = Usage.Failed, LogsRead = Usage.Scanned, Plan = Plan };
@@ -606,6 +609,8 @@ namespace WidgetScreen
                 if (a != null && a.Remote) s.Where = "Remote Control";
                 else if (!s.Running && s.Where.Length == 0 && a != null) s.Where = "Desktop";
                 DateTime seen; lastSeen.TryGetValue(s.Id, out seen);
+                // Resolved only while the logs show nothing newer than the app's record (a new prompt un-resolves it).
+                s.Resolved = a != null && a.Completed && !a.Archived && seen <= a.LastActive + ResolvedSlack;
                 foreach (var at in new[] { s.Since, seen, a == null ? DateTime.MinValue : a.LastActive }) if (at > s.LastActive) s.LastActive = at;
                 s.CanFocus = s.Running && (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;
                 List<ClaudeUsageEntry> mine;
