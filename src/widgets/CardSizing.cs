@@ -203,6 +203,9 @@ namespace WidgetScreen
         }
         // The Small critter: as tall as the card allows, at most 42% of its width.
         public static double ClaudeSmallCritter(double bodyWidth, double bodyHeight) { return Clamp(Math.Floor(Math.Min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
+        // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
+        // each text was copied at the reference size, and two-line previews with their length from 440 × 400.
+        public static Design Clip(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 400 ? Design.Large : Design.Medium; }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

@@ -28,6 +28,7 @@ namespace WidgetScreen
             prayerCard.Fit(Editor.Bounds("Prayer")); RenderPrayer();
             notesCard.Fit(Editor.Bounds("Notes"));
             claudeCard.Fit(Editor.Bounds("Claude"), settings.TextScale);
+            clipCard.Fit(Editor.Bounds("Clipboard"));
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
             Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;

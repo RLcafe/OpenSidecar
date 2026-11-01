@@ -54,7 +54,7 @@ namespace WidgetScreen
         // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
         private const double MinimumShrink = 0.78;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard" };
         public static string Title(string id)
         {
             switch (id) {
@@ -68,6 +68,7 @@ namespace WidgetScreen
                 case "Prayer": return "Prayer times";
                 case "Notes": return "Notes and to-do";
                 case "Claude": return "Claude Code";
+                case "Clipboard": return "Clipboard history";
                 default: return id;
             }
         }
@@ -88,6 +89,7 @@ namespace WidgetScreen
                 case "Prayer": return new Size(240, 152);
                 case "Notes": return new Size(260, 200);
                 case "Claude": return new Size(260, 180);
+                case "Clipboard": return new Size(240, 200);
                 default: return new Size(232, 152);
             }
         }
@@ -140,7 +142,8 @@ namespace WidgetScreen
                 new WidgetPlacement { Id = "Clocks", X = 1384, Y = 0, Width = 472, Height = 250, Visible = false },
                 new WidgetPlacement { Id = "Prayer", X = 1384, Y = 326, Width = 472, Height = 250, Visible = false },
                 new WidgetPlacement { Id = "Notes", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
-                new WidgetPlacement { Id = "Claude", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false }
+                new WidgetPlacement { Id = "Claude", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
+                new WidgetPlacement { Id = "Clipboard", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)
@@ -295,6 +298,11 @@ namespace WidgetScreen
         {
             return s.SwapSideWidgets || s.ClockWidth != 1 || s.MediaWidth != 3 || s.MixerWidth != 3 || s.SystemWidth != 2
                 || s.ClockHeight != 246 || s.MediaHeight != 326 || s.MixerHeight != 576 || s.SystemHeight != 326;
+        }
+        // Whether a widget is shown on any page, in any canvas shape's layout.
+        public static bool ShownAnywhere(AppSettings settings, string id)
+        {
+            return Pages(settings).Any(page => SavedLayouts(page).Any(layout => layout.Widgets.Any(p => p != null && p.Id == id && p.Visible)));
         }
         public static IEnumerable<CanvasLayout> SavedLayouts(LayoutPage page)
         {

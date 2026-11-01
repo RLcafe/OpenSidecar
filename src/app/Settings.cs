@@ -87,6 +87,9 @@ namespace WidgetScreen
         // Claude Code (Settings → Claude): a chime when a session starts needing you, and the read-only plan usage check.
         public bool ClaudeChime { get; set; }
         public bool ClaudeOnlineLimits { get; set; }
+        // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
+        public int ClipboardSize { get; set; }
+        public bool ClipboardKeep { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -129,6 +132,7 @@ namespace WidgetScreen
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
             PrayerLocation = ""; PrayerSound = "";
+            ClipboardSize = ClipboardHistory.DefaultSize;
             PrayerMethod = PrayerService.RegionMethod();
             Shortcuts = DefaultShortcuts();
         }
@@ -174,6 +178,7 @@ namespace WidgetScreen
             if (FocusCustomMinutes != 0) FocusCustomMinutes = Math.Max(5, Math.Min(180, FocusCustomMinutes));
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             WorldClocks = WorldClockService.Clean(WorldClocks);
+            ClipboardSize = ClipboardHistory.ClampSize(ClipboardSize);
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();
             Shortcuts.RemoveAll(s => s == null);
