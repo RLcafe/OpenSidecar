@@ -18,6 +18,7 @@ import com.alialyami.widgetscreen.views.HistoryBars;
 import com.alialyami.widgetscreen.views.ProgressLine;
 import com.alialyami.widgetscreen.views.RingGauge;
 import com.alialyami.widgetscreen.views.Sparkline;
+import com.alialyami.widgetscreen.views.Stickers;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ public final class SystemWidget extends Widget {
     private static final int HISTORY = 48;
     private static final double GAP = 12;
     private TextView status, headerUptime;
+    private Stickers.Sticker peak;
     private final Map<String, Part> parts = new HashMap<String, Part>();
     private final Map<String, List<Double>> history = new HashMap<String, List<Double>>();
     private final List<Double> upHistory = new ArrayList<Double>();
@@ -42,7 +44,7 @@ public final class SystemWidget extends Widget {
     // What one reading is drawn with in the current design; any of these may be missing.
     private static final class Part {
         String style;
-        TextView value, detail, second;
+        TextView value, detail, second, badge, range;
         RingGauge ring;
         ArcGauge gauge;
         ProgressLine bar;
@@ -90,8 +92,10 @@ public final class SystemWidget extends Widget {
         headerUptime = sticker(false);
         headerUptime.setVisibility(design == CardSizing.LARGE && uptime ? View.VISIBLE : View.GONE);
         right.addView(headerUptime, ui.ll(Ui.WRAP, Ui.WRAP));
+        // The busiest of CPU, GPU, RAM and VRAM as a fact, filled from 80% (Sticker Sheet phase 3).
+        peak = sticker(false);
+        right.addView(peak, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 12, 0, 0, 0));
         status = sticker(true);
-        
         right.addView(status, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 12, 0, 0, 0));
         header.addView(right, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
@@ -204,20 +208,29 @@ public final class SystemWidget extends Widget {
     private View dialCell(String id, Part part, double cellWidth, double cellHeight) {
         LinearLayout column = ui.column(); column.setGravity(Gravity.CENTER);
         double diameter = CardSizing.statsRing(cellWidth, cellHeight - CardSizing.statsDialText(ui.textScale));
-        column.addView(dial(part, diameter), ui.ll(ui.px(diameter), ui.px(diameter)));
+        column.addView(dial(id, part, diameter), ui.ll(ui.px(diameter), ui.px(diameter)));
         TextView label = ui.label(SystemText.title(id)); label.setGravity(Gravity.CENTER);
         column.addView(label, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));
         part.detail = caption(" "); part.detail.setGravity(Gravity.CENTER); part.detail.setMaxWidth(ui.px(Math.max(40, cellWidth - 8)));
         column.addView(part.detail, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 2, 0, 0));
         return column;
     }
-    private View dial(Part part, double diameter) {
+    private View dial(String id, Part part, double diameter) {
         FrameLayout dial = new FrameLayout(ui.context);
         float thickness = ui.fpx(Math.max(5, Math.min(12, Math.round(diameter * 0.075))));
         if (part.style.equals("Gauge")) { part.gauge = new ArcGauge(ui.context, ui.theme.accent, ui.theme.track, thickness); dial.addView(part.gauge, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH)); }
         else { part.ring = new RingGauge(ui.context, ui.theme.accent, ui.theme.track, thickness); dial.addView(part.ring, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH)); }
         part.value = reading("—", Math.round(diameter * (part.style.equals("Gauge") ? 0.25 : 0.27)));
         dial.addView(part.value, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER));
+        // CPU and GPU rings wear their temperature as a badge sticker at the top right.
+        if (id.equals("Cpu") || id.equals("Gpu")) {
+            part.badge = Ui.tabular(ui.text("", (float) Math.max(13, Math.round(diameter * 0.1)), Theme.INK_TEXT));
+            part.badge.setTypeface(Stickers.BOLD); part.badge.setIncludeFontPadding(false); part.badge.setSingleLine(true);
+            part.badge.setBackground(ui.shape(dash.ink(this.id), ui.theme.surface, 2, 10));
+            part.badge.setPadding(ui.px(6), ui.px(1), ui.px(6), ui.px(1));
+            part.badge.setVisibility(View.GONE);
+            dial.addView(part.badge, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.TOP | Gravity.END));
+        }
         return dial;
     }
     private View graphCell(String id, Part part, double cellHeight) {
@@ -260,14 +273,20 @@ public final class SystemWidget extends Widget {
                 top.addView(part.detail, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
                 content.addView(top, ui.ll(Ui.MATCH, Ui.WRAP));
                 if (SystemText.isDial(part.style)) {
-                    double diameter = CardSizing.statsRing(tileWidth - 32, tileHeight - 26 - 40);
+                    double diameter = CardSizing.statsRing(tileWidth - 32, tileHeight - 26 - 40 - 20);
                     FrameLayout holder = new FrameLayout(ui.context);
-                    holder.addView(dial(part, diameter), ui.frame(ui.px(diameter), ui.px(diameter), Gravity.CENTER));
+                    holder.addView(dial(id, part, diameter), ui.frame(ui.px(diameter), ui.px(diameter), Gravity.CENTER));
                     content.addView(holder, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 6, 0, 0));
                 } else {
                     part.value = reading("—", id.equals("Network") ? Math.round(size * 0.66) : size);
                     content.addView(part.value, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
                     content.addView(graph(id, part), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
+                }
+                // The lowest and highest of the history under each tile (Sticker Sheet phase 3).
+                if (!id.equals("Network")) {
+                    part.range = caption("");
+                    if (SystemText.isDial(part.style)) part.range.setGravity(Gravity.CENTER);
+                    content.addView(part.range, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
                 }
                 line.addView(tile(content, 16, 16, 14, 12), ui.margins(ui.ll(0, Ui.MATCH, 1), c == 0 ? 0 : GAP / 2, 0, c == columns - 1 ? 0 : GAP / 2, 0));
             }
@@ -299,6 +318,9 @@ public final class SystemWidget extends Widget {
         status.setText(!dash.online() ? "PC OFFLINE" : ok ? "" : "UNAVAILABLE");
         double fpsScale = SystemText.fpsScale(history.get("Fps"));
         Map<String, SystemText.Reading> readings = SystemText.readings(s, fpsScale);
+        String peakId = ok ? SystemText.peakId(readings, s) : null;
+        peak.setText(peakId == null ? "" : SystemText.peakText(peakId, readings.get(peakId)));
+        peak.setFilled(peakId != null && readings.get(peakId).percent >= SystemText.STRAINED);
         for (Map.Entry<String, Part> entry : parts.entrySet()) {
             String id = entry.getKey(); Part part = entry.getValue(); SystemText.Reading reading = readings.get(id);
             if (id.equals("Network")) {
@@ -319,6 +341,11 @@ public final class SystemWidget extends Widget {
             else { part.value.setText(reading.text); part.value.setTextColor(reading.warning ? Theme.WARNING : reading.missing() ? ui.theme.muted : ui.theme.text); }
             part.value.setContentDescription(SystemText.title(id) + ", " + (reading.missing() ? reading.longReason : reading.text));
             if (part.detail != null) part.detail.setText(reading.detail);
+            if (part.badge != null) {
+                String badge = SystemText.badge(readings.get(id.equals("Cpu") ? "CpuTemp" : "GpuTemp"));
+                part.badge.setText(badge); part.badge.setVisibility(badge.isEmpty() ? View.GONE : View.VISIBLE);
+            }
+            if (part.range != null) part.range.setText(SystemText.range(id, history.get(id), ok && s.fahrenheit));
             if (part.ring != null) { part.ring.setValue(reading.percent); part.ring.setFill(color); }
             if (part.gauge != null) { part.gauge.setValue(reading.percent); part.gauge.setFill(color); }
             if (part.bar != null) { part.bar.setValue(reading.percent / 100); part.bar.setFill(color); }

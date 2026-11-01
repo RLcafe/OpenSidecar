@@ -6,11 +6,13 @@ using System.Windows.Controls;
 
 namespace WidgetScreen
 {
-    // Storage in three designs that follow the card's size (CardSizing.Storage; docs/design/storage.md). Small lists each
-    // drive's letter and free space over a thin bar; Medium adds the drive's name, a thicker bar and used of total; Large
-    // gives each drive a tile with a ring of used space and the free percentage inside. A drive under the low-space
-    // threshold (Settings → Widgets) turns to the warning colour, and the heading names it. Drives that don't fit the
-    // card are counted in a last line. The phone's StorageWidget.java draws the same three.
+    // Storage in three designs that follow the card's size (CardSizing.Storage; docs/design/storage.md), each drive a
+    // jar filled by its used space (Sticker Sheet phase 3, docs/design/sticker-sheet.md). Small lists each drive's letter
+    // and free space over a thin bar; Medium puts a small jar beside the drive's name, free space and used of total;
+    // Large gives each drive a tile with a big jar labelled with its free percentage. A drive under the low-space
+    // threshold (Settings → Widgets) fills with Amber caution tape, its free space turns to the warning colour, and the
+    // heading names it. Drives that don't fit the card are counted in a last line. The phone's StorageWidget.java draws
+    // the same three.
     public sealed class StorageCard : CardParts
     {
         private const double Gap = 12;
@@ -31,7 +33,7 @@ namespace WidgetScreen
         {
             public TextBlock Title, Free, Detail;
             public MeterBar Bar;
-            public RingGauge Ring;
+            public StorageJar Jar;
         }
 
         public StorageCard(FrameworkElement scope, Grid host, TextBlock status) { this.host = host; this.status = status; names = new PartNames(scope); }
@@ -65,7 +67,7 @@ namespace WidgetScreen
             design = CardSizing.Storage(bounds.Width, bounds.Height);
             FrameworkElement view;
             if (drives == null) view = Caption("Reading drives…");
-            else if (drives.Count == 0) view = Caption("No fixed drives found.");
+            else if (drives.Count == 0) { var empty = Stickers.Unavailable("No fixed drives found."); empty.VerticalAlignment = VerticalAlignment.Center; view = empty; }
             else
             {
                 int capacity = CardSizing.StorageCapacity(design, width, height, drives.Count);
@@ -106,27 +108,31 @@ namespace WidgetScreen
             return view;
         }
 
-        // Medium: a row per drive with its name and free space, a bar, and used of total under it.
+        // Medium: a row per drive with a small jar, its name and free space, and used of total under them.
         private FrameworkElement BuildRows(List<StorageDrive> list, bool overflow, bool detail)
         {
             var view = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            double jar = detail ? 46 : 24;
             for (int i = 0; i < list.Count; i++)
             {
                 var part = new Part(); parts.Add(part);
-                var row = Rows(Auto, Auto, Auto); row.Margin = new Thickness(0, i == 0 ? 0 : detail ? 8 : 4, 0, 0);
+                var line = Columns(Auto, Star); line.Margin = new Thickness(0, i == 0 ? 0 : detail ? 8 : 4, 0, 0);
+                part.Jar = names.Add(new StorageJar { Width = StorageJar.WidthFor(jar), Height = jar, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) }, "StorageJar" + i);
+                line.Children.Add(part.Jar);
+                var row = Rows(Auto, Auto); row.VerticalAlignment = VerticalAlignment.Center;
                 var top = Columns(Star, Auto);
-                part.Title = names.Add(Text("", detail ? "BodySize" : "SmallSize", "Text"), "StorageTitle" + i); part.Title.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(part.Title);
+                part.Title = names.Add(Text("", detail ? "BodySize" : "SmallSize", "Text"), "StorageTitle" + i); part.Title.VerticalAlignment = VerticalAlignment.Center; part.Title.TextTrimming = TextTrimming.CharacterEllipsis; top.Children.Add(part.Title);
                 part.Free = names.Add(Text("—", detail ? "BodySize" : "SmallSize", "Text"), "StorageFree" + i); part.Free.Margin = new Thickness(12, 0, 0, 0); part.Free.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(At(part.Free, 0, 1));
                 row.Children.Add(top);
-                part.Bar = Bar(detail ? 10 : 4); part.Bar.Margin = new Thickness(0, detail ? 6 : 3, 0, 0); row.Children.Add(At(part.Bar, 1));
-                if (detail) { part.Detail = names.Add(Caption(""), "StorageDetail" + i); part.Detail.Margin = new Thickness(0, 5, 0, 0); row.Children.Add(At(part.Detail, 2)); }
-                view.Children.Add(row);
+                if (detail) { part.Detail = names.Add(Caption(""), "StorageDetail" + i); part.Detail.Margin = new Thickness(0, 4, 0, 0); part.Detail.TextTrimming = TextTrimming.CharacterEllipsis; row.Children.Add(At(part.Detail, 1)); }
+                line.Children.Add(At(row, 0, 1));
+                view.Children.Add(line);
             }
             if (overflow) view.Children.Add(More());
             return view;
         }
 
-        // Large: a tile per drive with a ring of used space, the free percentage inside, and the drive and sizes under it.
+        // Large: a tile per drive with a jar of used space labelled with the free percentage, and the drive and sizes under it.
         private FrameworkElement BuildTiles(List<StorageDrive> list, double width, double height, bool overflow)
         {
             int columns = CardSizing.StorageTileColumns(width, list.Count), rows = (list.Count + columns - 1) / columns;
@@ -143,14 +149,17 @@ namespace WidgetScreen
                 {
                     int index = r * columns + c; var part = new Part(); parts.Add(part);
                     var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                    var dial = new Grid { Width = diameter, Height = diameter, HorizontalAlignment = HorizontalAlignment.Center };
-                    part.Ring = new RingGauge { Thickness = Math.Max(6, Math.Min(14, Math.Round(diameter * 0.08))) };
-                    part.Ring.SetResourceReference(RingGauge.TrackProperty, "Track");
-                    dial.Children.Add(part.Ring);
-                    var inside = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                    part.Free = names.Add(Reading("—", Math.Round(diameter * 0.24)), "StorageFree" + index); part.Free.HorizontalAlignment = HorizontalAlignment.Center; inside.Children.Add(part.Free);
-                    var free = Caption("free"); free.HorizontalAlignment = HorizontalAlignment.Center; inside.Children.Add(free);
-                    dial.Children.Add(inside);
+                    double jarWidth = Math.Min(StorageJar.WidthFor(diameter), tileWidth - 24);
+                    var dial = new Grid { Width = jarWidth, Height = diameter, HorizontalAlignment = HorizontalAlignment.Center };
+                    part.Jar = names.Add(new StorageJar(), "StorageJar" + index);
+                    dial.Children.Add(part.Jar);
+                    // The jar's label: the free percentage on a pill in the card's colour, readable over any fill.
+                    var inside = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                    part.Free = names.Add(Reading("—", Math.Max(18, Math.Round(diameter * 0.17))), "StorageFree" + index); part.Free.HorizontalAlignment = HorizontalAlignment.Center; inside.Children.Add(part.Free);
+                    var free = Caption("free"); free.HorizontalAlignment = HorizontalAlignment.Center; free.Margin = new Thickness(0, -2, 0, 0); inside.Children.Add(free);
+                    var label = new Border { Child = inside, CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 2, 10, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, diameter * 0.12, 0, 0) };
+                    label.SetResourceReference(Border.BackgroundProperty, "Surface");
+                    dial.Children.Add(label);
                     content.Children.Add(dial);
                     part.Title = names.Add(Text("", "BodySize", "Text"), "StorageTitle" + index); part.Title.HorizontalAlignment = HorizontalAlignment.Center; part.Title.MaxWidth = Math.Max(60, tileWidth - 24); part.Title.Margin = new Thickness(0, 10, 0, 0);
                     content.Children.Add(part.Title);
@@ -174,7 +183,7 @@ namespace WidgetScreen
             {
                 var drive = drives[i]; var part = parts[i];
                 bool low = StorageService.Low(drive, lowPercent);
-                string fill = low ? "Warning" : "Accent", free = StorageService.FormatBytes(drive.FreeBytes);
+                string free = StorageService.FormatBytes(drive.FreeBytes);
                 if (design == CardSizing.Design.Small) part.Free.Text = free;
                 else if (design == CardSizing.Design.Medium)
                 {
@@ -187,8 +196,12 @@ namespace WidgetScreen
                     part.Detail.Text = free + " free of " + StorageService.FormatBytes(drive.TotalBytes);
                 }
                 part.Free.SetResourceReference(TextBlock.ForegroundProperty, low ? "Warning" : "Text");
-                if (part.Bar != null) { part.Bar.Value = drive.UsedPercent; part.Bar.SetResourceReference(MeterBar.FillProperty, fill); }
-                if (part.Ring != null) { part.Ring.Value = drive.UsedPercent; part.Ring.SetResourceReference(RingGauge.FillProperty, fill); }
+                if (part.Bar != null)
+                {
+                    part.Bar.Value = drive.UsedPercent;
+                    if (low) part.Bar.Fill = Stickers.Caution; else part.Bar.SetResourceReference(MeterBar.FillProperty, Stickers.InkKey("Storage"));
+                }
+                if (part.Jar != null) { part.Jar.Used = drive.UsedPercent; part.Jar.Low = low; }
             }
             if (more != null)
             {

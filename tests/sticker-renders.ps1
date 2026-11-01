@@ -24,6 +24,11 @@ $pages = [ordered]@{
     'five-medium' = @{ Focus = @(0, 0, 320, 420); Media = @(336, 0, 472, 310); Shortcuts = @(336, 326, 472, 250); Mixer = @(824, 0, 456, 380); Spotify = @(1296, 0, 560, 576) }
     'five-large' = @{ Focus = @(0, 0, 340, 576); Media = @(356, 0, 480, 576); Mixer = @(852, 0, 600, 576); Shortcuts = @(1468, 0, 388, 576) }
     'five-wide' = @{ Mixer = @(0, 0, 820, 420); Shortcuts = @(836, 0, 1020, 400) }
+    # Phase 3, the readings (System stats, Weather, Storage, World clocks, Prayer) at their Small, Medium and Large designs.
+    'read-small' = @{ Weather = @(0, 0, 320, 200); System = @(336, 0, 300, 200); Storage = @(652, 0, 300, 180); Clocks = @(968, 0, 300, 180); Prayer = @(1284, 0, 300, 180) }
+    'read-medium' = @{ Weather = @(0, 0, 472, 250); System = @(488, 0, 456, 280); Storage = @(960, 0, 456, 250); Clocks = @(0, 296, 472, 250); Prayer = @(488, 296, 456, 280); }
+    'read-large' = @{ Weather = @(0, 0, 560, 576); System = @(576, 0, 640, 576); Storage = @(1232, 0, 624, 360) }
+    'read-large2' = @{ Clocks = @(0, 0, 720, 400); Prayer = @(736, 0, 560, 420); Weather = @(1312, 0, 544, 340) }
 }
 # Today's focus sessions for the pips and chips: two sessions, 50 minutes.
 $sessions = '<FocusSessionDate>' + (Get-Date -Format 'yyyy-MM-dd') + '</FocusSessionDate><FocusSessionsToday>2</FocusSessionsToday><FocusMinutesToday>50</FocusMinutesToday>'
@@ -40,8 +45,24 @@ $scenes['midnight-edit-ink-picker'] = @{ Page = 'default'; Theme = 'Midnight'; E
 foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'five-small', 'five-medium', 'five-large', 'five-wide') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = $sessions } } }
 foreach ($page in 'five-medium', 'five-large') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = $sessions + '<TextScale>1.4</TextScale>' } }
 $scenes['midnight-default-nothing-playing'] = @{ Page = 'default'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
+# Phase 3: the readings at each size in each palette, and at 140%.
+foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = '' } } }
+foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<TextScale>1.4</TextScale>' } }
+# Failure states: Weather offline after a real reading (stale, at 60%) and unreachable with no reading
+# (--render-weather-offline, --render-weather-unreachable); no city set for Weather or Prayer; and (in every scene
+# here) hardware sensors not installed in this checkout, so CPU temperature says why.
+$scenes['midnight-read-medium-weather-offline'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-offline') }
+$scenes['midnight-read-large-weather-offline'] = @{ Page = 'read-large'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-offline') }
+$scenes['midnight-read-medium-weather-unreachable'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-unreachable') }
+$scenes['midnight-read-medium-no-city'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Places = '' }
+$scenes['midnight-read-large2-no-city'] = @{ Page = 'read-large2'; Theme = 'Midnight'; Extra = ''; Places = '' }
+# A low-space threshold of 20% so this PC's fullest drives show the caution-tape state.
+foreach ($page in 'read-small', 'read-medium', 'read-large') { $scenes["midnight-$page-low-space"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<StorageLowPercent>20</StorageLowPercent>' } }
 $scenes['midnight-five-large-nothing-playing'] = @{ Page = 'five-large'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
 
+# Weather in London and prayer times in Riyadh, unless a scene sets its own places.
+$places = '<WeatherLocation>London, England, United Kingdom</WeatherLocation><Latitude>51.50853</Latitude><Longitude>-0.12574</Longitude><WeatherUnits>metric</WeatherUnits>' +
+    '<PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>'
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]; $layout = $pages[$scene.Page]
@@ -58,9 +79,8 @@ foreach ($name in $scenes.Keys) {
 <?xml version="1.0" encoding="utf-8"?>
 <AppSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Theme>$($scene.Theme)</Theme>$($scene.Extra)
-  <WeatherLocation>London, England, United Kingdom</WeatherLocation><Latitude>51.50853</Latitude><Longitude>-0.12574</Longitude><WeatherUnits>metric</WeatherUnits>
+  $(if ($scene.Contains('Places')) { $scene.Places } else { $places })
   <HintDismissed>true</HintDismissed>
-  <PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>
   <WorldClocks><WorldClock><Zone>Tokyo Standard Time</Zone><Label>Tokyo</Label></WorldClock><WorldClock><Zone>GMT Standard Time</Zone><Label>London</Label></WorldClock><WorldClock><Zone>Pacific Standard Time</Zone><Label>San Francisco</Label></WorldClock></WorldClocks>
   $placements
 </AppSettings>

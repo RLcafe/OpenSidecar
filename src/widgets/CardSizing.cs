@@ -185,6 +185,12 @@ namespace WidgetScreen
         public static Design Tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? Design.Small : cellWidth >= 150 && cellHeight >= 110 ? Design.Large : Design.Medium; }
         // The hours a Large forecast shows: up to five, as many as fit 72 units each.
         public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
+        // The chips a Large weather card's rail holds (Sticker Sheet phase 3): three to six, 112 units and a gap each.
+        public static int WeatherChips(double width) { return (int)Clamp(Math.Floor((width - 48 + 8) / 120), 3, 6); }
+        // A storage jar's width for its height (a little narrower than tall), and how far up it the used space reaches,
+        // 0–1, with any used space at least a sliver (Sticker Sheet phase 3).
+        public static double JarWidth(double height) { return Math.Round(height * 0.72); }
+        public static double JarLevel(double used) { double v = Math.Max(0, Math.Min(100, Double.IsNaN(used) ? 0 : used)) / 100; return v > 0 && v < 0.03 ? 0.03 : v; }
         // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
         // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
         // counted in a last line.
@@ -213,6 +219,15 @@ namespace WidgetScreen
         public static bool ClockTilesAcross(double width, int count) { return count <= 1 || (width - 12 * (count - 1)) / count >= 170; }
         public static double ClockTileTime(double tileWidth, double tileHeight, bool use24) { return Clamp(Math.Round(Math.Min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
         public static double ClockStackedTime(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
+        // Analog faces (Sticker Sheet phase 3): beside roomy Small rows (0 for none), atop Medium columns and Large tiles,
+        // at the left of stacked tiles; stacked tiles get a 24-hour band when they're tall enough.
+        public static double ClockListFace(double cardWidth, double rowHeight) { return cardWidth >= 260 && rowHeight >= 34 ? Clamp(Math.Floor(rowHeight - 6), 28, 40) : 0; }
+        // Medium columns have room for a face and Day or Evening from a 150-unit body.
+        public static bool ClockColumnFaces(double height) { return height >= 150; }
+        public static double ClockFace(double column, double height) { return Clamp(Math.Round(Math.Min(column * 0.3, height * 0.3)), 32, 64); }
+        public static double ClockTileFace(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.34, (tileHeight - 32) * 0.3)), 40, 96); }
+        public static double ClockStackedFace(double tileHeight) { return Clamp(Math.Floor(tileHeight - 20 - 4 - (ClockStackedBand(tileHeight) ? 24 : 0)), 28, 64); }
+        public static bool ClockStackedBand(double tileHeight) { return tileHeight >= 110; }
         // Prayer times (docs/design/prayer-times.md): the next prayer under 340 wide or 220 tall, the next prayer beside
         // today's five times at the reference 472 × 250, and from 440 × 360 the next prayer with its progress over the
         // times, as rows or (with a body 860 wide) six tiles across.
@@ -221,6 +236,15 @@ namespace WidgetScreen
         public static double PrayerNextColumn(double width) { return Math.Floor(width * 0.46); }
         public static bool PrayerTilesAcross(double width) { return width >= 860; }
         public static double PrayerLargeTop(double height, bool across) { return across ? Clamp(height - 120, 140, 260) : Clamp(Math.Round(height * 0.38), 140, 220); }
+        // Sticker Sheet phase 3: the room a Medium next-prayer column leaves under its countdown for the sun path (it
+        // shows from 44 units, else a progress line), and whether a Large list has room for sunrise (22 units a row).
+        public const double PrayerPathMinimum = 44;
+        public static double PrayerPathRoom(double height, double timeSize) { return Math.Floor(height - 22 - Math.Round(timeSize * 1.12) - 4 - 20 - 10); }
+        public static bool PrayerSunriseRow(double listHeight) { return listHeight / 6 >= 22; }
+        // The Large top row (the next prayer beside the sun path) for the room left after the chips.
+        // Large has room for the chips from a 301-unit body (the list keeps 20 units a row under them).
+        public static bool PrayerChips(double height) { return height >= 301; }
+        public static double PrayerPathTop(double height, bool across) { return across ? Clamp(height - 120, 120, 240) : Clamp(Math.Round(height * 0.36), 120, 200); }
         public static double PrayerTileTime(double tileWidth, bool use24) { return Clamp(Math.Round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
         // Notes and to-do (docs/design/notes.md): the scratchpad or the list behind two tabs under 700 wide or 300 tall
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.

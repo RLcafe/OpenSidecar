@@ -98,6 +98,13 @@ public final class Stickers {
         return drawable;
     }
 
+    // The same, centred in a card's body (it keeps its own height, as on the PC).
+    public static View unavailableBody(Ui ui, String reason) {
+        android.widget.FrameLayout body = new android.widget.FrameLayout(ui.context);
+        body.addView(unavailable(ui, reason), new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        return body;
+    }
+
     // Offline or stale: the last values stay, at 60%.
     public static void stale(View values, boolean stale) { values.setAlpha(stale ? 0.6f : 1f); }
 

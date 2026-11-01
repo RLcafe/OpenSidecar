@@ -6,6 +6,32 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.37.0 (1 Nov 2026)
+
+Sticker Sheet, phase 3: the readings (Ali's approved redesign; Windows and the phone; decision 021).
+
+- **System stats:**
+  - A sticker in the heading names the busiest reading ("GPU 92%"), filled from 80%.
+  - CPU and GPU dials wear their temperature as a badge.
+  - Large tiles show the lowest and highest of the recent readings.
+  - The CPU and GPU show short model names ("Ryzen 7 7700", "RTX 4070").
+- **Weather:**
+  - The reading sits on a sky band tinted by the weather and time of day, with the condition on a round sticker.
+  - Feels, Humidity and Rain chips; large cards add UV, Wind and High / Low.
+  - Large cards (and tall medium ones) show the next 12 hours as a temperature curve over rain bars, and a sunrise–sunset arc.
+  - Still one request to Open-Meteo, now also asking for humidity, rain chance, UV, sunrise and sunset.
+  - Offline keeps the last reading dimmed; no city, or no reading at all, says why in a dashed box.
+- **Storage:** each drive is a jar filled by its used space. A drive low on space fills with Amber caution tape.
+- **World clocks:**
+  - Each city gets an analog clock face, yellow from 7 AM to 7 PM and lavender otherwise, labelled Day or Evening.
+  - Large cards add a 24-hour band with 9 to 5 shaded and a line at the time now.
+- **Prayer:**
+  - The day's sun path: an arc from Fajr to Isha with each prayer placed by its time and the sun at now.
+  - Large cards add Hijri, Method and Alert chips.
+- Not set up (no city, no time zones, no drives) shows the reason in a dashed box.
+- **The phone shows the same.** The phone link adds `cpuName` to System stats and `alert` to Prayer.
+- No new timers, polling or effects, and no extra network requests.
+
 ## v0.36.0 (1 Nov 2026)
 
 Sticker Sheet, phase 2: the default five (Ali's approved redesign; Windows and the phone; decision 021).

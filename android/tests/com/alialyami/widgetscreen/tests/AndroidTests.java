@@ -907,6 +907,88 @@ public final class AndroidTests {
                 } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
             }
         } });
+
+        // Sticker Sheet phase 3, the readings (docs/design/sticker-sheet.md): the same values as the PC's ReadingsTests.
+        check("System stats: processor and graphics card names shorten like the PC", new Action() { public void run() {
+            ok(SystemText.shortModel("AMD Ryzen 7 7800X3D 8-Core Processor").equals("Ryzen 7 7800X3D"), "Ryzen " + SystemText.shortModel("AMD Ryzen 7 7800X3D 8-Core Processor"));
+            ok(SystemText.shortModel("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz").equals("i7-12700K"), "Intel " + SystemText.shortModel("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz"));
+            ok(SystemText.shortModel("NVIDIA GeForce RTX 4070").equals("RTX 4070") && SystemText.shortModel("AMD Radeon RX 7900 XTX").equals("Radeon RX 7900 XTX"), "graphics");
+            ok(SystemText.shortModel("AMD Ryzen 5 5600G with Radeon Graphics").equals("Ryzen 5 5600G") && SystemText.shortModel(null).isEmpty() && SystemText.shortModel("  ").isEmpty(), "APU and empty");
+        } });
+        check("System stats: the peak sticker, temperature badges and min/max lines match the PC", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"system\":{\"cpu\":41,\"gpu\":92,\"gpuName\":\"NVIDIA GeForce RTX 4070\",\"cpuName\":\"AMD Ryzen 7 7700 8-Core Processor\",\"memoryPercent\":55,\"memoryUsedGB\":17.6,\"memoryTotalGB\":32,\"cpuTemp\":58.4,\"gpuTemp\":71,\"showCpu\":true,\"showGpu\":true,\"showRam\":true}}")));
+            ok(state.system != null && state.system.cpuName.equals("AMD Ryzen 7 7700 8-Core Processor"), "cpuName parsed");
+            Map<String, SystemText.Reading> readings = SystemText.readings(state.system, 60);
+            ok(readings.get("Cpu").detail.equals("Ryzen 7 7700") && readings.get("Gpu").detail.equals("RTX 4070"), "details " + readings.get("Cpu").detail + " / " + readings.get("Gpu").detail);
+            String peak = SystemText.peakId(readings, state.system);
+            ok("Gpu".equals(peak) && SystemText.peakText(peak, readings.get(peak)).equals("GPU 92%") && readings.get(peak).percent >= SystemText.STRAINED, "peak " + peak);
+            ok(SystemText.badge(readings.get("CpuTemp")).equals("58°") && SystemText.badge(new SystemText.Reading()).isEmpty(), "badges");
+            ok(SystemText.range("Cpu", Arrays.asList(12.2, 87.4, 40.0), false).equals("min 12% · max 87%"), "percent range");
+            ok(SystemText.range("CpuTemp", Arrays.asList(41.0, 42.4), true).equals("min 106° · max 108°"), "temperature range " + SystemText.range("CpuTemp", Arrays.asList(41.0, 42.4), true));
+            ok(SystemText.range("Fps", Arrays.asList(58.6, 144.0), false).equals("min 59 · max 144") && SystemText.range("Ram", Arrays.asList(50.0), false).isEmpty() && SystemText.range("Ram", null, false).isEmpty(), "fps and short ranges");
+            String path = System.getProperty("widgetscreen.sample");
+            if (path != null && new File(path).exists()) {
+                try {
+                    PcState sample = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+                    ok(sample.system == null || sample.system.error || sample.system.cpuName != null, "sample cpuName");
+                } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
+            }
+        } });
+        final String weatherSample = "{\"utc_offset_seconds\":0,\"current\":{\"temperature_2m\":10.2,\"apparent_temperature\":8.1,\"wind_speed_10m\":14,\"weather_code\":3,\"relative_humidity_2m\":82},"
+            + "\"daily\":{\"temperature_2m_max\":[11.4],\"temperature_2m_min\":[8.6],\"uv_index_max\":[1.2],\"sunrise\":[\"2026-11-01T06:53\"],\"sunset\":[\"2026-11-01T16:33\"]},"
+            + "\"hourly\":{\"time\":[\"2026-11-01T20:00\",\"2026-11-01T21:00\",\"2026-11-01T22:00\",\"2026-11-01T23:00\",\"2026-11-02T00:00\",\"2026-11-02T01:00\",\"2026-11-02T02:00\",\"2026-11-02T03:00\",\"2026-11-02T04:00\",\"2026-11-02T05:00\",\"2026-11-02T06:00\",\"2026-11-02T07:00\",\"2026-11-02T08:00\",\"2026-11-02T09:00\",\"2026-11-02T10:00\"],"
+            + "\"temperature_2m\":[10.6,10.2,10,10.4,11,11.3,11,10.5,10,9.6,9.2,9,9.4,10.1,10.8],\"weather_code\":[3,3,3,61,61,61,3,3,2,2,1,0,0,0,1],\"precipitation_probability\":[5,10,20,45,60,40,20,10,5,0,0,0,0,0,null]}}";
+        check("Weather: one Open-Meteo request brings humidity, rain chances, UV, sunrise and sunset, as on the PC", new Action() { public void run() {
+            String url = Weather.forecastUrl(51.5, -0.12, false);
+            for (String part : new String[] { "relative_humidity_2m", "precipitation_probability", "uv_index_max", "sunrise", "sunset" }) ok(url.contains(part), "request lacks " + part);
+            Weather.Snapshot s = Weather.parse(weatherSample, 0, "2026-11-01T21:00");
+            ok(s.humidity == 82 && Math.abs(s.uv - 1.2) < 0.001 && "2026-11-01T06:53".equals(s.sunrise) && "2026-11-01T16:33".equals(s.sunset) && s.utcOffsetSeconds == 0, "phase 3 fields");
+            ok(s.curve.size() == 13 && s.curve.get(0).time.equals("2026-11-01T21:00") && s.curve.get(0).rain == 10 && s.curve.get(12).rain == 0 && s.hours.size() == 5, "curve " + s.curve.size());
+            Weather.Snapshot none = Weather.parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":0}}", 0);
+            ok(none.humidity == null && none.uv == null && none.sunrise == null && none.curve.isEmpty(), "missing extras");
+        } });
+        check("Weather: chips, UV words, sky inks, the sun's place and the curve match the PC", new Action() { public void run() {
+            Weather.Snapshot s = Weather.parse(weatherSample, 0, "2026-11-01T21:00");
+            StringBuilder three = new StringBuilder();
+            for (String[] c : Weather.chips(s, false, 3)) three.append(three.length() == 0 ? "" : "|").append(c[0]).append('=').append(c[1]);
+            ok(three.toString().equals("FEELS=8°|HUMIDITY=82%|RAIN=10%"), "medium chips " + three);
+            String[][] six = Weather.chips(s, true, 6);
+            ok(six.length == 6 && six[3][0].equals("UV") && six[4][1].equals("14 mph") && six[5][0].equals("HIGH / LOW"), "large chips");
+            ok(Weather.uvText(1.2).equals("1 Low") && Weather.uvText(5.4).equals("5 Moderate") && Weather.uvText(7).equals("7 High") && Weather.uvText(9.6).equals("10 Very high") && Weather.uvText(11).equals("11 Extreme"), "UV words");
+            ok(Weather.skyInk("sun", true).equals("Lemon") && Weather.skyInk("rain", true).equals("Glacier") && Weather.skyInk("storm", true).equals("Lavender") && Weather.skyInk("sun", false).equals("Lavender"), "sky inks");
+            ok(Weather.skyStrength("sun", true) == 0.42 && Weather.skyStrength("cloud", true) == 0.22 && Weather.skyStrength("sun", false) == 0.32, "sky strengths");
+            ok(Weather.sunPart("2026-11-01T12:00", "2026-11-01T06:00", "2026-11-01T18:00") == 0.5 && Weather.sunPart("2026-11-01T03:00", "2026-11-01T06:00", "2026-11-01T18:00") < 0 && Weather.sunPart("2026-11-02T01:00", "2026-11-01T06:00", "2026-11-01T18:00") > 1 && Weather.sunPart("2026-11-01T12:00", null, "2026-11-01T18:00") == null, "sun part");
+            ok(Weather.isDay("2026-11-01T12:00", "2026-11-01T06:00", "2026-11-01T18:00") && !Weather.isDay("2026-11-01T21:00", "2026-11-01T06:00", "2026-11-01T18:00") && Weather.isDay("2026-11-01T08:00", null, null) && !Weather.isDay("2026-11-01T20:00", null, null), "day and night");
+            ok(Weather.cityNow(s, 1793566800000L).equals("2026-11-01T21:00"), "city clock " + Weather.cityNow(s, 1793566800000L));
+            ok(Arrays.equals(Weather.curveLevels(new double[] { 10, 12, 14 }), new double[] { 0, 0.5, 1 }) && Weather.curveLevels(new double[] { 10, 10.2 })[1] == 0.5 && Weather.curveLevels(new double[0]).length == 0, "curve levels");
+            ok(Weather.clockTime("2026-11-01T06:53", false).equals("6:53 AM") && Weather.clockTime("2026-11-01T16:33", true).equals("16:33"), "clock times");
+            ok(CardSizing.weatherChips(472) == 3 && CardSizing.weatherChips(560) == 4 && CardSizing.weatherChips(900) == 6, "chip counts");
+        } });
+        check("Storage: jars fill by used space like the PC's", new Action() { public void run() {
+            ok(CardSizing.jarWidth(100) == 72 && CardSizing.jarLevel(0) == 0 && CardSizing.jarLevel(1) == 0.03 && CardSizing.jarLevel(85) == 0.85 && CardSizing.jarLevel(120) == 1 && CardSizing.jarLevel(Double.NaN) == 0, "jar sizes and levels");
+        } });
+        check("World clocks: faces, Day or Evening, hands and day fractions match the PC", new Action() { public void run() {
+            ok(WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 7, 0)).equals("Lemon") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 18, 59)).equals("Lemon") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 19, 0)).equals("Lavender") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 6, 59)).equals("Lavender"), "inks");
+            ok(WorldClockText.partOfDay(LocalDateTime.of(2026, 11, 1, 12, 0)).equals("Day") && WorldClockText.partOfDay(LocalDateTime.of(2026, 11, 1, 3, 0)).equals("Evening"), "day and evening");
+            ok(WorldClockText.hourAngle(LocalDateTime.of(2026, 11, 1, 15, 30)) == 105 && WorldClockText.minuteAngle(LocalDateTime.of(2026, 11, 1, 15, 30)) == 180 && WorldClockText.hourAngle(LocalDateTime.of(2026, 11, 1, 0, 0)) == 0, "hands");
+            ok(WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 12, 0)) == 0.5 && WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 18, 0)) == 0.75, "day fraction");
+            ok(CardSizing.clockListFace(300, 40) == 34 && CardSizing.clockListFace(240, 60) == 0 && CardSizing.clockFace(140, 166) == 42 && CardSizing.clockTileFace(220, 300) == 64 && CardSizing.clockStackedBand(120) && !CardSizing.clockStackedBand(90) && CardSizing.clockColumnFaces(166) && !CardSizing.clockColumnFaces(116), "face sizes");
+        } });
+        check("Prayer: the sun path places prayers by time, the chips and the alert words match the PC", new Action() { public void run() {
+            double fajr = 1793583660000.0, isha = fajr + 14 * 3600000.0;
+            ok(PrayerText.pathPart(fajr, fajr, isha) == 0 && PrayerText.pathPart(isha, fajr, isha) == 1 && PrayerText.pathPart(fajr + 7 * 3600000.0, fajr, isha) == 0.5 && PrayerText.pathPart(fajr - 3600000.0, fajr, isha) < 0 && Double.isNaN(PrayerText.pathPart(fajr, isha, fajr)), "path parts");
+            ok(PrayerText.methodShort("Umm al-Qura, Makkah").equals("Umm al-Qura") && PrayerText.methodShort("Muslim World League").equals("Muslim World League") && PrayerText.methodShort(null).isEmpty(), "method names");
+            ok(CardSizing.prayerPathRoom(166, 47) == 57 && CardSizing.prayerSunriseRow(132) && !CardSizing.prayerSunriseRow(120) && CardSizing.prayerPathTop(267, false) == 120 && CardSizing.prayerPathTop(500, false) == 180, "prayer sizes");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":true,\"alert\":\"Chime\",\"nextAt\":1,\"times\":[1,2,3,4,5]}}")));
+            ok(state.prayer != null && state.prayer.alert.equals("Chime"), "alert words from the PC");
+            String path = System.getProperty("widgetscreen.sample");
+            if (path != null && new File(path).exists()) {
+                try {
+                    PcState sample = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+                    ok(sample.prayer == null || !sample.prayer.located || sample.prayer.alert.length() > 0, "sample alert");
+                } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
+            }
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

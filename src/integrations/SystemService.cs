@@ -21,6 +21,8 @@ namespace WidgetScreen
         // "NeedsFullSensors", "NeedsPawnIO", "NoGame" or "Unavailable"; "Working" when it has a value.
         public double? CpuTemperature, GpuTemperature, VramUsedGB, VramTotalGB, Fps;
         public string CpuTemperatureState, GpuTemperatureState, VramState, FpsState, FpsSource, FpsApp, GpuName;
+        // The processor's name as Windows reports it, read once (Sticker Sheet phase 3 shows it under the CPU reading).
+        public string CpuName;
     }
 
     // Which readings are wanted; anything not wanted isn't read (and its sensors close).
@@ -36,7 +38,7 @@ namespace WidgetScreen
         }
     }
 
-    public sealed class SystemService : IDisposable
+    public sealed partial class SystemService : IDisposable
     {
         private readonly GpuService gpu = new GpuService();
         private readonly GpuTelemetry telemetry = new GpuTelemetry();
@@ -160,6 +162,7 @@ namespace WidgetScreen
             else lastIdle = lastKernel = lastUser = 0;
             if (readGpu) { snapshot.Gpu = gpu.Read(); snapshot.GpuStatus = gpu.Status; }
             else gpu.Pause();
+            snapshot.CpuName = CpuModel;
             var memory = new MemoryStatus(); memory.Length = (uint)Marshal.SizeOf(memory);
             if (readRam && GlobalMemoryStatusEx(ref memory) && memory.TotalPhysical > 0)
             {

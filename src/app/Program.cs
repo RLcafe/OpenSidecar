@@ -50,6 +50,9 @@ namespace WidgetScreen
                     if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
             // Renders Now Playing's empty state (an empty sleeve) whatever plays on this PC; it shows an absence, not a reading.
             if (renderPath != null && args.Contains("--render-no-media")) controller.IgnoreMedia = true;
+                    // Weather's failure states: the real reading shown stale, or no reading at all; never made-up readings.
+                    if (renderPath != null && args.Contains("--render-weather-offline")) controller.RenderWeather = "offline";
+                    if (renderPath != null && args.Contains("--render-weather-unreachable")) controller.RenderWeather = "unreachable";
                     if (renderPath != null)
                     {
                         // --render-wait N gives live readings longer to arrive (System stats history fills every 2 s).

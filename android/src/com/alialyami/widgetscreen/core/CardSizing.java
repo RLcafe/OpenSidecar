@@ -201,6 +201,29 @@ public final class CardSizing {
     public static int tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? SMALL : cellWidth >= 150 && cellHeight >= 110 ? LARGE : MEDIUM; }
     // The hours a Large forecast shows: up to five, as many as fit 72 units each.
     public static int weatherHours(double width) { return (int) clamp(Math.floor((width - 48 - 16) / 72), 3, 5); }
+    // The chips a Large weather card's rail holds (Sticker Sheet phase 3): three to six, 112 units and a gap each.
+    public static int weatherChips(double width) { return (int) clamp(Math.floor((width - 48 + 8) / 120), 3, 6); }
+    // A storage jar's width for its height (a little narrower than tall), and how far up it the used space reaches,
+    // 0–1, with any used space at least a sliver (Sticker Sheet phase 3).
+    public static double jarWidth(double height) { return Math.round(height * 0.72); }
+    // Analog faces (Sticker Sheet phase 3): beside roomy Small rows (0 for none), atop Medium columns and Large tiles,
+    // at the left of stacked tiles; stacked tiles get a 24-hour band when they're tall enough. Same as the PC.
+    public static double clockListFace(double cardWidth, double rowHeight) { return cardWidth >= 260 && rowHeight >= 34 ? clamp(Math.floor(rowHeight - 6), 28, 40) : 0; }
+    // Medium columns have room for a face and Day or Evening from a 150-unit body.
+    public static boolean clockColumnFaces(double height) { return height >= 150; }
+    public static double clockFace(double column, double height) { return clamp(Math.round(Math.min(column * 0.3, height * 0.3)), 32, 64); }
+    public static double clockTileFace(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min((tileWidth - 32) * 0.34, (tileHeight - 32) * 0.3)), 40, 96); }
+    public static double clockStackedFace(double tileHeight) { return clamp(Math.floor(tileHeight - 20 - 4 - (clockStackedBand(tileHeight) ? 24 : 0)), 28, 64); }
+    public static boolean clockStackedBand(double tileHeight) { return tileHeight >= 110; }
+    // Prayer (Sticker Sheet phase 3): the room a Medium next-prayer column leaves under its countdown for the sun path
+    // (it shows from 44 units, else a progress line), whether a Large list has room for sunrise, and the Large top row.
+    public static final double PRAYER_PATH_MINIMUM = 44;
+    public static double prayerPathRoom(double height, double timeSize) { return Math.floor(height - 22 - Math.round(timeSize * 1.12) - 4 - 20 - 10); }
+    public static boolean prayerSunriseRow(double listHeight) { return listHeight / 6 >= 22; }
+    // Large has room for the chips from a 301-unit body (the list keeps 20 units a row under them).
+    public static boolean prayerChips(double height) { return height >= 301; }
+    public static double prayerPathTop(double height, boolean across) { return across ? clamp(height - 120, 120, 240) : clamp(Math.round(height * 0.36), 120, 200); }
+    public static double jarLevel(double used) { double v = Math.max(0, Math.min(100, Double.isNaN(used) ? 0 : used)) / 100; return v > 0 && v < 0.03 ? 0.03 : v; }
 
     // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
     // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are

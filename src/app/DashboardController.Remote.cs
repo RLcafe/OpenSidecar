@@ -337,7 +337,7 @@ namespace WidgetScreen
                         "showCpuTemp", wanted.ShowCpuTemperature, "showGpuTemp", wanted.ShowGpuTemperature, "showVram", wanted.ShowVram, "showFps", wanted.ShowFps,
                         "styles", SystemStyles.Ids.Where(id => SystemStyles.Get(wanted.StatStyles, id) != "Auto").ToDictionary(id => id, id => (object)SystemStyles.Get(wanted.StatStyles, id)),
                         "fahrenheit", wanted.WeatherUnits == "imperial",
-                        "cpuTemp", s.CpuTemperature, "cpuTempState", s.CpuTemperatureState ?? "", "gpuTemp", s.GpuTemperature, "gpuTempState", s.GpuTemperatureState ?? "", "gpuName", s.GpuName ?? "",
+                        "cpuTemp", s.CpuTemperature, "cpuTempState", s.CpuTemperatureState ?? "", "gpuTemp", s.GpuTemperature, "gpuTempState", s.GpuTemperatureState ?? "", "gpuName", s.GpuName ?? "", "cpuName", s.CpuName ?? "",
                         "vramUsedGB", s.VramUsedGB, "vramTotalGB", s.VramTotalGB, "vramState", s.VramState ?? "",
                         "fps", s.Fps, "fpsState", s.FpsState ?? "", "fpsSource", s.FpsSource ?? "", "fpsApp", s.FpsApp ?? "",
                         "fullSensors", system.Elevated);

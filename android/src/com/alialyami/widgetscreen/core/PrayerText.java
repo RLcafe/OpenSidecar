@@ -34,5 +34,11 @@ public final class PrayerText {
         return Math.max(0, Math.min(1, (now - previousAt) / span));
     }
 
+    // Sticker Sheet phase 3, the same rules as PrayerService on the PC. Where a moment sits on the day's sun path: 0 at
+    // Fajr, 1 at Isha, outside that range before or after them (NaN without both).
+    public static double pathPart(double at, double fajr, double isha) { return fajr <= 0 || isha <= fajr ? Double.NaN : (at - fajr) / (isha - fajr); }
+    // A method's name for a chip: "Umm al-Qura, Makkah" is "Umm al-Qura".
+    public static String methodShort(String name) { if (name == null) return ""; int comma = name.indexOf(','); return comma > 0 ? name.substring(0, comma).trim() : name; }
+
     public static boolean justStarted(long now, double previousAt) { return previousAt > 0 && now - previousAt >= 0 && now - previousAt < NOW_FOR_MS; }
 }

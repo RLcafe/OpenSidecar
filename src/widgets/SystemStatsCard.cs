@@ -44,6 +44,8 @@ namespace WidgetScreen
             public MeterBar Bar;
             public HistoryGraph Graph;
             public HistoryBars Bars;
+            // Sticker Sheet phase 3: a temperature badge on the CPU and GPU dials, and min and max on Large tiles.
+            public Border Badge; public TextBlock BadgeText, Range;
         }
 
         public SystemStatsCard(FrameworkElement scope, Grid host, TextBlock headerUptime)
@@ -228,6 +230,15 @@ namespace WidgetScreen
             part.Value = Named(Reading("—", Math.Round(diameter * (part.Style == "Gauge" ? 0.25 : 0.27))), id, "Value");
             part.Value.HorizontalAlignment = HorizontalAlignment.Center; part.Value.VerticalAlignment = VerticalAlignment.Center;
             dial.Children.Add(part.Value);
+            // The CPU and GPU dials wear their temperature as a small badge at the top right (filled in the ink).
+            if (id == "Cpu" || id == "Gpu")
+            {
+                part.BadgeText = Named(new TextBlock { FontSize = Math.Max(13, Math.Round(diameter * 0.1)), FontWeight = FontWeights.Bold }, id, "Badge");
+                part.BadgeText.SetResourceReference(TextBlock.ForegroundProperty, "InkText");
+                part.Badge = new Border { Child = part.BadgeText, CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 1, 6, 1), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -2, -10, 0), Visibility = Visibility.Collapsed };
+                part.Badge.SetResourceReference(Border.BackgroundProperty, Stickers.InkKey("System")); part.Badge.SetResourceReference(Border.BorderBrushProperty, "Surface"); part.Badge.BorderThickness = new Thickness(2);
+                dial.Children.Add(part.Badge);
+            }
             return dial;
         }
         // The name and value on a line, the history under it (line, bars or sparkline), a detail at the foot.
@@ -275,7 +286,7 @@ namespace WidgetScreen
                 for (int c = 0; c < row.Count; c++)
                 {
                     string id = row[c]; var part = parts[id] = new Part { Style = Style(id) };
-                    var tile = Rows(Auto, Star);
+                    var tile = Rows(Auto, Star, Auto);
                     var top = Columns(Auto, Star); top.Children.Add(Label(SystemStyles.Title(id)));
                     part.Detail = Named(Caption(""), id, "Detail"); part.Detail.HorizontalAlignment = HorizontalAlignment.Right; part.Detail.VerticalAlignment = VerticalAlignment.Center; part.Detail.Margin = new Thickness(8, 0, 0, 0);
                     part.Detail.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -283,7 +294,8 @@ namespace WidgetScreen
                     tile.Children.Add(top);
                     if (SystemStyles.IsDial(part.Style))
                     {
-                        double diameter = CardSizing.StatsRing(tileWidth - 32, tileHeight - 26 - 40);
+                        // Less 20 for the range line under the dial.
+                        double diameter = CardSizing.StatsRing(tileWidth - 32, tileHeight - 26 - 40 - 20);
                         var dial = Dial(id, part, diameter); dial.VerticalAlignment = VerticalAlignment.Center; dial.Margin = new Thickness(0, 6, 0, 0);
                         tile.Children.Add(At(dial, 1));
                     }
@@ -294,6 +306,13 @@ namespace WidgetScreen
                         body.Children.Add(part.Value);
                         var graph = Graph(id, part); graph.Margin = new Thickness(0, 8, 0, 0); body.Children.Add(At(graph, 1));
                         tile.Children.Add(At(body, 1));
+                    }
+                    // The range this card has seen (its 48-reading history), under the dial or graph.
+                    if (id != "Network")
+                    {
+                        part.Range = Named(Caption(""), id, "Range"); part.Range.TextTrimming = TextTrimming.CharacterEllipsis; part.Range.Margin = new Thickness(0, 4, 0, 0);
+                        if (SystemStyles.IsDial(part.Style)) part.Range.HorizontalAlignment = HorizontalAlignment.Center;
+                        tile.Children.Add(At(part.Range, 2));
                     }
                     var border = Tile(tile, 16, new Thickness(16, 14, 16, 12)); border.Margin = new Thickness(c == 0 ? 0 : Gap / 2, 0, c == columns - 1 ? 0 : Gap / 2, 0);
                     line.Children.Add(At(Named(border, id, "Section"), 0, c));
@@ -335,8 +354,23 @@ namespace WidgetScreen
                 if (id == "Fps") { double scale = SystemReadings.FpsScale(values); if (part.Graph != null) part.Graph.Maximum = scale; if (part.Bars != null) part.Bars.Maximum = scale; }
                 if (part.Graph != null) { part.Graph.SetResourceReference(HistoryGraph.StrokeProperty, brush); part.Graph.SetValues(values); }
                 if (part.Bars != null) { part.Bars.SetResourceReference(HistoryBars.FillProperty, brush); part.Bars.SetValues(values); }
+                if (part.Badge != null)
+                {
+                    string badge = SystemReadings.Badge(readings[id == "Cpu" ? "CpuTemp" : "GpuTemp"]);
+                    part.BadgeText.Text = badge; part.Badge.Visibility = badge.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+                }
+                if (part.Range != null) part.Range.Text = SystemReadings.Range(id, values, fahrenheit);
+            }
+            // The status sticker names the busiest reading, filled from 80%.
+            if (Peak != null)
+            {
+                string peak = last == null ? null : SystemReadings.PeakId(readings, id => shown.Contains(id));
+                Peak.Text = peak == null ? "" : SystemReadings.PeakText(peak, readings[peak]);
+                var sticker = StatusSticker.For(Peak); if (sticker != null) sticker.Filled = peak != null && readings[peak].Percent >= SystemReadings.Strained;
             }
         }
+        // The header's caption for the peak (Sticker Sheet phase 3), wrapped in a status sticker by the controller.
+        public TextBlock Peak { get; set; }
         private void RenderNetwork(Part part, StatReading reading)
         {
             part.Value.Text = "↓ " + reading.Text;
