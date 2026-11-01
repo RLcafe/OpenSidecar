@@ -38,6 +38,7 @@ The source in `implementation-source.zip` is the baseline **before** the touchsc
 ```text
 Widget screen/
 ├── CLAUDE.md
+├── .github/workflows/     ci.yml, the GitHub Actions build and tests for both apps
 ├── BRANCHES.md            Unmerged branches, worktree and merge process, version rules
 ├── CHANGELOG.md           Released versions (vX.Y.Z tags on main)
 ├── design specfication/   Read-only as-built spec and reference package
@@ -161,15 +162,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-android.
 
 [`BRANCHES.md`](BRANCHES.md) has the full process. The short version:
 
-- **Every new branch or worktree lives inside this folder**, at `.worktrees\<name>` (git-ignored). Never create folders in `C:\Users\PCD\Documents\AI Apps\Claud` (user rule, 10 Oct 2026). Create one with `git worktree add ".worktrees\<name>" -b feature/<name> main`, or `fix/<name>` for a bug fix.
+- **The repository is on GitHub** at [RLcafe/OpenSidecar](https://github.com/RLcafe/OpenSidecar) (remote `origin`, default branch `main`, since 1 Nov 2026). The local folder stays the working copy; GitHub holds `main`, every tag and every open branch.
+- **Every new branch or worktree lives inside this folder**, at `.worktrees\<name>` (git-ignored). Never create folders in `C:\Users\PCD\Documents\AI Apps\Claud` (user rule, 10 Oct 2026). Create one with `git worktree add ".worktrees\<name>" -b feature/<name> main`, or `fix/<name>` for a bug fix, then push it with `git push -u origin <branch>`. Push again after each commit worth keeping.
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: `build.ps1 -Test`, `package.ps1 -Test` and `build-android.ps1 -Test` on a GitHub Windows runner, with the exe, setup and APK kept as the run's artifacts for 14 days. Pushes that only change Markdown, `docs\` or `design specfication\` skip it. **Tests run on GitHub** (Ali, 1 Nov 2026): push the branch and read its CI run instead of relying on local runs; a branch is ready to merge, and a release ready to tag, only when its latest CI run is green. Local runs are still fine for quick feedback and for renders. The runner has no touchscreen, audio devices or GPU sensors, so live integrations still need checking on the PC, and its APK is signed with the runner's debug key (it won't install over a PC-built one).
 - When you create a branch, add it to the table in `BRANCHES.md` with its purpose, base commit, status, checkout and test build paths (`.worktrees\<name>\artifacts\app\WidgetScreen.exe` and `.worktrees\<name>\artifacts\android\WidgetScreen.apk`). Keep that row current.
-- After a merge: run `build.ps1 -Test` and `build-android.ps1 -Test` on `main`, move the change into `CHANGELOG.md` under a new version, remove the branch's row, commit, and add an annotated `vX.Y.Z` tag. Then `git worktree remove` the worktree, delete any `artifacts\<name>` build, `git branch -d` the branch, and `git worktree prune`. Finish with `scripts\release.ps1 -UpdateShortcut` so the desktop shortcut runs the new version.
+- After a merge: push `main` and wait for its CI run to pass, move the change into `CHANGELOG.md` under a new version, remove the branch's row, commit, and add an annotated `vX.Y.Z` tag. Push `main` and the tag (`git push origin main vX.Y.Z`). Then `git worktree remove` the worktree, delete any `artifacts\<name>` build, `git branch -d` the branch, delete it on GitHub (`git push origin --delete <branch>`), and `git worktree prune`. Finish with `scripts\release.ps1 -UpdateShortcut` so the desktop shortcut runs the new version.
+- Release builds (`releases\`, exe, setup and APK) stay out of git; `.gitignore` keeps them out. Never commit build output, `.dat` sessions or keys.
 - Versions are semver. MAJOR stays 0 until the user calls it 1.0. MINOR is for a new widget, feature or visible behavior change. PATCH is for fixes and polish. Docs-only changes go under Unreleased. `v0.1.0` is the first tag.
 
 ## Working process
 
 - Read this file and the relevant spec section before changing code. Keep changes focused on the agreed scope and preserve existing user work.
 - Make routine, reversible implementation decisions yourself. Ask only when a missing preference materially changes the result.
-- Verify against the spec's acceptance criteria (§10): run `build.ps1 -Test` and `build-android.ps1 -Test`, render at 1920 × 720 for visual changes (and other sizes with `tests\screen-size-renders.ps1` when layout changes), and check integration failure states (unavailable device, expired account, missing sensor).
+- Verify against the spec's acceptance criteria (§10): push the branch and check that its CI run (`build.ps1 -Test`, `package.ps1 -Test`, `build-android.ps1 -Test`) is green, render at 1920 × 720 for visual changes (and other sizes with `tests\screen-size-renders.ps1` when layout changes), and check integration failure states (unavailable device, expired account, missing sensor).
 - Report what changed, what was verified, and what remains unverified in plain language.
 - When the user settles a decision, record it here (and in `docs/decisions/` if it's a technical choice).
