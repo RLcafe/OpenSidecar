@@ -6,9 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/sticker-foundations` | Sticker Sheet phase 1 (decision 021): eight inks, label strips, status stickers, state language and sticker helpers, the ink picker in Edit layout and Settings → Theme → Widget colours, inks in the phone link's layout section. Windows and Android. Next MINOR when merged. | `main` at 21b8807 (v0.34.0) | Ready for review | `.worktrees\sticker-foundations` | `.worktrees\sticker-foundations\artifacts\app\WidgetScreen.exe`, `.worktrees\sticker-foundations\artifacts\android\WidgetScreen.apk`; renders in `.worktrees\sticker-foundations\artifacts\sticker-sheet\` |
-
-`fix/claude-live-fixes` was merged as v0.33.0.
+None right now. `feature/sticker-foundations` was merged as v0.35.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

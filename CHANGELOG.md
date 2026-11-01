@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Sticker Sheet, phase 1: foundations (Ali's approved redesign; Windows and the phone; decision 021). Waiting on `feature/sticker-foundations`; it gets the next MINOR tag when merged.
+Nothing yet.
+
+## v0.35.0 (1 Nov 2026)
+
+Sticker Sheet, phase 1: foundations (Ali's approved redesign; Windows and the phone; decision 021).
 
 - **Every card but Claude Code wears an ink,** one of eight colours: the four accents plus Coral, Mint, Rose and Lemon. Each widget has its own by default, for example Focus Coral, Now Playing Rose, the mixer Lime and Spotify Mint. Amber stays for warnings.
 - **Label strips replace the grey card titles.** Each is a bold pill in the card's ink with dark text. Narrow cards show an ink dot and a short name.
