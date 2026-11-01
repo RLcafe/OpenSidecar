@@ -7,6 +7,7 @@ import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcPairing;
+import com.alialyami.widgetscreen.core.NotesText;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.PrayerText;
 import com.alialyami.widgetscreen.core.StorageText;
@@ -353,9 +354,10 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null, "every part");
             ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
             ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
+            ok(state.notes != null && state.notes.text.equals("From the phone") && state.notes.items.size() == 1 && state.notes.items.get(0).text.equals("Bread"), "notes");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
@@ -446,6 +448,14 @@ public final class AndroidTests {
             ok(state.prayer.located && state.prayer.next == 3 && state.prayer.current == 2 && state.prayer.alerting && state.prayer.times[4] == 5 && state.prayer.city.equals("Riyadh"), "parse");
             ok(!PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":true,\"times\":[1]}}"))).prayer.located && !PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":false}}"))).prayer.located, "incomplete");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Prayer").visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Prayer").visible && WidgetLayout.title("Prayer").equals("Prayer times"), "hidden by default");
+        } });
+        check("Notes pick the PC's designs, read the PC's notes and word the list like the PC", new Action() { public void run() {
+            ok(CardSizing.notes(260, 200) == CardSizing.SMALL && CardSizing.notes(472, 310) == CardSizing.MEDIUM && CardSizing.notes(699, 576) == CardSizing.MEDIUM && CardSizing.notes(700, 300) == CardSizing.LARGE && CardSizing.notesListColumn(652) == 300 && CardSizing.notesListColumn(1200) == 520, "designs");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"notes\":{\"version\":7,\"text\":\"Line one\\nLine two\",\"items\":[{\"id\":\"a\",\"text\":\"Milk\",\"done\":true},{\"id\":\"b\",\"text\":\"Bread\"},{\"text\":\"no id\"}]}}")));
+            ok(state.notes.version == 7 && state.notes.text.equals("Line one\nLine two") && state.notes.items.size() == 2 && state.notes.items.get(0).done && !state.notes.items.get(1).done, "parse");
+            ok(NotesText.status(state.notes.items).equals("1 TO DO") && NotesText.todoTab(state.notes.items).equals("To-do · 1") && NotesText.anyDone(state.notes.items), "wording");
+            ok(NotesText.line("  Call the\nbank\t now ").equals("Call the bank now") && NotesText.line(new String(new char[500]).replace('\0', 'y')).length() == 200 && NotesText.line(" \n ").isEmpty(), "line");
+            ok(!WidgetLayout.find(WidgetLayout.defaults(), "Notes").visible && WidgetLayout.title("Notes").equals("Notes and to-do"), "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

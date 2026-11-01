@@ -86,6 +86,7 @@ namespace WidgetScreen
             InitializeStorage();
             InitializeClocks();
             InitializePrayer();
+            InitializeNotes();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -238,7 +239,7 @@ namespace WidgetScreen
             UpdateTray();
             spotify.Tick(Showing && Editor.IsVisible("Spotify") && !Editor.Editing, settings.QuietMode);
             soundboard.Tick(Showing && Editor.IsVisible("Soundboard") && !Editor.Editing, settings.QuietMode);
-            TickPrayer();
+            TickPrayer(); TickNotes();
             // Minimized or in the tray: the dashboard isn't visible, so it doesn't poll (a phone still gets answers).
             if (!Showing) return;
             int interval = settings.QuietMode ? 5 : 2;
@@ -1091,7 +1092,7 @@ namespace WidgetScreen
         }
         public void Dispose()
         {
-            disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
+            SaveNotesDraft(); disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
             weather.Dispose(); prayerAlert.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());

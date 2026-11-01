@@ -54,7 +54,7 @@ namespace WidgetScreen
         // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
         private const double MinimumShrink = 0.78;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes" };
         public static string Title(string id)
         {
             switch (id) {
@@ -66,6 +66,7 @@ namespace WidgetScreen
                 case "Storage": return "Storage";
                 case "Clocks": return "World clocks";
                 case "Prayer": return "Prayer times";
+                case "Notes": return "Notes and to-do";
                 default: return id;
             }
         }
@@ -84,6 +85,7 @@ namespace WidgetScreen
                 case "Storage": return new Size(240, 152);
                 case "Clocks": return new Size(240, 152);
                 case "Prayer": return new Size(240, 152);
+                case "Notes": return new Size(260, 200);
                 default: return new Size(232, 152);
             }
         }
@@ -134,7 +136,8 @@ namespace WidgetScreen
                 // New widgets start hidden, so the default layout stays the same; they are turned on in Edit layout.
                 new WidgetPlacement { Id = "Storage", X = 1384, Y = 326, Width = 472, Height = 250, Visible = false },
                 new WidgetPlacement { Id = "Clocks", X = 1384, Y = 0, Width = 472, Height = 250, Visible = false },
-                new WidgetPlacement { Id = "Prayer", X = 1384, Y = 326, Width = 472, Height = 250, Visible = false }
+                new WidgetPlacement { Id = "Prayer", X = 1384, Y = 326, Width = 472, Height = 250, Visible = false },
+                new WidgetPlacement { Id = "Notes", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)

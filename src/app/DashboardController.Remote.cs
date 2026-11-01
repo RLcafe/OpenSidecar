@@ -350,6 +350,7 @@ namespace WidgetScreen
             if (parts.Contains("storage")) state["storage"] = await RemoteStorage();
             if (parts.Contains("clocks")) state["clocks"] = RemoteClocks();
             if (parts.Contains("prayer")) state["prayer"] = RemotePrayer();
+            if (parts.Contains("notes")) state["notes"] = RemoteNotes();
             return state;
         }
 
@@ -429,6 +430,8 @@ namespace WidgetScreen
                 case "focus.preset": SetFocus((int)Required(body, "minutes")); return Done(null);
                 case "focus.custom": StartCustomFocus((int)Required(body, "minutes")); return Done(null);
                 case "focus.dismiss": DismissFocus(); return Done(null);
+                case "notes.text": case "notes.add": case "notes.toggle": case "notes.delete": case "notes.clearDone": case "notes.move":
+                    return RemoteNotesCommand(action, body);
                 case "prayer.stop": StopPrayerAlert(); return Done(null);
                 case "quiet.toggle":
                     settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist();

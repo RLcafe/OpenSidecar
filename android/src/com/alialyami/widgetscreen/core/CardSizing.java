@@ -169,5 +169,9 @@ public final class CardSizing {
     public static double prayerLargeTop(double height, boolean across) { return across ? clamp(height - 120, 140, 260) : clamp(Math.round(height * 0.38), 140, 220); }
     public static double prayerTileTime(double tileWidth, boolean use24) { return clamp(Math.round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
 
+    // Notes and to-do (docs/design/notes.md): the same numbers as CardSizing.cs.
+    public static int notes(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 700 && height >= 300 ? LARGE : MEDIUM; }
+    public static double notesListColumn(double width) { return clamp(Math.floor(width * 0.46), 300, 520); }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }
