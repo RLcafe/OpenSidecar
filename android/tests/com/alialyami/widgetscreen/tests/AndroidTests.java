@@ -934,6 +934,36 @@ public final class AndroidTests {
                 } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
             }
         } });
+        final String weatherSample = "{\"utc_offset_seconds\":0,\"current\":{\"temperature_2m\":10.2,\"apparent_temperature\":8.1,\"wind_speed_10m\":14,\"weather_code\":3,\"relative_humidity_2m\":82},"
+            + "\"daily\":{\"temperature_2m_max\":[11.4],\"temperature_2m_min\":[8.6],\"uv_index_max\":[1.2],\"sunrise\":[\"2026-11-01T06:53\"],\"sunset\":[\"2026-11-01T16:33\"]},"
+            + "\"hourly\":{\"time\":[\"2026-11-01T20:00\",\"2026-11-01T21:00\",\"2026-11-01T22:00\",\"2026-11-01T23:00\",\"2026-11-02T00:00\",\"2026-11-02T01:00\",\"2026-11-02T02:00\",\"2026-11-02T03:00\",\"2026-11-02T04:00\",\"2026-11-02T05:00\",\"2026-11-02T06:00\",\"2026-11-02T07:00\",\"2026-11-02T08:00\",\"2026-11-02T09:00\",\"2026-11-02T10:00\"],"
+            + "\"temperature_2m\":[10.6,10.2,10,10.4,11,11.3,11,10.5,10,9.6,9.2,9,9.4,10.1,10.8],\"weather_code\":[3,3,3,61,61,61,3,3,2,2,1,0,0,0,1],\"precipitation_probability\":[5,10,20,45,60,40,20,10,5,0,0,0,0,0,null]}}";
+        check("Weather: one Open-Meteo request brings humidity, rain chances, UV, sunrise and sunset, as on the PC", new Action() { public void run() {
+            String url = Weather.forecastUrl(51.5, -0.12, false);
+            for (String part : new String[] { "relative_humidity_2m", "precipitation_probability", "uv_index_max", "sunrise", "sunset" }) ok(url.contains(part), "request lacks " + part);
+            Weather.Snapshot s = Weather.parse(weatherSample, 0, "2026-11-01T21:00");
+            ok(s.humidity == 82 && Math.abs(s.uv - 1.2) < 0.001 && "2026-11-01T06:53".equals(s.sunrise) && "2026-11-01T16:33".equals(s.sunset) && s.utcOffsetSeconds == 0, "phase 3 fields");
+            ok(s.curve.size() == 13 && s.curve.get(0).time.equals("2026-11-01T21:00") && s.curve.get(0).rain == 10 && s.curve.get(12).rain == 0 && s.hours.size() == 5, "curve " + s.curve.size());
+            Weather.Snapshot none = Weather.parse("{\"current\":{\"temperature_2m\":20,\"apparent_temperature\":19,\"wind_speed_10m\":8,\"weather_code\":0}}", 0);
+            ok(none.humidity == null && none.uv == null && none.sunrise == null && none.curve.isEmpty(), "missing extras");
+        } });
+        check("Weather: chips, UV words, sky inks, the sun's place and the curve match the PC", new Action() { public void run() {
+            Weather.Snapshot s = Weather.parse(weatherSample, 0, "2026-11-01T21:00");
+            StringBuilder three = new StringBuilder();
+            for (String[] c : Weather.chips(s, false, 3)) three.append(three.length() == 0 ? "" : "|").append(c[0]).append('=').append(c[1]);
+            ok(three.toString().equals("FEELS=8°|HUMIDITY=82%|RAIN=10%"), "medium chips " + three);
+            String[][] six = Weather.chips(s, true, 6);
+            ok(six.length == 6 && six[3][0].equals("UV") && six[4][1].equals("14 mph") && six[5][0].equals("HIGH / LOW"), "large chips");
+            ok(Weather.uvText(1.2).equals("1 Low") && Weather.uvText(5.4).equals("5 Moderate") && Weather.uvText(7).equals("7 High") && Weather.uvText(9.6).equals("10 Very high") && Weather.uvText(11).equals("11 Extreme"), "UV words");
+            ok(Weather.skyInk("sun", true).equals("Lemon") && Weather.skyInk("rain", true).equals("Glacier") && Weather.skyInk("storm", true).equals("Lavender") && Weather.skyInk("sun", false).equals("Lavender"), "sky inks");
+            ok(Weather.skyStrength("sun", true) == 0.42 && Weather.skyStrength("cloud", true) == 0.22 && Weather.skyStrength("sun", false) == 0.32, "sky strengths");
+            ok(Weather.sunPart("2026-11-01T12:00", "2026-11-01T06:00", "2026-11-01T18:00") == 0.5 && Weather.sunPart("2026-11-01T03:00", "2026-11-01T06:00", "2026-11-01T18:00") < 0 && Weather.sunPart("2026-11-02T01:00", "2026-11-01T06:00", "2026-11-01T18:00") > 1 && Weather.sunPart("2026-11-01T12:00", null, "2026-11-01T18:00") == null, "sun part");
+            ok(Weather.isDay("2026-11-01T12:00", "2026-11-01T06:00", "2026-11-01T18:00") && !Weather.isDay("2026-11-01T21:00", "2026-11-01T06:00", "2026-11-01T18:00") && Weather.isDay("2026-11-01T08:00", null, null) && !Weather.isDay("2026-11-01T20:00", null, null), "day and night");
+            ok(Weather.cityNow(s, 1793566800000L).equals("2026-11-01T21:00"), "city clock " + Weather.cityNow(s, 1793566800000L));
+            ok(Arrays.equals(Weather.curveLevels(new double[] { 10, 12, 14 }), new double[] { 0, 0.5, 1 }) && Weather.curveLevels(new double[] { 10, 10.2 })[1] == 0.5 && Weather.curveLevels(new double[0]).length == 0, "curve levels");
+            ok(Weather.clockTime("2026-11-01T06:53", false).equals("6:53 AM") && Weather.clockTime("2026-11-01T16:33", true).equals("16:33"), "clock times");
+            ok(CardSizing.weatherChips(472) == 3 && CardSizing.weatherChips(560) == 4 && CardSizing.weatherChips(900) == 6, "chip counts");
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

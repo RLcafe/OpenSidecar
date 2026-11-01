@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
@@ -19,6 +20,8 @@ namespace WidgetScreen
         public DateTime Time;
         public double Temperature;
         public int Code;
+        // The chance of rain in that hour, 0–100, when Open-Meteo has it.
+        public int? Rain;
     }
     public sealed class WeatherSnapshot
     {
@@ -27,6 +30,12 @@ namespace WidgetScreen
         // Today's high and low, and the next hours (now, +3 h, +6 h, +9 h, +12 h), when the answer had them.
         public double? High, Low;
         public List<WeatherHour> Hours = new List<WeatherHour>();
+        // Sticker Sheet phase 3: humidity now, today's UV index, sunrise and sunset (the city's local time), the city's
+        // offset from UTC, and every hour from now to +12 h for the temperature curve and rain bars.
+        public double? Humidity, Uv;
+        public DateTime? Sunrise, Sunset;
+        public TimeSpan? UtcOffset;
+        public List<WeatherHour> Curve = new List<WeatherHour>();
         public DateTime Retrieved;
     }
     public sealed class WeatherService : IDisposable
@@ -53,7 +62,7 @@ namespace WidgetScreen
         public static string ForecastUrl(double latitude, double longitude, bool imperial)
         {
             return "https://api.open-meteo.com/v1/forecast?latitude=" + latitude.ToString(CultureInfo.InvariantCulture) + "&longitude=" + longitude.ToString(CultureInfo.InvariantCulture)
-                + "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&hourly=temperature_2m,weather_code&forecast_days=2&timezone=auto"
+                + "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=2&timezone=auto"
                 + (imperial ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "");
         }
         public Task<WeatherSnapshot> ReadAsync(double latitude, double longitude) { return ReadAsync(latitude, longitude, false); }
@@ -79,6 +88,9 @@ namespace WidgetScreen
             // The forecast parts are extras: a missing or odd one leaves current conditions intact.
             try
             {
+                object humidity, offset;
+                if (current.TryGetValue("relative_humidity_2m", out humidity) && humidity != null) snapshot.Humidity = Convert.ToDouble(humidity, CultureInfo.InvariantCulture);
+                if (root.TryGetValue("utc_offset_seconds", out offset) && offset != null) snapshot.UtcOffset = TimeSpan.FromSeconds(Convert.ToDouble(offset, CultureInfo.InvariantCulture));
                 object daily;
                 if (root.TryGetValue("daily", out daily) && daily is Dictionary<string, object>)
                 {
@@ -86,12 +98,15 @@ namespace WidgetScreen
                     var highs = Items(d, "temperature_2m_max"); var lows = Items(d, "temperature_2m_min");
                     if (highs != null && lows != null && highs.Length > 0 && lows.Length > 0 && highs[0] != null && lows[0] != null)
                     { snapshot.High = Convert.ToDouble(highs[0], CultureInfo.InvariantCulture); snapshot.Low = Convert.ToDouble(lows[0], CultureInfo.InvariantCulture); }
+                    var uv = Items(d, "uv_index_max");
+                    if (uv != null && uv.Length > 0 && uv[0] != null) snapshot.Uv = Convert.ToDouble(uv[0], CultureInfo.InvariantCulture);
+                    snapshot.Sunrise = Moment(Items(d, "sunrise")); snapshot.Sunset = Moment(Items(d, "sunset"));
                 }
                 object hourly;
                 if (root.TryGetValue("hourly", out hourly) && hourly is Dictionary<string, object>)
                 {
                     var h = (Dictionary<string, object>)hourly;
-                    var times = Items(h, "time"); var temperatures = Items(h, "temperature_2m"); var codes = Items(h, "weather_code");
+                    var times = Items(h, "time"); var temperatures = Items(h, "temperature_2m"); var codes = Items(h, "weather_code"); var rain = Items(h, "precipitation_probability");
                     if (times != null && temperatures != null && codes != null)
                     {
                         var all = new List<WeatherHour>();
@@ -100,17 +115,25 @@ namespace WidgetScreen
                             if (temperatures[i] == null || codes[i] == null) continue;
                             DateTime time;
                             if (!DateTime.TryParseExact(Convert.ToString(times[i]), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out time)) continue;
-                            all.Add(new WeatherHour { Time = time, Temperature = Convert.ToDouble(temperatures[i], CultureInfo.InvariantCulture), Code = Convert.ToInt32(codes[i], CultureInfo.InvariantCulture) });
+                            all.Add(new WeatherHour { Time = time, Temperature = Convert.ToDouble(temperatures[i], CultureInfo.InvariantCulture), Code = Convert.ToInt32(codes[i], CultureInfo.InvariantCulture),
+                                Rain = rain != null && i < rain.Length && rain[i] != null ? (int?)Convert.ToInt32(rain[i], CultureInfo.InvariantCulture) : null });
                         }
                         DateTime thisHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
                         int start = all.FindIndex(hour => hour.Time >= thisHour);
                         if (start < 0) start = 0;
-                        foreach (int offset in new[] { 0, 3, 6, 9, 12 }) if (start + offset < all.Count) snapshot.Hours.Add(all[start + offset]);
+                        foreach (int step in new[] { 0, 3, 6, 9, 12 }) if (start + step < all.Count) snapshot.Hours.Add(all[start + step]);
+                        for (int i = start; i <= start + 12 && i < all.Count; i++) snapshot.Curve.Add(all[i]);
                     }
                 }
             }
-            catch (Exception) { snapshot.High = snapshot.Low = null; snapshot.Hours.Clear(); }
+            catch (Exception) { snapshot.High = snapshot.Low = snapshot.Humidity = snapshot.Uv = null; snapshot.Sunrise = snapshot.Sunset = null; snapshot.Hours.Clear(); snapshot.Curve.Clear(); }
             return snapshot;
+        }
+        private static DateTime? Moment(object[] items)
+        {
+            DateTime time;
+            if (items == null || items.Length == 0 || items[0] == null) return null;
+            return DateTime.TryParseExact(Convert.ToString(items[0]), "yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out time) ? (DateTime?)time : null;
         }
         // A JSON array from JavaScriptSerializer arrives as object[] at the top level and as an ArrayList when nested.
         private static object[] Items(Dictionary<string, object> map, string key)
@@ -177,6 +200,63 @@ namespace WidgetScreen
                 default: return cloud;
             }
         }
+        // Sticker Sheet phase 3 (docs/design/sticker-sheet.md). The phone's core/Weather.java has the same rules.
+        // "6 High": the UV index with the WHO level.
+        public static string UvText(double uv)
+        {
+            double v = Math.Round(uv);
+            return v + " " + (v <= 2 ? "Low" : v <= 5 ? "Moderate" : v <= 7 ? "High" : v <= 10 ? "Very high" : "Extreme");
+        }
+        // The fact-rail chips, most useful first: Feels, Humidity, Rain, UV, Wind, High / Low; count of those it has.
+        public static string[][] Chips(WeatherSnapshot s, bool imperial, int count)
+        {
+            var chips = new List<string[]> { new[] { "FEELS", Math.Round(s.FeelsLike) + "°" } };
+            if (s.Humidity.HasValue) chips.Add(new[] { "HUMIDITY", Math.Round(s.Humidity.Value) + "%" });
+            int? rain = s.Curve.Count > 0 ? s.Curve[0].Rain : s.Hours.Count > 0 ? s.Hours[0].Rain : null;
+            if (rain.HasValue) chips.Add(new[] { "RAIN", rain.Value + "%" });
+            if (s.Uv.HasValue) chips.Add(new[] { "UV", UvText(s.Uv.Value) });
+            chips.Add(new[] { "WIND", Math.Round(s.Wind) + (imperial ? " mph" : " km/h") });
+            if (s.High.HasValue && s.Low.HasValue) chips.Add(new[] { "HIGH / LOW", Math.Round(s.High.Value) + "° / " + Math.Round(s.Low.Value) + "°" });
+            return chips.Take(Math.Max(0, count)).ToArray();
+        }
+        // The city's clock: UTC plus the offset Open-Meteo gave, or this PC's clock without one.
+        public static DateTime CityNow(WeatherSnapshot s, DateTime utcNow)
+        {
+            return s != null && s.UtcOffset.HasValue ? utcNow + s.UtcOffset.Value : utcNow.ToLocalTime();
+        }
+        // Where the sun is between sunrise (0) and sunset (1); under 0 before it rises, over 1 after it sets.
+        public static double? SunPart(DateTime now, DateTime? sunrise, DateTime? sunset)
+        {
+            if (!sunrise.HasValue || !sunset.HasValue || sunset.Value <= sunrise.Value) return null;
+            return (now - sunrise.Value).TotalMinutes / (sunset.Value - sunrise.Value).TotalMinutes;
+        }
+        // Day between sunrise and sunset; without them, 7 AM to 7 PM.
+        public static bool IsDay(DateTime now, DateTime? sunrise, DateTime? sunset)
+        {
+            double? part = SunPart(now, sunrise, sunset);
+            return part.HasValue ? part.Value >= 0 && part.Value <= 1 : now.Hour >= 7 && now.Hour < 19;
+        }
+        // The sky band's ink and how strongly it shows: Lemon for a clear day, Glacier for cloud, rain and snow, Lavender
+        // for storms and night; clear skies show most, grey ones least.
+        public static string SkyInk(string family, bool day)
+        {
+            if (!day || family == "storm") return "Lavender";
+            return family == "sun" ? "Lemon" : "Glacier";
+        }
+        public static double SkyStrength(string family, bool day)
+        {
+            if (!day) return 0.32;
+            switch (family) { case "sun": return 0.42; case "partly": return 0.36; case "storm": return 0.36; case "rain": return 0.3; case "snow": return 0.28; default: return 0.22; }
+        }
+        // The curve's heights, 0 (the lowest temperature) to 1 (the highest); a flat line sits at the middle.
+        public static double[] CurveLevels(IList<double> values)
+        {
+            if (values == null || values.Count == 0) return new double[0];
+            double low = values.Min(), high = values.Max();
+            return values.Select(v => high - low < 0.5 ? 0.5 : (v - low) / (high - low)).ToArray();
+        }
+        // "6:12 AM" or "06:12", following the clock's choice.
+        public static string ClockTime(DateTime time, bool use24) { return time.ToString(use24 ? "HH:mm" : "h:mm tt", CultureInfo.InvariantCulture); }
         // "14:00" or "2 PM", following the clock's choice.
         public static string HourLabel(DateTime time, bool use24) { return time.ToString(use24 ? "HH:mm" : "h tt", CultureInfo.InvariantCulture); }
         public void Dispose() { http.Dispose(); }

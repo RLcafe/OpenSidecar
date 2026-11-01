@@ -3,13 +3,17 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace WidgetScreen
 {
-    // Weather in three designs that follow the card's size (CardSizing.Weather; docs/design/widget-size-views.md).
-    // Small is a glance (temperature and glyph, city, high and low); Medium is today (a large glyph and temperature,
-    // the condition and city, and Feels, Wind and High / Low as three facts, plus three hours on a tall card); Large is
-    // the forecast (the same, larger, with five hours in a strip). The last reading lives here, so a rebuilt design
+    // Weather in three designs that follow the card's size (CardSizing.Weather; docs/design/widget-size-views.md),
+    // dressed as a sticker sheet (phase 3, docs/design/sticker-sheet.md): the reading sits on a sky band tinted by the
+    // condition and the time of day, with the condition glyph on a die-cut sticker. Small is a glance (temperature and
+    // glyph, city, high and low); Medium is today (the reading, the condition and city, and Feels, Humidity and Rain
+    // chips, plus the 12-hour curve on a tall card); Large adds more chips and a forecast row with the 12-hour
+    // temperature curve over rain bars and the sunrise–sunset arc. The last reading lives here, so a rebuilt design
     // starts full. The phone's WeatherWidget.java draws the same three.
     public sealed class WeatherCard : CardParts
     {
@@ -23,11 +27,14 @@ namespace WidgetScreen
         private WeatherSnapshot last;
         private bool busy, offline, imperial, use24;
         private string empty = "Tap to choose a city.";
-        private TextBlock temperature, city, condition, described, message, credit;
+        private TextBlock temperature, city, condition, described, message, credit, sunrise, sunset;
         private ContentControl glyph;
-        private Grid facts;
-        private UniformGrid hours;
-        private FrameworkElement hoursFrame;
+        private Rectangle sky;
+        private UniformGrid chips;
+        private int chipCount;
+        private TemperatureCurve curve;
+        private FrameworkElement curveFrame, arcFrame, values;
+        private SunArc arc;
         private double glyphSize;
 
         public WeatherCard(FrameworkElement scope, Grid host) { this.host = host; names = new PartNames(scope); TextScale = 1; }
@@ -62,36 +69,62 @@ namespace WidgetScreen
 
         private void Build()
         {
-            host.Children.Clear(); names.Clear(); facts = null; hours = null; hoursFrame = null; condition = null; described = null; Strip = null;
+            host.Children.Clear(); names.Clear(); chips = null; curve = null; curveFrame = arcFrame = null; arc = null; sunrise = sunset = null; condition = null; described = null; Strip = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Weather(bounds.Width, bounds.Height);
             FrameworkElement view = design == CardSizing.Design.Small ? BuildGlance(width, height) : BuildToday(width, height, design == CardSizing.Design.Large);
             host.Children.Add(names.Add(view, "WeatherView"));
         }
 
-        // Small: no heading; the temperature and glyph fill the top, the city, high and low, and the credit follow.
+        // The sky band behind the reading: a rounded panel in the sky's ink fading downwards, the content over it.
+        private Grid SkyBand(UIElement content, Thickness padding)
+        {
+            var band = new Grid();
+            sky = names.Add(new Rectangle { RadiusX = 16, RadiusY = 16, OpacityMask = Fade, IsHitTestVisible = false }, "WeatherSky");
+            band.Children.Add(sky);
+            var inner = new Border { Padding = padding, Child = content };
+            band.Children.Add(inner);
+            return band;
+        }
+        private static readonly Brush Fade = MakeFade();
+        private static Brush MakeFade()
+        {
+            var brush = new LinearGradientBrush(Colors.Black, Color.FromArgb(0x10, 0, 0, 0), 90); brush.Freeze();
+            return brush;
+        }
+
+        // The condition glyph on a die-cut disc sticker in the sky's ink, drawn in dark text.
+        private ContentControl GlyphSticker(double size)
+        {
+            return new ContentControl { Width = size + Stickers.Keyline, Height = size + Stickers.Lift + Stickers.Keyline, VerticalAlignment = VerticalAlignment.Center, Focusable = false, IsTabStop = false };
+        }
+
+        // Small: no heading; the temperature and glyph sticker on the sky band, then the city, high and low, and the credit.
         private FrameworkElement BuildGlance(double width, double height)
         {
             bool detail = height >= 136;
             var view = Rows(Star, Auto, Auto, Auto);
-            double size = CardSizing.WeatherTemperature(CardSizing.Design.Small, bounds.Width, height - 26 - (detail ? 20 : 0) - 20);
+            double size = CardSizing.WeatherTemperature(CardSizing.Design.Small, bounds.Width, height - 26 - (detail ? 20 : 0) - 20 - 8);
             var top = Columns(Star, Auto);
             temperature = names.Add(Reading("—°", size), "WeatherTemperature"); temperature.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(temperature);
-            glyphSize = Math.Max(28, Math.Min(72, Math.Round(size * 0.9)));
-            glyph = new ContentControl { Width = glyphSize, Height = glyphSize, VerticalAlignment = VerticalAlignment.Center, Focusable = false, IsTabStop = false };
+            glyphSize = Math.Max(28, Math.Min(64, Math.Round(size * 0.8)));
+            glyph = names.Add(GlyphSticker(glyphSize), "WeatherGlyph");
             top.Children.Add(At(glyph, 0, 1));
-            view.Children.Add(top);
-            city = names.Add(Text("", "BodySize", "Text"), "WeatherCity"); city.Margin = new Thickness(0, 2, 0, 0); view.Children.Add(At(city, 1));
+            var band = SkyBand(top, new Thickness(10, 4, 10, 4));
+            values = band;
+            view.Children.Add(band);
+            city = names.Add(Text("", "BodySize", "Text"), "WeatherCity"); city.Margin = new Thickness(0, 4, 0, 0); view.Children.Add(At(city, 1));
             message = Caption(""); message.Margin = new Thickness(0, 4, 0, 0); if (detail) view.Children.Add(At(message, 2));
             credit = names.Add(Caption(""), "WeatherCredit"); credit.Margin = new Thickness(0, 4, 0, 0); view.Children.Add(At(credit, 3));
             return view;
         }
 
-        // Medium and Large: a heading, the glyph and temperature beside the condition and city, three facts, the next
-        // hours (three on a tall Medium card, up to five in a strip on Large) and the credit.
+        // Medium and Large: a heading; the glyph sticker and temperature beside the condition and city on the sky band;
+        // a rail of chips; on Large (and a tall Medium) the 12-hour curve, beside the sun arc on Large; and the credit.
         private FrameworkElement BuildToday(double width, double height, bool large)
         {
-            bool showHours = large || height >= 300 - 48;
+            bool showCurve = large || height >= 300 - 48;
+            bool showArc = large && width >= 380;
             var view = Rows(Auto, Star, Auto, Auto, Auto);
             // The label strip and the condition as a status sticker (docs/design/sticker-sheet.md).
             var header = Columns(Auto, Star); header.MinHeight = Stickers.StripHeight;
@@ -100,35 +133,53 @@ namespace WidgetScreen
             header.Children.Add(At(condition, 0, 1));
             StatusSticker.Wrap(condition, "Weather", false);
             view.Children.Add(header);
-            double hoursHeight = !showHours ? 0 : large ? 104 + 12 : 64 + 10;
-            double size = CardSizing.WeatherTemperature(design, bounds.Width, height - Stickers.StripHeight - 62 - hoursHeight - 26);
-            glyphSize = Math.Round(size * (large ? 0.8 : 0.85));
+            double padY = large ? 6 : 4;
+            double chart = large ? Math.Max(92, Math.Min(150, Math.Round((height - Stickers.StripHeight - 65 - 21) * 0.36))) : 64;
+            double curveHeight = !showCurve ? 0 : chart + (large ? 10 : 8);
+            double size = CardSizing.WeatherTemperature(design, bounds.Width, height - Stickers.StripHeight - padY * 2 - 65 - curveHeight - 21);
+            glyphSize = Math.Round(size * (large ? 0.8 : 0.8));
             var hero = Columns(Auto, Auto, Star); hero.VerticalAlignment = VerticalAlignment.Center;
-            glyph = new ContentControl { Width = glyphSize, Height = glyphSize, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, large ? 20 : 16, 0), Focusable = false, IsTabStop = false };
+            glyph = names.Add(GlyphSticker(glyphSize), "WeatherGlyph"); glyph.Margin = new Thickness(0, 0, large ? 18 : 14, 0);
             hero.Children.Add(glyph);
             temperature = names.Add(Reading("—°", size), "WeatherTemperature"); temperature.VerticalAlignment = VerticalAlignment.Center;
             hero.Children.Add(At(temperature, 0, 1));
-            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(large ? 20 : 16, 0, 0, 0) };
-            described = Text("", large ? "TitleSize" : "BodySize", "Text"); words.Children.Add(described);
-            city = names.Add(Text("", large ? "BodySize" : "SmallSize", "Muted"), "WeatherCity"); city.TextWrapping = TextWrapping.Wrap; city.MaxHeight = large ? 54 : 44; city.Margin = new Thickness(0, 4, 0, 0);
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(large ? 18 : 14, 0, 0, 0) };
+            described = Text("", large ? "TitleSize" : "BodySize", "Text"); described.TextTrimming = TextTrimming.CharacterEllipsis; words.Children.Add(described);
+            city = names.Add(Text("", large ? "BodySize" : "SmallSize", "Text"), "WeatherCity"); city.TextWrapping = TextWrapping.Wrap; city.MaxHeight = large ? 54 : 44; city.Margin = new Thickness(0, 4, 0, 0); city.Opacity = 0.78;
             words.Children.Add(city);
             hero.Children.Add(At(words, 0, 2));
-            view.Children.Add(At(hero, 1));
-            // The facts, or in their place a message while there is nothing to show.
-            var middle = new Grid { Height = 52, Margin = new Thickness(0, 10, 0, 0) };
-            facts = new Grid(); middle.Children.Add(facts);
-            message = Text("", "SmallSize", "Muted"); message.TextWrapping = TextWrapping.Wrap; message.MaxHeight = 52; message.VerticalAlignment = VerticalAlignment.Center;
+            var band = SkyBand(hero, new Thickness(12, padY, 12, padY));
+            view.Children.Add(At(band, 1));
+            // The chips, or in their place a message while there is nothing to show.
+            var middle = new Grid { MinHeight = 57, Margin = new Thickness(0, 8, 0, 0) };
+            chipCount = large ? CardSizing.WeatherChips(bounds.Width) : 3;
+            chips = names.Add(new UniformGrid { Rows = 1 }, "WeatherChips"); middle.Children.Add(chips);
+            message = Text("", "SmallSize", "Muted"); message.TextWrapping = TextWrapping.Wrap; message.MaxHeight = 57; message.VerticalAlignment = VerticalAlignment.Center;
             middle.Children.Add(message);
             view.Children.Add(At(middle, 2));
-            if (showHours)
+            if (showCurve)
             {
-                hours = new UniformGrid { Rows = 1, Columns = large ? CardSizing.WeatherHours(bounds.Width) : 3 };
-                if (large) { var strip = Tile(hours, 16, new Thickness(8, 10, 8, 10)); strip.Height = 104; strip.Margin = new Thickness(0, 12, 0, 0); hoursFrame = strip; }
-                else { hours.Height = 64; hours.Margin = new Thickness(0, 10, 0, 0); hoursFrame = hours; }
-                view.Children.Add(At(hoursFrame, 3));
+                curve = names.Add(new TemperatureCurve(), "WeatherCurve");
+                var row = Columns(Star, Auto); row.Height = chart; row.Margin = new Thickness(0, large ? 10 : 8, 0, 0);
+                if (large) { curveFrame = Tile(curve, 16, new Thickness(8, 6, 8, 6)); }
+                else curveFrame = curve;
+                row.Children.Add(curveFrame);
+                if (showArc)
+                {
+                    arc = names.Add(new SunArc { Height = 46 }, "WeatherSunArc");
+                    var times = Columns(Star, Star);
+                    sunrise = Caption(""); sunset = Caption(""); sunset.HorizontalAlignment = HorizontalAlignment.Right;
+                    times.Children.Add(sunrise); times.Children.Add(At(sunset, 0, 1));
+                    arc.Height = Math.Max(46, chart - 12 - 22); var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; stack.Children.Add(arc); stack.Children.Add(times);
+                    var tile = Tile(stack, 16, new Thickness(10, 6, 10, 6)); tile.Width = 150; tile.Margin = new Thickness(10, 0, 0, 0);
+                    arcFrame = tile;
+                    row.Children.Add(At(tile, 0, 1));
+                }
+                view.Children.Add(At(row, 3));
             }
-            credit = names.Add(Caption(""), "WeatherCredit"); credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 6, 0, 0);
+            credit = names.Add(Caption(""), "WeatherCredit"); credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 4, 0, 0);
             view.Children.Add(At(credit, 4));
+            values = band;
             return view;
         }
 
@@ -138,72 +189,92 @@ namespace WidgetScreen
             bool hasCity = location.Length > 0, reading = last != null && !offline;
             temperature.Text = last != null ? Math.Round(last.Temperature) + "°" : "—°";
             city.Text = hasCity ? location : "No city yet";
-            string family = reading ? WeatherService.Family(last.Code) : null;
-            glyph.Content = family == null ? null : WeatherGlyph(family, glyphSize, "Accent");
+            DateTime now = WeatherService.CityNow(last, DateTime.UtcNow);
+            bool day = last == null || WeatherService.IsDay(now, last.Sunrise, last.Sunset);
+            string family = last != null ? WeatherService.Family(last.Code) : null;
+            string ink = WeatherService.SkyInk(family ?? "cloud", day);
+            sky.SetResourceReference(Shape.FillProperty, "Ink" + ink);
+            sky.Opacity = last == null ? 0.12 : WeatherService.SkyStrength(family, day);
+            glyph.Content = family == null ? null : Sticker(family, ink);
+            Stickers.Stale(values, offline && last != null);
             if (condition != null)
             {
                 condition.Text = offline ? "OFFLINE" : "";
                 condition.SetResourceReference(TextBlock.ForegroundProperty, offline ? "Warning" : "Muted");
-                described.Text = reading ? WeatherService.Describe(last.Code) : "";
+                described.Text = last != null ? WeatherService.Describe(last.Code) : "";
                 described.Visibility = described.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             string note = !hasCity ? empty
-                : offline ? (last == null ? "Can't reach the weather service. Tap the card to try again." : "Showing the last update. Tap the card to try again.")
+                : offline ? (last == null ? "Can't reach the weather service. Tap the card to try again." : null)
                 : last == null ? "Updating weather…" : null;
             if (design == CardSizing.Design.Small)
             {
-                message.Text = note != null ? (offline ? "Offline. Tap to try again." : note) : HighLow(last) ?? WeatherService.Describe(last.Code);
+                message.Text = note != null ? (offline ? "Offline. Tap to try again." : note) : offline ? "Offline: last update shown" : HighLow(last) ?? WeatherService.Describe(last.Code);
                 message.SetResourceReference(TextBlock.ForegroundProperty, offline ? "Warning" : "Muted");
             }
             else
             {
                 message.Text = note ?? ""; message.Visibility = note != null ? Visibility.Visible : Visibility.Collapsed;
-                facts.Visibility = note == null ? Visibility.Visible : Visibility.Collapsed;
-                Facts(note == null ? last : null);
-                Hours(reading ? last : null);
+                chips.Visibility = note == null ? Visibility.Visible : Visibility.Collapsed;
+                Chips(note == null ? last : null);
+                Stickers.Stale(chips, offline && last != null);
+                Forecast(last, now);
             }
-            credit.Text = last != null ? "Open-Meteo  ·  " + (busy ? "updating…" : "updated " + last.Retrieved.ToString(use24 ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture))
+            credit.Text = last != null ? "Open-Meteo  ·  " + (busy ? "updating…" : (offline ? "last update " : "updated ") + last.Retrieved.ToString(use24 ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture))
                 : busy ? "Open-Meteo  ·  updating…" : "Weather data by Open-Meteo";
+        }
+        // The glyph sticker: a disc in the sky's ink with the condition drawn in dark text over it.
+        private Grid Sticker(string family, string ink)
+        {
+            var grid = new Grid();
+            grid.Children.Add(new StickerShape(Stickers.Disc(glyphSize), "Ink" + ink) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(Stickers.Keyline / 2, Stickers.Keyline / 2, 0, 0) });
+            double mark = Math.Round(glyphSize * 0.62);
+            var drawn = WeatherGlyph(family, mark, "InkText");
+            drawn.HorizontalAlignment = HorizontalAlignment.Left; drawn.VerticalAlignment = VerticalAlignment.Top;
+            drawn.Margin = new Thickness(Stickers.Keyline / 2 + (glyphSize - mark) / 2, Stickers.Keyline / 2 + (glyphSize - mark) / 2, 0, 0);
+            grid.Children.Add(drawn);
+            return grid;
         }
         private static string HighLow(WeatherSnapshot snapshot)
         {
             return snapshot != null && snapshot.High.HasValue && snapshot.Low.HasValue ? "↑ " + Math.Round(snapshot.High.Value) + "°   ↓ " + Math.Round(snapshot.Low.Value) + "°" : null;
         }
-        // Feels, Wind and High / Low, each a small tile with its name over its value.
-        private void Facts(WeatherSnapshot snapshot)
+        // The fact rail: Feels, Humidity, Rain and, on Large, UV, Wind and High / Low as far as they fit.
+        private void Chips(WeatherSnapshot snapshot)
         {
-            facts.Children.Clear(); facts.ColumnDefinitions.Clear();
+            chips.Children.Clear();
             if (snapshot == null) return;
-            var items = WeatherService.Facts(snapshot, imperial);
+            var items = WeatherService.Chips(snapshot, imperial, chipCount);
+            chips.Columns = Math.Max(1, items.Length);
             for (int i = 0; i < items.Length; i++)
             {
-                facts.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
-                var column = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                column.Children.Add(Caption(items[i][0]));
-                var value = Text(items[i][1], "BodySize", "Text"); value.Margin = new Thickness(0, 1, 0, 0); column.Children.Add(value);
-                var tile = Tile(column, 12, new Thickness(12, 0, 8, 0)); tile.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == items.Length - 1 ? 0 : 4, 0);
-                facts.Children.Add(At(tile, 0, i));
+                TextBlock value;
+                var chip = Stickers.FactChip(items[i][0], items[i][1], out value);
+                chip.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == items.Length - 1 ? 0 : 4, 0);
+                chips.Children.Add(chip);
             }
         }
-        // The next hours: the time (Now in the accent), the condition glyph and the temperature.
-        private void Hours(WeatherSnapshot snapshot)
+        // The next 12 hours as a curve over rain bars (labels every three hours), and the sun's place between sunrise and sunset.
+        private void Forecast(WeatherSnapshot snapshot, DateTime now)
         {
-            if (hours == null) return;
-            hours.Children.Clear();
-            bool any = snapshot != null && snapshot.Hours.Count > 0;
-            hoursFrame.Visibility = any ? Visibility.Visible : Visibility.Hidden;
-            if (!any) return;
-            foreach (var hour in snapshot.Hours.Take(hours.Columns))
+            if (curve != null)
             {
-                bool now = hour == snapshot.Hours[0];
-                var column = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var time = Caption(now ? "Now" : WeatherService.HourLabel(hour.Time, use24)); time.HorizontalAlignment = HorizontalAlignment.Center;
-                if (now) { time.SetResourceReference(TextBlock.ForegroundProperty, "Accent"); time.FontWeight = FontWeights.SemiBold; }
-                column.Children.Add(time);
-                double size = hours.Columns > 3 || hoursFrame != hours ? 26 : 18;
-                var mark = WeatherGlyph(WeatherService.Family(hour.Code), size, "Muted"); mark.Margin = new Thickness(0, 4, 0, 4); column.Children.Add(mark);
-                var temperature = Text(Math.Round(hour.Temperature) + "°", "BodySize", "Text"); temperature.HorizontalAlignment = HorizontalAlignment.Center; column.Children.Add(temperature);
-                hours.Children.Add(column);
+                bool any = snapshot != null && snapshot.Curve.Count >= 2;
+                curveFrame.Visibility = any ? Visibility.Visible : Visibility.Hidden;
+                if (any)
+                {
+                    var hours = snapshot.Curve;
+                    curve.Show(hours.Select(h => h.Temperature).ToArray(), hours.Select(h => h.Rain).ToArray(),
+                        hours.Select((h, i) => i == 0 ? "Now" : i % 3 == 0 ? WeatherService.HourLabel(h.Time, use24) : null).ToArray());
+                }
+            }
+            if (arc != null)
+            {
+                double? part = snapshot == null ? null : WeatherService.SunPart(now, snapshot.Sunrise, snapshot.Sunset);
+                arcFrame.Visibility = part.HasValue ? Visibility.Visible : Visibility.Collapsed;
+                arc.Part = part ?? Double.NaN;
+                sunrise.Text = part.HasValue ? "↑ " + WeatherService.ClockTime(snapshot.Sunrise.Value, use24) : "";
+                sunset.Text = part.HasValue ? "↓ " + WeatherService.ClockTime(snapshot.Sunset.Value, use24) : "";
             }
         }
     }

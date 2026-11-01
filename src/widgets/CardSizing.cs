@@ -185,6 +185,8 @@ namespace WidgetScreen
         public static Design Tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? Design.Small : cellWidth >= 150 && cellHeight >= 110 ? Design.Large : Design.Medium; }
         // The hours a Large forecast shows: up to five, as many as fit 72 units each.
         public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
+        // The chips a Large weather card's rail holds (Sticker Sheet phase 3): three to six, 112 units and a gap each.
+        public static int WeatherChips(double width) { return (int)Clamp(Math.Floor((width - 48 + 8) / 120), 3, 6); }
         // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
         // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
         // counted in a last line.

@@ -201,6 +201,8 @@ public final class CardSizing {
     public static int tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? SMALL : cellWidth >= 150 && cellHeight >= 110 ? LARGE : MEDIUM; }
     // The hours a Large forecast shows: up to five, as many as fit 72 units each.
     public static int weatherHours(double width) { return (int) clamp(Math.floor((width - 48 - 16) / 72), 3, 5); }
+    // The chips a Large weather card's rail holds (Sticker Sheet phase 3): three to six, 112 units and a gap each.
+    public static int weatherChips(double width) { return (int) clamp(Math.floor((width - 48 + 8) / 120), 3, 6); }
 
     // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
     // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
