@@ -33,4 +33,16 @@ public final class WorldClockText {
 
     // "Tomorrow, Nov 2" on a large tile.
     public static String date(LocalDateTime time, int dayOffset) { return day(dayOffset) + ", " + DATE.format(time); }
+
+    // Sticker Sheet phase 3, the same rules as WorldClockService on the PC: a face is Lemon from 7 AM to 7 PM in its
+    // city and Lavender otherwise, labelled Day or Evening (the hours people are about, not sunlight).
+    public static final int DAY_STARTS = 7, DAY_ENDS = 19, WORK_STARTS = 9, WORK_ENDS = 17;
+    public static boolean daytime(LocalDateTime time) { return time.getHour() >= DAY_STARTS && time.getHour() < DAY_ENDS; }
+    public static String ink(LocalDateTime time) { return daytime(time) ? "Lemon" : "Lavender"; }
+    public static String partOfDay(LocalDateTime time) { return daytime(time) ? "Day" : "Evening"; }
+    // The hands in degrees clockwise from 12: the hour hand moves with the minutes.
+    public static double hourAngle(LocalDateTime time) { return (time.getHour() % 12 + time.getMinute() / 60.0) * 30; }
+    public static double minuteAngle(LocalDateTime time) { return time.getMinute() * 6; }
+    // How far through its day a city is, 0 at midnight to 1.
+    public static double dayFraction(LocalDateTime time) { return (time.getHour() * 60 + time.getMinute()) / 1440.0; }
 }

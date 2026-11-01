@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace WidgetScreen
 {
     // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3): Weather's 12-hour temperature
-    // curve with rain bars and its sunrise–sunset arc, and Storage's jars. Like StickerParts, they draw only when their data changes, never
+    // curve with rain bars and its sunrise–sunset arc, Storage's jars, and World clocks' faces and 24-hour bands. Like StickerParts, they draw only when their data changes, never
     // animate and use no effects; brushes come from resources so palettes and inks apply live. The phone's
     // views/ReadingParts.java draws the same.
     public sealed class TemperatureCurve : FrameworkElement
@@ -188,6 +188,110 @@ namespace WidgetScreen
             context.DrawRoundedRectangle(null, PartCache.Pen(Keyline, key), body, radius, radius);
             var cap = new Rect(w * 0.14, key / 2, w * 0.72, lid);
             context.DrawRoundedRectangle(Ink, PartCache.Pen(Keyline, Math.Max(1.5, key - 1)), cap, Math.Min(4, lid / 2), Math.Min(4, lid / 2));
+        }
+    }
+
+    // An analog clock face (World clocks, phase 3): a disc in the city's ink (Lemon by day, Lavender in the evening)
+    // with a keyline and a solid lift, twelve hour marks and two hands in dark text.
+    public sealed class ClockFace : FrameworkElement
+    {
+        public static readonly DependencyProperty FillProperty = DependencyProperty.Register("Fill", typeof(Brush), typeof(ClockFace), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty HandsProperty = DependencyProperty.Register("Hands", typeof(Brush), typeof(ClockFace), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty KeylineProperty = DependencyProperty.Register("Keyline", typeof(Brush), typeof(ClockFace), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty LiftProperty = DependencyProperty.Register("Lift", typeof(Brush), typeof(ClockFace), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public Brush Fill { get { return (Brush)GetValue(FillProperty); } set { SetValue(FillProperty, value); } }
+        public Brush Hands { get { return (Brush)GetValue(HandsProperty); } set { SetValue(HandsProperty, value); } }
+        public Brush Keyline { get { return (Brush)GetValue(KeylineProperty); } set { SetValue(KeylineProperty, value); } }
+        public Brush Lift { get { return (Brush)GetValue(LiftProperty); } set { SetValue(LiftProperty, value); } }
+        private DateTime time;
+        public DateTime Time { get { return time; } }
+
+        public ClockFace()
+        {
+            IsHitTestVisible = false;
+            SetResourceReference(FillProperty, "InkLemon"); SetResourceReference(HandsProperty, "InkText");
+            SetResourceReference(KeylineProperty, "Text"); SetResourceReference(LiftProperty, "Page");
+        }
+        // The city's time and the ink its face wears.
+        public void Show(DateTime time)
+        {
+            if (time == this.time && Fill != null) return;
+            this.time = time;
+            SetResourceReference(FillProperty, "Ink" + WorldClockService.Ink(time));
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double size = Math.Floor(Math.Min(ActualWidth, ActualHeight - Stickers.Lift)); if (size < 20) return;
+            double key = size < 48 ? 2 : Stickers.Keyline, r = size / 2 - key / 2;
+            var c = new Point(ActualWidth / 2, size / 2);
+            context.DrawEllipse(Lift, null, new Point(c.X, c.Y + Stickers.Lift), r, r);
+            context.DrawEllipse(Fill, PartCache.Pen(Keyline, key), c, r, r);
+            double mark = Math.Max(1.5, size / 36);
+            context.DrawGeometry(null, PartCache.Pen(Hands, mark), PartCache.Get("clockmarks" + size, () => Marks(size, r)));
+            Hand(context, c, WorldClockService.HourAngle(time), r * 0.5, Math.Max(2.5, size / 18));
+            Hand(context, c, WorldClockService.MinuteAngle(time), r * 0.74, Math.Max(2, size / 26));
+            context.DrawEllipse(Hands, null, c, Math.Max(2, size / 22), Math.Max(2, size / 22));
+        }
+        private void Hand(DrawingContext context, Point c, double degrees, double length, double thickness)
+        {
+            double a = degrees * Math.PI / 180;
+            context.DrawLine(PartCache.Pen(Hands, thickness), c, new Point(c.X + length * Math.Sin(a), c.Y - length * Math.Cos(a)));
+        }
+        private static Geometry Marks(double size, double r)
+        {
+            var geometry = new StreamGeometry(); var c = new Point(size / 2, size / 2);
+            using (var figure = geometry.Open())
+                for (int i = 0; i < 12; i++)
+                {
+                    double a = i * Math.PI / 6, from = r * (i % 3 == 0 ? 0.72 : 0.8), to = r * 0.88;
+                    figure.BeginFigure(new Point(c.X + from * Math.Sin(a), c.Y - from * Math.Cos(a)), false, false);
+                    figure.LineTo(new Point(c.X + to * Math.Sin(a), c.Y - to * Math.Cos(a)), true, false);
+                }
+            return geometry;
+        }
+    }
+
+    // A city's 24 hours as a band (Large World clocks): midnight to midnight, 9 to 5 shaded in the city's ink, and a
+    // line at the city's time now.
+    public sealed class DayBand : FrameworkElement
+    {
+        public static readonly DependencyProperty TrackProperty = DependencyProperty.Register("Track", typeof(Brush), typeof(DayBand), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty InkProperty = DependencyProperty.Register("Ink", typeof(Brush), typeof(DayBand), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty LineProperty = DependencyProperty.Register("Line", typeof(Brush), typeof(DayBand), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public Brush Track { get { return (Brush)GetValue(TrackProperty); } set { SetValue(TrackProperty, value); } }
+        public Brush Ink { get { return (Brush)GetValue(InkProperty); } set { SetValue(InkProperty, value); } }
+        public Brush Line { get { return (Brush)GetValue(LineProperty); } set { SetValue(LineProperty, value); } }
+        private double now = -1;
+        public double Now { get { return now; } }
+
+        public DayBand()
+        {
+            IsHitTestVisible = false;
+            SetResourceReference(TrackProperty, "Track"); SetResourceReference(InkProperty, "InkLemon"); SetResourceReference(LineProperty, "Text");
+        }
+        public void Show(DateTime time)
+        {
+            double next = WorldClockService.DayFraction(time);
+            if (Math.Abs(next - now) < 0.0001) return;
+            now = next;
+            SetResourceReference(InkProperty, "Ink" + WorldClockService.Ink(time));
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double w = ActualWidth, h = ActualHeight; if (w < 40 || h < 8 || now < 0) return;
+            double bar = Math.Min(14, h - 4), top = (h - bar) / 2;
+            context.DrawRoundedRectangle(Track, null, new Rect(0, top, w, bar), bar / 2, bar / 2);
+            double from = w * WorldClockService.WorkStarts / 24, to = w * WorldClockService.WorkEnds / 24;
+            context.PushOpacity(0.75);
+            context.DrawRoundedRectangle(Ink, null, new Rect(from, top, to - from, bar), 3, 3);
+            context.Pop();
+            foreach (int hour in new[] { 6, 12, 18 }) context.DrawLine(PartCache.Pen(Track, 1), new Point(w * hour / 24, top - 2), new Point(w * hour / 24, top));
+            double x = Math.Max(1.5, Math.Min(w - 1.5, w * now));
+            context.DrawLine(PartCache.Pen(Line, 2.5), new Point(x, 0), new Point(x, h));
         }
     }
 }

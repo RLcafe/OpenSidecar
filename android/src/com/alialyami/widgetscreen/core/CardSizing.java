@@ -206,6 +206,15 @@ public final class CardSizing {
     // A storage jar's width for its height (a little narrower than tall), and how far up it the used space reaches,
     // 0–1, with any used space at least a sliver (Sticker Sheet phase 3).
     public static double jarWidth(double height) { return Math.round(height * 0.72); }
+    // Analog faces (Sticker Sheet phase 3): beside roomy Small rows (0 for none), atop Medium columns and Large tiles,
+    // at the left of stacked tiles; stacked tiles get a 24-hour band when they're tall enough. Same as the PC.
+    public static double clockListFace(double cardWidth, double rowHeight) { return cardWidth >= 260 && rowHeight >= 34 ? clamp(Math.floor(rowHeight - 6), 28, 40) : 0; }
+    // Medium columns have room for a face and Day or Evening from a 150-unit body.
+    public static boolean clockColumnFaces(double height) { return height >= 150; }
+    public static double clockFace(double column, double height) { return clamp(Math.round(Math.min(column * 0.3, height * 0.3)), 32, 64); }
+    public static double clockTileFace(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min((tileWidth - 32) * 0.34, (tileHeight - 32) * 0.3)), 40, 96); }
+    public static double clockStackedFace(double tileHeight) { return clamp(Math.floor(tileHeight - 20 - 4 - (clockStackedBand(tileHeight) ? 24 : 0)), 28, 64); }
+    public static boolean clockStackedBand(double tileHeight) { return tileHeight >= 110; }
     public static double jarLevel(double used) { double v = Math.max(0, Math.min(100, Double.isNaN(used) ? 0 : used)) / 100; return v > 0 && v < 0.03 ? 0.03 : v; }
 
     // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference

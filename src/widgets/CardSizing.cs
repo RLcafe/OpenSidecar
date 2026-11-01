@@ -219,6 +219,15 @@ namespace WidgetScreen
         public static bool ClockTilesAcross(double width, int count) { return count <= 1 || (width - 12 * (count - 1)) / count >= 170; }
         public static double ClockTileTime(double tileWidth, double tileHeight, bool use24) { return Clamp(Math.Round(Math.Min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
         public static double ClockStackedTime(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
+        // Analog faces (Sticker Sheet phase 3): beside roomy Small rows (0 for none), atop Medium columns and Large tiles,
+        // at the left of stacked tiles; stacked tiles get a 24-hour band when they're tall enough.
+        public static double ClockListFace(double cardWidth, double rowHeight) { return cardWidth >= 260 && rowHeight >= 34 ? Clamp(Math.Floor(rowHeight - 6), 28, 40) : 0; }
+        // Medium columns have room for a face and Day or Evening from a 150-unit body.
+        public static bool ClockColumnFaces(double height) { return height >= 150; }
+        public static double ClockFace(double column, double height) { return Clamp(Math.Round(Math.Min(column * 0.3, height * 0.3)), 32, 64); }
+        public static double ClockTileFace(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.34, (tileHeight - 32) * 0.3)), 40, 96); }
+        public static double ClockStackedFace(double tileHeight) { return Clamp(Math.Floor(tileHeight - 20 - 4 - (ClockStackedBand(tileHeight) ? 24 : 0)), 28, 64); }
+        public static bool ClockStackedBand(double tileHeight) { return tileHeight >= 110; }
         // Prayer times (docs/design/prayer-times.md): the next prayer under 340 wide or 220 tall, the next prayer beside
         // today's five times at the reference 472 × 250, and from 440 × 360 the next prayer with its progress over the
         // times, as rows or (with a body 860 wide) six tiles across.

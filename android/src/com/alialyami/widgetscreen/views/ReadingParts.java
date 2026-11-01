@@ -13,7 +13,8 @@ import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.Weather;
 
 // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3), the same as the PC's
-// ReadingParts.cs: Weather's 12-hour temperature curve over rain bars and its sunrise–sunset arc, and Storage's jars. Paints are made with
+// ReadingParts.cs: Weather's 12-hour temperature curve over rain bars and its sunrise–sunset arc, Storage's jars, and
+// World clocks' faces and 24-hour bands. Paints are made with
 // the view and paths when the data or size changes; onDraw allocates nothing.
 public final class ReadingParts {
     private ReadingParts() { }
@@ -193,6 +194,97 @@ public final class ReadingParts {
             canvas.drawRoundRect(body, radius, radius, keyline);
             float r = Math.min(ui.fpx(4), cap.height() / 2);
             canvas.drawRoundRect(cap, r, r, lid); canvas.drawRoundRect(cap, r, r, lidLine);
+        }
+    }
+
+    // An analog clock face (World clocks): a disc in the city's ink (Lemon by day, Lavender in the evening) with a
+    // keyline and a solid lift, twelve hour marks and two hands in dark text.
+    public static final class ClockFace extends View {
+        private final Ui ui;
+        private final Paint face = new Paint(Paint.ANTI_ALIAS_FLAG), lift = new Paint(Paint.ANTI_ALIAS_FLAG), keyline = new Paint(Paint.ANTI_ALIAS_FLAG),
+            marks = new Paint(Paint.ANTI_ALIAS_FLAG), hour = new Paint(Paint.ANTI_ALIAS_FLAG), minute = new Paint(Paint.ANTI_ALIAS_FLAG), centre = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path ticks = new Path();
+        private float cx, cy, r, size;
+        private java.time.LocalDateTime time;
+
+        public ClockFace(Ui ui) {
+            super(ui.context);
+            this.ui = ui;
+            lift.setColor(ui.theme.page); keyline.setStyle(Paint.Style.STROKE); keyline.setColor(ui.theme.text);
+            for (Paint p : new Paint[] { marks, hour, minute }) { p.setStyle(Paint.Style.STROKE); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(Theme.INK_TEXT); }
+            centre.setColor(Theme.INK_TEXT);
+        }
+        public void show(java.time.LocalDateTime time) {
+            if (time.equals(this.time)) return;
+            this.time = time; face.setColor(Theme.ink(com.alialyami.widgetscreen.core.WorldClockText.ink(time)));
+            invalidate();
+        }
+        public java.time.LocalDateTime time() { return time; }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            size = (float) Math.floor(Math.min(w, h - ui.fpx(Stickers.LIFT)));
+            float key = size < ui.fpx(48) ? ui.fpx(2) : ui.fpx(Stickers.KEYLINE);
+            keyline.setStrokeWidth(key);
+            r = size / 2 - key / 2; cx = w / 2f; cy = size / 2;
+            marks.setStrokeWidth(Math.max(ui.fpx(1.5), size / 36)); hour.setStrokeWidth(Math.max(ui.fpx(2.5), size / 18)); minute.setStrokeWidth(Math.max(ui.fpx(2), size / 26));
+            ticks.reset();
+            for (int i = 0; i < 12; i++) {
+                double a = i * Math.PI / 6; float from = r * (i % 3 == 0 ? 0.72f : 0.8f), to = r * 0.88f;
+                ticks.moveTo(cx + from * (float) Math.sin(a), cy - from * (float) Math.cos(a));
+                ticks.lineTo(cx + to * (float) Math.sin(a), cy - to * (float) Math.cos(a));
+            }
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            if (time == null || size < ui.fpx(20)) return;
+            canvas.drawCircle(cx, cy + ui.fpx(Stickers.LIFT), r, lift);
+            canvas.drawCircle(cx, cy, r, face); canvas.drawCircle(cx, cy, r, keyline);
+            canvas.drawPath(ticks, marks);
+            hand(canvas, com.alialyami.widgetscreen.core.WorldClockText.hourAngle(time), r * 0.5f, hour);
+            hand(canvas, com.alialyami.widgetscreen.core.WorldClockText.minuteAngle(time), r * 0.74f, minute);
+            canvas.drawCircle(cx, cy, Math.max(ui.fpx(2), size / 22), centre);
+        }
+        private void hand(Canvas canvas, double degrees, float length, Paint paint) {
+            double a = Math.toRadians(degrees);
+            canvas.drawLine(cx, cy, cx + length * (float) Math.sin(a), cy - length * (float) Math.cos(a), paint);
+        }
+    }
+
+    // A city's 24 hours as a band (Large World clocks): midnight to midnight, 9 to 5 shaded in the city's ink, and a
+    // line at the city's time now.
+    public static final class DayBand extends View {
+        private final Ui ui;
+        private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG), work = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG), tick = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF bar = new RectF(), shade = new RectF();
+        private double now = -1;
+
+        public DayBand(Ui ui) {
+            super(ui.context);
+            this.ui = ui;
+            track.setColor(ui.theme.track); line.setColor(ui.theme.text); line.setStrokeWidth(ui.fpx(2.5));
+            tick.setColor(ui.theme.track); tick.setStrokeWidth(ui.fpx(1));
+        }
+        public void show(java.time.LocalDateTime time) {
+            double next = com.alialyami.widgetscreen.core.WorldClockText.dayFraction(time);
+            if (Math.abs(next - now) < 0.0001) return;
+            now = next; work.setColor(Theme.ink(com.alialyami.widgetscreen.core.WorldClockText.ink(time))); work.setAlpha(191);
+            invalidate();
+        }
+        public double now() { return now; }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            float height = Math.min(ui.fpx(14), h - ui.fpx(4)), top = (h - height) / 2;
+            bar.set(0, top, w, top + height);
+            shade.set(w * com.alialyami.widgetscreen.core.WorldClockText.WORK_STARTS / 24f, top, w * com.alialyami.widgetscreen.core.WorldClockText.WORK_ENDS / 24f, top + height);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            if (now < 0 || getWidth() < ui.fpx(40)) return;
+            canvas.drawRoundRect(bar, bar.height() / 2, bar.height() / 2, track);
+            canvas.drawRoundRect(shade, ui.fpx(3), ui.fpx(3), work);
+            for (int hour : new int[] { 6, 12, 18 }) canvas.drawLine(getWidth() * hour / 24f, bar.top - ui.fpx(2), getWidth() * hour / 24f, bar.top, tick);
+            float x = Math.max(ui.fpx(1.5), Math.min(getWidth() - ui.fpx(1.5), (float) (getWidth() * now)));
+            canvas.drawLine(x, 0, x, getHeight(), line);
         }
     }
 }

@@ -104,5 +104,18 @@ namespace WidgetScreen
         }
         // "Tomorrow, Nov 2" on a large tile.
         public static string Date(WorldClockReading reading) { return Day(reading.DayOffset) + ", " + reading.Time.ToString("MMM d", Invariant); }
+
+        // Sticker Sheet phase 3 (docs/design/sticker-sheet.md); the phone's WorldClockText has the same rules.
+        // A clock's face is Lemon from 7 AM to 7 PM in its city and Lavender otherwise, labelled Day or Evening: the
+        // hours people are about, not sunlight.
+        public const int DayStarts = 7, DayEnds = 19, WorkStarts = 9, WorkEnds = 17;
+        public static bool Daytime(DateTime time) { return time.Hour >= DayStarts && time.Hour < DayEnds; }
+        public static string Ink(DateTime time) { return Daytime(time) ? "Lemon" : "Lavender"; }
+        public static string PartOfDay(DateTime time) { return Daytime(time) ? "Day" : "Evening"; }
+        // The hands in degrees clockwise from 12: the hour hand moves with the minutes.
+        public static double HourAngle(DateTime time) { return (time.Hour % 12 + time.Minute / 60.0) * 30; }
+        public static double MinuteAngle(DateTime time) { return time.Minute * 6; }
+        // How far through its day a city is, 0 at midnight to 1.
+        public static double DayFraction(DateTime time) { return (time.Hour * 60 + time.Minute) / 1440.0; }
     }
 }

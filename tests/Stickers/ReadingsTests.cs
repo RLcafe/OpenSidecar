@@ -182,5 +182,42 @@ internal static class ReadingsTests
                     finally { window.Close(); }
                 }
         });
+        check("World clocks: faces are Lemon by day and Lavender in the evening, with hands and day fractions like the phone's", () => {
+            Assert(WorldClockService.Ink(new DateTime(2026, 11, 1, 7, 0, 0)) == "Lemon" && WorldClockService.Ink(new DateTime(2026, 11, 1, 18, 59, 0)) == "Lemon" && WorldClockService.Ink(new DateTime(2026, 11, 1, 19, 0, 0)) == "Lavender" && WorldClockService.Ink(new DateTime(2026, 11, 1, 6, 59, 0)) == "Lavender", "Inks.");
+            Assert(WorldClockService.PartOfDay(new DateTime(2026, 11, 1, 12, 0, 0)) == "Day" && WorldClockService.PartOfDay(new DateTime(2026, 11, 1, 3, 0, 0)) == "Evening", "Day and Evening.");
+            Assert(WorldClockService.HourAngle(new DateTime(2026, 11, 1, 15, 30, 0)) == 105 && WorldClockService.MinuteAngle(new DateTime(2026, 11, 1, 15, 30, 0)) == 180 && WorldClockService.HourAngle(new DateTime(2026, 11, 1, 0, 0, 0)) == 0, "Hands.");
+            Assert(WorldClockService.DayFraction(new DateTime(2026, 11, 1, 12, 0, 0)) == 0.5 && WorldClockService.DayFraction(new DateTime(2026, 11, 1, 18, 0, 0)) == 0.75, "Day fraction.");
+            Assert(CardSizing.ClockListFace(300, 40) == 34 && CardSizing.ClockListFace(240, 60) == 0 && CardSizing.ClockFace(140, 166) == 42 && CardSizing.ClockTileFace(220, 300) == 64 && CardSizing.ClockStackedBand(120) && !CardSizing.ClockStackedBand(90) && CardSizing.ClockColumnFaces(166) && !CardSizing.ClockColumnFaces(116), "Face sizes.");
+        });
+        check("World clocks: faces, Day or Evening, and 24-hour bands fit their card at every design at 100% and 140%", () => {
+            var zones = new[] { new WorldClock { Zone = "Tokyo Standard Time", Label = "Tokyo" }, new WorldClock { Zone = "GMT Standard Time", Label = "London" }, new WorldClock { Zone = "Pacific Standard Time", Label = "San Francisco" } };
+            foreach (double scale in new[] { 1.0, 1.4 })
+                foreach (var size in new[] { new Size(300, 180), new Size(340, 200), new Size(472, 250), new Size(720, 400), new Size(460, 576) })
+                {
+                    var settings = Alone("Clocks", size, scale); settings.WorldClocks = zones;
+                    string path = Path.Combine(directory, "clocks-readings.xml"); SettingsStore.Save(path, settings);
+                    var window = Window();
+                    try
+                    {
+                        using (var controller = new DashboardController(window, path, true))
+                        {
+                            Lay(window);
+                            var card = (FrameworkElement)window.FindName("ClocksCard"); var design = CardSizing.Clocks(size.Width, size.Height);
+                            var faces = Descendants(card).OfType<ClockFace>().Where(f => Shown(f, card)).ToList(); var bands = Descendants(card).OfType<DayBand>().Where(b => Shown(b, card)).ToList();
+                            Assert(design == CardSizing.Design.Small || (design == CardSizing.Design.Medium && !CardSizing.ClockColumnFaces(size.Height - 84)) || faces.Count == 3, "Faces missing on " + design + " at " + size + ": " + faces.Count);
+                            Assert(faces.All(f => f.Time.Year > 2000), "A face has no time.");
+                            Assert(design == CardSizing.Design.Large ? bands.Count == 3 && bands.All(b => b.Now >= 0 && b.Now < 1) : bands.Count == 0, "Bands wrong on " + design + " at " + size + ".");
+                            if (design != CardSizing.Design.Small && size.Width >= 600)
+                            {
+                                var word = (TextBlock)window.FindName("ClockWord0");
+                                Assert(word.Text == WorldClockService.PartOfDay(faces[0].Time), "The Day or Evening word doesn't match its face.");
+                            }
+                            foreach (var part in Descendants(card).OfType<FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is TextBlock || e is ClockFace || e is DayBand)))
+                                Inside(part, card, "Clocks " + part.GetType().Name + " at " + size + " and " + scale * 100 + "%");
+                        }
+                    }
+                    finally { window.Close(); }
+                }
+        });
     }
 }

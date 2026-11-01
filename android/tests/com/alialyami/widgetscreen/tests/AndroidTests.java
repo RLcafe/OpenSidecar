@@ -967,6 +967,13 @@ public final class AndroidTests {
         check("Storage: jars fill by used space like the PC's", new Action() { public void run() {
             ok(CardSizing.jarWidth(100) == 72 && CardSizing.jarLevel(0) == 0 && CardSizing.jarLevel(1) == 0.03 && CardSizing.jarLevel(85) == 0.85 && CardSizing.jarLevel(120) == 1 && CardSizing.jarLevel(Double.NaN) == 0, "jar sizes and levels");
         } });
+        check("World clocks: faces, Day or Evening, hands and day fractions match the PC", new Action() { public void run() {
+            ok(WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 7, 0)).equals("Lemon") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 18, 59)).equals("Lemon") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 19, 0)).equals("Lavender") && WorldClockText.ink(LocalDateTime.of(2026, 11, 1, 6, 59)).equals("Lavender"), "inks");
+            ok(WorldClockText.partOfDay(LocalDateTime.of(2026, 11, 1, 12, 0)).equals("Day") && WorldClockText.partOfDay(LocalDateTime.of(2026, 11, 1, 3, 0)).equals("Evening"), "day and evening");
+            ok(WorldClockText.hourAngle(LocalDateTime.of(2026, 11, 1, 15, 30)) == 105 && WorldClockText.minuteAngle(LocalDateTime.of(2026, 11, 1, 15, 30)) == 180 && WorldClockText.hourAngle(LocalDateTime.of(2026, 11, 1, 0, 0)) == 0, "hands");
+            ok(WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 12, 0)) == 0.5 && WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 18, 0)) == 0.75, "day fraction");
+            ok(CardSizing.clockListFace(300, 40) == 34 && CardSizing.clockListFace(240, 60) == 0 && CardSizing.clockFace(140, 166) == 42 && CardSizing.clockTileFace(220, 300) == 64 && CardSizing.clockStackedBand(120) && !CardSizing.clockStackedBand(90) && CardSizing.clockColumnFaces(166) && !CardSizing.clockColumnFaces(116), "face sizes");
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }
