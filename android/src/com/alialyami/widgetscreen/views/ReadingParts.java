@@ -8,11 +8,12 @@ import android.graphics.RectF;
 import android.view.View;
 
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.Weather;
 
 // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3), the same as the PC's
-// ReadingParts.cs: Weather's 12-hour temperature curve over rain bars and its sunrise–sunset arc. Paints are made with
+// ReadingParts.cs: Weather's 12-hour temperature curve over rain bars and its sunrise–sunset arc, and Storage's jars. Paints are made with
 // the view and paths when the data or size changes; onDraw allocates nothing.
 public final class ReadingParts {
     private ReadingParts() { }
@@ -139,6 +140,59 @@ public final class ReadingParts {
             float x = cx - r * (float) Math.cos(Math.PI * p), y = cy - r * (float) Math.sin(Math.PI * p);
             if (up) { canvas.drawCircle(x, y, ui.fpx(7), sun); canvas.drawCircle(x, y, ui.fpx(7), keyline); }
             else canvas.drawCircle(x, y, ui.fpx(6), hollow);
+        }
+    }
+
+    // A storage jar: a lidded jar with a keyline and a solid lift, filled from the bottom by the used space in the ink;
+    // a drive under the low-space threshold fills with Amber caution tape instead.
+    public static final class StorageJar extends View {
+        private final Ui ui;
+        private final Paint glass = new Paint(Paint.ANTI_ALIAS_FLAG), fill = new Paint(Paint.ANTI_ALIAS_FLAG), tape = new Paint(Paint.ANTI_ALIAS_FLAG),
+            lift = new Paint(Paint.ANTI_ALIAS_FLAG), keyline = new Paint(Paint.ANTI_ALIAS_FLAG), lid = new Paint(Paint.ANTI_ALIAS_FLAG), lidLine = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF body = new RectF(), shadow = new RectF(), cap = new RectF();
+        private final Path clip = new Path();
+        private float radius, key;
+        private double used;
+        private boolean low;
+
+        public StorageJar(Ui ui, int inkColour) {
+            super(ui.context);
+            this.ui = ui;
+            glass.setColor(ui.theme.track); fill.setColor(inkColour); tape.setShader(Stickers.caution(ui)); lift.setColor(ui.theme.page);
+            keyline.setStyle(Paint.Style.STROKE); keyline.setColor(ui.theme.text);
+            lid.setColor(inkColour); lidLine.setStyle(Paint.Style.STROKE); lidLine.setColor(ui.theme.text);
+        }
+
+        public static double widthFor(double height) { return CardSizing.jarWidth(height); }
+
+        public void set(double usedPercent, boolean low) { if (usedPercent != used || low != this.low) { used = usedPercent; this.low = low; invalidate(); } }
+        public double used() { return used; }
+        public boolean low() { return low; }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            boolean small = w < ui.fpx(40);
+            key = ui.fpx(small ? 2 : Stickers.KEYLINE); float liftBy = ui.fpx(small ? 2 : Stickers.LIFT), lidHeight = Math.max(ui.fpx(3), Math.round(h * 0.09f));
+            keyline.setStrokeWidth(key); lidLine.setStrokeWidth(Math.max(ui.fpx(1.5), key - ui.fpx(1)));
+            body.set(key / 2, lidHeight + key, w - key / 2, h - liftBy - key);
+            shadow.set(body.left, body.top + liftBy, body.right, body.bottom + liftBy);
+            radius = Math.min(body.width() * 0.24f, ui.fpx(16));
+            clip.reset(); clip.addRoundRect(body, radius, radius, Path.Direction.CW);
+            cap.set(w * 0.14f, key / 2, w * 0.86f, key / 2 + lidHeight);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            if (getWidth() < ui.fpx(12) || getHeight() < ui.fpx(16)) return;
+            canvas.drawRoundRect(shadow, radius, radius, lift);
+            canvas.drawRoundRect(body, radius, radius, glass);
+            float level = (float) CardSizing.jarLevel(used);
+            if (level > 0) {
+                canvas.save(); canvas.clipPath(clip);
+                canvas.drawRect(body.left, body.bottom - body.height() * level, body.right, body.bottom, low ? tape : fill);
+                canvas.restore();
+            }
+            canvas.drawRoundRect(body, radius, radius, keyline);
+            float r = Math.min(ui.fpx(4), cap.height() / 2);
+            canvas.drawRoundRect(cap, r, r, lid); canvas.drawRoundRect(cap, r, r, lidLine);
         }
     }
 }

@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace WidgetScreen
 {
     // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3): Weather's 12-hour temperature
-    // curve with rain bars and its sunrise–sunset arc. Like StickerParts, they draw only when their data changes, never
+    // curve with rain bars and its sunrise–sunset arc, and Storage's jars. Like StickerParts, they draw only when their data changes, never
     // animate and use no effects; brushes come from resources so palettes and inks apply live. The phone's
     // views/ReadingParts.java draws the same.
     public sealed class TemperatureCurve : FrameworkElement
@@ -138,6 +138,56 @@ namespace WidgetScreen
                 figure.ArcTo(Place(c, r, part), new Size(r, r), 0, false, SweepDirection.Clockwise, true, false);
             }
             return geometry;
+        }
+    }
+
+    // A storage jar (Storage, phase 3): a lidded jar with a keyline and a solid lift, filled from the bottom by the used
+    // space in the ink; a drive under the low-space threshold fills with Amber caution tape instead.
+    public sealed class StorageJar : FrameworkElement
+    {
+        public static readonly DependencyProperty UsedProperty = DependencyProperty.Register("Used", typeof(double), typeof(StorageJar), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty LowProperty = DependencyProperty.Register("Low", typeof(bool), typeof(StorageJar), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty InkProperty = DependencyProperty.Register("Ink", typeof(Brush), typeof(StorageJar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty GlassProperty = DependencyProperty.Register("Glass", typeof(Brush), typeof(StorageJar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty KeylineProperty = DependencyProperty.Register("Keyline", typeof(Brush), typeof(StorageJar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty LiftProperty = DependencyProperty.Register("Lift", typeof(Brush), typeof(StorageJar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        // Used space, 0–100.
+        public double Used { get { return (double)GetValue(UsedProperty); } set { SetValue(UsedProperty, value); } }
+        public bool Low { get { return (bool)GetValue(LowProperty); } set { SetValue(LowProperty, value); } }
+        public Brush Ink { get { return (Brush)GetValue(InkProperty); } set { SetValue(InkProperty, value); } }
+        public Brush Glass { get { return (Brush)GetValue(GlassProperty); } set { SetValue(GlassProperty, value); } }
+        public Brush Keyline { get { return (Brush)GetValue(KeylineProperty); } set { SetValue(KeylineProperty, value); } }
+        public Brush Lift { get { return (Brush)GetValue(LiftProperty); } set { SetValue(LiftProperty, value); } }
+
+        public StorageJar()
+        {
+            IsHitTestVisible = false;
+            SetResourceReference(InkProperty, Stickers.InkKey("Storage")); SetResourceReference(GlassProperty, "Track");
+            SetResourceReference(KeylineProperty, "Text"); SetResourceReference(LiftProperty, "Page");
+        }
+
+        public static double WidthFor(double height) { return CardSizing.JarWidth(height); }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double w = ActualWidth, h = ActualHeight; if (w < 12 || h < 16) return;
+            double key = w < 40 ? 2 : Stickers.Keyline, lift = w < 40 ? 2 : Stickers.Lift, lid = Math.Max(3, Math.Round(h * 0.09));
+            var body = new Rect(key / 2, lid + key, w - key, h - lift - lid - key * 1.5);
+            double radius = Math.Min(body.Width * 0.24, 16);
+            context.DrawRoundedRectangle(Lift, null, new Rect(body.X, body.Y + lift, body.Width, body.Height), radius, radius);
+            context.DrawRoundedRectangle(Glass, null, body, radius, radius);
+            double level = CardSizing.JarLevel(Used);
+            if (level > 0)
+            {
+                var shape = new RectangleGeometry(body, radius, radius); shape.Freeze();
+                context.PushClip(shape);
+                double fill = body.Height * level;
+                context.DrawRectangle(Low ? Stickers.Caution : Ink, null, new Rect(body.X, body.Bottom - fill, body.Width, fill));
+                context.Pop();
+            }
+            context.DrawRoundedRectangle(null, PartCache.Pen(Keyline, key), body, radius, radius);
+            var cap = new Rect(w * 0.14, key / 2, w * 0.72, lid);
+            context.DrawRoundedRectangle(Ink, PartCache.Pen(Keyline, Math.Max(1.5, key - 1)), cap, Math.Min(4, lid / 2), Math.Min(4, lid / 2));
         }
     }
 }

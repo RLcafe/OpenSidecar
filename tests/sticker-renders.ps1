@@ -48,6 +48,8 @@ $scenes['midnight-default-nothing-playing'] = @{ Page = 'default'; Theme = 'Midn
 # Phase 3: the readings at each size in each palette, and at 140%.
 foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = '' } } }
 foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<TextScale>1.4</TextScale>' } }
+# A low-space threshold of 20% so this PC's fullest drives show the caution-tape state.
+foreach ($page in 'read-small', 'read-medium', 'read-large') { $scenes["midnight-$page-low-space"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<StorageLowPercent>20</StorageLowPercent>' } }
 $scenes['midnight-five-large-nothing-playing'] = @{ Page = 'five-large'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
 
 foreach ($name in $scenes.Keys) {

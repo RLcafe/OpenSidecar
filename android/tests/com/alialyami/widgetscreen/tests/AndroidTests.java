@@ -964,6 +964,9 @@ public final class AndroidTests {
             ok(Weather.clockTime("2026-11-01T06:53", false).equals("6:53 AM") && Weather.clockTime("2026-11-01T16:33", true).equals("16:33"), "clock times");
             ok(CardSizing.weatherChips(472) == 3 && CardSizing.weatherChips(560) == 4 && CardSizing.weatherChips(900) == 6, "chip counts");
         } });
+        check("Storage: jars fill by used space like the PC's", new Action() { public void run() {
+            ok(CardSizing.jarWidth(100) == 72 && CardSizing.jarLevel(0) == 0 && CardSizing.jarLevel(1) == 0.03 && CardSizing.jarLevel(85) == 0.85 && CardSizing.jarLevel(120) == 1 && CardSizing.jarLevel(Double.NaN) == 0, "jar sizes and levels");
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

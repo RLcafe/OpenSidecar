@@ -187,6 +187,10 @@ namespace WidgetScreen
         public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
         // The chips a Large weather card's rail holds (Sticker Sheet phase 3): three to six, 112 units and a gap each.
         public static int WeatherChips(double width) { return (int)Clamp(Math.Floor((width - 48 + 8) / 120), 3, 6); }
+        // A storage jar's width for its height (a little narrower than tall), and how far up it the used space reaches,
+        // 0–1, with any used space at least a sliver (Sticker Sheet phase 3).
+        public static double JarWidth(double height) { return Math.Round(height * 0.72); }
+        public static double JarLevel(double used) { double v = Math.Max(0, Math.Min(100, Double.IsNaN(used) ? 0 : used)) / 100; return v > 0 && v < 0.03 ? 0.03 : v; }
         // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
         // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
         // counted in a last line.

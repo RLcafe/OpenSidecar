@@ -152,5 +152,35 @@ internal static class ReadingsTests
                     finally { window.Close(); }
                 }
         });
+        check("Storage: jars fill by used space and a drive under the threshold fills with caution tape, inside the card at 100% and 140%", () => {
+            Assert(CardSizing.JarWidth(100) == 72 && CardSizing.JarLevel(0) == 0 && CardSizing.JarLevel(1) == 0.03 && CardSizing.JarLevel(85) == 0.85 && CardSizing.JarLevel(120) == 1 && CardSizing.JarLevel(Double.NaN) == 0, "Jar sizes or levels.");
+            var drives = new List<StorageDrive> {
+                new StorageDrive { Name = "C:", Label = "Windows", TotalBytes = 1000L << 30, FreeBytes = 60L << 30 },
+                new StorageDrive { Name = "D:", Label = "Games", TotalBytes = 2000L << 30, FreeBytes = 900L << 30 } };
+            foreach (double scale in new[] { 1.0, 1.4 })
+                foreach (var size in new[] { new Size(300, 180), new Size(456, 250), new Size(624, 360) })
+                {
+                    string path = Path.Combine(directory, "storage-readings.xml"); SettingsStore.Save(path, Alone("Storage", size, scale));
+                    var window = Window();
+                    try
+                    {
+                        using (var controller = new DashboardController(window, path, true))
+                        {
+                            Lay(window);
+                            controller.StorageView.Configure(10); controller.StorageView.Update(drives);
+                            Lay(window);
+                            var card = (FrameworkElement)window.FindName("StorageCard"); var design = CardSizing.Storage(size.Width, size.Height);
+                            var jars = Descendants(card).OfType<StorageJar>().Where(j => Shown(j, card)).ToList();
+                            Assert(design == CardSizing.Design.Small ? jars.Count == 0 : jars.Count == 2 && jars[0].Low && !jars[1].Low && Math.Abs(jars[0].Used - 94) < 0.01, "Jars wrong on " + design + " at " + size + ": " + jars.Count);
+                            var bars = Descendants(card).OfType<MeterBar>().Where(b => Shown(b, card)).ToList();
+                            if (design == CardSizing.Design.Small) Assert(bars.Count == 2 && bars[0].Fill == Stickers.Caution && bars[1].Fill != Stickers.Caution, "The low drive's bar isn't caution tape.");
+                            Assert(((TextBlock)window.FindName("StorageStatus")).Text == "C: LOW", "The heading doesn't name the low drive.");
+                            foreach (var part in Descendants(card).OfType<FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is TextBlock || e is StorageJar || e is MeterBar)))
+                                Inside(part, card, "Storage " + part.GetType().Name + " at " + size + " and " + scale * 100 + "%");
+                        }
+                    }
+                    finally { window.Close(); }
+                }
+        });
     }
 }
