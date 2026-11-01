@@ -279,7 +279,7 @@ internal static class ClaudeTreeTests
             var onlyList = ClaudeBridge.ParseUsageResponse("{\"limits\":[{\"kind\":\"five_hour\",\"percent\":40,\"resets_at\":\"2026-11-01T14:00:00Z\"},{\"kind\":\"weekly_all\",\"percent\":10}]}", Now);
             Assert(onlyList != null && onlyList.FiveHour.Percent == 40 && onlyList.Week.Percent == 10, "A window only in the limits list was missed.");
 
-            // Lanes: every project used in the last five hours, and the busiest threads of a project with more than one.
+            // Lanes: one for every project used in the last five hours, and none for threads (Ali, 1 Nov 2026).
             string config = Fresh(directory, "config-lanes");
             Func<string, string, string, int, string> reply = (session, folder, request, output) => "{\"type\":\"assistant\",\"cwd\":\"" + Json(folder) + "\",\"sessionId\":\"" + session + "\",\"requestId\":\"" + request + "\",\"timestamp\":\"" + Iso(Now.AddMinutes(-20)) + "\",\"message\":{\"id\":\"" + request + "\",\"model\":\"claude-opus-5-5\",\"usage\":{\"input_tokens\":10,\"output_tokens\":" + output + ",\"cache_read_input_tokens\":99999}}}\n";
             foreach (var t in new[] { new[] { "a1", "C:\\Code\\alpha", "900" }, new[] { "a2", "C:\\Code\\alpha", "500" }, new[] { "b1", "C:\\Code\\beta", "100" } })
@@ -292,7 +292,7 @@ internal static class ClaudeTreeTests
             var service = new ClaudeService(Fresh(directory, "bridge-lanes"), config, appThreads: new ClaudeAppThreads(() => new string[0]));
             service.Usage.Scan(Now);
             var view = service.View(Now, service.Usage.Entries);
-            Assert(view.Lanes.Count == 4 && view.Lanes[0].Name == "alpha" && view.Lanes[0].Session == "" && view.Lanes[1].Session == "a1" && view.Lanes[2].Session == "a2" && view.Lanes[3].Name == "beta"
+            Assert(view.Lanes.Count == 2 && view.Lanes[0].Name == "alpha" && view.Lanes.All(l => l.Session == "") && view.Lanes[1].Name == "beta"
                 && view.Lanes[0].Bins.Sum() == 1420, "Lanes wrong: " + String.Join(", ", view.Lanes.Select(l => l.Name + "/" + l.Session + "=" + l.Bins.Sum())));
             Assert(view.Facts.Tokens == 1530 && view.Facts.CacheRead == 299997, "Cache reads were counted as tokens.");
             service.Dispose();
@@ -311,6 +311,18 @@ internal static class ClaudeTreeTests
             Func<System.Windows.Media.Imaging.BitmapSource, int> red = b => { var px = new byte[b.PixelWidth * b.PixelHeight * 4]; b.CopyPixels(px, b.PixelWidth * 4, 0); int n = 0; for (int i = 0; i < px.Length; i += 4) if (px[i + 3] == 255 && px[i + 2] > 200 && px[i + 1] < 170 && px[i] < 170) n++; return n; };
             Assert(red(turn[PitSprite.StillFrame(PitState.Done)]) > red(idle[0]) + 3, "Your turn's brake lights don't show in its still frame.");
             Assert(amber(need[0]) > 10 && amber(need[5]) > 3 && amber(idle[0]) == 0, "Needs you's beacon doesn't show, or Idle shows amber.");
+        });
+
+        check("Claude's Models column names the model, and a mix's top two with shares", () => {
+            Func<string, long, ClaudeUsageEntry> e = (model, tokens) => new ClaudeUsageEntry { Model = model, Tokens = tokens, At = Now };
+            var one = ClaudePace.Models(new[] { e("claude-opus-4-8", 900), e("claude-opus-4-8[1m]", 100), e("", 50) });
+            Assert(one.Count == 1 && one[0].Key == "Opus 4.8" && one[0].Value == 1, "One model wasn't named: " + String.Join(",", one.Select(m => m.Key)));
+            var label = ClaudePace.ModelLabel(one);
+            Assert(label.Count == 1 && label[0].Key == "Opus 4.8", "A single model's label is wrong.");
+            var mixed = ClaudePace.Models(new[] { e("claude-fable-5-1", 700), e("claude-sonnet-4-6", 200), e("claude-haiku-4-5", 100) });
+            var parts = ClaudePace.ModelLabel(mixed);
+            Assert(mixed[0].Key == "Fable 5.1" && parts.Count == 2 && parts[0].Key == "Fable 70%" && parts[1].Key == "Sonnet 20%" && parts[1].Value == "Sonnet 4.6", "A mix's label is wrong: " + String.Join(" · ", parts.Select(x => x.Key)));
+            Assert(ClaudePace.ModelLabel(ClaudePace.Models(new[] { e("claude-opus-4-8", 96), e("claude-haiku-4-5", 4) }))[0].Key == "Opus 4.8" && ClaudePace.ModelLabel(new List<KeyValuePair<string, double>>()).Count == 0, "A near-pure model shows as a mix, or nothing shows something.");
         });
 
         check("Claude cars follow their threads: class by model, behaviour by state and telemetry", () => {

@@ -656,8 +656,8 @@ namespace WidgetScreen
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(72) + 10) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(80) + 10) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(64) + 10) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeModels(width) ? 74 : 0) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeLines(width) ? Scaled(84) + 10 : 0) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeModels(width, textScale) ? Scaled(150) + 10 : 0) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeLines(width, textScale) ? Scaled(84) + 10 : 0) });
             return row;
         }
         private FrameworkElement Ledger(double width)
@@ -666,11 +666,11 @@ namespace WidgetScreen
             var table = Rows(new GridLength(24), Star);
             var head = LedgerRow(width, 24);
             var labels = new[] { "", "Project · thread", "Tokens", "Cache reads", showApi ? "API value" : "Replies", "Models", "Lines" };
-            var tips = new[] { "", "", ClaudeText.TokensTip, ClaudeText.CacheTip, showApi ? ClaudeText.ApiValueTip : ClaudeText.RepliesTip, "Opus, Sonnet and Haiku shares of the tokens", "Lines added and removed (from Claude Code's telemetry)" };
+            var tips = new[] { "", "", ClaudeText.TokensTip, ClaudeText.CacheTip, showApi ? ClaudeText.ApiValueTip : ClaudeText.RepliesTip, "The model each thread used; a mix shows its top two with their share of the tokens", "Lines added and removed (from Claude Code's telemetry)" };
             for (int i = 1; i < labels.Length; i++)
             {
                 if (head.ColumnDefinitions[i].Width.Value == 0 && !head.ColumnDefinitions[i].Width.IsStar) continue;
-                var label = Upper(labels[i], 12); label.VerticalAlignment = VerticalAlignment.Center; if (i >= 2) { Right(label); label.Margin = new Thickness(10, 0, 0, 0); }
+                var label = Upper(labels[i], 12); label.VerticalAlignment = VerticalAlignment.Center; if (i >= 2) { if (i != 5) Right(label); label.Margin = new Thickness(10, 0, 0, 0); }
                 if (tips[i].Length > 0) label.ToolTip = tips[i];
                 head.Children.Add(At(label, 0, i));
             }
@@ -720,8 +720,8 @@ namespace WidgetScreen
             var tokens = Right(Text("", Scaled(17), "Text")); tokens.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(tokens, 0, 2));
             var cached = Right(Text("", Scaled(15), "Muted")); cached.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(cached, 0, 3));
             var dollars = Right(Text("", Scaled(15), "Muted")); dollars.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(dollars, 0, 4));
-            var mix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) row.Children.Add(At(mix, 0, 5));
-            var lines = Right(Text("", 12, "Muted")); lines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) row.Children.Add(At(lines, 0, 6));
+            var mix = Trimmed(Text("", 12, "Muted")); mix.VerticalAlignment = VerticalAlignment.Center; mix.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeModels(width, textScale)) row.Children.Add(At(mix, 0, 5));
+            var lines = Right(Text("", 12, "Muted")); lines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width, textScale)) row.Children.Add(At(lines, 0, 6));
             list.Children.Add(names.Add(row, "ClaudeProjectRow" + index));
             string folder = group.Folder;
             fills.Add(now => {
@@ -732,7 +732,7 @@ namespace WidgetScreen
                 long total = view.Groups(period).Sum(x => x.Tokens);
                 share.Value = total <= 0 ? 0 : 100.0 * g.Tokens / total;
                 tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; cached.Text = Counted ? ClaudeUsage.Format(g.CacheReads) : ""; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : g.Replies.ToString(CultureInfo.InvariantCulture);
-                mix.Shares = g.Mix; mix.ToolTip = ClaudeText.Mix(g.Mix); mix.InvalidateVisual();
+                SetModels(mix, g.Models);
                 SetLines(lines, g.Added, g.Removed);
                 RenderGarage(garage, g);
             });
@@ -753,8 +753,8 @@ namespace WidgetScreen
                 var ttokens = Right(Text("", Scaled(14), "Text")); ttokens.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(ttokens, 0, 2));
                 var tcached = Right(Text("", Scaled(14), "Muted")); tcached.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tcached, 0, 3));
                 var tdollars = Right(Text("", Scaled(14), "Muted")); tdollars.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tdollars, 0, 4));
-                var tmix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) trow.Children.Add(At(tmix, 0, 5));
-                var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) trow.Children.Add(At(tlines, 0, 6));
+                var tmix = Trimmed(Text("", 12, "Muted")); tmix.VerticalAlignment = VerticalAlignment.Center; tmix.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeModels(width, textScale)) trow.Children.Add(At(tmix, 0, 5));
+                var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width, textScale)) trow.Children.Add(At(tlines, 0, 6));
                 var tap = Tappable(trow, thread);
                 tap.ToolTip = ClaudeText.ThreadTip(thread, period, DateTime.UtcNow, use24, Counted, showApi);
                 car.Row = tap;
@@ -770,7 +770,7 @@ namespace WidgetScreen
                     name2.SetResourceReference(TextBlock.ForegroundProperty, t.Pit == PitState.Need ? "Warning" : "Text");
                     where.Text = ClaudeText.Where(t, now);
                     ttokens.Text = Counted ? ClaudeUsage.Format(t.TokensFor(period)) : "—"; tcached.Text = Counted ? ClaudeUsage.Format(t.CacheReadsFor(period)) : ""; tdollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(t.CostFor(period)) : t.RepliesFor(period).ToString(CultureInfo.InvariantCulture);
-                    var m = t.MixFor(period); tmix.Shares = m; tmix.ToolTip = ClaudeText.Mix(m); tmix.InvalidateVisual();
+                    SetModels(tmix, t.ModelsFor(period));
                     var l = t.LinesFor(period); SetLines(tlines, l[0], l[1]);
                 });
             }
@@ -796,6 +796,21 @@ namespace WidgetScreen
             if (state == PitState.End || state == PitState.Idle) { chip.Background = Brushes.Transparent; text.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); return; }
             chip.Background = Tint("Accent", 0.16); text.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
         }
+        // The Models column: the model by name, or a mix's top two with shares, each in its family's colour (Opus Lime,
+        // Sonnet Glacier, Haiku Lavender); the tooltip lists every model.
+        private static void SetModels(TextBlock block, List<KeyValuePair<string, double>> models)
+        {
+            block.Inlines.Clear();
+            var parts = ClaudePace.ModelLabel(models);
+            if (parts.Count == 0) { block.Inlines.Add(Colored("—", "Muted")); block.ToolTip = "No replies in this period"; return; }
+            for (int i = 0; i < parts.Count; i++)
+            {
+                if (i > 0) block.Inlines.Add(Colored(" · ", "Muted"));
+                int family = ClaudePace.Family(parts[i].Value);
+                block.Inlines.Add(new Run(parts[i].Key) { Foreground = Solid(family < 0 ? PitArt.Muted : MixBar.Colors[family]) });
+            }
+            block.ToolTip = String.Join(" · ", models.Select(m => m.Key + " " + Math.Round(m.Value * 100) + "%"));
+        }
         private static void SetLines(TextBlock block, long added, long removed)
         {
             block.Inlines.Clear();
@@ -819,7 +834,7 @@ namespace WidgetScreen
                 if (thread) name.Margin = new Thickness(8, 0, 0, 0);
                 name.ToolTip = lane.Name;
                 row.Children.Add(name);
-                var b = new LaneBins { Height = thread ? 10 : 16, Margin = new Thickness(8, 0, 0, 0), Color = PitArt.Accent(ClaudeBridge.ProjectName(lane.Folder)), Bins = lane.Bins };
+                var b = new LaneBins { Height = thread ? 10 : 24, Margin = new Thickness(8, 0, 0, 0), Color = PitArt.Accent(ClaudeBridge.ProjectName(lane.Folder)), Bins = lane.Bins };
                 bins.Add(b); row.Children.Add(At(b, 0, 1));
                 lanes.Children.Add(row);
             }

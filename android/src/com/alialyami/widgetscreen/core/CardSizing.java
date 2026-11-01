@@ -236,8 +236,10 @@ public final class CardSizing {
     public static final double CLAUDE_PLAN_HEIGHT = 124, CLAUDE_SIDE_WIDTH = 300;
     public static boolean claudeRevs(double bodyWidth) { return bodyWidth >= 860; }
     public static boolean claudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-    public static boolean claudeModels(double tableWidth) { return tableWidth >= 640; }
-    public static boolean claudeLines(double tableWidth) { return tableWidth >= 740; }
+    // The optional columns step aside as the text grows, so a thread's title keeps at least 240 units (as on the PC).
+    public static double claudeFixedColumns(double textScale) { return 52 + Math.round(72 * textScale) + 10 + Math.round(80 * textScale) + 10 + Math.round(64 * textScale) + 10; }
+    public static boolean claudeModels(double tableWidth, double textScale) { return tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + 240; }
+    public static boolean claudeLines(double tableWidth, double textScale) { return claudeModels(tableWidth, textScale) && tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + Math.round(84 * textScale) + 10 + 240; }
     public static final double CLAUDE_MINI_HEIGHT = 84;
     public static double claudeMediumRow(double textScale) { return Math.max(44, Math.ceil(Math.round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
     public static int claudeInlineCars(double nameRoom, int threads) {

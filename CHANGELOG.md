@@ -6,6 +6,14 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.33.2 (1 Nov 2026)
+
+Claude ledger and timeline polish (Ali's requests; Windows and the phone):
+
+- **The Models column names the model** ("Opus 4.8", "Fable 5.1") in its colour, instead of a bar that was solid green for every thread. A thread that mixed models shows its top two with shares ("Opus 70% · Sonnet 30%"); hovering on the PC lists them all.
+- **Columns fit at larger text sizes.** Models and Lines step aside when the text is bigger, so thread titles keep their room, and Replies stays readable.
+- **The 5-hour timeline shows one lane per project**, with taller bars and no lanes for single threads.
+
 ## v0.33.1 (1 Nov 2026)
 
 - **Clearer dust behind working cars** (Ali's request; Windows and the phone). Light puffs kick up behind each tyre at ground level and drift back and away: two per tyre, four when the thread burns hard. Before, the dust was faint specks hidden under the car.

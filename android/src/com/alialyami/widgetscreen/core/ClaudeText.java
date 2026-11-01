@@ -194,6 +194,21 @@ public final class ClaudeText {
         String age = duration(now - thread.since);
         return thread.where.isEmpty() ? age : thread.where + " · " + age;
     }
+    // The Models column, the same as the PC's: one model by name ("Opus 4.8"); a mix as its top two with shares
+    // ("Opus 70% · Sonnet 30%"). Each part is { words, model }.
+    public static List<String[]> modelLabel(List<PcState.ClaudeModel> models) {
+        List<String[]> parts = new ArrayList<String[]>();
+        if (models == null || models.isEmpty()) return parts;
+        if (models.get(0).share >= 0.95) { parts.add(new String[] { models.get(0).name, models.get(0).name }); return parts; }
+        for (int i = 0; i < Math.min(2, models.size()); i++) { PcState.ClaudeModel m = models.get(i); parts.add(new String[] { familyName(m.name) + " " + Math.round(m.share * 100) + "%", m.name }); }
+        return parts;
+    }
+    // 0 Opus (and the bigger Fable and Mythos), 1 Sonnet, 2 Haiku, -1 another name.
+    public static int family(String model) {
+        String name = model == null ? "" : model.toLowerCase(Locale.ROOT);
+        return name.contains("haiku") ? 2 : name.contains("sonnet") ? 1 : name.contains("opus") || name.contains("fable") || name.contains("mythos") ? 0 : -1;
+    }
+    private static String familyName(String model) { int f = family(model); return f == 0 ? model.split(" ")[0] : f == 1 ? "Sonnet" : f == 2 ? "Haiku" : model; }
     public static String replies(int count) { return count == 1 ? "1 reply" : count + " replies"; }
     public static String added(long lines) { return "+" + tokens(lines); }
     public static String removed(long lines) { return "−" + tokens(lines); }
