@@ -66,7 +66,7 @@ namespace WidgetScreen
         {
             claudeSample = true;
             claudeView = ClaudeView.Fixture(DateTime.UtcNow, needsYou);
-            claudeView.Collapsed.UnionWith(settings.ClaudeCollapsed ?? new string[0]);
+            ClaudeChoices(claudeView);
             claudeCard.Update(claudeView);
             UpdateClaudePill();
         }
@@ -164,12 +164,18 @@ namespace WidgetScreen
             finally { claudeOnlineBusy = false; }
         }
 
+        // The folded projects and which threads Settings → Claude hides.
+        private void ClaudeChoices(ClaudeView view)
+        {
+            view.Collapsed.UnionWith(settings.ClaudeCollapsed ?? new string[0]);
+            view.ShowArchived = settings.ClaudeShowArchived; view.HideIdle = settings.ClaudeHideIdle;
+        }
         private void RefreshClaudeView()
         {
             claudeDirty = false;
             if (claudeSample) return;
             claudeView = claude.View(DateTime.UtcNow, claude.Usage.Scanned ? claude.Usage.Entries : null, ClaudeFilter);
-            claudeView.Collapsed.UnionWith(settings.ClaudeCollapsed ?? new string[0]);
+            ClaudeChoices(claudeView);
             claudeCard.Update(claudeView);
             // A chime for each session that newly needs you, if Settings → Claude asks for one.
             var needing = claudeView.Sessions.Where(s => s.State == ClaudeState.NeedsYou).Select(s => s.Id).ToList();
@@ -224,6 +230,8 @@ namespace WidgetScreen
             Control<CheckBox>("ClaudeChimeChoice").IsChecked = settings.ClaudeChime;
             Control<CheckBox>("ClaudeStillChoice").IsChecked = settings.ClaudeStillInQuiet;
             Control<CheckBox>("ClaudeApiValueChoice").IsChecked = settings.ClaudeShowApiValue;
+            Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked = !settings.ClaudeShowArchived;
+            Control<CheckBox>("ClaudeHideIdleChoice").IsChecked = settings.ClaudeHideIdle;
             Control<CheckBox>("ClaudeShowNewChoice").IsChecked = settings.ClaudeShowNewProjects;
             Control<TextBox>("ClaudeCardSecondsBox").Text = settings.ClaudeCardSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Control<TextBox>("ClaudePlanSecondsBox").Text = settings.ClaudePlanSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -277,6 +285,8 @@ namespace WidgetScreen
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true;
             candidate.ClaudeStillInQuiet = Control<CheckBox>("ClaudeStillChoice").IsChecked == true;
             candidate.ClaudeShowApiValue = Control<CheckBox>("ClaudeApiValueChoice").IsChecked == true;
+            candidate.ClaudeShowArchived = Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked != true;
+            candidate.ClaudeHideIdle = Control<CheckBox>("ClaudeHideIdleChoice").IsChecked == true;
             candidate.ClaudeShowNewProjects = Control<CheckBox>("ClaudeShowNewChoice").IsChecked == true;
             candidate.ClaudeCardSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudeCardSecondsBox").Text, settings.ClaudeCardSeconds, ClaudeIntervals.Card);
             candidate.ClaudePlanSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudePlanSecondsBox").Text, settings.ClaudePlanSeconds, ClaudeIntervals.Plan);
@@ -391,13 +401,13 @@ namespace WidgetScreen
             // groups babies under their project critters the same way. Titles are the Claude app's; never prompts.
             Func<ClaudePeriod, object[]> groups = period => view.Groups(period).Select(g => (object)D("key", g.Folder, "project", g.Name, "collapsed", g.Collapsed,
                 "tokens", g.Tokens, "cost", Math.Round(g.Cost, 4), "threads", g.Threads.Select(t => (object)t.Id).ToArray(),
-                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed, "replies", g.Replies, "cache", g.CacheReads, "models", Names(g.Models), "lastActive", ClaudeBridge.Epoch(g.LastActive == DateTime.MinValue ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) : g.LastActive) / 1000.0)).ToArray();
+                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed, "replies", g.Replies, "cache", g.CacheReads, "models", Names(g.Models), "hidden", g.Hidden, "lastActive", ClaudeBridge.Epoch(g.LastActive == DateTime.MinValue ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) : g.LastActive) / 1000.0)).ToArray();
             // The pit wall (decision 017): each thread's car and what it does, its burn, mix and lines per period.
             Func<ClaudeSession, Func<ClaudePeriod, object>, object> per = (t, value) => D("fiveHour", value(ClaudePeriod.FiveHour), "today", value(ClaudePeriod.Today), "week", value(ClaudePeriod.Week));
             return D("connected", view.Connected, "sample", view.Sample, "logsFailed", view.LogsFailed, "logsRead", view.LogsRead, "noPlan", view.NoPlan, "plan", ClaudeText.PlanName(view.Plan),
                 "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod, "still", ClaudeStill, "apiValue", settings.ClaudeShowApiValue,
                 "threads", view.Threads.Select(t => (object)D("id", t.Id, "project", t.ProjectName, "title", t.Title, "running", t.Running, "state", ClaudeSessionFile.StateName(t.Running ? t.State : ClaudeState.Ready),
-                    "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus,
+                    "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus, "archived", t.Archived,
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),

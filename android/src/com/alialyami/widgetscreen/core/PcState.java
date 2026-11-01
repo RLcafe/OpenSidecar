@@ -108,11 +108,13 @@ public final class PcState {
     public static final class ClaudeThread {
         public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
         public boolean running, canFocus;
+        // Archived in the Claude app (decision 020); its pit is "archived".
+        public boolean archived;
         public double since, lastActive;
         public final long[] tokens = new long[3];
         public final double[] cost = new double[3];
         // The pit wall (decision 017): its car ("gt", "sport", "hatch"), what the car does ("idle", "work", "rev",
-        // "need", "pit", "stuck", "done", "end"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
+        // "need", "pit", "stuck", "done", "end", "archived"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
         // Haiku shares) and lines added and removed.
         public String pit = "idle", car = "sport";
         public double rate;
@@ -133,6 +135,8 @@ public final class PcState {
         public boolean collapsed;
         public long tokens, added, removed, cache;
         public int replies;
+        // Threads the PC's Settings → Claude hides (archived, or idle when asked); they still count in the totals.
+        public int hidden;
         // When the project was last used (a project with no thread in the period still gets a quiet garage).
         public double lastActive;
         public double cost;
@@ -507,7 +511,7 @@ public final class PcState {
             Map<String, Object> t = Json.obj(item);
             ClaudeThread thread = new ClaudeThread();
             thread.id = text(t, "id"); thread.project = text(t, "project"); thread.title = text(t, "title"); thread.state = text(t, "state"); thread.running = flag(t, "running");
-            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus");
+            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus"); thread.archived = flag(t, "archived");
             thread.since = Json.number(t, "since"); thread.lastActive = Json.number(t, "lastActive");
             Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
             for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }
@@ -531,7 +535,7 @@ public final class PcState {
                 group.tokens = (long) Json.number(g, "tokens"); group.cost = Json.number(g, "cost");
                 numbers(Json.array(g, "mix"), group.mix); group.added = (long) Json.number(g, "added"); group.removed = (long) Json.number(g, "removed");
                 models(Json.array(g, "models"), group.models);
-                group.replies = (int) Json.number(g, "replies"); group.cache = (long) Json.number(g, "cache"); group.lastActive = Json.number(g, "lastActive");
+                group.replies = (int) Json.number(g, "replies"); group.cache = (long) Json.number(g, "cache"); group.lastActive = Json.number(g, "lastActive"); group.hidden = (int) Json.number(g, "hidden");
                 for (Object id : Json.array(g, "threads")) if (id instanceof String && claude.thread((String) id) != null) group.threads.add((String) id);
                 if (!group.key.isEmpty()) claude.groups[i].add(group);
             }

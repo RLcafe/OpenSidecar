@@ -38,7 +38,7 @@ public final class PitArt {
 
     public static int state(String name) {
         if (name == null) return IDLE;
-        switch (name) { case "work": return WORK; case "rev": return REV; case "need": return NEED; case "pit": return PIT; case "stuck": return STUCK; case "done": return DONE; case "end": return END; default: return IDLE; }
+        switch (name) { case "work": return WORK; case "rev": return REV; case "need": return NEED; case "pit": return PIT; case "stuck": return STUCK; case "done": return DONE; case "end": case "archived": return END; default: return IDLE; }
     }
     public static int car(String name) { return "gt".equals(name) ? GT : "hatch".equals(name) ? HATCH : SPORT; }
 

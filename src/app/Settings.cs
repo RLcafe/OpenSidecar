@@ -109,6 +109,10 @@ namespace WidgetScreen
         // The ledger's "API value" (what the tokens would cost at API list prices): off by default, since a plan
         // doesn't pay those prices and Ali can't check them; replies show instead (decision 019).
         public bool ClaudeShowApiValue { get; set; }
+        // Archived threads are hidden unless this is set ("Hide archived threads", on by default), and idle ones when
+        // ClaudeHideIdle is (off by default). Hidden threads still count in their project's totals (Ali, 1 Nov 2026; decision 020).
+        public bool ClaudeShowArchived { get; set; }
+        public bool ClaudeHideIdle { get; set; }
         public bool ClaudeShowNewProjects { get; set; }
         [XmlArray("ClaudeProjects"), XmlArrayItem("Project")]
         public ClaudeProjectChoice[] ClaudeProjects { get; set; }

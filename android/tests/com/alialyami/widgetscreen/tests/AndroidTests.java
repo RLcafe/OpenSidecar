@@ -617,6 +617,17 @@ public final class AndroidTests {
             c.thread("t1").running = false; ok(ClaudeText.groupState(c, g).equals("ready"), "a project with nothing running sleeps");
             ok(ClaudeText.groupDetail(c, g, 1700000000 + 3600).equals("2 threads · ended 1 h ago") && ClaudeText.cars(2).equals("2 cars"), "an ended project's words");
         } });
+        check("Claude archived threads and hidden counts read like the PC's", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],"
+                + "\"threads\":[{\"id\":\"t1\",\"project\":\"alpha\",\"running\":false,\"pit\":\"archived\",\"archived\":true,\"lastActive\":1700000000},"
+                + "{\"id\":\"t2\",\"project\":\"alpha\",\"running\":false,\"pit\":\"end\",\"lastActive\":1700000000}],"
+                + "\"groups\":{\"fiveHour\":[{\"key\":\"k\",\"project\":\"alpha\",\"threads\":[],\"hidden\":2,\"lastActive\":1700000000}],\"today\":[],"
+                + "\"week\":[{\"key\":\"k\",\"project\":\"alpha\",\"threads\":[\"t2\",\"t1\"],\"hidden\":1}]}}}")));
+            PcState.Claude c = state.claude;
+            ok(c.thread("t1").archived && !c.thread("t2").archived && ClaudeText.chip("archived").equals("Archived") && PitArt.state("archived") == PitArt.END, "an archived thread");
+            ok(ClaudeText.groupDetail(c, c.groups[2].get(0), 1700000000 + 3600).equals("2 threads · ended 1 h ago · +1 hidden"), "+N hidden: " + ClaudeText.groupDetail(c, c.groups[2].get(0), 1700000000 + 3600));
+            ok(ClaudeText.groupDetail(c, c.groups[0].get(0), 1700000000).startsWith("2 hidden · Quiet · last used "), "a project whose threads are all hidden");
+        } });
         check("Claude plan sign-in states, cost and extra windows read like the PC's", new Action() { public void run() {
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"logsRead\":true,\"plan\":\"failed\",\"sessions\":[{\"id\":\"a\",\"project\":\"api\",\"state\":\"working\",\"where\":\"Desktop\",\"tokens\":{\"week\":9},\"cost\":{\"fiveHour\":0.5,\"today\":1.25,\"week\":12.6}}],"
                 + "\"limits\":{\"fiveHour\":{\"pct\":40},\"week\":{\"pct\":60},\"updatedAt\":1700000000,\"source\":\"online\",\"extra\":[{\"name\":\"Opus week\",\"pct\":12},{\"name\":\"\",\"pct\":3},{\"name\":\"Fable week\"}]},"
