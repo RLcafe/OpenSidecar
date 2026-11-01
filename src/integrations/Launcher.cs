@@ -19,7 +19,7 @@ namespace WidgetScreen
         public static void Open(string target)
         {
             if (!IsAllowed(target)) throw new InvalidOperationException("Choose an existing .exe file, an http(s) website, spotify:, or ms-settings:sound.");
-            Process.Start(new ProcessStartInfo(Environment.ExpandEnvironmentVariables(target.Trim())) { UseShellExecute = true });
+            ProcessLauncher.Start(Environment.ExpandEnvironmentVariables(target.Trim()), "", null);
         }
     }
 }

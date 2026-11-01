@@ -622,7 +622,11 @@
               </Grid>
               <CheckBox x:Name="ClipKeepChoice" Content="Keep the history when Widget Screen closes" Margin="0,8,0,0"/>
               <TextBlock Text="Off, the history is only in memory and is gone when the app closes. On, it's saved encrypted for your Windows account." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
-              <TextBlock Text="Games" FontSize="24" Margin="0,8,0,10"/>
+              </StackPanel>
+              </ScrollViewer>
+              <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+              <StackPanel Margin="0,0,12,0">
+              <TextBlock Text="Games" FontSize="24" Margin="0,0,0,10"/>
               <TextBlock Text="The Games widget lists the games installed from these stores, recently played first, and a tap starts one. Playtime shows where the store keeps it on this PC (Steam); Epic and the Xbox app keep it online, so their games show none." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
               <CheckBox x:Name="SteamGamesChoice" Content="Steam"/>
               <CheckBox x:Name="EpicGamesChoice" Content="Epic Games"/>
@@ -636,16 +640,44 @@
               <TextBlock Text="Drives are read once a minute while the widget is shown (every two minutes in Quiet mode). Network and removable drives aren't listed." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
               </StackPanel>
               </ScrollViewer>
-              <StackPanel Grid.Column="2">
+              </Grid>
+              </TabItem>
+              <TabItem Header="Stats">
+              <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="640"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+              <StackPanel Margin="0,0,12,0">
               <TextBlock Text="System stats" FontSize="24" Margin="0,0,0,10"/>
-              <TextBlock Text="Choose the readings the System stats widget shows." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-              <CheckBox x:Name="CpuChoice" Content="CPU usage"/>
-              <CheckBox x:Name="GpuChoice" Content="GPU usage"/>
-              <CheckBox x:Name="RamChoice" Content="Memory (RAM) usage"/>
-              <CheckBox x:Name="NetworkChoice" Content="Network speed"/>
-              <CheckBox x:Name="UptimeChoice" Content="Time since restart"/>
-              <TextBlock Text="Hidden readings stop updating. Turn them all off to hide the widget. GPU usage needs a graphics driver that reports it to Windows." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
+              <TextBlock Text="Choose the readings the System stats widget shows, and how each one is drawn: a history line, bars, a sparkline, a ring or a gauge. Auto uses rings and gauges on medium cards and history lines on large ones." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="CpuChoice" Content="CPU usage" Margin="0,0,12,8"/><ComboBox x:Name="CpuStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="CPU usage graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="CpuTempChoice" Content="CPU temperature" Margin="0,0,12,8"/><ComboBox x:Name="CpuTempStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="CPU temperature graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="GpuChoice" Content="GPU usage" Margin="0,0,12,8"/><ComboBox x:Name="GpuStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="GPU usage graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="GpuTempChoice" Content="GPU temperature" Margin="0,0,12,8"/><ComboBox x:Name="GpuTempStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="GPU temperature graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="VramChoice" Content="Video memory (VRAM)" Margin="0,0,12,8"/><ComboBox x:Name="VramStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="Video memory (VRAM) graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="RamChoice" Content="Memory (RAM) usage" Margin="0,0,12,8"/><ComboBox x:Name="RamStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="Memory (RAM) usage graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="FpsChoice" Content="Frame rate (FPS) of the game in front" Margin="0,0,12,8"/><ComboBox x:Name="FpsStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="Frame rate (FPS) of the game in front graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="NetworkChoice" Content="Network speed" Margin="0,0,12,8"/><ComboBox x:Name="NetworkStyle" Grid.Column="1" Width="190" Margin="0,0,0,8" AutomationProperties.Name="Network speed graph" ToolTip="How the card draws it: Auto picks rings and gauges on medium cards and history lines on large ones"/></Grid>
+                <Grid Margin="0,0,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox x:Name="UptimeChoice" Content="Time since restart" Margin="0,0,12,8"/></Grid>
+              <TextBlock Text="Hidden readings stop updating. Turn them all off to hide the widget. Temperatures use the units in Settings → Weather. A reading this PC can't give says why instead of showing a number." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,6,0,16"/>
               </StackPanel>
+              </ScrollViewer>
+              <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+              <StackPanel Margin="0,0,12,0">
+              <TextBlock Text="Hardware sensors" FontSize="24" Margin="0,0,0,10"/>
+              <TextBlock x:Name="SensorPackageStatus" Text="" TextWrapping="Wrap" FontSize="{DynamicResource BodySize}" Margin="0,0,0,8"/>
+              <TextBlock Text="GPU usage, temperature and video memory come from Windows and work without anything else. CPU temperatures come from LibreHardwareMonitor, which setup installs when you tick Install hardware sensors." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="Full-sensors mode" FontSize="20" Margin="0,0,0,8"/>
+              <TextBlock x:Name="FullSensorsStatus" Text="Off." TextWrapping="Wrap" FontSize="{DynamicResource BodySize}" Margin="0,0,0,8"/>
+              <TextBlock Text="CPU temperatures and frame counting need administrator rights. Full-sensors mode starts Widget Screen with them through a Windows task you approve once (Windows asks when you turn it on and off). Apps you start from Quick Launch, macros and Games still start without administrator rights." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <WrapPanel><Button x:Name="FullSensorsOn" Content="Turn on full-sensors mode" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="FullSensorsOff" Content="Turn off" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="FullSensorsRestart" Content="Restart now" MinHeight="52" Margin="0,0,8,8"/></WrapPanel>
+              <TextBlock Text="PawnIO driver" FontSize="20" Margin="0,8,0,8"/>
+              <TextBlock x:Name="PawnIOStatus" Text="" TextWrapping="Wrap" FontSize="{DynamicResource BodySize}" Margin="0,0,0,8"/>
+              <TextBlock Text="LibreHardwareMonitor reads CPU temperatures through the PawnIO driver. Widget Screen and its setup never install drivers: get PawnIO from its own site if you want CPU temperatures." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <Button x:Name="PawnIOLink" Content="Open pawnio.eu" HorizontalAlignment="Left" MinHeight="52" Margin="0,0,0,16" ToolTip="https://pawnio.eu opens in your browser"/>
+              <TextBlock Text="Frame rate" FontSize="20" Margin="0,0,0,8"/>
+              <TextBlock x:Name="FpsStatus" Text="" TextWrapping="Wrap" Style="{StaticResource Small}" Margin="0,0,0,16"/>
+              </StackPanel>
+              </ScrollViewer>
               </Grid>
               </TabItem>
               <TabItem Header="Weather">

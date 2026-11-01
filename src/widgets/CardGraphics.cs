@@ -103,6 +103,8 @@ namespace WidgetScreen
         public Brush Guide { get { return (Brush)GetValue(GuideProperty); } set { SetValue(GuideProperty, value); } }
         public double Maximum { get; set; }
         public int Capacity { get; set; }
+        // A sparkline: the line alone, thinner, with no area or guides (Settings → Stats).
+        public bool Sparkline { get; set; }
         private readonly List<double> values = new List<double>(), second = new List<double>();
 
         public HistoryGraph() { Maximum = 100; Capacity = 48; }
@@ -116,7 +118,7 @@ namespace WidgetScreen
         {
             double width = ActualWidth, height = ActualHeight;
             if (width <= 0 || height <= 4 || Stroke == null) return;
-            if (Guide != null)
+            if (Guide != null && !Sparkline)
             {
                 context.DrawRectangle(Guide, null, new Rect(0, height - 1, width, 1));
                 if (Maximum > 0) context.DrawRectangle(Guide, null, new Rect(0, Math.Round(height / 2), width, 1));
@@ -125,9 +127,8 @@ namespace WidgetScreen
             if (maximum <= 0) { maximum = 1; foreach (double v in values) maximum = Math.Max(maximum, v); foreach (double v in second) maximum = Math.Max(maximum, v); maximum *= 1.15; }
             if (second.Count >= 2 && SecondStroke != null) context.DrawGeometry(null, new Pen(SecondStroke, 1.5) { LineJoin = PenLineJoin.Round }, Line(second, width, height, maximum, false));
             if (values.Count < 2) return;
-            var fill = Stroke.Clone(); fill.Opacity = 0.16; fill.Freeze();
-            context.DrawGeometry(fill, null, Line(values, width, height, maximum, true));
-            context.DrawGeometry(null, new Pen(Stroke, 2) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Line(values, width, height, maximum, false));
+            if (!Sparkline) { var fill = Stroke.Clone(); fill.Opacity = 0.16; fill.Freeze(); context.DrawGeometry(fill, null, Line(values, width, height, maximum, true)); }
+            context.DrawGeometry(null, new Pen(Stroke, Sparkline ? 1.5 : 2) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Line(values, width, height, maximum, false));
         }
         private StreamGeometry Line(List<double> series, double width, double height, double maximum, bool area)
         {
@@ -146,6 +147,88 @@ namespace WidgetScreen
             }
             geometry.Freeze();
             return geometry;
+        }
+    }
+
+    // A gauge: a 240° arc open at the bottom, filled clockwise from the left with a percentage (temperatures).
+    public sealed class ArcGauge : FrameworkElement
+    {
+        public static readonly DependencyProperty ValueProperty = DependencyProperty.Register("Value", typeof(double), typeof(ArcGauge), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty TrackProperty = DependencyProperty.Register("Track", typeof(Brush), typeof(ArcGauge), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty FillProperty = DependencyProperty.Register("Fill", typeof(Brush), typeof(ArcGauge), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public double Value { get { return (double)GetValue(ValueProperty); } set { SetValue(ValueProperty, value); } }
+        public Brush Track { get { return (Brush)GetValue(TrackProperty); } set { SetValue(TrackProperty, value); } }
+        public Brush Fill { get { return (Brush)GetValue(FillProperty); } set { SetValue(FillProperty, value); } }
+        public double Thickness { get; set; }
+        public const double Sweep = 240;
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double size = Math.Min(ActualWidth, ActualHeight), thickness = Math.Max(1, Thickness);
+            if (size <= thickness) return;
+            double radius = (size - thickness) / 2; var centre = new Point(ActualWidth / 2, ActualHeight / 2);
+            if (Track != null) context.DrawGeometry(null, new Pen(Track, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Arc(centre, radius, 1));
+            double part = Math.Max(0, Math.Min(100, Double.IsNaN(Value) ? 0 : Value)) / 100;
+            if (part > 0.002 && Fill != null) context.DrawGeometry(null, new Pen(Fill, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, Arc(centre, radius, part));
+        }
+        // Angles measured clockwise from the top: the arc runs from -120° to +120°.
+        private static StreamGeometry Arc(Point centre, double radius, double part)
+        {
+            double start = -Sweep / 2 * Math.PI / 180, end = start + part * Sweep * Math.PI / 180;
+            var geometry = new StreamGeometry();
+            using (var figure = geometry.Open())
+            {
+                figure.BeginFigure(new Point(centre.X + radius * Math.Sin(start), centre.Y - radius * Math.Cos(start)), false, false);
+                figure.ArcTo(new Point(centre.X + radius * Math.Sin(end), centre.Y - radius * Math.Cos(end)), new Size(radius, radius), 0, end - start > Math.PI, SweepDirection.Clockwise, true, false);
+            }
+            geometry.Freeze();
+            return geometry;
+        }
+    }
+
+    // The recent history as bars, newest at the right, one per reading (Settings → Stats → Bars). Percentages use a
+    // 0–100 scale; rates (Maximum 0) scale to the largest shown. A second series (network upload) draws muted beside.
+    public sealed class HistoryBars : FrameworkElement
+    {
+        public static readonly DependencyProperty FillProperty = DependencyProperty.Register("Fill", typeof(Brush), typeof(HistoryBars), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty SecondFillProperty = DependencyProperty.Register("SecondFill", typeof(Brush), typeof(HistoryBars), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty TrackProperty = DependencyProperty.Register("Track", typeof(Brush), typeof(HistoryBars), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public Brush Fill { get { return (Brush)GetValue(FillProperty); } set { SetValue(FillProperty, value); } }
+        public Brush SecondFill { get { return (Brush)GetValue(SecondFillProperty); } set { SetValue(SecondFillProperty, value); } }
+        public Brush Track { get { return (Brush)GetValue(TrackProperty); } set { SetValue(TrackProperty, value); } }
+        public double Maximum { get; set; }
+        public int Capacity { get; set; }
+        private readonly List<double> values = new List<double>(), second = new List<double>();
+
+        public HistoryBars() { Maximum = 100; Capacity = 24; }
+        // The latest readings; only the last Capacity are drawn.
+        public void SetValues(IList<double> next, IList<double> other = null)
+        {
+            values.Clear(); values.AddRange(next); second.Clear(); if (other != null) second.AddRange(other);
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double width = ActualWidth, height = ActualHeight;
+            int capacity = Math.Max(4, Capacity);
+            if (width <= 0 || height <= 4) return;
+            double slot = width / capacity, gap = Math.Max(1, Math.Round(slot * 0.25)), bar = Math.Max(1, slot - gap);
+            double maximum = Maximum;
+            if (maximum <= 0) { maximum = 1; foreach (double v in values) maximum = Math.Max(maximum, v); foreach (double v in second) maximum = Math.Max(maximum, v); maximum *= 1.15; }
+            if (Track != null) context.DrawRectangle(Track, null, new Rect(0, height - 1, width, 1));
+            Draw(context, second, SecondFill, width, height, slot, bar, maximum, capacity, bar / 2);
+            Draw(context, values, Fill, width, height, slot, bar, maximum, capacity, second.Count > 0 && SecondFill != null ? bar / 2 : bar);
+        }
+        private static void Draw(DrawingContext context, List<double> series, Brush brush, double width, double height, double slot, double bar, double maximum, int capacity, double thickness)
+        {
+            if (brush == null) return;
+            int skip = Math.Max(0, series.Count - capacity);
+            for (int i = skip; i < series.Count; i++)
+            {
+                double x = width - (series.Count - i) * slot, h = Math.Max(1, height * Math.Max(0, Math.Min(maximum, series[i])) / maximum);
+                context.DrawRoundedRectangle(brush, null, new Rect(x + (bar - thickness), height - h, thickness, h), Math.Min(2, thickness / 2), Math.Min(2, thickness / 2));
+            }
         }
     }
 

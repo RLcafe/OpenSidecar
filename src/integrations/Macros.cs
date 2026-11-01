@@ -110,11 +110,9 @@ namespace WidgetScreen
         {
             string error = Validate(step); if (error != null) throw new InvalidOperationException(error);
             string path = DeckActions.Expanded(step.Target), extension = Path.GetExtension(path).ToLowerInvariant(), arguments = step.Arguments ?? "";
-            var start = extension == ".ps1" ? new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + path + "\" " + arguments)
-                : extension == ".vbs" ? new ProcessStartInfo("wscript.exe", "\"" + path + "\" " + arguments)
-                : new ProcessStartInfo("cmd.exe", "/c \"\"" + path + "\" " + arguments + "\"");
-            start.UseShellExecute = false; start.WorkingDirectory = Path.GetDirectoryName(path);
-            Process.Start(start).Dispose();
+            if (extension == ".ps1") ProcessLauncher.Start("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + path + "\" " + arguments, Path.GetDirectoryName(path));
+            else if (extension == ".vbs") ProcessLauncher.Start("wscript.exe", "\"" + path + "\" " + arguments, Path.GetDirectoryName(path));
+            else ProcessLauncher.Start("cmd.exe", "/c \"\"" + path + "\" " + arguments + "\"", Path.GetDirectoryName(path));
         }
     }
 }

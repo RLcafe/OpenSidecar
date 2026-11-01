@@ -10,6 +10,7 @@ import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.GameText;
 import com.alialyami.widgetscreen.core.HomeText;
+import com.alialyami.widgetscreen.core.SystemText;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.MacroText;
 import com.alialyami.widgetscreen.core.PcLink;
@@ -381,6 +382,7 @@ public final class AndroidTests {
             ok(api != null && api.key.equals("C:\\Code\\api-server") && api.threads.size() == 3 && "needs".equals(ClaudeText.groupState(state.claude, api)) && api.threads.get(0).equals("sample-1"), "the api-server project critter");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
+            if (!state.system.error) ok(!state.system.cpuTempState.isEmpty() && !state.system.fpsState.isEmpty() && state.system.showCpuTemp && state.system.showFps, "system sensors: " + state.system.cpuTempState + " " + state.system.fpsState);
             // The Windows checks add a page, rename it Play and move it first, so the PC shows Main, the second page.
             ok(state.layout != null && !state.layoutVersion.isEmpty() && state.layout.pages.equals(Arrays.asList("Play", "Main")) && state.layout.page == 1 && state.layout.pageName().equals("Main"), "layout pages");
             ok(state.layout.shown != null && state.layout.shown.length == WidgetLayout.IDS.length && state.layout.canvasWidth == 1856 && state.layout.sources().containsKey("1856x576"), "PC screen layout");
@@ -601,6 +603,21 @@ public final class AndroidTests {
             ok(games.read && games.items.size() == 2 && games.items.get(0).playtime == 2533 && games.items.get(1).playtime == null && games.items.get(1).lastPlayed == 0, "parse");
             ok(GameText.detail(games.items.get(0), now).equals("Steam  ·  42 h played  ·  2 days ago") && GameText.detail(games.items.get(1), now).equals("Epic") && GameText.playtime(0).equals("Not played yet") && GameText.playtime(35).equals("35 m played"), "wording");
             ok(GameText.storeColor("Steam") == 0xFF8ED8F8 && !WidgetLayout.find(WidgetLayout.defaults(), "Games").visible && WidgetLayout.keepsSix("Games"), "layout");
+        } });
+        check("System stats read the PC's sensors, say why one is missing, and size like the PC", new Action() { public void run() {
+            PcState.System s = PcState.parse(Json.obj(Json.parse("{\"system\":{\"showCpu\":true,\"showGpu\":true,\"showRam\":true,\"showNetwork\":true,\"showUptime\":true,\"showCpuTemp\":true,\"showGpuTemp\":true,\"showVram\":true,\"showFps\":true,"
+                + "\"cpu\":34,\"gpu\":91,\"gpuStatus\":\"Busiest engine\",\"memoryPercent\":52,\"memoryUsedGB\":16.1,\"memoryTotalGB\":31.1,\"download\":2400000,\"upload\":180000,\"uptimeMs\":3000000,"
+                + "\"styles\":{\"Cpu\":\"Bars\",\"Network\":\"Ring\",\"Fps\":\"Gauge\"},\"fahrenheit\":false,\"cpuTemp\":null,\"cpuTempState\":\"NeedsFullSensors\",\"gpuTemp\":71,\"gpuTempState\":\"Working\",\"gpuName\":\"TEST FIXTURE GPU\","
+                + "\"vramUsedGB\":6.2,\"vramTotalGB\":12,\"vramState\":\"Working\",\"fps\":143.6,\"fpsState\":\"Working\",\"fpsSource\":\"RTSS\",\"fpsApp\":\"FixtureGame\",\"fullSensors\":false}}"))).system;
+            ok(s.showCpuTemp && s.showFps && s.anyShown() && SystemText.shownIds(s).size() == 9, "shown");
+            ok(SystemText.style(s, "Cpu").equals("Bars") && SystemText.style(s, "Network").equals("Auto") && SystemText.style(s, "Fps").equals("Gauge") && SystemText.style(s, "Ram").equals("Auto"), "styles");
+            ok(SystemText.resolve("Auto", "GpuTemp", CardSizing.MEDIUM).equals("Gauge") && SystemText.resolve("Auto", "Fps", CardSizing.MEDIUM).equals("Sparkline") && SystemText.resolve("Auto", "Cpu", CardSizing.LARGE).equals("Line"), "auto");
+            java.util.Map<String, SystemText.Reading> r = SystemText.readings(s, 144);
+            ok(r.get("CpuTemp").text.equals("—") && r.get("CpuTemp").shortReason.equals("Needs admin") && r.get("CpuTemp").longReason.equals("Needs admin: full-sensors mode"), "missing says why");
+            ok(r.get("GpuTemp").text.equals("71°C") && r.get("Vram").text.equals("52%") && r.get("Vram").detail.equals("6.2 / 12 GB") && r.get("Gpu").warning && r.get("Fps").text.equals("144") && r.get("Fps").detail.equals("FixtureGame  ·  RTSS"), "wording " + r.get("Vram").detail);
+            ok(SystemText.degrees(88, true).equals("190°F") && SystemText.fpsScale(java.util.Arrays.asList(130.0)) == 144, "units and scale");
+            int[] list = CardSizing.statsListGrid(212, 196, 9, 1.4), cells = CardSizing.statsCellGrid(852, 248, 7, 1.4), tiles = CardSizing.statsTileGrid(1152, 492, 8, 1.4);
+            ok(list[0] == 1 && list[2] == 2 && cells != null && cells[0] == 7 && tiles != null && tiles[0] == 4 && tiles[1] == 2 && CardSizing.statsCellGrid(424, 158, 7, 1.4) == null, "sizes " + list[0] + "," + list[2] + " tiles " + (tiles == null ? "-" : tiles[0] + "x" + tiles[1]));
         } });
         check("Smart home reads the PC's devices and steps thermostats like the PC", new Action() { public void run() {
             PcState.Home home = PcState.parse(Json.obj(Json.parse("{\"home\":{\"connected\":true,\"chosen\":3,\"read\":true,\"problem\":\"\",\"entities\":["

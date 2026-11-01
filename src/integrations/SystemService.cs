@@ -17,11 +17,36 @@ namespace WidgetScreen
         public double DownloadBytes;
         public double UploadBytes;
         public TimeSpan Uptime;
+        // Hardware sensors (decision 016). A reading that's null has a state saying why: "NotInstalled", "Damaged",
+        // "NeedsFullSensors", "NeedsPawnIO", "NoGame" or "Unavailable"; "Working" when it has a value.
+        public double? CpuTemperature, GpuTemperature, VramUsedGB, VramTotalGB, Fps;
+        public string CpuTemperatureState, GpuTemperatureState, VramState, FpsState, FpsSource, FpsApp, GpuName;
+    }
+
+    // Which readings are wanted; anything not wanted isn't read (and its sensors close).
+    public sealed class SystemWants
+    {
+        public bool Cpu, Gpu, Ram, Network, Uptime, CpuTemperature, GpuTemperature, Vram, Fps;
+        public bool Any { get { return Cpu || Gpu || Ram || Network || Uptime || CpuTemperature || GpuTemperature || Vram || Fps; } }
+        public string Key { get { return "" + Cpu + Gpu + Ram + Network + Uptime + CpuTemperature + GpuTemperature + Vram + Fps; } }
+        public static SystemWants From(AppSettings s, bool shown)
+        {
+            return new SystemWants { Cpu = shown && s.ShowCpu, Gpu = shown && s.ShowGpu, Ram = shown && s.ShowRam, Network = shown && s.ShowNetwork, Uptime = shown && s.ShowUptime,
+                CpuTemperature = shown && s.ShowCpuTemperature, GpuTemperature = shown && s.ShowGpuTemperature, Vram = shown && s.ShowVram, Fps = shown && s.ShowFps };
+        }
     }
 
     public sealed class SystemService : IDisposable
     {
         private readonly GpuService gpu = new GpuService();
+        private readonly GpuTelemetry telemetry = new GpuTelemetry();
+        private readonly HardwareSensors hardware;
+        private readonly PresentCounter presents = new PresentCounter();
+        private SensorPackage.State? package;
+        private readonly bool elevated = HardwareSensors.Elevated;
+        private DateTime traceRetry = DateTime.MinValue;
+        private static readonly int ownProcess = System.Diagnostics.Process.GetCurrentProcess().Id;
+        public string SensorFolder { get; private set; }
         private readonly object gate = new object();
         private bool disposed;
         private ulong lastIdle, lastKernel, lastUser;
@@ -37,8 +62,10 @@ namespace WidgetScreen
         private readonly NetworkAvailabilityChangedEventHandler availabilityChanged;
         public static readonly TimeSpan InterfacesLifetime = TimeSpan.FromSeconds(30);
 
-        public SystemService()
+        public SystemService() : this(SensorPackage.DefaultFolder) { }
+        public SystemService(string sensorFolder)
         {
+            SensorFolder = sensorFolder; hardware = new HardwareSensors(sensorFolder);
             addressChanged = (sender, e) => interfacesStale = true;
             availabilityChanged = (sender, e) => interfacesStale = true;
             try { NetworkChange.NetworkAddressChanged += addressChanged; NetworkChange.NetworkAvailabilityChanged += availabilityChanged; } catch (Exception) { }
@@ -56,12 +83,68 @@ namespace WidgetScreen
 
         public SystemSnapshot Read(bool readCpu = true, bool readGpu = true, bool readRam = true, bool readNetwork = true, bool readUptime = true)
         {
+            return Read(new SystemWants { Cpu = readCpu, Gpu = readGpu, Ram = readRam, Network = readNetwork, Uptime = readUptime });
+        }
+        public SystemSnapshot Read(SystemWants wants)
+        {
             lock (gate)
             {
                 if (disposed) throw new ObjectDisposedException("SystemService");
-                return ReadCore(readCpu, readGpu, readRam, readNetwork, readUptime);
+                var snapshot = ReadCore(wants.Cpu, wants.Gpu, wants.Ram, wants.Network, wants.Uptime);
+                ReadSensors(snapshot, wants);
+                return snapshot;
             }
         }
+
+        // Whether the sensor files are there and match their pins; hashed once (they don't change while the app runs).
+        public SensorPackage.State Package { get { if (!package.HasValue) { string damaged; package = SensorPackage.Check(SensorFolder, out damaged); } return package.Value; } }
+        public bool Elevated { get { return elevated; } }
+
+        private void ReadSensors(SystemSnapshot snapshot, SystemWants wants)
+        {
+            // Windows' own GPU figures first; LibreHardwareMonitor only for what they don't give.
+            var windows = wants.GpuTemperature || wants.Vram ? Safe(() => telemetry.Read(wants.GpuTemperature, wants.Vram)) : null;
+            if (!wants.GpuTemperature && !wants.Vram) telemetry.Pause();
+            if (windows != null) { snapshot.GpuName = windows.Name; snapshot.GpuTemperature = windows.Temperature; snapshot.VramUsedGB = windows.VramUsedGB; snapshot.VramTotalGB = windows.VramTotalGB; }
+            bool installed = Package == SensorPackage.State.Installed;
+            bool cpuSensors = wants.CpuTemperature && installed && elevated && HardwareSensors.PawnIOInstalled;
+            bool gpuSensors = installed && ((wants.GpuTemperature && !snapshot.GpuTemperature.HasValue) || (wants.Vram && !snapshot.VramUsedGB.HasValue));
+            var library = cpuSensors || gpuSensors ? hardware.Read(cpuSensors, gpuSensors) : hardware.Read(false, false);
+            if (library != null)
+            {
+                if (cpuSensors) snapshot.CpuTemperature = library.CpuTemperature;
+                if (gpuSensors && !snapshot.GpuTemperature.HasValue) snapshot.GpuTemperature = library.GpuTemperature;
+                if (gpuSensors && !snapshot.VramUsedGB.HasValue && library.VramUsedGB.HasValue) { snapshot.VramUsedGB = library.VramUsedGB; snapshot.VramTotalGB = library.VramTotalGB; }
+                if (String.IsNullOrEmpty(snapshot.GpuName)) snapshot.GpuName = library.GpuName;
+            }
+            if (wants.CpuTemperature)
+                snapshot.CpuTemperatureState = snapshot.CpuTemperature.HasValue ? "Working" : Package == SensorPackage.State.Missing ? "NotInstalled" : Package == SensorPackage.State.Damaged ? "Damaged"
+                    : !elevated ? "NeedsFullSensors" : !HardwareSensors.PawnIOInstalled ? "NeedsPawnIO" : "Unavailable";
+            if (wants.GpuTemperature) snapshot.GpuTemperatureState = snapshot.GpuTemperature.HasValue ? "Working" : "Unavailable";
+            if (wants.Vram) snapshot.VramState = snapshot.VramUsedGB.HasValue && snapshot.VramTotalGB > 0 ? "Working" : "Unavailable";
+            if (wants.Fps) ReadFps(snapshot); else presents.Stop();
+        }
+
+        private void ReadFps(SystemSnapshot snapshot)
+        {
+            // The dashboard itself is never the game (it doesn't take the focus, but it's in front right after it starts).
+            int process = FrameRate.ForegroundProcess();
+            if (process == ownProcess) process = 0;
+            double? fps; string source = null;
+            if (RtssReader.Read(process, out fps)) { source = "RTSS"; presents.Stop(); }
+            // Windows lets administrators and members of Performance Log Users count frames; anyone else is asked again
+            // a minute later rather than on every reading.
+            else if (presents.Running || DateTime.UtcNow >= traceRetry)
+            {
+                if (presents.Start()) { fps = presents.Rate(process, DateTime.UtcNow); source = "DirectX"; }
+                else traceRetry = DateTime.UtcNow.AddMinutes(1);
+            }
+            snapshot.Fps = fps; snapshot.FpsSource = source;
+            snapshot.FpsState = fps.HasValue ? "Working" : source != null ? "NoGame" : elevated ? "Unavailable" : "NeedsFullSensors";
+            if (fps.HasValue) try { using (var game = System.Diagnostics.Process.GetProcessById(process)) snapshot.FpsApp = game.ProcessName; } catch (Exception) { }
+        }
+
+        private static T Safe<T>(Func<T> read) where T : class { try { return read(); } catch (Exception) { return null; } }
 
         private SystemSnapshot ReadCore(bool readCpu, bool readGpu, bool readRam, bool readNetwork, bool readUptime)
         {
@@ -118,7 +201,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             try { NetworkChange.NetworkAddressChanged -= addressChanged; NetworkChange.NetworkAvailabilityChanged -= availabilityChanged; } catch (Exception) { }
-            lock (gate) { disposed = true; gpu.Dispose(); }
+            lock (gate) { disposed = true; gpu.Dispose(); telemetry.Dispose(); hardware.Dispose(); presents.Dispose(); }
         }
 
         public static string FormatRate(double bytes)

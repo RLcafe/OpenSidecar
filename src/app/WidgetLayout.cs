@@ -134,7 +134,7 @@ namespace WidgetScreen
             double mediaX = settings.SwapSideWidgets ? widths[3] + 16 : widths[0];
             double mixerX = mediaX + widths[1];
             double infoX = settings.SwapSideWidgets ? 0 : mixerX + widths[2];
-            bool stats = settings.ShowCpu || settings.ShowGpu || settings.ShowRam || settings.ShowNetwork || settings.ShowUptime;
+            bool stats = SystemStyles.Any(settings);
             return new[] {
                 Place("Focus", focusX, 0, widths[0] - 16, ReferenceHeight),
                 Place("Media", mediaX, 0, widths[1] - 16, settings.MediaHeight - 16),

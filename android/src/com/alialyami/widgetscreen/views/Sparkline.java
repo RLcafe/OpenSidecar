@@ -17,7 +17,7 @@ public final class Sparkline extends View {
     private final Path path = new Path();
     private final List<Double> values = new ArrayList<Double>(), second = new ArrayList<Double>();
     private int capacity = 48;
-    private final double maximum;
+    private double maximum;
     private final float stroke;
 
     public Sparkline(Context context, int color, float stroke) { this(context, color, 0, 0, stroke, 100); }
@@ -31,6 +31,8 @@ public final class Sparkline extends View {
         setColor(color);
     }
 
+    // The frame rate's scale follows the highest reading (60, 120, 144…).
+    public void setMaximum(double next) { if (next != maximum) { maximum = next; invalidate(); } }
     public void setColor(int color) { line.setColor(color); area.setColor((Math.round(0.16f * 255) << 24) | (color & 0x00FFFFFF)); invalidate(); }
 
     public void setValues(List<Double> next, int capacity) { setValues(next, null, capacity); }

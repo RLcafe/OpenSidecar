@@ -328,11 +328,19 @@ namespace WidgetScreen
                 var wanted = settings;
                 try
                 {
-                    var s = await ReadSystemAsync(wanted.ShowCpu, wanted.ShowGpu, wanted.ShowRam, wanted.ShowNetwork, wanted.ShowUptime);
+                    var s = await ReadSystemAsync(SystemWants.From(wanted, true));
                     state["system"] = D("showCpu", wanted.ShowCpu, "showGpu", wanted.ShowGpu, "showRam", wanted.ShowRam, "showNetwork", wanted.ShowNetwork, "showUptime", wanted.ShowUptime,
                         "cpu", s.CpuAvailable ? (object)s.Cpu : null, "gpu", s.Gpu, "gpuStatus", s.GpuStatus ?? "Unavailable",
                         "memoryPercent", s.MemoryAvailable ? (object)s.MemoryPercent : null, "memoryUsedGB", s.UsedMemoryGB, "memoryTotalGB", s.TotalMemoryGB,
-                        "download", s.NetworkAvailable ? (object)s.DownloadBytes : null, "upload", s.NetworkAvailable ? (object)s.UploadBytes : null, "uptimeMs", s.Uptime.TotalMilliseconds);
+                        "download", s.NetworkAvailable ? (object)s.DownloadBytes : null, "upload", s.NetworkAvailable ? (object)s.UploadBytes : null, "uptimeMs", s.Uptime.TotalMilliseconds,
+                        // Hardware sensors (decision 016): each reading with the state that says why it's missing.
+                        "showCpuTemp", wanted.ShowCpuTemperature, "showGpuTemp", wanted.ShowGpuTemperature, "showVram", wanted.ShowVram, "showFps", wanted.ShowFps,
+                        "styles", SystemStyles.Ids.Where(id => SystemStyles.Get(wanted.StatStyles, id) != "Auto").ToDictionary(id => id, id => (object)SystemStyles.Get(wanted.StatStyles, id)),
+                        "fahrenheit", wanted.WeatherUnits == "imperial",
+                        "cpuTemp", s.CpuTemperature, "cpuTempState", s.CpuTemperatureState ?? "", "gpuTemp", s.GpuTemperature, "gpuTempState", s.GpuTemperatureState ?? "", "gpuName", s.GpuName ?? "",
+                        "vramUsedGB", s.VramUsedGB, "vramTotalGB", s.VramTotalGB, "vramState", s.VramState ?? "",
+                        "fps", s.Fps, "fpsState", s.FpsState ?? "", "fpsSource", s.FpsSource ?? "", "fpsApp", s.FpsApp ?? "",
+                        "fullSensors", system.Elevated);
                 }
                 catch (Exception) { state["system"] = D("error", true); }
             }

@@ -108,6 +108,52 @@ namespace WidgetScreen
         public static double StatsRing(double cellWidth, double height) { return Clamp(Math.Floor(Math.Min(cellWidth - 16, height)), 56, 200); }
         public static double StatsTileValue(double tileHeight) { return Clamp(Math.Round(tileHeight * 0.24), 30, 64); }
         public static int StatsTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.Min(count, 4) : 2; }
+        // Hardware sensors (docs/design/system-sensors.md): with up to nine readings, each design checks they fit.
+        // Small rows are at least StatsListRow tall, in as many columns as that takes.
+        public static double StatsListRow(double textScale) { return Math.Ceiling(32 + 8 * textScale); }
+        // Columns are at least 140 wide; { columns, rows, shown }: when not every reading fits, the last row says how many more.
+        public static int[] StatsListGrid(double width, double height, int count, double textScale)
+        {
+            count = Math.Max(1, count);
+            int perColumn = Math.Max(1, (int)Math.Floor((height + 8) / (StatsListRow(textScale) + 8)));
+            int most = Math.Max(1, (int)Math.Floor((width + 16) / (140 + 16)));
+            int columns = Math.Min(most, Math.Min(count, (count + perColumn - 1) / perColumn));
+            int room = columns * perColumn;
+            if (count <= room) return new[] { columns, (count + columns - 1) / columns, count };
+            return new[] { columns, perColumn, Math.Max(1, room - 1) };
+        }
+        // The name and detail under a Medium dial.
+        public static double StatsDialText(double textScale) { return Math.Ceiling(26 + 20 * textScale); }
+        // Medium cells at least 100 wide with room for a 56-unit dial and its text; the shape with the biggest dials.
+        // Null when even that doesn't fit (the card shows Small instead).
+        public static int[] StatsCellGrid(double width, double height, int count, double textScale)
+        {
+            int[] best = null; double bestDial = 0;
+            for (int columns = 1; columns <= count; columns++)
+            {
+                int rows = (count + columns - 1) / columns;
+                double cellWidth = width / columns, cellHeight = (height - 12 * (rows - 1)) / rows;
+                if (cellWidth < 100 || cellHeight < 56 + StatsDialText(textScale)) continue;
+                double dial = Math.Min(cellWidth - 16, cellHeight - StatsDialText(textScale));
+                if (dial > bestDial + 0.5) { bestDial = dial; best = new[] { columns, rows }; }
+            }
+            return best;
+        }
+        // Large tiles at least 150 wide and StatsTileMinimum tall, shaped closest to 1.6 : 1. Null when none fit (Medium).
+        public static double StatsTileMinimum(double textScale) { return Math.Ceiling(108 + 20 * textScale); }
+        public static int[] StatsTileGrid(double width, double height, int count, double textScale)
+        {
+            int[] best = null; double bestShape = Double.MaxValue;
+            for (int columns = 1; columns <= Math.Min(4, Math.Max(1, count)); columns++)
+            {
+                int rows = (Math.Max(1, count) + columns - 1) / columns;
+                double tileWidth = (width - 12 * (columns - 1)) / columns, tileHeight = (height - 12 * (rows - 1)) / rows;
+                if (tileWidth < 150 || tileHeight < StatsTileMinimum(textScale)) continue;
+                double shape = Math.Abs(Math.Log(tileWidth / tileHeight / 1.6));
+                if (shape < bestShape) { bestShape = shape; best = new[] { columns, rows }; }
+            }
+            return best;
+        }
         // The weather temperature for the room left to it (the card less its fixed rows) and the card's width.
         public static double WeatherTemperature(Design size, double width, double room)
         {

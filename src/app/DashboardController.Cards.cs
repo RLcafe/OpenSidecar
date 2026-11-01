@@ -21,7 +21,7 @@ namespace WidgetScreen
             FitMedia(Editor.Bounds("Media"));
             FitMixer(Editor.Bounds("Mixer"));
             // System stats and Weather switch between a Small, Medium and Large design (docs/design/widget-size-views.md).
-            systemCard.Fit(Editor.Bounds("System"));
+            systemCard.Fit(Editor.Bounds("System"), settings.TextScale);
             weatherCard.Fit(Editor.Bounds("Weather"));
             storageCard.Fit(Editor.Bounds("Storage"));
             clocksCard.Fit(Editor.Bounds("Clocks"));

@@ -13,6 +13,7 @@ Widget Screen ships a setup exe, `WidgetScreen-Setup-vX.Y.Z.exe`, written in C# 
 | Start menu | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Widget Screen.lnk` |
 | Start with Windows | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Widget Screen.lnk` (checkbox, on by default) |
 | Installed apps entry | `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\WidgetScreen` |
+| Hardware sensors (optional, decision 016) | `%LOCALAPPDATA%\Programs\Widget Screen\sensors\` (LibreHardwareMonitor 0.9.6, its notice and licences; "Install hardware sensors" checkbox, on by default) |
 | Settings (untouched) | `%LOCALAPPDATA%\WidgetScreen\` |
 
 ## Why
@@ -28,6 +29,10 @@ Widget Screen ships a setup exe, `WidgetScreen-Setup-vX.Y.Z.exe`, written in C# 
 - A firewall rule Windows created for an older copy's path doesn't cover the new path, so with the phone link on, Windows asks once more for the installed copy.
 - Uninstall can't delete a firewall rule (that needs admin). Windows leaves it harmless once the exe is gone.
 - The app has no single-instance guard, so opening the desktop shortcut (which points at `releases\`) while the installed copy runs gives two dashboards. Use one or the other.
+
+## Hardware sensors (1 Nov 2026)
+
+Setup also carries the optional LibreHardwareMonitor files (decision 016) when the build has them, behind a checkbox that says what they are, their licences and that the PawnIO driver isn't included. They're the only third-party files Widget Screen ships; uninstalling removes them, and the uninstaller also removes full-sensors mode's task. Setup still needs no administrator rights; only removing that task asks.
 
 ## Android
 

@@ -121,7 +121,7 @@ namespace WidgetScreen
             try
             {
                 if (!LaunchAllowed(game.LaunchUri)) throw new InvalidOperationException("That game's launch address doesn't look right.");
-                Process.Start(new ProcessStartInfo(game.Store == "Xbox" ? "explorer.exe" : game.LaunchUri) { UseShellExecute = true, Arguments = game.Store == "Xbox" ? game.LaunchUri : "" });
+                ProcessLauncher.Start(game.Store == "Xbox" ? "explorer.exe" : game.LaunchUri, game.Store == "Xbox" ? game.LaunchUri : "", null);
                 Notify("Starting " + game.Name + " through " + (game.Store == "Xbox" ? "the Xbox app" : game.Store) + ".");
                 return null;
             }
