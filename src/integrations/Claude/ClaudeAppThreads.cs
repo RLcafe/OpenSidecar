@@ -14,6 +14,9 @@ namespace WidgetScreen
         // Started from the Claude app's Remote Control (a phone or claude.ai driving this PC): shown as where it runs.
         public bool Remote;
         public bool Archived;
+        // The app's summary of the latest reply says "completed" (postTurnSummary.status_category, and it summarizes
+        // lastAssistantUuid): Ali counts that as resolved (1 Nov 2026; decision 020). Only the category is read.
+        public bool Completed;
         public DateTime Created, LastActive;
     }
 
@@ -93,6 +96,10 @@ namespace WidgetScreen
             if (String.IsNullOrEmpty(folder)) folder = ClaudeJson.Str(o, "cwd") ?? "";
             double created = ClaudeJson.Num(o, "createdAt"), active = ClaudeJson.Num(o, "lastActivityAt");
             var thread = new ClaudeAppThread { Session = session, Folder = folder, Title = (ClaudeJson.Str(o, "title") ?? "").Trim(), Archived = ClaudeJson.Bool(o, "isArchived") };
+            var summary = ClaudeJson.Obj(o, "postTurnSummary");
+            string about = ClaudeJson.Str(summary, "summarizes_uuid"), last = ClaudeJson.Str(o, "lastAssistantUuid");
+            thread.Completed = String.Equals(ClaudeJson.Str(summary, "status_category"), "completed", StringComparison.OrdinalIgnoreCase)
+                && (String.IsNullOrEmpty(about) || String.IsNullOrEmpty(last) || about == last);
             thread.Remote = ClaudeJson.Obj(o, "remoteControlSpawn") != null || thread.Title.StartsWith("Remote Control", StringComparison.OrdinalIgnoreCase);
             thread.Created = Double.IsNaN(created) ? DateTime.MinValue : ClaudeBridge.FromEpoch(created);
             thread.LastActive = Double.IsNaN(active) ? thread.Created : ClaudeBridge.FromEpoch(active);

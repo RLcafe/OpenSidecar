@@ -38,12 +38,13 @@ internal static class ClaudeTreeTests
     private static string Iso(DateTime time) { return time.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture); }
     private static string Json(string text) { return text.Replace("\\", "\\\\").Replace("\"", "\\\""); }
     // A Claude app thread record with only the fields the reader uses, plus one it ignores.
-    private static void Record(string root, string session, string folder, string title, DateTime active, bool archived = false)
+    private static void Record(string root, string session, string folder, string title, DateTime active, bool archived = false, string status = null)
     {
+        string summary = status == null ? "" : ",\"postTurnSummary\":{\"status_category\":\"" + status + "\",\"status_detail\":\"not read\",\"summarizes_uuid\":\"u1\"},\"lastAssistantUuid\":\"u1\"";
         string path = Path.Combine(root, "org", "account", "local_" + session + ".json");
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         File.WriteAllText(path, "{\"sessionId\":\"local_" + session + "\",\"cliSessionId\":\"" + session + "\",\"cwd\":\"" + Json(folder) + "\",\"originCwd\":\"" + Json(folder) + "\",\"createdAt\":" + ClaudeBridge.Epoch(active.AddHours(-1))
-            + ",\"lastActivityAt\":" + ClaudeBridge.Epoch(active) + ",\"isArchived\":" + (archived ? "true" : "false") + ",\"title\":\"" + Json(title) + "\",\"promptAppendSnapshot\":{\"append\":\"not read\"}}");
+            + ",\"lastActivityAt\":" + ClaudeBridge.Epoch(active) + ",\"isArchived\":" + (archived ? "true" : "false") + ",\"title\":\"" + Json(title) + "\"" + summary + ",\"promptAppendSnapshot\":{\"append\":\"not read\"}}");
     }
     private sealed class Handler : HttpMessageHandler
     {
@@ -128,6 +129,8 @@ internal static class ClaudeTreeTests
             Record(app, "s-run", "C:\\Code\\alpha", "Running thread", Now.AddMinutes(-1));
             Record(app, "s-wt", "C:\\Code\\alpha\\.claude\\worktrees\\zen", "Worktree thread", Now.AddHours(-6));
             Record(app, "s-arch", "C:\\Code\\alpha", "Archived thread", Now.AddHours(-2), archived: true);
+            Record(app, "s-fin", "C:\\Code\\alpha", "Finished thread", Now.AddHours(-3), status: "completed");
+            Record(app, "s-rev", "C:\\Code\\alpha", "Review thread", Now.AddHours(-3), status: "review_ready");
             Record(app, "s-beta", "C:\\Code\\beta", "Beta work", Now.AddDays(-2));
             Record(app, "s-old", "C:\\Code\\beta", "Too old", Now.AddDays(-10));
             // A terminal thread only the logs know, with a typed title and some usage an hour ago.
@@ -148,26 +151,29 @@ internal static class ClaudeTreeTests
             Assert(archived != null && archived.Archived && archived.Pit == PitState.Archived && ClaudeText.Chip(archived.Pit) == "Archived", "An archived thread isn't marked Archived.");
             var five = view.Groups(ClaudePeriod.FiveHour);
             // Archived threads are hidden by default but counted (decision 020); shown, they park last.
-            Assert(five[0].Hidden == 1 && ClaudeText.GroupDetail(five[0]).EndsWith(" · +1 hidden"), "The hidden archived thread isn't counted: " + ClaudeText.GroupDetail(five[0]));
+            Assert(five[0].Hidden == 2 && ClaudeText.GroupDetail(five[0]).EndsWith(" · +2 hidden"), "The hidden archived thread isn't counted: " + ClaudeText.GroupDetail(five[0]));
             view.ShowArchived = true;
             var shownFive = view.Groups(ClaudePeriod.FiveHour);
-            Assert(shownFive[0].Hidden == 0 && shownFive[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-arch" }), "Shown archived threads don't park last: " + String.Join(",", shownFive[0].Threads.Select(t => t.Id)));
+            Assert(shownFive[0].Hidden == 0 && shownFive[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-rev", "s-arch", "s-fin" }), "Shown archived threads don't park last: " + String.Join(",", shownFive[0].Threads.Select(t => t.Id)));
             view.ShowArchived = false;
+            // "completed" in the app's summary is Resolved (Ali, decision 020); "review_ready" isn't.
+            var fin = view.Threads.First(t => t.Id == "s-fin"); var rev = view.Threads.First(t => t.Id == "s-rev");
+            Assert(fin.Resolved && fin.Pit == PitState.Resolved && ClaudeText.Chip(fin.Pit) == "Resolved" && !rev.Resolved && rev.Pit == PitState.End, "Completed or review-ready threads are marked wrongly.");
             // beta has no thread in the last five hours: it still gets a quiet garage after the busy ones (decision 019).
             Assert(five.Count == 2 && five[1].Folder == "C:\\Code\\beta" && five[1].Threads.Count == 0 && ClaudeText.GroupDetail(five[1]).StartsWith("Quiet · last used ")
-                && five[0].Folder == "C:\\Code\\alpha" && five[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log" }), "5 h groups wrong: " + String.Join(";", five.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
+                && five[0].Folder == "C:\\Code\\alpha" && five[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-rev" }), "5 h groups wrong: " + String.Join(";", five.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
             Assert(five[0].Threads[0].Title == "Running thread" && five[0].Threads[1].Title == "Typed title" && five[0].Tokens == 150 && five[0].Running == 1 && five[0].State == ClaudeState.Working, "Titles, tokens or the project's face are wrong.");
             var week = view.Groups(ClaudePeriod.Week);
-            Assert(week.Count == 2 && week[0].Folder == "C:\\Code\\alpha" && week[1].Folder == "C:\\Code\\beta" && week[1].Asleep && week[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-wt" }), "Week groups wrong: " + String.Join(";", week.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
+            Assert(week.Count == 2 && week[0].Folder == "C:\\Code\\alpha" && week[1].Folder == "C:\\Code\\beta" && week[1].Asleep && week[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-rev", "s-wt" }), "Week groups wrong: " + String.Join(";", week.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
             DateTime today = view.Starts[ClaudePeriod.Today];
-            var expected = new[] { "s-run", "s-log", "s-wt" }.Where(id => id == "s-run" || view.Threads.First(t => t.Id == id).LastActive >= today).ToList();
+            var expected = new[] { "s-run", "s-log", "s-rev", "s-wt" }.Where(id => id == "s-run" || view.Threads.First(t => t.Id == id).LastActive >= today).ToList();
             Assert(view.Groups(ClaudePeriod.Today)[0].Threads.Select(t => t.Id).SequenceEqual(expected), "Today's threads are filtered wrongly.");
             var projects = service.Projects(Now, null);
-            Assert(projects.Any(p => p.Folder == "C:\\Code\\alpha" && p.Threads == 4) && projects.Any(p => p.Folder == "C:\\Code\\beta" && p.Threads == 1) && !projects.Any(p => p.Folder.Contains("worktrees")), "Settings → Claude counts threads wrongly: " + String.Join(";", projects.Select(p => p.Folder + "=" + p.Threads)));
+            Assert(projects.Any(p => p.Folder == "C:\\Code\\alpha" && p.Threads == 6) && projects.Any(p => p.Folder == "C:\\Code\\beta" && p.Threads == 1) && !projects.Any(p => p.Folder.Contains("worktrees")), "Settings → Claude counts threads wrongly: " + String.Join(";", projects.Select(p => p.Folder + "=" + p.Threads)));
             // Unticked projects leave the card's threads too.
             var filtered = service.View(Now, service.Usage.Entries, folder => folder != "C:\\Code\\beta");
             Assert(filtered.Groups(ClaudePeriod.Week).Count == 1, "An unticked project still shows its threads.");
-            Assert(ClaudeText.ThreadTitle(new ClaudeSession { Id = "abc123def", LastActive = Now }, Now, true) == "Thread abc123" && ClaudeText.GroupDetail(five[0]).StartsWith("2 threads") && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0]));
+            Assert(ClaudeText.ThreadTitle(new ClaudeSession { Id = "abc123def", LastActive = Now }, Now, true) == "Thread abc123" && ClaudeText.GroupDetail(five[0]).StartsWith("3 threads") && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0]));
             service.Dispose();
         });
 
@@ -317,12 +323,19 @@ internal static class ClaudeTreeTests
             SettingsStore.Save(hidePath, new AppSettings { ClaudeShowArchived = true, ClaudeHideIdle = true });
             var hide = SettingsStore.Load(hidePath, out warning);
             Assert(hide.ClaudeShowArchived && hide.ClaudeHideIdle, "The hide choices weren't saved.");
+            // Live state wins over Resolved: a resolved thread that works, needs you or compacts shows that; once
+            // its turn ends it's Resolved again. A summary of an older reply doesn't count.
+            Func<ClaudeState, bool, bool, PitState> live = (st, running, compacting) => ClaudePace.State(new ClaudeSession { State = st, Running = running, Resolved = true, Compacting = compacting, Since = Now }, Now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
+            Assert(live(ClaudeState.Working, true, false) == PitState.Work && live(ClaudeState.NeedsYou, true, false) == PitState.Need && live(ClaudeState.Done, true, true) == PitState.Pit
+                && live(ClaudeState.Done, true, false) == PitState.Resolved && live(ClaudeState.Ready, false, false) == PitState.Resolved && ClaudePace.Hidden(PitState.Resolved, false, false), "Live state doesn't win over Resolved.");
+            Func<string, string, string, bool> completed = (status, about, last) => ClaudeAppThreads.Parse("{\"cliSessionId\":\"x\",\"postTurnSummary\":{\"status_category\":\"" + status + "\",\"summarizes_uuid\":\"" + about + "\"},\"lastAssistantUuid\":\"" + last + "\"}").Completed;
+            Assert(completed("completed", "a", "a") && !completed("completed", "a", "b") && !completed("blocked", "a", "a") && !completed("review_ready", "a", "a") && !ClaudeAppThreads.Parse("{\"cliSessionId\":\"x\"}").Completed, "The app's summary is read wrongly.");
             Assert(ClaudePace.Hidden(PitState.Archived, false, false) && !ClaudePace.Hidden(PitState.Archived, true, false) && !ClaudePace.Hidden(PitState.Idle, false, false)
                 && ClaudePace.Hidden(PitState.Idle, true, true) && !ClaudePace.Hidden(PitState.End, false, true) && !ClaudePace.Hidden(PitState.Done, false, true), "The wrong states are hidden.");
             Assert(ClaudeText.GroupDetail(new ClaudeProjectGroup { Hidden = 2, Seen = DateTime.UtcNow.AddHours(-1) }).StartsWith("2 hidden · Quiet · last used "), "A project whose threads are all hidden doesn't say so.");
             var fixture = ClaudeView.Fixture(Now, false);
             var sampleGroup = fixture.Groups(ClaudePeriod.Week).First(g => g.Name == "widget-screen");
-            Assert(sampleGroup.Hidden == 1 && sampleGroup.Tokens == fixture.Threads.Where(t => t.ProjectName == "widget-screen").Sum(t => t.TokensFor(ClaudePeriod.Week)), "Hidden threads leave the project's totals.");
+            Assert(sampleGroup.Hidden == 2 && sampleGroup.Tokens == fixture.Threads.Where(t => t.ProjectName == "widget-screen").Sum(t => t.TokensFor(ClaudePeriod.Week)), "Hidden threads leave the project's totals.");
             fixture.HideIdle = true;
             Assert(fixture.Groups(ClaudePeriod.Week).SelectMany(g => g.Threads).All(t => t.Pit != PitState.Idle && t.Pit != PitState.Archived), "Hide idle threads leaves idle ones.");
 

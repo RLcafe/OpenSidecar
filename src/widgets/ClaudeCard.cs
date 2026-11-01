@@ -196,6 +196,7 @@ namespace WidgetScreen
                 case PitState.Done: return "Your turn";
                 case PitState.End: return "Ended";
                 case PitState.Archived: return "Archived";
+                case PitState.Resolved: return "Resolved";
                 default: return "Idle";
             }
         }
@@ -765,7 +766,7 @@ namespace WidgetScreen
                 fills.Add(now => {
                     var t = view.Threads.FirstOrDefault(x => x.Id == id);
                     if (t == null) return;
-                    tap.Opacity = t.Running ? 1 : t.Pit == PitState.Archived ? 0.45 : 0.62;
+                    tap.Opacity = ClaudePace.Parked(t.Pit) ? 0.45 : t.Running ? 1 : 0.62;
                     chipText.Text = ClaudeText.Chip(t.Pit).ToUpperInvariant();
                     SetChip(chip, chipText, t.Pit);
                     name2.Text = ClaudeText.ThreadTitle(t, now, use24);
@@ -790,13 +791,13 @@ namespace WidgetScreen
         private void SetChip(Border chip, TextBlock text, PitState state)
         {
             chip.BorderThickness = new Thickness(state == PitState.End || state == PitState.Idle ? 1 : 0);
-            chip.Opacity = state == PitState.Archived ? 0.7 : 1;
+            chip.Opacity = ClaudePace.Parked(state) ? 0.7 : 1;
             chip.SetResourceReference(Border.BorderBrushProperty, "ControlBorder");
             if (state == PitState.Need) { chip.SetResourceReference(Border.BackgroundProperty, "Warning"); text.Foreground = new SolidColorBrush(Color.FromRgb(0x11, 0x17, 0x0E)); text.FontWeight = FontWeights.Bold; return; }
             text.FontWeight = FontWeights.Normal;
             if (state == PitState.Done) { chip.Background = Solid(PitArt.Alpha(PitArt.Accents[1], 0.14)); text.Foreground = Solid(PitArt.Accents[1]); return; }
             if (state == PitState.Stuck) { chip.Background = Tint("Warning", 0.16); text.SetResourceReference(TextBlock.ForegroundProperty, "Warning"); return; }
-            if (state == PitState.End || state == PitState.Idle || state == PitState.Archived) { chip.Background = Brushes.Transparent; text.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); return; }
+            if (state == PitState.End || state == PitState.Idle || ClaudePace.Parked(state)) { chip.Background = Brushes.Transparent; text.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); return; }
             chip.Background = Tint("Accent", 0.16); text.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
         }
         // The Models column: the model by name, or a mix's top two with shares, each in its family's colour (Opus Lime,
@@ -1078,8 +1079,8 @@ namespace WidgetScreen
         private void RenderCar(CarPart part, ClaudeSession t, double fiveHour)
         {
             PitState shown = t == null ? (view.Connected ? PitState.Idle : PitState.End) : t.Pit;
-            // An archived car is an ended one under its cover, dimmed the most (decision 020).
-            PitState state = shown == PitState.Archived ? PitState.End : shown;
+            // An archived or resolved car is an ended one under its cover, dimmed the most (decision 020).
+            PitState state = ClaudePace.Parked(shown) ? PitState.End : shown;
             uint color = t == null ? PitArt.Accents[0] : PitArt.Accent(t.ProjectName);
             double share = t == null ? 0 : ClaudePace.Share(t.Rate, view.Scale);
             bool fuel = t != null && t.Running && ClaudePace.Fuel(fiveHour);
@@ -1093,7 +1094,7 @@ namespace WidgetScreen
             part.Sprite.Show(key, frames, PitSprite.CarOverflow, PitSprite.StillFrame(state), restart);
             if (quiet || !live) part.Sprite.Hold();
             // Idle has its engine off, dimmed; an ended or archived car is dimmed where its row isn't.
-            part.Sprite.Opacity = state == PitState.Idle ? 0.7 : part.Dim && shown == PitState.Archived ? 0.45 : part.Dim && state == PitState.End ? 0.6 : 1;
+            part.Sprite.Opacity = state == PitState.Idle ? 0.7 : part.Dim && ClaudePace.Parked(shown) ? 0.45 : part.Dim && state == PitState.End ? 0.6 : 1;
         }
         private void RenderGarage(GaragePart part, ClaudeProjectGroup group)
         {

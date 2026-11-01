@@ -10,7 +10,8 @@ namespace WidgetScreen
     // jack), Stuck (rate-limited or an API error: wheelspin), Done ("your turn": Claude finished and waits for your next
     // message, brake lights on) and End (under a cover).
     // Archived (decision 020): a thread archived in the Claude app, parked under its cover and dimmed the most.
-    public enum PitState { Idle, Work, Rev, Need, Pit, Stuck, Done, End, Archived }
+    // Resolved: the Claude app says its latest reply completed the job (Ali, 1 Nov 2026); shown like Archived.
+    public enum PitState { Idle, Work, Rev, Need, Pit, Stuck, Done, End, Archived, Resolved }
 
     // The car classes, by the model a thread mostly used: a grand tourer for Opus (and bigger), a sports car for
     // Sonnet, a hot hatch for Haiku.
@@ -140,12 +141,13 @@ namespace WidgetScreen
         // spins after an API error (until a later request goes through).
         public static PitState State(ClaudeSession thread, DateTime now, DateTime decision, DateTime result, DateTime error, DateTime request)
         {
-            if (!thread.Running) return thread.Archived ? PitState.Archived : PitState.End;
+            if (!thread.Running) return thread.Archived ? PitState.Archived : thread.Resolved ? PitState.Resolved : PitState.End;
+            // Live state wins over Resolved: working, needing you or compacting shows as that (decision 020).
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;
-                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : now - thread.Since >= TurnIdle ? PitState.Idle : PitState.Done;
-                case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : PitState.Idle;
+                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : thread.Resolved ? PitState.Resolved : now - thread.Since >= TurnIdle ? PitState.Idle : PitState.Done;
+                case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : thread.Resolved ? PitState.Resolved : PitState.Idle;
             }
             if (thread.Compacting) return PitState.Pit;
             if (error > request && now - error < ErrorShows) return PitState.Stuck;
@@ -154,7 +156,9 @@ namespace WidgetScreen
         }
         public static string StateName(PitState state) { return state.ToString().ToLowerInvariant(); }
         // Whether Settings → Claude hides a thread in this state (its tokens still count in its project's totals).
-        public static bool Hidden(PitState state, bool showArchived, bool hideIdle) { return (state == PitState.Archived && !showArchived) || (state == PitState.Idle && hideIdle); }
+        public static bool Hidden(PitState state, bool showArchived, bool hideIdle) { return (Parked(state) && !showArchived) || (state == PitState.Idle && hideIdle); }
+        // Archived or resolved: under the cover, dimmed the most, last in its project.
+        public static bool Parked(PitState state) { return state == PitState.Archived || state == PitState.Resolved; }
         public static PitState ParseState(string name) { PitState state; return Enum.TryParse(name ?? "", true, out state) ? state : PitState.Idle; }
         public static string CarName(PitCar car) { return car == PitCar.GrandTourer ? "gt" : car == PitCar.Hatch ? "hatch" : "sport"; }
 

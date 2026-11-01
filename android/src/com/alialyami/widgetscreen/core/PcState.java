@@ -108,13 +108,14 @@ public final class PcState {
     public static final class ClaudeThread {
         public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
         public boolean running, canFocus;
-        // Archived in the Claude app (decision 020); its pit is "archived".
-        public boolean archived;
+        // Archived in the Claude app, or resolved (its latest reply completed the job; decision 020); its pit is
+        // "archived" or "resolved".
+        public boolean archived, resolved;
         public double since, lastActive;
         public final long[] tokens = new long[3];
         public final double[] cost = new double[3];
         // The pit wall (decision 017): its car ("gt", "sport", "hatch"), what the car does ("idle", "work", "rev",
-        // "need", "pit", "stuck", "done", "end", "archived"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
+        // "need", "pit", "stuck", "done", "end", "archived", "resolved"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
         // Haiku shares) and lines added and removed.
         public String pit = "idle", car = "sport";
         public double rate;
@@ -511,7 +512,7 @@ public final class PcState {
             Map<String, Object> t = Json.obj(item);
             ClaudeThread thread = new ClaudeThread();
             thread.id = text(t, "id"); thread.project = text(t, "project"); thread.title = text(t, "title"); thread.state = text(t, "state"); thread.running = flag(t, "running");
-            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus"); thread.archived = flag(t, "archived");
+            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus"); thread.archived = flag(t, "archived"); thread.resolved = flag(t, "resolved");
             thread.since = Json.number(t, "since"); thread.lastActive = Json.number(t, "lastActive");
             Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
             for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }

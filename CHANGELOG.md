@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Resolved Claude threads (Ali's choice; Windows and the phone; decision 020):
+
+- **Threads the Claude app marks "completed" now show as Resolved.** The car is under its cover, dimmed, last in its project, with a "Resolved" chip. "Review ready" and "blocked" threads don't count.
+- **Live state wins.** If a resolved thread starts working again, needs you or is compacting, it shows that state right away and isn't hidden.
+- The setting is now **Hide resolved and archived threads** (still on by default). Hidden threads still count in their project's totals ("+N hidden").
 
 ## v0.34.0 (1 Nov 2026)
 

@@ -915,8 +915,8 @@
                     <TextBlock Text="Off: the cars keep driving, revving and rolling into their garages even in Quiet mode. They stop whenever the card is hidden or the window is minimised." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
                     <CheckBox x:Name="ClaudeApiValueChoice" Content="Show what the tokens would cost at API list prices" AutomationProperties.Name="Show the API value of the tokens on the Claude card"/>
                     <TextBlock Text="Your Claude plan doesn't pay these prices; the plan meters show your plan's use. Off: the card shows each thread's replies instead." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
-                    <CheckBox x:Name="ClaudeHideArchivedChoice" Content="Hide archived threads" AutomationProperties.Name="Hide archived Claude threads"/>
-                    <TextBlock Text="Threads you archived in the Claude app. On: they leave the card and the phone, and each project says how many it hides. Off: they park last, dimmed, marked Archived." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <CheckBox x:Name="ClaudeHideArchivedChoice" Content="Hide resolved and archived threads" AutomationProperties.Name="Hide resolved and archived Claude threads"/>
+                    <TextBlock Text="Resolved: the Claude app says the latest reply completed the job. Archived: you archived it in the Claude app. On: they leave the card and the phone, and each project says how many it hides. Off: they park last, dimmed. A resolved thread that starts working again or needs you shows right away." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
                     <CheckBox x:Name="ClaudeHideIdleChoice" Content="Hide idle threads" AutomationProperties.Name="Hide idle Claude threads"/>
                     <TextBlock Text="Open threads that have waited 30 minutes or more. Their tokens still count in their project's totals." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
                     <TextBlock Text="Refresh" FontSize="24" Margin="0,0,0,12"/>

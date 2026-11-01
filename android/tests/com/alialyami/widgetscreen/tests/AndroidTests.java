@@ -625,6 +625,7 @@ public final class AndroidTests {
                 + "\"week\":[{\"key\":\"k\",\"project\":\"alpha\",\"threads\":[\"t2\",\"t1\"],\"hidden\":1}]}}}")));
             PcState.Claude c = state.claude;
             ok(c.thread("t1").archived && !c.thread("t2").archived && ClaudeText.chip("archived").equals("Archived") && PitArt.state("archived") == PitArt.END, "an archived thread");
+            ok(ClaudeText.chip("resolved").equals("Resolved") && PitArt.state("resolved") == PitArt.END && ClaudeText.parked("resolved") && ClaudeText.parked("archived") && !ClaudeText.parked("end") && !ClaudeText.parked("done"), "a resolved thread");
             ok(ClaudeText.groupDetail(c, c.groups[2].get(0), 1700000000 + 3600).equals("2 threads · ended 1 h ago · +1 hidden"), "+N hidden: " + ClaudeText.groupDetail(c, c.groups[2].get(0), 1700000000 + 3600));
             ok(ClaudeText.groupDetail(c, c.groups[0].get(0), 1700000000).startsWith("2 hidden · Quiet · last used "), "a project whose threads are all hidden");
         } });
