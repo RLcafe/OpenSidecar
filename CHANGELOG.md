@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.20.0 (1 Nov 2026)
+
+A World clocks widget (user request; Windows and the phone, the same designs on both):
+
+- **Two or three time zones side by side.** Each shows a city name, its local time, its day ("Today", "Tomorrow", "Yesterday") and how many hours it is from the PC ("+6 h", "−5:30 h"). Turn it on in Edit layout's Widgets list; it starts hidden, so your layout doesn't change.
+- **Choose the cities in Settings → Widgets → World clocks**: up to three of Windows' time zones, each with a city name you can change (it starts as the zone's first city). With none chosen, a tap on the card opens that section.
+- **No internet needed.** Times come from Windows' own time zone rules, so daylight saving switches by itself. The card follows the 12- or 24-hour clock setting.
+- **Small, medium and large designs**: rows with the time at the right (cities that don't fit are counted in the heading); the cities side by side with a large time; and a tile per city with an even larger time and the date.
+- The phone shows the PC's cities and keeps time itself between readings. Not yet tried on a phone or emulator.
+
 ## v0.19.0 (1 Nov 2026)
 
 A Storage widget (user request; Windows and the phone, the same designs on both):
