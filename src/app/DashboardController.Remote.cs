@@ -290,6 +290,7 @@ namespace WidgetScreen
         private async Task<Dictionary<string, object>> RemoteState(string[] parts)
         {
             var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock, "layoutVersion", RemoteLayoutVersion());
+            RemoteClaudeAlert(state);
             if (parts.Contains("layout")) state["layout"] = RemoteLayout();
             if (parts.Contains("focus"))
             {
@@ -351,6 +352,7 @@ namespace WidgetScreen
             if (parts.Contains("clocks")) state["clocks"] = RemoteClocks();
             if (parts.Contains("prayer")) state["prayer"] = RemotePrayer();
             if (parts.Contains("notes")) state["notes"] = RemoteNotes();
+            if (parts.Contains("claude")) state["claude"] = RemoteClaude();
             return state;
         }
 
@@ -459,6 +461,7 @@ namespace WidgetScreen
                         if (failure != null) throw new InvalidOperationException(SoundboardWidget.Message(failure));
                         return Done("Played " + sound.Name + ".");
                     }
+                case "claude.focus": return RemoteClaudeFocus(body);
                 case "page.show": case "layout.save": case "page.add": case "page.rename": case "page.delete": case "page.move":
                     return RemotePages(Str(body, "action"), body);
                 default: throw new ArgumentException("Unknown command. Update Widget Screen on the phone or the PC.");

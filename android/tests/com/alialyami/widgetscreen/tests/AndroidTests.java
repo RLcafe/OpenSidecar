@@ -2,6 +2,8 @@ package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.CardSizing;
+import com.alialyami.widgetscreen.core.ClaudeText;
+import com.alialyami.widgetscreen.core.Critter;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
@@ -359,6 +361,10 @@ public final class AndroidTests {
             ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
             ok(state.notes != null && state.notes.text.equals("From the phone") && state.notes.items.size() == 1 && state.notes.items.get(0).text.equals("Bread"), "notes");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
+            // The PC's Claude section comes from its labelled fixture: four sessions, the first one needs you.
+            ok(state.claude != null && state.claude.sample && state.claude.connected && state.claude.sessions.size() == 4 && "needs".equals(state.claude.sessions.get(0).state) && state.claude.sessions.get(0).project.equals("api-server")
+                && state.claude.sessions.get(0).tokens[0] == 412000 && state.claude.fiveHour != null && state.claude.fiveHour.pct == 84 && state.claude.fiveHour.resetsAt > 1e9 && state.claude.usage[2].size() == 5 && state.claude.needsYou() == 1, "claude");
+            ok(state.claudePage == -1 && state.claudeNeeds == 0, "claude alert without the card on a page");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
             // The Windows checks add a page, rename it Play and move it first, so the PC shows Main, the second page.
@@ -456,6 +462,61 @@ public final class AndroidTests {
             ok(NotesText.status(state.notes.items).equals("1 TO DO") && NotesText.todoTab(state.notes.items).equals("To-do · 1") && NotesText.anyDone(state.notes.items), "wording");
             ok(NotesText.line("  Call the\nbank\t now ").equals("Call the bank now") && NotesText.line(new String(new char[500]).replace('\0', 'y')).length() == 200 && NotesText.line(" \n ").isEmpty(), "line");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Notes").visible && WidgetLayout.title("Notes").equals("Notes and to-do"), "hidden by default");
+        } });
+        check("Claude critters match the PC's and pick designs at the same sizes", new Action() { public void run() {
+            ok(Critter.hash("a") == 3826002220L && Critter.hash("") == 2166136261L && Critter.hash("api-server") == Critter.hash(" API-Server "), "hash");
+            ok(Critter.shape("api-server") == 2 && Critter.accent("api-server") == 1 && Critter.shape("widget-screen") == 1 && Critter.shape("aeq") == 0 && Critter.accent("notes") == 0 && Critter.accent("photo-manager") == 2, "the same critters as the PC");
+            ok(Critter.hop("needs", true, false) == -4 && Critter.hop("needs", true, true) == 0 && Critter.pupilX("working", true, false) == 3 && Critter.pupilX("working", true, true) == -3 && Critter.eyesOpen("needs") && !Critter.eyesOpen("done"), "quiet critters");
+            ok(CardSizing.claude(260, 180) == CardSizing.SMALL && CardSizing.claude(359, 400) == CardSizing.SMALL && CardSizing.claude(600, 279) == CardSizing.SMALL && CardSizing.claude(472, 310) == CardSizing.MEDIUM && CardSizing.claude(639, 576) == CardSizing.MEDIUM && CardSizing.claude(640, 420) == CardSizing.LARGE, "designs");
+            ok(CardSizing.claudeLineup(424) == 4 && CardSizing.claudeLineup(200) == 1 && CardSizing.claudeLineup(1400) == 5 && CardSizing.claudeStrip(1) == 84 && CardSizing.claudeStrip(1.4) == 94 && CardSizing.claudeRowHeight(1) == 64 && CardSizing.claudeRowHeight(1.4) == 70 && CardSizing.claudeRows(472, 1) == 6 && CardSizing.claudePanel(592) == 240, "sizes");
+            WidgetLayout.Placement claude = WidgetLayout.find(WidgetLayout.defaults(), "Claude");
+            ok(claude != null && !claude.visible && WidgetLayout.title("Claude").equals("Claude Code") && WidgetLayout.minimum("Claude")[0] == 260 && WidgetLayout.minimum("Claude")[1] == 180, "hidden by default");
+        } });
+        check("Claude designs leave room for their text at 140%", new Action() { public void run() {
+            // Line heights as the views lay them out: about 1.33 times the text size; captions are 13, unscaled.
+            double t = 1.4, small = 15 * t * 1.33, body = 18 * t * 1.33, title = 24 * t * 1.33, caption = 13 * 1.33;
+            for (double[] size : new double[][] { { 360, 280 }, { 472, 310 }, { 639, 576 }, { 1856, 300 } }) {
+                double width = size[0] - 48, height = size[1] - 48;
+                ok(CardSizing.claude(size[0], size[1]) == CardSizing.MEDIUM, "medium at " + size[0]);
+                double row = height - 36 - (CardSizing.claudeStrip(t) + 12);
+                boolean state = CardSizing.claudeLineupState(row, t);
+                double critter = CardSizing.claudeLineupCritter(row, width / CardSizing.claudeLineup(width), t, state);
+                ok(critter + 6 + small + (state ? 2 + caption : 0) <= row + 0.5, "the lineup overflows at " + size[0] + " x " + size[1]);
+                ok(CardSizing.claudeStrip(t) >= 20 + small + 6 + 10 + 4 + caption, "the strip is too short for its text");
+            }
+            for (double[] size : new double[][] { { 640, 420 }, { 900, 576 }, { 1856, 576 } }) {
+                double height = size[1] - 48 - 40;
+                ok(CardSizing.claudeRowHeight(t) >= body + 3 + small, "a Large row is too short for its text");
+                int rows = CardSizing.claudeRows(height, t);
+                ok(rows * CardSizing.claudeRowHeight(t) + (rows - 1) * 8 <= height + 0.5, "Large rows overflow at " + size[0] + " x " + size[1]);
+                int projects = CardSizing.claudeProjects(height - 32, t);
+                double used = 2 * CardSizing.claudeMeterBlock(t) + 14 + 48 + 16 + small + 8 + projects * CardSizing.claudeProjectRow(t) + 12 + caption;
+                ok(used <= height - 32 + 0.5, "the usage panel overflows at " + size[0] + " x " + size[1]);
+                ok(CardSizing.claudeMeterBlock(t) >= Math.max(small, 30 * 1.12) + 6 + 14 + 4 + caption, "a meter block is too short");
+            }
+            for (double[] size : new double[][] { { 260, 180 }, { 359, 279 } }) {
+                double width = size[0] - 48, room = size[1] - 48 - 16;
+                double critter = CardSizing.claudeSmallCritter(width, room);
+                ok(critter <= room + 0.5 && critter <= width * 0.42 + 0.5, "the Small critter leaves its card");
+                double side = (room < 150 ? body : title) + 4 + small + 4 + caption + 4 + caption;
+                ok(side <= room + 0.5, "the Small text column overflows at " + size[0] + " x " + size[1]);
+            }
+        } });
+        check("Claude words, meters and the claude section read like the PC's", new Action() { public void run() {
+            ok(ClaudeText.tokens(950).equals("950") && ClaudeText.tokens(12400).equals("12.4k") && ClaudeText.tokens(1234567).equals("1.2M") && ClaudeText.tokens(3400000000L).equals("3.4B") && ClaudeText.tokens(999999).equals("999k") && ClaudeText.tokens(2000).equals("2k"), "tokens");
+            ok(ClaudeText.stateWords("needs", 1000, 1120, false).equals("Needs you · 2 min") && ClaudeText.stateWords("working", 0, 10, false).equals("Working") && ClaudeText.stateWords("done", 0, 3 * 3600 + 5, true).equals("Done · 3 h") && ClaudeText.stateWords("ready", 0, 99, true).equals("Ready"), "state words");
+            ok(ClaudeText.ask("Claude needs your permission to use Bash").equals("Wants to use Bash") && ClaudeText.ask("Pick one").equals("Pick one"), "asks");
+            ok(ClaudeText.lit(23) == 2 && ClaudeText.lit(3) == 1 && ClaudeText.lit(0) == 0 && ClaudeText.lit(99) == 9 && ClaudeText.lit(100) == 10 && ClaudeText.warns(80) && !ClaudeText.warns(79.9), "meters");
+            PcState.ClaudeWindow full = new PcState.ClaudeWindow(); full.pct = 100; full.resetsAt = 1000 + 3600;
+            PcState.ClaudeWindow past = new PcState.ClaudeWindow(); past.pct = 90; past.resetsAt = 900;
+            ok(ClaudeText.reset(full, 1000, true).startsWith("Limit reached · back ") && ClaudeText.percent(past, 1000) == 0 && ClaudeText.reset(past, 1000, false).equals("reset"), "resets");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claudeNeeds\":2,\"claudePage\":1,\"claude\":{\"connected\":true,\"logsRead\":true,\"noPlan\":false,\"sessions\":[{\"id\":\"a\",\"project\":\"api\",\"title\":\"\",\"state\":\"needs\",\"since\":1000,\"message\":\"m\",\"model\":\"Opus\",\"canFocus\":true,\"tokens\":{\"fiveHour\":5,\"today\":6,\"week\":7}},{\"id\":\"\",\"state\":\"done\"},{\"id\":\"b\",\"project\":\"web\",\"state\":\"needs\"}],\"limits\":{\"fiveHour\":{\"pct\":23.5,\"resetsAt\":1738425600},\"week\":null,\"updatedAt\":1700000000,\"source\":\"online\"},\"usage\":{\"fiveHour\":[{\"project\":\"api\",\"tokens\":5}],\"today\":[],\"week\":[{\"project\":\"\",\"tokens\":1}]}}}")));
+            PcState.Claude c = state.claude;
+            ok(state.claudeNeeds == 2 && state.claudePage == 1 && c.connected && c.sessions.size() == 2 && c.sessions.get(0).tokens[2] == 7 && c.sessions.get(0).canFocus && c.sessions.get(0).shown().equals("api"), "sessions");
+            ok(c.fiveHour.pct == 23.5 && c.fiveHour.resetsAt == 1738425600 && c.week == null && c.limitsKnown() && c.usage[0].size() == 1 && c.usage[2].isEmpty() && c.source.equals("online"), "limits and usage");
+            ok(ClaudeText.heading(c).equals("2 sessions need you") && ClaudeText.flag(c, 1700000000 + 60, true, true).equals("2 RUNNING") && ClaudeText.flag(c, 1700000000 + 3600, true, true).startsWith("2 RUNNING · AS OF ") && ClaudeText.source(c, true).endsWith("checked online"), "heading and flag");
+            PcState empty = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":false,\"noPlan\":true,\"sessions\":[]}}")));
+            ok(!empty.claude.limitsKnown() && ClaudeText.limitsMissing(empty.claude).equals("Plan limits need a Claude Pro or Max login.") && empty.claudePage == -1 && ClaudeText.heading(empty.claude).equals("CLAUDE CODE"), "empty");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

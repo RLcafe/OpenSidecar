@@ -173,5 +173,32 @@ public final class CardSizing {
     public static int notes(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 700 && height >= 300 ? LARGE : MEDIUM; }
     public static double notesListColumn(double width) { return clamp(Math.floor(width * 0.46), 300, 520); }
 
+    // Claude Code (docs/design/claude-watcher.md): one loud critter under 360 wide or 280 tall, the lineup of critters
+    // over the plan meters between, and the burrow (session rows beside a usage panel) from 640 × 420. Heights that hold
+    // text follow the text size, so nothing leaves the card at 140%. The same numbers as CardSizing.cs.
+    public static int claude(double width, double height) { return width < 360 || height < 280 ? SMALL : width >= 640 && height >= 420 ? LARGE : MEDIUM; }
+    // The Medium meter strip: two meters side by side, each a label line, a 10-unit bar and a reset line.
+    public static double claudeStrip(double textScale) { return Math.ceil(60 + 24 * textScale); }
+    // Critters in the Medium lineup: one per 108 units of width, at most five.
+    public static int claudeLineup(double bodyWidth) { return (int) clamp(Math.floor((bodyWidth + 12) / 108), 1, 5); }
+    // A lineup critter: what's left of the row after its name (and state, when there's room), at most 96 units.
+    public static double claudeLineupCritter(double rowHeight, double columnWidth, double textScale, boolean state) {
+        return clamp(Math.floor(Math.min(rowHeight - 20 * textScale - 10 - (state ? 19 : 0), columnWidth - 8)), 32, 96);
+    }
+    public static boolean claudeLineupState(double rowHeight, double textScale) { return rowHeight - 20 * textScale - 10 - 19 >= 48; }
+    // A Large session row: the title over the state, at least 64 units.
+    public static double claudeRowHeight(double textScale) { return Math.max(64, Math.ceil(8 + 44 * textScale)); }
+    public static int claudeRows(double height, double textScale) { return Math.max(1, (int) Math.floor((height + 8) / (claudeRowHeight(textScale) + 8))); }
+    // The Large usage panel's width, and how many project rows fit under its meters and period switch.
+    public static double claudePanel(double bodyWidth) { return clamp(Math.round(bodyWidth * 0.38), 240, 380); }
+    public static double claudeMeterBlock(double textScale) { return Math.ceil(Math.max(20 * textScale, 34) + 42); }
+    public static double claudeProjectRow(double textScale) { return Math.ceil(16 + 20 * textScale); }
+    public static int claudeProjects(double panelHeight, double textScale) {
+        double used = 2 * claudeMeterBlock(textScale) + 14 + 48 + 16 + Math.ceil(20 * textScale) + 8 + 22;
+        return (int) clamp(Math.floor((panelHeight - used) / claudeProjectRow(textScale)), 0, 6);
+    }
+    // The Small critter: as tall as the card allows, at most 42% of its width.
+    public static double claudeSmallCritter(double bodyWidth, double bodyHeight) { return clamp(Math.floor(Math.min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

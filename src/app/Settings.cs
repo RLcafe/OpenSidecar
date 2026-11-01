@@ -84,6 +84,9 @@ namespace WidgetScreen
         public bool PrayerHanafi { get; set; }
         public bool PrayerAlert { get; set; }
         public string PrayerSound { get; set; }
+        // Claude Code (Settings → Claude): a chime when a session starts needing you, and the read-only plan usage check.
+        public bool ClaudeChime { get; set; }
+        public bool ClaudeOnlineLimits { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -121,6 +124,7 @@ namespace WidgetScreen
             HideToTrayWithPhone = false;
             FocusChime = true;
             StorageLowPercent = StorageService.DefaultLowPercent;
+            ClaudeOnlineLimits = true;
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
@@ -208,6 +212,8 @@ namespace WidgetScreen
     {
         public static string SpotifyPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "spotify-session.dat"); }
         public static string DiscordPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "discord-session.dat"); }
+        // The Claude Code bridge's folder (ClaudeHook.exe, sessions\, limits.json) beside settings.xml.
+        public static string ClaudePath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "claude"); }
         public static string DefaultPath
         {
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WidgetScreen", "settings.xml"); }

@@ -64,6 +64,32 @@ namespace WidgetScreen
         }
     }
 
+    // A chunky meter in ten segments (Claude Code's plan limits): 4-unit gaps, radius 3, a segment lit for each 10%.
+    public sealed class SegmentBar : FrameworkElement
+    {
+        public static readonly DependencyProperty ValueProperty = DependencyProperty.Register("Value", typeof(double), typeof(SegmentBar), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty TrackProperty = DependencyProperty.Register("Track", typeof(Brush), typeof(SegmentBar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty FillProperty = DependencyProperty.Register("Fill", typeof(Brush), typeof(SegmentBar), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public double Value { get { return (double)GetValue(ValueProperty); } set { SetValue(ValueProperty, value); } }
+        public Brush Track { get { return (Brush)GetValue(TrackProperty); } set { SetValue(TrackProperty, value); } }
+        public Brush Fill { get { return (Brush)GetValue(FillProperty); } set { SetValue(FillProperty, value); } }
+        public const int Segments = 10;
+        // Segments lit for a percentage: any use lights the first, and a full one only at 100%.
+        public static int Lit(double percent) { if (Double.IsNaN(percent) || percent <= 0) return 0; return Math.Max(1, Math.Min(Segments, (int)Math.Floor(percent / 10 + 0.0001))); }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            double gap = 4, width = (ActualWidth - gap * (Segments - 1)) / Segments, height = ActualHeight;
+            if (width <= 1 || height <= 0) return;
+            int lit = Lit(Value); double radius = Math.Min(3, height / 2);
+            for (int i = 0; i < Segments; i++)
+            {
+                var brush = i < lit ? Fill : Track;
+                if (brush != null) context.DrawRoundedRectangle(brush, null, new Rect(i * (width + gap), 0, width, height), radius, radius);
+            }
+        }
+    }
+
     // The recent history of a reading, newest at the right: a line over a faint area. Percentages use a 0–100 scale;
     // rates (Maximum 0) scale to the largest value shown, and an optional second series is drawn as a muted line.
     public sealed class HistoryGraph : FrameworkElement

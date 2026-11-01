@@ -43,6 +43,8 @@ internal static class SmokeTests
         string directory = args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         // Dashboards in the checks are laid out for the 1920 × 720 reference screen, whatever monitors this PC has.
         Program.ScreenSize = new System.Windows.Size(1920, 720);
+        // Claude Code's folder is a throwaway one for every check: the real settings.json, sign-in and logs are never touched.
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", Path.Combine(directory, "claude-config"));
         SpotifyTests.Run(directory, Check);
         DeckTests.Run(directory, Check);
         DiscordTests.Run(directory, Check);
@@ -53,6 +55,7 @@ internal static class SmokeTests
         ClockTests.Run(directory, Check);
         PrayerTests.Run(directory, Check);
         NotesTests.Run(directory, Check);
+        ClaudeTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -112,7 +115,7 @@ internal static class SmokeTests
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     click("SettingsButton");
-                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 9, "Settings tabs missing.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 10 && (string)((System.Windows.Controls.TabItem)tabs.Items[9]).Header == "Claude", "Settings tabs missing.");
                     ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
                     var preview = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
                     click("CancelSettings");
@@ -246,7 +249,7 @@ internal static class SmokeTests
                     Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
                     var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
                     var headers = tabs.Items.OfType<System.Windows.Controls.TabItem>().Select(t => (string)t.Header).ToList();
-                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Phone", "Discord" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
+                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
                     Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
                 }
                 window.Close();
