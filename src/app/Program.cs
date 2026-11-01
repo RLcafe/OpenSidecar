@@ -44,6 +44,8 @@ namespace WidgetScreen
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))
                 {
                     running = controller;
+                    // A labelled fixture for the Claude card ("Sample" in its heading) instead of this PC's sessions.
+                    if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
                     if (renderPath != null)
                     {
                         // --render-wait N gives live readings longer to arrive (System stats history fills every 2 s).

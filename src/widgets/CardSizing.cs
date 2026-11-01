@@ -175,6 +175,34 @@ namespace WidgetScreen
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.
         public static Design Notes(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 700 && height >= 300 ? Design.Large : Design.Medium; }
         public static double NotesListColumn(double width) { return Clamp(Math.Floor(width * 0.46), 300, 520); }
+        // Claude Code (docs/design/claude-watcher.md): one loud critter under 360 wide or 280 tall, the lineup of critters
+        // over the plan meters between, and the burrow (session rows beside a usage panel) from 640 × 420. Heights that
+        // hold text follow the text size, so nothing leaves the card at 140%.
+        public static Design Claude(double width, double height) { return width < 360 || height < 280 ? Design.Small : width >= 640 && height >= 420 ? Design.Large : Design.Medium; }
+        // The Medium meter strip: two meters side by side, each a label line, a 10-unit bar and a reset line.
+        public static double ClaudeStrip(double textScale) { return Math.Ceiling(60 + 24 * textScale); }
+        // Critters in the Medium lineup: one per 108 units of width, at most five.
+        public static int ClaudeLineup(double bodyWidth) { return (int)Clamp(Math.Floor((bodyWidth + 12) / 108), 1, 5); }
+        // A lineup critter: what's left of the row after its name (and state, when there's room), at most 96 units.
+        public static double ClaudeLineupCritter(double rowHeight, double columnWidth, double textScale, bool state)
+        {
+            return Clamp(Math.Floor(Math.Min(rowHeight - 20 * textScale - 10 - (state ? 19 : 0), columnWidth - 8)), 32, 96);
+        }
+        public static bool ClaudeLineupState(double rowHeight, double textScale) { return rowHeight - 20 * textScale - 10 - 19 >= 48; }
+        // A Large session row: the title over the state, at least 64 units.
+        public static double ClaudeRowHeight(double textScale) { return Math.Max(64, Math.Ceiling(8 + 44 * textScale)); }
+        public static int ClaudeRows(double height, double textScale) { return Math.Max(1, (int)Math.Floor((height + 8) / (ClaudeRowHeight(textScale) + 8))); }
+        // The Large usage panel's width, and how many project rows fit under its meters and period switch.
+        public static double ClaudePanel(double bodyWidth) { return Clamp(Math.Round(bodyWidth * 0.38), 240, 380); }
+        public static double ClaudeMeterBlock(double textScale) { return Math.Ceiling(Math.Max(20 * textScale, 32) + 41); }
+        public static double ClaudeProjectRow(double textScale) { return Math.Ceiling(16 + 20 * textScale); }
+        public static int ClaudeProjects(double panelHeight, double textScale)
+        {
+            double used = 2 * ClaudeMeterBlock(textScale) + 14 + 48 + 16 + Math.Ceiling(20 * textScale) + 8 + 22;
+            return (int)Clamp(Math.Floor((panelHeight - used) / ClaudeProjectRow(textScale)), 0, 6);
+        }
+        // The Small critter: as tall as the card allows, at most 42% of its width.
+        public static double ClaudeSmallCritter(double bodyWidth, double bodyHeight) { return Clamp(Math.Floor(Math.Min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

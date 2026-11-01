@@ -1,12 +1,12 @@
 param([string]$SourceDirectory = 'artifacts\app', [string]$OutputDirectory = 'artifacts\setup', [string]$Version, [switch]$Test)
-# Packs a built Widget Screen (WidgetScreen.exe and its .config) into one setup exe,
+# Packs a built Widget Screen (WidgetScreen.exe, its .config and the ClaudeHook.exe bridge) into one setup exe,
 # WidgetScreen-Setup-<version>.exe, built with the Framework's csc.exe like the app. See docs\design\setup.md.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 function Resolve-ProjectPath([string]$path) { if ([IO.Path]::IsPathRooted($path)) { $path } else { Join-Path $projectRoot $path } }
 $source = Resolve-ProjectPath $SourceDirectory
 $output = Resolve-ProjectPath $OutputDirectory
-foreach ($file in @('WidgetScreen.exe', 'WidgetScreen.exe.config')) {
+foreach ($file in @('WidgetScreen.exe', 'WidgetScreen.exe.config', 'ClaudeHook.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path $source $file))) { throw "$file is missing from $source. Build the app first." }
 }
 # The version comes from the newest vX.Y.Z tag, like the app's own (builds after a tag carry the commit count and hash).
@@ -37,7 +37,8 @@ $sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'installer') -Fi
 $arguments = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/utf8output', '/warn:4', "/out:$setupPath",
     ('/win32manifest:' + (Join-Path $projectRoot 'installer\setup.manifest')), ('/win32icon:' + (Join-Path $projectRoot 'assets\WidgetScreen.ico')),
     ('/resource:' + (Join-Path $source 'WidgetScreen.exe') + ',payload/WidgetScreen.exe'),
-    ('/resource:' + (Join-Path $source 'WidgetScreen.exe.config') + ',payload/WidgetScreen.exe.config')) + $references + $sources
+    ('/resource:' + (Join-Path $source 'WidgetScreen.exe.config') + ',payload/WidgetScreen.exe.config'),
+    ('/resource:' + (Join-Path $source 'ClaudeHook.exe') + ',payload/ClaudeHook.exe')) + $references + $sources
 & $compiler $arguments
 if ($LASTEXITCODE -ne 0) { throw "Setup build failed (exit $LASTEXITCODE)." }
 Write-Output "Setup: $setupPath"

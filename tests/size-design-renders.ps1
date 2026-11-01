@@ -1,6 +1,7 @@
 ﻿# Renders the cards in their Small, Medium and Large designs (docs/design/widget-size-views.md) at 1920 × 720 with
 # isolated settings, into artifacts\size-designs\. Readings are live: this PC's stats, audio and media, and Open-Meteo's
-# weather for London, so a render without network shows the offline state instead. Spotify and Discord aren't
+# weather for London, so a render without network shows the offline state instead. The claude-* scenes use the card's
+# labelled fixture. Spotify and Discord aren't
 # connected in isolated settings; tests\Spotify\SpotifyTests.cs renders Spotify's Large design with labelled fixtures.
 param([string]$AppDirectory = (Join-Path $PSScriptRoot '..\artifacts\app'), [int]$Wait = 30, [string[]]$Only = @())
 $ErrorActionPreference = 'Stop'
@@ -33,12 +34,20 @@ $scenes = [ordered]@{
     'prayer-wide'   = @{ Prayer = @(0, 0, 1200, 420) }
     'notes'         = @{ Notes = @(0, 0, 472, 310); Prayer = @(488, 0, 300, 200) }
     'notes-large'   = @{ Notes = @(0, 0, 1000, 420) }
+    # Claude Code with its labelled fixture (--render-claude-sample): "Sample" shows in the card's heading.
+    'claude-small'  = @{ Claude = @(0, 0, 300, 220); Focus = @(316, 0, 320, 576) }
+    'claude-medium' = @{ Claude = @(0, 0, 472, 310); Focus = @(488, 0, 320, 576) }
+    'claude-large'  = @{ Claude = @(0, 0, 900, 576); Focus = @(916, 0, 320, 576) }
+    'claude-needs'  = @{ Claude = @(0, 0, 472, 310); Storage = @(488, 0, 300, 220) }
+    'claude-needs-large' = @{ Claude = @(0, 0, 760, 576) }
+    # The Claude card on a second page: the header's pill says a session needs you.
+    'claude-pill'   = @{ Focus = @(0, 0, 320, 576); Media = @(336, 0, 472, 310) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]
     $settings = Join-Path $output ($name + '-settings.xml')
-    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage', 'Clocks', 'Prayer', 'Notes') {
+    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage', 'Clocks', 'Prayer', 'Notes', 'Claude') {
         $b = if ($scene.Contains($id)) { $scene[$id] } else { @(0, 0, 320, 300) }
         $visible = if ($scene.Contains($id)) { 'true' } else { 'false' }
         "<WidgetPlacement><Id>$id</Id><X>$($b[0])</X><Y>$($b[1])</Y><Width>$($b[2])</Width><Height>$($b[3])</Height><Visible>$visible</Visible></WidgetPlacement>"
@@ -50,14 +59,16 @@ foreach ($name in $scenes.Keys) {
   <HintDismissed>true</HintDismissed>
   <PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>
   <WorldClocks><WorldClock><Zone>Tokyo Standard Time</Zone><Label>Tokyo</Label></WorldClock><WorldClock><Zone>GMT Standard Time</Zone><Label>London</Label></WorldClock><WorldClock><Zone>Pacific Standard Time</Zone><Label>San Francisco</Label></WorldClock></WorldClocks>
-  <WidgetLayout>$($placements -join '')</WidgetLayout>
+  <WidgetLayout>$($placements -join '')</WidgetLayout>$(if ($name -eq 'claude-pill') { '<MorePages><LayoutPage><Name>Claude</Name><WidgetLayout><WidgetPlacement><Id>Claude</Id><X>0</X><Y>0</Y><Width>472</Width><Height>310</Height><Visible>true</Visible></WidgetPlacement></WidgetLayout></LayoutPage></MorePages>' })
 </AppSettings>
 "@ | Set-Content -Encoding UTF8 $settings
     # A labelled fixture for the Notes card: made-up notes in the scene's own notes.xml.
     $notesFile = Join-Path $output 'notes.xml'
     '<?xml version="1.0"?><NotesData><Text>TEST FIXTURE: example notes. Call about the order on Tuesday.</Text><Items><TodoItem><Id>a1</Id><Text>Example: renew the domain</Text><Done>true</Done></TodoItem><TodoItem><Id>a2</Id><Text>Example: back up the photos</Text><Done>false</Done></TodoItem><TodoItem><Id>a3</Id><Text>Example: book a haircut</Text><Done>false</Done></TodoItem></Items></NotesData>' | Set-Content -Encoding UTF8 $notesFile
     $png = Join-Path $output ($name + '.png')
-    $process = Start-Process -FilePath $exe -ArgumentList @('--settings', "`"$settings`"", '--render', "`"$png`"", '--render-wait', $Wait) -PassThru -Wait
+    $arguments = @('--settings', "`"$settings`"", '--render', "`"$png`"", '--render-wait', $Wait)
+    if ($name -like 'claude-*') { $arguments += '--render-claude-sample'; if ($name -like 'claude-needs*' -or $name -eq 'claude-pill') { $arguments += '--render-claude-needs' } }
+    $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -Wait
     if ($process.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "Render failed: $name" }
     Write-Output "Rendered $png"
 }

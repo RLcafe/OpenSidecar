@@ -217,6 +217,10 @@
               <TextBlock x:Name="PageCountText" Text="1 of 1" Style="{StaticResource Caption}" HorizontalAlignment="Center"/>
             </StackPanel>
             <Button x:Name="NextPageButton" Content="&#xE76C;" Style="{StaticResource IconButton}" ToolTip="Next page" AutomationProperties.Name="Next page"/>
+            <!-- Shown while a Claude Code session needs you and the Claude card is on another page; a tap shows that page. -->
+            <Button x:Name="ClaudePill" Visibility="Collapsed" Margin="20,0,0,0" Padding="10,4,16,4" BorderBrush="{DynamicResource Warning}" BorderThickness="2" ToolTip="A Claude Code session needs you. Tap to show its page." AutomationProperties.Name="Claude needs you. Show the Claude page.">
+              <StackPanel Orientation="Horizontal"><Grid x:Name="ClaudePillCritter" Width="32" Height="32" VerticalAlignment="Center"/><TextBlock Text="Claude needs you" Foreground="{DynamicResource Warning}" FontSize="{DynamicResource SmallSize}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/></StackPanel>
+            </Button>
           </StackPanel>
           <!-- A one-time hint for what the dashboard doesn't show by itself; Got it puts it away for good. -->
           <StackPanel x:Name="HintRow" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed" AutomationProperties.Name="Tips">
@@ -452,6 +456,10 @@
                 <Grid x:Name="ClocksBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
+            <!-- Claude Code sessions, plan limits and usage. ClaudeCard builds the Small, Medium or Large design in ClaudeBody (docs/design/claude-watcher.md). -->
+            <Border x:Name="ClaudeCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Claude Code">
+              <Grid x:Name="ClaudeBody"/>
+            </Border>
           </Grid>
         </Grid>
 
@@ -462,21 +470,6 @@
       <Grid x:Name="EditPanelLayer" Visibility="Collapsed" Background="Transparent">
         <Border x:Name="EditPanel" Background="{DynamicResource Raised}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" CornerRadius="16" Width="460" Padding="16,12" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,92,332,52">
           <ScrollViewer VerticalScrollBarVisibility="Auto" PanningMode="VerticalOnly"><StackPanel x:Name="EditPanelContent"/></ScrollViewer>
-        </Border>
-      </Grid>
-
-      <!-- The confirm sheet (ConfirmSheet): one themed "are you sure" for the whole dashboard. Tapping outside cancels. -->
-      <Grid x:Name="ConfirmOverlay" Visibility="Collapsed" Background="#B30C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
-        <Border Style="{StaticResource Card}" Width="600" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
-          <StackPanel>
-            <TextBlock x:Name="ConfirmTitle" Text="QUICK LAUNCH" Style="{StaticResource Label}"/>
-            <TextBlock x:Name="ConfirmSubject" Text="" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0"/>
-            <TextBlock x:Name="ConfirmDetail" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" MaxHeight="120" Margin="0,8,0,0"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
-              <Button x:Name="ConfirmCancel" Content="Cancel" MinWidth="140" MinHeight="52" Margin="0,0,12,0" AutomationProperties.Name="Cancel"/>
-              <Button x:Name="ConfirmAction" Content="Run" Style="{StaticResource AccentButton}" MinWidth="170" MinHeight="52"/>
-            </StackPanel>
-          </StackPanel>
         </Border>
       </Grid>
 
@@ -761,9 +754,47 @@
                   </StackPanel></ScrollViewer>
                 </Grid>
               </TabItem>
+              <TabItem Header="Claude">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="740"/><ColumnDefinition Width="32"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="Claude Code" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="ClaudeConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,6" FontSize="{DynamicResource BodySize}"/>
+                    <TextBlock x:Name="ClaudeFolderText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <WrapPanel><Button x:Name="ClaudeConnectButton" Content="Connect Claude Code" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="ClaudeDisconnectButton" Content="Disconnect" Margin="0,0,8,8"/></WrapPanel>
+                    <TextBlock Text="Connect and Disconnect take effect right away; you don't need to save. Claude Code picks up the change in sessions you start afterwards." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
+                    <CheckBox x:Name="ClaudeChimeChoice" Content="Chime when a session needs me"/>
+                    <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <CheckBox x:Name="ClaudeOnlineChoice" Content="Check my plan's limits online every 5 minutes"/>
+                    <TextBlock Text="Asks api.anthropic.com for your plan's 5-hour and weekly use with Claude Code's own sign-in, even when no session is open. It uses no credits, and the sign-in isn't stored, changed or sent anywhere else. Your phone gets only the percentages." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                  </StackPanel></ScrollViewer>
+                  <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="What Connect changes" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="It adds hooks to Claude Code's settings.json, so each session tells the dashboard when it starts, works, finishes or needs you, and sets its status line, which brings your plan's limits to the card." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Your own hooks stay as they are. If you had a status line, it keeps showing: Widget Screen runs it and passes on what it prints." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="A backup is saved next to it as settings.json.widgetscreen-backup. Disconnect takes out exactly what Connect added and puts your earlier status line back." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Usage per project and per session is counted from Claude Code's logs on this PC. Tap a session on the card to bring its window to the front." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Turn on the Claude Code widget in Edit layout." Style="{StaticResource Small}" TextWrapping="Wrap"/>
+                  </StackPanel></ScrollViewer>
+                </Grid>
+              </TabItem>
 </TabControl>
             <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="SettingsStatus" Text="" Style="{StaticResource Small}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,20,0"/><Button x:Name="CancelSettingsFooter" Grid.Column="1" Content="Cancel" MinWidth="140" Margin="0,0,12,0" VerticalAlignment="Center" AutomationProperties.Name="Cancel settings changes"/><Button x:Name="SaveSettings" Grid.Column="2" Content="Save changes" Style="{StaticResource AccentButton}" MinWidth="170" MinHeight="52" VerticalAlignment="Center"/></Grid>
           </Grid>
+        </Border>
+      </Grid>
+
+      <!-- The confirm sheet (ConfirmSheet): one themed "are you sure" for the whole dashboard, above Settings too. Tapping outside cancels. -->
+      <Grid x:Name="ConfirmOverlay" Visibility="Collapsed" Background="#B30C0E13" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
+        <Border Style="{StaticResource Card}" Width="600" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{DynamicResource ControlBorder}">
+          <StackPanel>
+            <TextBlock x:Name="ConfirmTitle" Text="QUICK LAUNCH" Style="{StaticResource Label}"/>
+            <TextBlock x:Name="ConfirmSubject" Text="" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0"/>
+            <TextBlock x:Name="ConfirmDetail" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" MaxHeight="120" Margin="0,8,0,0"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+              <Button x:Name="ConfirmCancel" Content="Cancel" MinWidth="140" MinHeight="52" Margin="0,0,12,0" AutomationProperties.Name="Cancel"/>
+              <Button x:Name="ConfirmAction" Content="Run" Style="{StaticResource AccentButton}" MinWidth="170" MinHeight="52"/>
+            </StackPanel>
+          </StackPanel>
         </Border>
       </Grid>
     </Grid>

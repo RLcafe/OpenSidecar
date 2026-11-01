@@ -30,6 +30,7 @@ try {
         Run $Setup "/S --root `"$root`""
         Assert ((Get-FileHash $app).Hash -eq (Get-FileHash (Join-Path $Source 'WidgetScreen.exe')).Hash) 'The installed exe differs from the build.'
         Assert (Test-Path -LiteralPath (Join-Path $installDir 'WidgetScreen.exe.config')) 'The .config is missing.'
+        Assert ((Get-FileHash (Join-Path $installDir 'ClaudeHook.exe')).Hash -eq (Get-FileHash (Join-Path $Source 'ClaudeHook.exe')).Hash) 'The Claude Code bridge is missing or differs from the build.'
         Assert (Test-Path -LiteralPath $uninstaller) 'The uninstaller is missing.'
         Assert ((Target $startMenu) -eq $app) 'The Start menu shortcut does not open the installed app.'
         Assert ((Target $startup) -eq $app) 'The Startup shortcut does not open the installed app.'

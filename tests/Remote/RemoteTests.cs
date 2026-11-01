@@ -143,7 +143,16 @@ internal static class RemoteTests
                     Assert(live.Item1 == 200, "Live state failed: " + live.Item2);
                     var liveState = Json(live.Item2);
                     // The Android checks parse this real answer, so both apps agree on the format.
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes", token).Item2);
+                    // The Claude section comes from the labelled fixture, never from this PC's Claude Code logs.
+                    controller.UseClaudeSample(true);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude", token).Item2);
+                    var claudeState = (Dictionary<string, object>)Json(get("/state?parts=claude", token).Item2)["claude"];
+                    var claudeSessions = (object[])claudeState["sessions"]; var firstSession = (Dictionary<string, object>)claudeSessions[0];
+                    var claudeLimits = (Dictionary<string, object>)claudeState["limits"]; var claudeFive = (Dictionary<string, object>)claudeLimits["fiveHour"];
+                    Assert((bool)claudeState["connected"] && (bool)claudeState["sample"] && claudeSessions.Length == 4 && (string)firstSession["state"] == "needs" && (string)firstSession["project"] == "api-server"
+                        && Convert.ToInt64(((Dictionary<string, object>)firstSession["tokens"])["fiveHour"]) == 412000 && Convert.ToDouble(claudeFive["pct"]) == 84 && Convert.ToDouble(claudeFive["resetsAt"]) > 1e9
+                        && ((object[])((Dictionary<string, object>)claudeState["usage"])["week"]).Length == 5 && !claudeState.ContainsKey("token") && !state.Item2.Contains("accessToken"), "Claude state wrong.");
+                    Assert(post("/command", "{\"action\":\"claude.focus\",\"id\":\"sample-2\"}", token).Item1 == 200 && post("/command", "{\"action\":\"claude.focus\",\"id\":\"gone\"}", token).Item1 == 409, "Focusing a Claude session from the phone failed.");
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
                     var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];
                     Assert(Convert.ToInt32(storageState["lowPercent"]) == 10 && ((object[])storageState["drives"]).Length > 0 && ((Dictionary<string, object>)((object[])storageState["drives"])[0]).ContainsKey("free"), "Storage state wrong.");
@@ -212,7 +221,7 @@ internal static class RemoteTests
                     controller.Editor.Cancel();
                     Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
                     Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,layout", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,layout", token).Item2);
                     Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");
