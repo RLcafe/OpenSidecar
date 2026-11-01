@@ -13,6 +13,7 @@ import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.GameText;
 import com.alialyami.widgetscreen.core.HomeText;
 import com.alialyami.widgetscreen.core.Inks;
+import com.alialyami.widgetscreen.core.SoundboardText;
 import com.alialyami.widgetscreen.core.SystemText;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.MacroText;
@@ -988,6 +989,16 @@ public final class AndroidTests {
                     ok(sample.prayer == null || !sample.prayer.located || sample.prayer.alert.length() > 0, "sample alert");
                 } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
             }
+        } });
+        // Sticker Sheet phase 5, the Soundboard: the same words as the PC's SoundboardPadTests.
+        check("Soundboard: the voice sticker, pad numbers and sources match the PC", new Action() { public void run() {
+            ok(SoundboardText.voice(false, false, false, null).equals("NOT SET UP") && SoundboardText.voice(true, true, true, "General").equals("UNAVAILABLE"), "not set up, unavailable");
+            ok(SoundboardText.voice(true, true, false, "General").equals("General") && SoundboardText.voice(true, true, false, "").equals("NOT IN VOICE") && SoundboardText.voice(true, false, false, null).equals("…"), "in voice, not in voice, connecting");
+            ok(Inks.stateOf("NOT SET UP", false) == Inks.UNAVAILABLE && Inks.stateOf("…", false) == Inks.LOADING && Inks.stateOf("General", false) == Inks.FACT, "sticker looks");
+            ok(SoundboardText.padNumber(0).equals("01") && SoundboardText.padNumber(11).equals("12") && SoundboardText.padNumber(99).equals("100") && SoundboardText.FLASH_MS == 150, "pad numbers and flash");
+            ok(SoundboardText.source(true, false).equals("Discord sound") && SoundboardText.source(false, true).equals("From another server") && SoundboardText.source(false, false).equals("This server"), "sources");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"discord\":{\"connected\":true,\"linked\":false,\"failed\":true,\"status\":\"Open Discord on this PC to play sounds.\",\"sounds\":[]}}")));
+            ok(state.discord != null && state.discord.failed && SoundboardText.voice(true, state.discord.linked, state.discord.failed, state.discord.channel).equals("UNAVAILABLE"), "failed from the PC");
         } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);

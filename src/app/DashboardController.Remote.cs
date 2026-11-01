@@ -369,6 +369,8 @@ namespace WidgetScreen
             return state;
         }
 
+        // Whether the last read failed (Discord not running or unreachable), for the phone's voice sticker.
+        private bool remoteDiscordFailed;
         // Sounds and the voice channel, read again after 15 seconds or when the phone asks to reload.
         private async Task<Dictionary<string, object>> RemoteDiscord(bool reload)
         {
@@ -382,11 +384,12 @@ namespace WidgetScreen
                     var sounds = await discordService.SoundsAsync(remoteLifetime.Token);
                     remoteChannel = channel; remoteSounds = DiscordService.Order(sounds, channel == null ? null : channel.GuildId);
                     remoteDiscordStatus = remoteSounds.Count == 0 ? "No soundboard sounds yet. Add some to a server in Discord." : channel == null ? "Join a voice channel in Discord to play sounds." : "";
+                    remoteDiscordFailed = false;
                 }
-                catch (Exception error) { remoteChannel = null; remoteDiscordStatus = SoundboardWidget.Message(error); }
+                catch (Exception error) { remoteChannel = null; remoteDiscordStatus = SoundboardWidget.Message(error); remoteDiscordFailed = true; }
                 finally { remoteDiscordBusy = false; }
             }
-            return D("connected", true, "linked", discordService.Linked, "channel", remoteChannel == null ? "" : remoteChannel.Name, "channelGuild", remoteChannel == null ? "" : remoteChannel.GuildId, "status", remoteDiscordStatus,
+            return D("connected", true, "linked", discordService.Linked, "channel", remoteChannel == null ? "" : remoteChannel.Name, "channelGuild", remoteChannel == null ? "" : remoteChannel.GuildId, "status", remoteDiscordStatus, "failed", remoteDiscordFailed,
                 "sounds", remoteSounds.Select(s => D("id", s.Id, "guild", s.GuildId ?? "", "name", s.Name, "isDefault", s.IsDefault)).ToArray());
         }
 

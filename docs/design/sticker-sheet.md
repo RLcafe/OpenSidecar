@@ -77,12 +77,14 @@ Numerals stay Segoe UI Light. Strips and sticker text use Segoe UI Black, values
    - **Storage:** jars, with caution stripes under the threshold.
    - **World clocks:** analog faces, Lemon from 7 AM to 7 PM and Lavender otherwise, labelled day and evening (not sunlight). On Large, 24-hour bands with 9–5 shaded and a now line.
    - **Prayer:** a sun-path arc from Fajr to Isha placed by time, the countdown, and Hijri, Method and Alert chips.
-4. **Lists:**
+**Ali skipped phase 4 and most of phase 5 (1 Nov 2026).** Phase 4 (Notes, Clipboard, Macros, Calendar) and phase 5's Games and Smart home were not built; those cards keep their phase 1 label strips and status stickers over their earlier bodies. Phase 5 covered the Soundboard only, and the redesign ends there (v0.38.0). See "What phase 5 built".
+
+4. **Lists** (skipped by Ali):
    - **Notes:** a Lemon sticky note with dark text, and the to-do progress.
    - **Clipboard:** receipt slips with the copy time and a type tag.
    - **Macros:** a bead chain; beads fill as steps finish, and a failed bead is striped.
    - **Calendar:** a tear-off date block, a countdown pill, and a day timeline on Large.
-5. **The rest:**
+5. **The rest** (Ali kept the Soundboard only):
    - **Games:** cartridge cells, a store chip, when it was last played, and playtime from Steam only.
    - **Smart home:** bulbs in their reported colour, rocker switches and a thermostat dial.
    - **Soundboard:** sampler pads with a 150 ms flash, and the voice channel status.
@@ -189,4 +191,19 @@ Branch `feature/sticker-readings`. The readings, on both apps unless a line says
 - **Performance check** (1 Nov 2026): 60 s after a 10 s warm-up, windowed with isolated settings, on the default layout and on the medium readings page (all five readings shown, Weather fetching for London).
   - Default layout: v0.36.0 release 0.07% CPU and 128.4 MB private memory; this branch 0.08% CPU and 123.0 MB.
   - Readings page: v0.36.0 release 0.01% CPU and 129.8 MB; this branch 0.02% CPU and 131.9 MB.
+  - Both are within the targets (CPU within 0.5 points, memory within 10%).
+
+## What phase 5 built
+
+Branch `feature/sticker-soundboard`. The Soundboard only (Ali skipped phase 4 and the rest of phase 5), on both apps:
+
+- **Sampler pads.** Each sound is a pad edged in the Soundboard ink (Lavender by default) on a 3-unit solid lift, tinted 10% with the ink (`Pad` style on Windows; `Stickers.pad` on the phone). Small shows the name; Medium adds the pad number ("01"), numbered through the whole list like a sampler's banks (`SoundboardWidget.PadNumber`, `SoundboardText.padNumber`); Large is a pad with the number and a play mark at the top and the name and where the sound comes from (Discord sound, This server, From another server) at the bottom. The six-a-page grid, its sizes and the 48-unit floor are unchanged.
+- **The flash.** A pad lights in the ink, with dark text, while pressed and for 150 ms after a tap (a one-shot dispatcher timer on Windows, a posted runnable on the phone; `Flash`, `FLASH_MS`). In Quiet mode it only lights while pressed. Secondary text follows the pad's text colour at 70%, so it stays readable when lit.
+- **Voice channel status** is the status sticker: the channel's name, filled, with a speaker glyph while you're in voice; NOT IN VOICE; "…" while connecting; UNAVAILABLE when Discord can't be reached; NOT SET UP before Discord is connected (`Voice`, `SoundboardText.voice`). It needs 360 units of card, as the channel name did. The phone link adds `discord.failed`, so the phone tells unavailable from connecting.
+- **Not set up** keeps Connect Discord and its button inside a dashed outline. **Discord not running** with nothing loaded, and **no sounds yet**, put the reason in a dashed outline in place of the pads.
+- **Render flags** `--render-soundboard-sample` (eight labelled sample sounds, a "SAMPLE" sticker and "Labelled sample sounds." under the pads; they never play) and `--render-soundboard-empty` (connected with no sounds). `tests\sticker-renders.ps1` adds the card at Small, Medium and Large in each palette, at 140%, empty, and not set up.
+- **Not rendered:** a real Discord account, voice channel and the lit pad (the flash lasts 150 ms; its length and the pad style are checked). The phone views were checked on the JVM and by building the APK, not on a device.
+- **Performance check** (1 Nov 2026): 60 s after a 10 s warm-up, windowed with isolated settings.
+  - Default layout: v0.37.0 release 0.06% CPU and 126.9 MB private memory; this branch 0.07% CPU and 124.1 MB.
+  - Soundboard page (Soundboard and Quick Launch, Discord not set up): v0.37.0 0.00% CPU and 114.3 MB; this branch 0.00% CPU and 112.2 MB.
   - Both are within the targets (CPU within 0.5 points, memory within 10%).

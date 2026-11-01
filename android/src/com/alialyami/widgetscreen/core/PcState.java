@@ -245,7 +245,7 @@ public final class PcState {
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
     public static final class Discord {
-        public boolean connected, linked;
+        public boolean connected, linked, failed;
         public String channel = "", channelGuild = "", status = "";
         public final List<Sound> sounds = new ArrayList<Sound>();
     }
@@ -662,7 +662,7 @@ public final class PcState {
 
     public static Discord parseDiscord(Map<String, Object> d) {
         Discord discord = new Discord();
-        discord.connected = flag(d, "connected"); discord.linked = flag(d, "linked");
+        discord.connected = flag(d, "connected"); discord.linked = flag(d, "linked"); discord.failed = flag(d, "failed");
         discord.channel = text(d, "channel"); discord.channelGuild = text(d, "channelGuild"); discord.status = text(d, "status");
         for (Object item : Json.array(d, "sounds")) {
             Map<String, Object> s = Json.obj(item);

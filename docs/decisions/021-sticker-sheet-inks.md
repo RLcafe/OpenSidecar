@@ -80,3 +80,13 @@ System stats, Weather, Storage, World clocks and Prayer, on both apps (branch `f
 - **Not set up is a dashed outline** (Weather and Prayer without a city, World clocks without zones, Storage without drives, Weather unreachable with nothing to show), following the state language from phase 1.
 - **"Used this week" on Storage stays deferred.** It would need the app to keep a history of drive sizes, which it doesn't.
 - **Not verified on hardware:** the phone views were checked on the JVM and by building the APK, not on a device or emulator.
+
+## Phases 4 and 5: the Soundboard only
+
+Ali skipped phase 4 (Notes, Clipboard, Macros, Calendar) and phase 5's Games and Smart home (1 Nov 2026). Phase 5 redesigned the Soundboard alone (branch `feature/sticker-soundboard`, v0.38.0), and the redesign ends there. The skipped cards keep their phase 1 strips and stickers over their earlier bodies. The choices behind the Soundboard:
+
+- **Pads keep the six-a-page grid and the 48-unit floor.** Only their look changes (a pad style on Windows, a drawable on the phone), so `CardSizing.SoundGrid` and the Small, Medium and Large thresholds (`CardSizing.Tile`) are unchanged.
+- **The 150 ms flash is a one-shot state change,** allowed by the performance rules: a single dispatcher timer per tap on Windows and a posted runnable on the phone, nothing repeating, off in Quiet mode (the pad still lights while pressed).
+- **The voice channel moves into the status sticker,** so the state language covers it: filled with a speaker in voice, dashed for NOT SET UP and UNAVAILABLE, "…" while connecting. The phone link adds `discord.failed` so the phone can tell unavailable from connecting.
+- **Pad text follows the pad's state** (secondary lines at 70% of it) rather than fixed muted colours, so it turns dark on the lit ink.
+- **Labelled samples for renders.** A connected Discord needs the owner's account, so `--render-soundboard-sample` and `--render-soundboard-empty` show labelled sample sounds that never play, following the "fixtures must be labelled" rule.

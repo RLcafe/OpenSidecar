@@ -37,7 +37,9 @@ namespace WidgetScreen
             homeCard.Fit(Editor.Bounds("Home"), settings.TextScale); ShowHome();
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
-            Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;
+            // The voice sticker (Sticker Sheet phase 5) needs 360 units of card, as the channel name did; under that it steps aside.
+            var voice = (FrameworkElement)StatusSticker.For(Control<TextBlock>("SoundboardChannel")) ?? Control<TextBlock>("SoundboardChannel");
+            voice.MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;
             Show("SoundboardHeading", CardSizing.HeadingShown(board.Width, Control<FrameworkElement>("SoundboardPages").Visibility == Visibility.Visible));
             FitEmpty(null, "SoundboardEmptyTitle", "SoundboardEmptyText", board.Height - 90);
         }
