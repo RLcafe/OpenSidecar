@@ -266,6 +266,8 @@ namespace WidgetScreen
         private readonly List<Action<DateTime>> fills = new List<Action<DateTime>>();
         private Canvas layer;
         private Border askStrip;
+        // The ledger's scrolling list on Large: the roll only moves cars that show in it.
+        private ScrollViewer ledgerScroll;
 
         // A thread's car (in the ledger, inline on Medium, Small's or the pit stop strip's) and its row.
         private sealed class CarPart { public string Id, Folder; public PitSprite Sprite; public FrameworkElement Row; public double Width; public bool Dim; }
@@ -360,7 +362,7 @@ namespace WidgetScreen
         private void Build()
         {
             EndRoll(false);
-            host.Children.Clear(); names.Clear(); cars.Clear(); garages.Clear(); fills.Clear(); clock.Clear(); askStrip = null;
+            host.Children.Clear(); names.Clear(); cars.Clear(); garages.Clear(); fills.Clear(); clock.Clear(); askStrip = null; ledgerScroll = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Claude(bounds.Width, bounds.Height);
             FrameworkElement content;
@@ -650,6 +652,7 @@ namespace WidgetScreen
             if (groups.Count == 0) list.Children.Add(Empty(width));
             for (int i = 0; i < groups.Count; i++) AddGarageRows(list, groups[i], i, width);
             var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, PanningMode = PanningMode.VerticalOnly };
+            ledgerScroll = scroll;
             table.Children.Add(At(names.Add(scroll, "ClaudeLedger"), 1));
             return table;
         }
@@ -1067,12 +1070,17 @@ namespace WidgetScreen
             string name = group == null ? garage.Folder : group.Name;
             var roll = new RollState { Garage = garage, Out = outward, Done = done, Color = PitArt.Accent(name), Count = group == null ? garage.Cars.Count : group.Threads.Count };
             roll.GarageSize = garage.Sprite.ActualWidth; roll.GarageAt = On(garage.Sprite);
+            // Only what shows moves: the ledger's visible part on Large, the whole card body otherwise.
+            var viewport = ledgerScroll != null && ledgerScroll.IsLoaded ? new Rect(On(ledgerScroll), new Size(ledgerScroll.ActualWidth, ledgerScroll.ActualHeight)) : new Rect(0, 0, host.ActualWidth, host.ActualHeight);
+            Func<FrameworkElement, bool> shows = e => { var box = new Rect(On(e), new Size(e.ActualWidth, e.ActualHeight)); return box.Top >= viewport.Top - 1 && box.Bottom <= viewport.Bottom + 1; };
+            if (!shows(garage.Sprite)) { if (done != null) done(); else ShowGarage(garage); return; }
+            layer.Clip = new RectangleGeometry(viewport);
             roll.Bay = new Point(roll.GarageAt.X + roll.GarageSize * 0.5, roll.GarageAt.Y + roll.GarageSize * 0.93);
             layer.Children.Clear();
             roll.Back = Piece(roll.GarageAt, roll.GarageSize, roll.GarageSize, 0);
             roll.Back.Show("back|" + roll.Color, new[] { Overlay("back|" + roll.Color, PitArt.GarageBack(roll.Color), roll.GarageSize, 100, 100) }, 0, 0, false);
             roll.Front = Piece(roll.GarageAt, roll.GarageSize, roll.GarageSize, 2);
-            foreach (var c in garage.Cars.Where(c => c.Sprite.IsLoaded && c.Sprite.ActualWidth > 0))
+            foreach (var c in garage.Cars.Where(c => c.Sprite.IsLoaded && c.Sprite.ActualWidth > 0 && shows(c.Sprite)))
             {
                 var at = On(c.Sprite);
                 var target = new Point(at.X + c.Sprite.ActualWidth / 2, at.Y + c.Sprite.ActualHeight);
