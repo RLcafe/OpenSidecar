@@ -6,6 +6,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.33.1 (1 Nov 2026)
+
+- **Clearer dust behind working cars** (Ali's request; Windows and the phone). Light puffs kick up behind each tyre at ground level and drift back and away: two per tyre, four when the thread burns hard. Before, the dust was faint specks hidden under the car.
+
 ## v0.33.0 (1 Nov 2026)
 
 Claude watcher fixes from the live app (Ali's report; Windows and the phone; decision 019):
