@@ -202,5 +202,11 @@ public final class CardSizing {
     // Clipboard history (docs/design/clipboard-history.md): the same numbers as CardSizing.cs.
     public static int clip(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 400 ? LARGE : MEDIUM; }
 
+    // Calendar (docs/design/calendar.md): the same numbers as CardSizing.cs.
+    public static int calendar(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 380 ? LARGE : MEDIUM; }
+    public static final double CALENDAR_ROW = 30;
+    public static double calendarNextHeight(double textScale) { return Math.ceil(27 + 72 * textScale); }
+    public static double calendarTimeColumn(boolean use24) { return use24 ? 96 : 128; }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

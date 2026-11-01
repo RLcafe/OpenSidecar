@@ -123,6 +123,16 @@ public final class PcState {
         public final List<MacroItem> items = new ArrayList<MacroItem>();
     }
 
+    // The PC's calendars (docs/design/calendar.md): the next two weeks' events as moments, how many feeds there are and
+    // which failed. Feed addresses never reach the phone.
+    public static final class CalendarItem { public String title = "", location = "", date = "", endDate = ""; public double start, end; public boolean allDay; public int feed; }
+    public static final class Calendar {
+        public int feeds, pcOffset;
+        public boolean read;
+        public final List<String> failed = new ArrayList<String>();
+        public final List<CalendarItem> events = new ArrayList<CalendarItem>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -174,6 +184,7 @@ public final class PcState {
     public Notes notes;
     public Clipboard clipboard;
     public Macros macros;
+    public Calendar calendar;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -325,6 +336,20 @@ public final class PcState {
                 macros.items.add(macro);
             }
             state.macros = macros;
+        }
+        if (Json.has(root, "calendar")) {
+            Map<String, Object> c = Json.obj(Json.value(root, "calendar"));
+            Calendar calendar = new Calendar();
+            calendar.feeds = (int) Json.number(c, "feeds"); calendar.read = flag(c, "read"); calendar.pcOffset = (int) Json.number(c, "pcOffset");
+            for (Object failed : Json.array(c, "failed")) if (failed instanceof String) calendar.failed.add((String) failed);
+            for (Object item : Json.array(c, "events")) {
+                Map<String, Object> e = Json.obj(item);
+                CalendarItem event = new CalendarItem();
+                event.title = text(e, "title"); event.location = text(e, "location"); event.start = Json.number(e, "start"); event.end = Json.number(e, "end");
+                event.allDay = flag(e, "allDay"); event.date = text(e, "date"); event.endDate = text(e, "endDate"); event.feed = Math.max(0, (int) Json.number(e, "feed"));
+                if (event.start > 0) calendar.events.add(event);
+            }
+            state.calendar = calendar;
         }
         return state;
     }

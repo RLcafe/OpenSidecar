@@ -1,6 +1,7 @@
 package com.alialyami.widgetscreen.tests;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.CalendarText;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.core.Critter;
@@ -358,11 +359,12 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null && state.clipboard != null && state.macros != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null && state.prayer != null && state.notes != null && state.clipboard != null && state.macros != null && state.calendar != null, "every part");
             ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
             ok(state.prayer != null && state.prayer.located && state.prayer.city.equals("Riyadh") && state.prayer.nextAt > 0 && state.prayer.times[0] > 0, "prayer");
             ok(state.notes != null && state.notes.text.equals("From the phone") && state.notes.items.size() == 1 && state.notes.items.get(0).text.equals("Bread"), "notes");
             ok(state.macros != null && state.macros.items.size() == 2 && state.macros.items.get(0).label.equals("Quiet twice") && state.macros.items.get(0).steps.size() == 3 && state.macros.items.get(1).confirm, "macros");
+            ok(state.calendar != null && state.calendar.feeds == 0 && !state.calendar.read && state.calendar.events.isEmpty(), "calendar");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             // The PC's Claude section comes from its labelled fixture: four sessions, the first one needs you.
             ok(state.claude != null && state.claude.sample && state.claude.connected && state.claude.sessions.size() == 4 && "needs".equals(state.claude.sessions.get(0).state) && state.claude.sessions.get(0).project.equals("api-server")
@@ -536,6 +538,21 @@ public final class AndroidTests {
             ok(MacroText.kind(state.macros.items.get(0)).equals("2 steps") && MacroText.kind(state.macros.items.get(1)).equals("1 step  ·  asks first") && MacroText.detail(state.macros.items.get(0).steps).equals("1.  Control  ·  Mute / unmute microphone\n2.  Wait 0.5 s"), "wording");
             ok(PcState.parse(Json.obj(Json.parse("{\"macros\":{\"items\":[]}}"))).macros.running == -1, "nothing running");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Macros").visible && WidgetLayout.keepsSix("Macros") && WidgetLayout.minimum("Macros")[0] == 288, "like Quick Launch");
+        } });
+        check("Calendar reads the PC's agenda and words it like the PC", new Action() { public void run() {
+            ok(CardSizing.calendar(240, 152) == CardSizing.SMALL && CardSizing.calendar(472, 250) == CardSizing.MEDIUM && CardSizing.calendar(439, 576) == CardSizing.MEDIUM && CardSizing.calendar(440, 380) == CardSizing.LARGE && CardSizing.calendarNextHeight(1.4) == 128 && CardSizing.calendarNextHeight(1) == 99, "designs");
+            // 2 Nov 2026 10:00 UTC, the PC three hours ahead (13:00 there).
+            long now = java.time.LocalDateTime.of(2026, 11, 2, 10, 0).toEpochSecond(java.time.ZoneOffset.UTC) * 1000;
+            String json = "{\"calendar\":{\"feeds\":2,\"read\":true,\"pcOffset\":180,\"failed\":[\"Work: The address was refused.\"],\"events\":["
+                + "{\"title\":\"Meeting\",\"location\":\"Room 4\",\"start\":" + (now + 90 * 60000L) + ",\"end\":" + (now + 150 * 60000L) + ",\"allDay\":false,\"feed\":1},"
+                + "{\"title\":\"Holiday\",\"start\":" + (now + 11 * 3600000L) + ",\"end\":" + (now + 35 * 3600000L) + ",\"allDay\":true,\"date\":\"2026-11-03\",\"endDate\":\"2026-11-04\",\"feed\":0},"
+                + "{\"title\":\"Trip\",\"start\":" + (now + 72 * 3600000L) + ",\"end\":" + (now + 75 * 3600000L) + ",\"allDay\":false,\"feed\":0},{\"title\":\"no start\"}]}}";
+            PcState.Calendar c = PcState.parse(Json.obj(Json.parse(json))).calendar;
+            ok(c.feeds == 2 && c.read && c.events.size() == 3 && c.events.get(0).feed == 1 && c.events.get(0).location.equals("Room 4") && CalendarText.flag(c).equals("1 FEED FAILED"), "parse");
+            ok(CalendarText.next(c.events, now) == c.events.get(0) && CalendarText.countdown(c.events.get(0), now).equals("in 1 h 30 m") && CalendarText.countdown(c.events.get(0), now + 105 * 60000L).equals("now  ·  45 m left"), "countdown");
+            ok(CalendarText.when(c.events.get(0), 180, false).equals("2:30 PM – 3:30 PM") && CalendarText.when(c.events.get(0), 180, true).equals("14:30 – 15:30") && CalendarText.when(c.events.get(1), 180, false).equals("All day"), "times");
+            ok(CalendarText.day(c.events.get(0), 180, now).equals("Today") && CalendarText.day(c.events.get(1), 180, now).equals("Tomorrow") && CalendarText.day(c.events.get(2), 180, now).equals("Thursday, Nov 5"), "days");
+            ok(!WidgetLayout.find(WidgetLayout.defaults(), "Calendar").visible && WidgetLayout.title("Calendar").equals("Calendar"), "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");
