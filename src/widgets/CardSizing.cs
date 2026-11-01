@@ -231,8 +231,11 @@ namespace WidgetScreen
         public const double ClaudePlanHeight = 124, ClaudeSideWidth = 300;
         public static bool ClaudeRevs(double bodyWidth) { return bodyWidth >= 860; }
         public static bool ClaudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-        public static bool ClaudeModels(double tableWidth) { return tableWidth >= 640; }
-        public static bool ClaudeLines(double tableWidth) { return tableWidth >= 740; }
+        // The optional columns step aside as the text grows, so a thread's title keeps at least 240 units: the fixed
+        // columns are the car (52), tokens, cache reads and replies, each its scaled width plus a 10-unit gap.
+        public static double ClaudeFixedColumns(double textScale) { return 52 + Math.Round(72 * textScale) + 10 + Math.Round(80 * textScale) + 10 + Math.Round(64 * textScale) + 10; }
+        public static bool ClaudeModels(double tableWidth, double textScale) { return tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + 240; }
+        public static bool ClaudeLines(double tableWidth, double textScale) { return ClaudeModels(tableWidth, textScale) && tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + Math.Round(84 * textScale) + 10 + 240; }
         // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
         // beside the project's name when they leave it 110 units.
         public const double ClaudeMiniHeight = 84;

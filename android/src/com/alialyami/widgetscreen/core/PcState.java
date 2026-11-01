@@ -121,7 +121,11 @@ public final class PcState {
         // Claude's replies and the tokens read from the cache, per period.
         public final int[] replies = new int[3];
         public final long[] cache = new long[3];
+        // The models by name with their share of the tokens, biggest first, per period.
+        @SuppressWarnings("unchecked")
+        public final List<ClaudeModel>[] models = new List[] { new ArrayList<ClaudeModel>(), new ArrayList<ClaudeModel>(), new ArrayList<ClaudeModel>() };
     }
+    public static final class ClaudeModel { public String name = ""; public double share; }
     // A project on the card: its folder (the key claude.collapse names), name, threads in the period by id, whether
     // it's folded into its critter, and its usage.
     public static final class ClaudeGroup {
@@ -133,6 +137,7 @@ public final class PcState {
         public double lastActive;
         public double cost;
         public double[] mix = new double[3];
+        public final List<ClaudeModel> models = new ArrayList<ClaudeModel>();
         public final List<String> threads = new ArrayList<String>();
     }
     public static final class ClaudeWindow { public double pct; public double resetsAt; public String name = ""; }
@@ -514,6 +519,8 @@ public final class PcState {
             for (int i = 0; i < 3; i++) { numbers(Json.array(mix, PERIODS[i]), thread.mix[i]); double[] l = new double[2]; numbers(Json.array(lines, PERIODS[i]), l); thread.lines[i][0] = (long) l[0]; thread.lines[i][1] = (long) l[1]; }
             Map<String, Object> replies = Json.obj(Json.value(t, "replies")), cached = Json.obj(Json.value(t, "cache"));
             for (int i = 0; i < 3; i++) { thread.replies[i] = (int) Json.number(replies, PERIODS[i]); thread.cache[i] = (long) Json.number(cached, PERIODS[i]); }
+            Map<String, Object> models = Json.obj(Json.value(t, "models"));
+            for (int i = 0; i < 3; i++) models(Json.array(models, PERIODS[i]), thread.models[i]);
             if (!thread.id.isEmpty()) claude.threads.add(thread);
         }
         Map<String, Object> groups = Json.obj(Json.value(c, "groups"));
@@ -523,6 +530,7 @@ public final class PcState {
                 ClaudeGroup group = new ClaudeGroup(); group.key = text(g, "key"); group.project = text(g, "project"); group.collapsed = flag(g, "collapsed");
                 group.tokens = (long) Json.number(g, "tokens"); group.cost = Json.number(g, "cost");
                 numbers(Json.array(g, "mix"), group.mix); group.added = (long) Json.number(g, "added"); group.removed = (long) Json.number(g, "removed");
+                models(Json.array(g, "models"), group.models);
                 group.replies = (int) Json.number(g, "replies"); group.cache = (long) Json.number(g, "cache"); group.lastActive = Json.number(g, "lastActive");
                 for (Object id : Json.array(g, "threads")) if (id instanceof String && claude.thread((String) id) != null) group.threads.add((String) id);
                 if (!group.key.isEmpty()) claude.groups[i].add(group);
@@ -566,6 +574,9 @@ public final class PcState {
                 if (!project.project.isEmpty()) claude.usage[i].add(project);
             }
         return claude;
+    }
+    private static void models(List<Object> items, List<ClaudeModel> into) {
+        for (Object item : items) { Map<String, Object> m = Json.obj(item); ClaudeModel model = new ClaudeModel(); model.name = text(m, "name"); model.share = Json.number(m, "share"); if (!model.name.isEmpty()) into.add(model); }
     }
     // Numbers from a JSON array into a fixed array (missing ones stay 0).
     private static void numbers(List<Object> items, double[] into) {

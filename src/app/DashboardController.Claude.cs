@@ -391,7 +391,7 @@ namespace WidgetScreen
             // groups babies under their project critters the same way. Titles are the Claude app's; never prompts.
             Func<ClaudePeriod, object[]> groups = period => view.Groups(period).Select(g => (object)D("key", g.Folder, "project", g.Name, "collapsed", g.Collapsed,
                 "tokens", g.Tokens, "cost", Math.Round(g.Cost, 4), "threads", g.Threads.Select(t => (object)t.Id).ToArray(),
-                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed, "replies", g.Replies, "cache", g.CacheReads, "lastActive", ClaudeBridge.Epoch(g.LastActive == DateTime.MinValue ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) : g.LastActive) / 1000.0)).ToArray();
+                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed, "replies", g.Replies, "cache", g.CacheReads, "models", Names(g.Models), "lastActive", ClaudeBridge.Epoch(g.LastActive == DateTime.MinValue ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) : g.LastActive) / 1000.0)).ToArray();
             // The pit wall (decision 017): each thread's car and what it does, its burn, mix and lines per period.
             Func<ClaudeSession, Func<ClaudePeriod, object>, object> per = (t, value) => D("fiveHour", value(ClaudePeriod.FiveHour), "today", value(ClaudePeriod.Today), "week", value(ClaudePeriod.Week));
             return D("connected", view.Connected, "sample", view.Sample, "logsFailed", view.LogsFailed, "logsRead", view.LogsRead, "noPlan", view.NoPlan, "plan", ClaudeText.PlanName(view.Plan),
@@ -401,7 +401,7 @@ namespace WidgetScreen
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),
-                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()), "replies", per(t, p => t.RepliesFor(p)), "cache", per(t, p => t.CacheReadsFor(p)))).ToArray(),
+                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()), "replies", per(t, p => t.RepliesFor(p)), "models", per(t, p => Names(t.ModelsFor(p))), "cache", per(t, p => t.CacheReadsFor(p)))).ToArray(),
                 "burn", D("rate", Math.Round(view.Rate), "scale", view.Scale, "minutes", view.Burn.Select(v => (object)Math.Round(v)).ToArray()),
                 "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "thread", l.Session.Length > 0, "color", ClaudeBridge.ProjectName(l.Folder), "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
                 "facts", D("tokens", view.Facts.Tokens, "cost", Math.Round(view.Facts.Cost, 4), "prompt", view.Facts.Prompt, "cacheRead", view.Facts.CacheRead, "tools", view.Facts.Tools, "asked", view.Facts.Asked,
@@ -415,6 +415,7 @@ namespace WidgetScreen
                     "extra", limits.Extra.Select(p => (object)D("name", p.Key, "pct", p.Value.Percent, "resetsAt", p.Value.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(p.Value.ResetsAt.Value) / 1000.0) : null)).ToArray()),
                 "usage", D("fiveHour", Projects(view, ClaudePeriod.FiveHour), "today", Projects(view, ClaudePeriod.Today), "week", Projects(view, ClaudePeriod.Week)));
         }
+        private static object[] Names(List<KeyValuePair<string, double>> models) { return models.Take(4).Select(m => (object)D("name", m.Key, "share", Math.Round(m.Value, 3))).ToArray(); }
         private static object[] Shares(double[] mix) { return mix.Select(v => (object)Math.Round(v, 3)).ToArray(); }
         private static object[] Projects(ClaudeView view, ClaudePeriod period) { return view.UsageFor(period).Select(p => (object)D("project", p.Name, "tokens", p.Tokens, "cost", Math.Round(p.Cost, 4))).ToArray(); }
 

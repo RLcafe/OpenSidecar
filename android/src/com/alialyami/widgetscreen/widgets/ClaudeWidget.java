@@ -166,6 +166,19 @@ public final class ClaudeWidget extends Widget {
         text.setSpan(new AbsoluteSizeSpan(ui.px(size / 2)), start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return text;
     }
+    // The Models column: the model by name, or a mix's top two with shares, each in its family's colour.
+    private CharSequence models(List<PcState.ClaudeModel> models) {
+        List<String[]> parts = ClaudeText.modelLabel(models);
+        if (parts.isEmpty()) return "—";
+        SpannableStringBuilder text = new SpannableStringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) text.append(" · ");
+            int start = text.length(); text.append(parts.get(i)[0]);
+            int family = ClaudeText.family(parts.get(i)[1]);
+            text.setSpan(new ForegroundColorSpan(family < 0 ? ui.theme.muted : PitArt.ACCENTS[family]), start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return text;
+    }
     private CharSequence lines(long added, long removed) {
         if (added == 0 && removed == 0) return "—";
         SpannableStringBuilder text = new SpannableStringBuilder(ClaudeText.added(added));
@@ -367,8 +380,8 @@ public final class ClaudeWidget extends Widget {
         cell(head, upper("Tokens", 12), scaled(72), Gravity.END);
         cell(head, upper("Cache reads", 12), scaled(80), Gravity.END);
         cell(head, upper(c.apiValue ? "API value" : "Replies", 12), scaled(64), Gravity.END);
-        if (CardSizing.claudeModels(width)) cell(head, upper("Models", 12), 64, Gravity.START);
-        if (CardSizing.claudeLines(width)) cell(head, upper("Lines", 12), scaled(84), Gravity.END);
+        if (CardSizing.claudeModels(width, ui.textScale)) cell(head, upper("Models", 12), scaled(150), Gravity.START);
+        if (CardSizing.claudeLines(width, ui.textScale)) cell(head, upper("Lines", 12), scaled(84), Gravity.END);
         table.addView(head, ui.ll(Ui.MATCH, ui.px(24)));
         table.addView(ui.divider(1, ui.theme.controlBorder), ui.ll(Ui.MATCH, Math.max(1, ui.px(1))));
         LinearLayout list = ui.column();
@@ -409,8 +422,8 @@ public final class ClaudeWidget extends Widget {
         final TextView tokens = ui.text("", scaled(17), ui.theme.text); cell(row, tokens, scaled(72), Gravity.END);
         final TextView cached = ui.text("", scaled(15), ui.theme.muted); cell(row, cached, scaled(80), Gravity.END);
         final TextView dollars = ui.text("", scaled(15), ui.theme.muted); cell(row, dollars, scaled(64), Gravity.END);
-        final PitViews.Mix mix = new PitViews.Mix(ui.context, ui.theme, ui.unit); if (CardSizing.claudeModels(width)) cell(row, mix, 64, Gravity.START);
-        final TextView changed = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width)) cell(row, changed, scaled(84), Gravity.END);
+        final TextView mix = trimmed(ui.text("", 12, ui.theme.muted)); if (CardSizing.claudeModels(width, ui.textScale)) cell(row, mix, scaled(150), Gravity.START);
+        final TextView changed = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width, ui.textScale)) cell(row, changed, scaled(84), Gravity.END);
         list.addView(row);
         final String key = group.key;
         fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
@@ -424,7 +437,7 @@ public final class ClaudeWidget extends Widget {
             ViewGroup.LayoutParams params = shareFill.getLayoutParams(); params.width = total <= 0 || full <= 0 ? 0 : (int) Math.round(full * (double) g.tokens / total); shareFill.setLayoutParams(params);
             tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); cached.setText(counted(c) ? ClaudeText.tokens(g.cache) : "");
             dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : String.valueOf(g.replies));
-            mix.shares = g.mix; mix.setContentDescription(ClaudeText.mix(g.mix)); mix.invalidate();
+            mix.setText(models(g.models));
             changed.setText(lines(g.added, g.removed));
             renderGarage(c, garage, g);
         } });
@@ -447,8 +460,8 @@ public final class ClaudeWidget extends Widget {
             final TextView ttokens = ui.text("", scaled(14), ui.theme.text); cell(trow, ttokens, scaled(72), Gravity.END);
             final TextView tcached = ui.text("", scaled(14), ui.theme.muted); cell(trow, tcached, scaled(80), Gravity.END);
             final TextView tdollars = ui.text("", scaled(14), ui.theme.muted); cell(trow, tdollars, scaled(64), Gravity.END);
-            final PitViews.Mix tmix = new PitViews.Mix(ui.context, ui.theme, ui.unit); if (CardSizing.claudeModels(width)) cell(trow, tmix, 64, Gravity.START);
-            final TextView tlines = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width)) cell(trow, tlines, scaled(84), Gravity.END);
+            final TextView tmix = trimmed(ui.text("", 12, ui.theme.muted)); if (CardSizing.claudeModels(width, ui.textScale)) cell(trow, tmix, scaled(150), Gravity.START);
+            final TextView tlines = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width, ui.textScale)) cell(trow, tlines, scaled(84), Gravity.END);
             final View tap = tappable(trow, thread);
             list.addView(tap);
             final String tid = thread.id;
@@ -461,7 +474,7 @@ public final class ClaudeWidget extends Widget {
                 where.setText(ClaudeText.where(t, now));
                 ttokens.setText(counted(c) ? ClaudeText.tokens(t.tokens[period]) : "—"); tcached.setText(counted(c) ? ClaudeText.tokens(t.cache[period]) : "");
                 tdollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(t.cost[period]) : String.valueOf(t.replies[period]));
-                tmix.shares = t.mix[period]; tmix.invalidate();
+                tmix.setText(models(t.models[period]));
                 tlines.setText(lines(t.lines[period][0], t.lines[period][1]));
             } });
         }
@@ -486,7 +499,7 @@ public final class ClaudeWidget extends Widget {
             TextView name = trimmed(ui.text(lane.thread ? "· " + lane.project : lane.project, lane.thread ? 11 : 12, lane.thread ? ui.theme.muted : ui.theme.text));
             row.addView(name, ui.margins(ui.ll(ui.px(lane.thread ? 96 : 104), Ui.WRAP), lane.thread ? 8 : 0, 0, 0, 0));
             PitViews.Lane b = new PitViews.Lane(ui.context, ui.theme, ui.unit); b.color = PitArt.accent(lane.color); b.bins = lane.bins; bins.add(b);
-            row.addView(b, ui.margins(ui.ll(0, ui.px(lane.thread ? 10 : 16), 1), 8, 0, 0, 0));
+            row.addView(b, ui.margins(ui.ll(0, ui.px(lane.thread ? 10 : 24), 1), 8, 0, 0, 0));
             lanes.addView(row, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, lane.thread ? 3 : 6, 0, 0));
         }
         if (c.lanes.isEmpty()) lanes.addView(ui.text("Nothing in the last 5 hours.", 12, ui.theme.muted), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));

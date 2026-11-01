@@ -491,7 +491,7 @@ public final class AndroidTests {
             ok(PitArt.hash("a") == 3826002220L && PitArt.hash("") == 2166136261L && PitArt.hash("api-server") == PitArt.hash(" API-Server "), "hash");
             ok(PitArt.accent("api-server") == PitArt.ACCENTS[1] && PitArt.accent("notes") == PitArt.ACCENTS[0] && PitArt.accent("photo-manager") == PitArt.ACCENTS[2], "the same project colours as the PC");
             ok(CardSizing.claude(260, 180) == CardSizing.SMALL && CardSizing.claude(359, 400) == CardSizing.SMALL && CardSizing.claude(600, 279) == CardSizing.SMALL && CardSizing.claude(472, 310) == CardSizing.MEDIUM && CardSizing.claude(639, 576) == CardSizing.MEDIUM && CardSizing.claude(640, 420) == CardSizing.LARGE, "designs");
-            ok(CardSizing.claudeRevs(860) && !CardSizing.claudeRevs(859) && CardSizing.claudeSide(1000) && !CardSizing.claudeSide(999) && CardSizing.claudeModels(640) && !CardSizing.claudeModels(639) && CardSizing.claudeLines(740) && !CardSizing.claudeLines(739)
+            ok(CardSizing.claudeRevs(860) && !CardSizing.claudeRevs(859) && CardSizing.claudeSide(1000) && !CardSizing.claudeSide(999) && CardSizing.claudeModels(698, 1) && !CardSizing.claudeModels(697, 1) && CardSizing.claudeLines(792, 1) && !CardSizing.claudeLines(791, 1) && CardSizing.claudeModels(852, 1.4) && !CardSizing.claudeLines(852, 1.4)
                 && CardSizing.claudeMediumRow(1) == 44 && CardSizing.claudeMediumRow(1.4) == 52 && CardSizing.claudeInlineCars(300, 5) == 3 && CardSizing.claudeInlineCars(200, 5) == 1 && CardSizing.claudeInlineCars(200, 2) == 2 && CardSizing.claudeInlineCars(100, 4) == 0
                 && CardSizing.claudeSmallMeter(152, 1) && !CardSizing.claudeSmallMeter(132, 1.4) && CardSizing.claudeSmallCar(252, 100) == 85 && CardSizing.claudeSmallCar(100, 20) == 48, "sizes as on the PC");
             WidgetLayout.Placement claude = WidgetLayout.find(WidgetLayout.defaults(), "Claude");
@@ -541,6 +541,14 @@ public final class AndroidTests {
             ok(c.still && c.lanes.size() == 2 && !c.lanes.get(0).thread && c.lanes.get(1).thread && c.lanes.get(1).color.equals("alpha") && c.lanes.get(1).project.equals("Fix the login") && c.lanes.get(1).bins[0] == 3, "still flag and thread lanes");
             ok(ClaudeText.summary(c, 1, false).equals("1 your turn"), "the summary counts your turn: " + ClaudeText.summary(c, 1, false));
             ok(!PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true}}"))).claude.still, "the cars stand still without being asked");
+        } });
+        check("Claude's Models column reads the PC's model names like the PC", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"threads\":[{\"id\":\"t1\",\"project\":\"alpha\",\"models\":{\"week\":[{\"name\":\"Fable 5.1\",\"share\":0.7},{\"name\":\"Sonnet 4.6\",\"share\":0.2},{\"name\":\"Haiku 4.5\",\"share\":0.1}],\"today\":[{\"name\":\"Opus 4.8\",\"share\":1}]}}],"
+                + "\"groups\":{\"week\":[{\"key\":\"k\",\"project\":\"alpha\",\"threads\":[\"t1\"],\"models\":[{\"name\":\"Opus 4.8\",\"share\":0.97}]}]}}}")));
+            PcState.ClaudeThread t = state.claude.thread("t1");
+            java.util.List<String[]> mixed = ClaudeText.modelLabel(t.models[2]), one = ClaudeText.modelLabel(t.models[1]);
+            ok(mixed.size() == 2 && mixed.get(0)[0].equals("Fable 70%") && mixed.get(1)[0].equals("Sonnet 20%") && mixed.get(1)[1].equals("Sonnet 4.6") && one.size() == 1 && one.get(0)[0].equals("Opus 4.8") && t.models[0].isEmpty(), "model labels");
+            ok(ClaudeText.modelLabel(state.claude.groups[2].get(0).models).get(0)[0].equals("Opus 4.8") && ClaudeText.family("Fable 5.1") == 0 && ClaudeText.family("Sonnet 4.6") == 1 && ClaudeText.family("x") == -1, "group models and families");
         } });
         check("Claude pace, laps and the rev counter work out like the PC's", new Action() { public void run() {
             double now = 1700000000;

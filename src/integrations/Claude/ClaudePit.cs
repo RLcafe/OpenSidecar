@@ -109,6 +109,24 @@ namespace WidgetScreen
             double total = sums.Sum();
             return total <= 0 ? new double[3] : sums.Select(v => v / total).ToArray();
         }
+        // The models replies used, by display name ("Opus 4.8"), with their share of the tokens, biggest first.
+        public static List<KeyValuePair<string, double>> Models(IEnumerable<ClaudeUsageEntry> entries)
+        {
+            var sums = entries.Where(e => e.Model.Length > 0).GroupBy(e => ClaudeService.ModelName(e.Model)).Select(g => new KeyValuePair<string, double>(g.Key, g.Sum(e => (double)e.Tokens))).ToList();
+            double total = sums.Sum(p => p.Value);
+            return total <= 0 ? new List<KeyValuePair<string, double>>() : sums.Select(p => new KeyValuePair<string, double>(p.Key, p.Value / total)).OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).ToList();
+        }
+        // The Models column (Ali, 1 Nov 2026): one model by name ("Opus 4.8"); a mix as its top two with shares
+        // ("Opus 70% · Sonnet 30%"). Each part is (words, model).
+        public static List<KeyValuePair<string, string>> ModelLabel(List<KeyValuePair<string, double>> models)
+        {
+            var parts = new List<KeyValuePair<string, string>>();
+            if (models == null || models.Count == 0) return parts;
+            if (models[0].Value >= 0.95) { parts.Add(new KeyValuePair<string, string>(models[0].Key, models[0].Key)); return parts; }
+            foreach (var m in models.Take(2)) parts.Add(new KeyValuePair<string, string>(Family(m.Key) >= 0 ? FamilyName(m.Key) + " " + Math.Round(m.Value * 100) + "%" : m.Key + " " + Math.Round(m.Value * 100) + "%", m.Key));
+            return parts;
+        }
+        public static string FamilyName(string model) { int f = Family(model); return f == 0 ? (model ?? "").Split(' ')[0] : f == 1 ? "Sonnet" : f == 2 ? "Haiku" : model; }
         // The car follows the model the thread used most, else the model it names, else a sports car.
         public static PitCar Car(double[] mix, string model)
         {
