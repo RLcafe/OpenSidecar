@@ -60,7 +60,7 @@ public final class PrayerWidget extends Widget {
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48 - 36);
         View body;
         if (p == null) body = ui.caption("Waiting for the PC…");
-        else if (!p.located) body = Ui.wrap(ui.caption("Choose a city in Settings → Prayer on the PC, or set the weather city."), 3);
+        else if (!p.located) body = Stickers.unavailableBody(ui, "Choose a city in Settings → Prayer on the PC, or set the weather city.");
         else if (design == CardSizing.SMALL) body = next(bodyHeight, CardSizing.prayerTime(bodyWidth, bodyHeight), false);
         else if (design == CardSizing.MEDIUM) {
             LinearLayout row = ui.row();

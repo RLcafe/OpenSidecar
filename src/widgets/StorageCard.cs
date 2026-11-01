@@ -67,7 +67,7 @@ namespace WidgetScreen
             design = CardSizing.Storage(bounds.Width, bounds.Height);
             FrameworkElement view;
             if (drives == null) view = Caption("Reading drives…");
-            else if (drives.Count == 0) view = Caption("No fixed drives found.");
+            else if (drives.Count == 0) { var empty = Stickers.Unavailable("No fixed drives found."); empty.VerticalAlignment = VerticalAlignment.Center; view = empty; }
             else
             {
                 int capacity = CardSizing.StorageCapacity(design, width, height, drives.Count);

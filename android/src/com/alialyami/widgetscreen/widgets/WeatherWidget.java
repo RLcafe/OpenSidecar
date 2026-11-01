@@ -40,7 +40,9 @@ public final class WeatherWidget extends Widget {
     private LinearLayout chips;
     private ReadingParts.TemperatureCurve curve;
     private ReadingParts.SunArc arc;
-    private View curveFrame, arcFrame, values;
+    private View curveFrame, arcFrame, values, middle;
+    // Not set up, or no reading because the service can't be reached: a dashed outline with the reason.
+    private TextView blank;
     private int design, chipCount;
     private double glyphSize;
     private String stickerKey = "";
@@ -56,10 +58,14 @@ public final class WeatherWidget extends Widget {
 
     @Override protected View create() {
         design = CardSizing.weather(width, height);
-        condition = described = sunrise = sunset = null; chips = null; curve = null; arc = null; curveFrame = arcFrame = null; stickerKey = "";
+        condition = described = sunrise = sunset = null; chips = null; middle = null; curve = null; arc = null; curveFrame = arcFrame = null; stickerKey = "";
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48);
         View view = design == CardSizing.SMALL ? glance(bodyHeight) : today(bodyWidth, bodyHeight, design == CardSizing.LARGE);
-        FrameLayout card = ui.card(view, 24);
+        FrameLayout stack = new FrameLayout(ui.context);
+        stack.addView(view, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        blank = Stickers.unavailable(ui, ""); blank.setVisibility(View.GONE);
+        stack.addView(blank, ui.frame(Ui.MATCH, Ui.WRAP, Gravity.CENTER));
+        FrameLayout card = ui.card(stack, 24);
         // The whole card is the refresh tap; without a city it says where to choose one.
         card.setClickable(true);
         card.setContentDescription("Weather. Tap to update.");
@@ -156,7 +162,7 @@ public final class WeatherWidget extends Widget {
         hero.addView(words, ui.margins(ui.ll(0, Ui.WRAP, 1), large ? 18 : 14, 0, 0, 0));
         view.addView(skyBand(hero, 12, padY), ui.ll(Ui.MATCH, 0, 1));
         // The chips, or in their place a message while there is nothing to show.
-        FrameLayout middle = new FrameLayout(ui.context);
+        FrameLayout middle = new FrameLayout(ui.context); this.middle = middle;
         chipCount = large ? CardSizing.weatherChips(this.width) : 3;
         chips = ui.row();
         middle.addView(chips, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
@@ -209,6 +215,13 @@ public final class WeatherWidget extends Widget {
         band.setCornerRadius(ui.fpx(16)); sky.setBackground(band);
         fillSticker(family, ink);
         Stickers.stale(values, offline && shown);
+        // No city, or the service unreachable with nothing to show: the reason in a dashed outline instead of the reading.
+        boolean unset = !hasCity || (offline && last == null);
+        blank.setVisibility(unset ? View.VISIBLE : View.GONE);
+        blank.setText(!hasCity ? (pcAway ? dash.offlineText() : "No city yet. Choose one on the PC: Settings → Weather.") : "Can't reach the weather service. Tap the card to try again.");
+        values.setVisibility(unset ? View.INVISIBLE : View.VISIBLE);
+        if (design == CardSizing.SMALL) { city.setVisibility(unset ? View.INVISIBLE : View.VISIBLE); message.setVisibility(unset ? View.INVISIBLE : View.VISIBLE); }
+        if (middle != null) middle.setVisibility(unset ? View.INVISIBLE : View.VISIBLE);
         if (condition != null) {
             condition.setText(offline && hasCity ? "OFFLINE" : "");
             condition.setTextColor(offline ? Theme.WARNING : ui.theme.muted);

@@ -983,6 +983,9 @@ namespace WidgetScreen
 
         private bool WeatherImperial { get { return settings.WeatherUnits == "imperial"; } }
         // WeatherCard shows the reading in the design for its size; the "updated" time follows the clock's choice.
+        // Render mode's --render-weather-offline and --render-weather-unreachable (Program.Main): the update after a
+        // real reading fails, so the card shows that reading as stale; or the first one fails, so there's nothing to show.
+        public string RenderWeather { get; set; }
         private async void RefreshWeather()
         {
             if (disposed || weatherBusy || !Editor.IsVisible("Weather")) return;
@@ -992,9 +995,11 @@ namespace WidgetScreen
             weatherCard.Updating();
             try
             {
+                if (RenderWeather == "unreachable") throw new InvalidOperationException("Render: the weather service is unreachable.");
                 var snapshot = await weather.ReadAsync(settings.Latitude, settings.Longitude, WeatherImperial);
                 if (disposed || generation != weatherGeneration) return;
                 weatherCard.Reading(snapshot);
+                if (RenderWeather == "offline") weatherCard.Failed();
             }
             catch (Exception)
             {

@@ -34,6 +34,8 @@ namespace WidgetScreen
         private int chipCount;
         private TemperatureCurve curve;
         private FrameworkElement curveFrame, arcFrame, values;
+        // Not set up, or no reading because the service can't be reached: a dashed outline with the reason.
+        private Grid blank, middle;
         private SunArc arc;
         private double glyphSize;
 
@@ -69,7 +71,7 @@ namespace WidgetScreen
 
         private void Build()
         {
-            host.Children.Clear(); names.Clear(); chips = null; curve = null; curveFrame = arcFrame = null; arc = null; sunrise = sunset = null; condition = null; described = null; Strip = null;
+            host.Children.Clear(); names.Clear(); chips = null; middle = null; curve = null; curveFrame = arcFrame = null; arc = null; sunrise = sunset = null; condition = null; described = null; Strip = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Weather(bounds.Width, bounds.Height);
             FrameworkElement view = design == CardSizing.Design.Small ? BuildGlance(width, height) : BuildToday(width, height, design == CardSizing.Design.Large);
@@ -116,6 +118,7 @@ namespace WidgetScreen
             city = names.Add(Text("", "BodySize", "Text"), "WeatherCity"); city.Margin = new Thickness(0, 4, 0, 0); view.Children.Add(At(city, 1));
             message = Caption(""); message.Margin = new Thickness(0, 4, 0, 0); if (detail) view.Children.Add(At(message, 2));
             credit = names.Add(Caption(""), "WeatherCredit"); credit.Margin = new Thickness(0, 4, 0, 0); view.Children.Add(At(credit, 3));
+            view.Children.Add(Blank(0, 3));
             return view;
         }
 
@@ -151,7 +154,7 @@ namespace WidgetScreen
             var band = SkyBand(hero, new Thickness(12, padY, 12, padY));
             view.Children.Add(At(band, 1));
             // The chips, or in their place a message while there is nothing to show.
-            var middle = new Grid { MinHeight = 57, Margin = new Thickness(0, 8, 0, 0) };
+            middle = new Grid { MinHeight = 57, Margin = new Thickness(0, 8, 0, 0) };
             chipCount = large ? CardSizing.WeatherChips(bounds.Width) : 3;
             chips = names.Add(new UniformGrid { Rows = 1 }, "WeatherChips"); middle.Children.Add(chips);
             message = Text("", "SmallSize", "Muted"); message.TextWrapping = TextWrapping.Wrap; message.MaxHeight = 57; message.VerticalAlignment = VerticalAlignment.Center;
@@ -180,7 +183,14 @@ namespace WidgetScreen
             credit = names.Add(Caption(""), "WeatherCredit"); credit.VerticalAlignment = VerticalAlignment.Bottom; credit.Margin = new Thickness(0, 4, 0, 0);
             view.Children.Add(At(credit, 4));
             values = band;
+            view.Children.Add(Blank(1, 3));
             return view;
+        }
+        private Grid Blank(int row, int span)
+        {
+            blank = names.Add(Stickers.Unavailable(""), "WeatherUnavailable"); blank.Visibility = Visibility.Collapsed; blank.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(blank, row); Grid.SetRowSpan(blank, span);
+            return blank;
         }
 
         private void Render()
@@ -197,6 +207,13 @@ namespace WidgetScreen
             sky.Opacity = last == null ? 0.12 : WeatherService.SkyStrength(family, day);
             glyph.Content = family == null ? null : Sticker(family, ink);
             Stickers.Stale(values, offline && last != null);
+            // No city, or the service unreachable with nothing to show: the reason in a dashed outline instead of the reading.
+            bool unset = !hasCity || (offline && last == null);
+            blank.Visibility = unset ? Visibility.Visible : Visibility.Collapsed;
+            ((TextBlock)blank.Children[1]).Text = !hasCity ? "No city yet. Tap the card to choose one." : "Can't reach the weather service. Tap the card to try again.";
+            values.Visibility = unset ? Visibility.Hidden : Visibility.Visible;
+            if (design == CardSizing.Design.Small) city.Visibility = message.Visibility = unset ? Visibility.Hidden : Visibility.Visible;
+            if (middle != null) middle.Visibility = unset ? Visibility.Hidden : Visibility.Visible;
             if (condition != null)
             {
                 condition.Text = offline ? "OFFLINE" : "";

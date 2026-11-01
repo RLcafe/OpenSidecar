@@ -60,8 +60,8 @@ namespace WidgetScreen
             FrameworkElement view;
             if (clocks.Length == 0)
             {
-                var empty = Caption("Choose up to three time zones in Settings → Widgets.");
-                empty.TextWrapping = TextWrapping.Wrap; empty.VerticalAlignment = VerticalAlignment.Center;
+                // Not set up: the reason in a dashed outline (docs/design/sticker-sheet.md).
+                var empty = Stickers.Unavailable("Choose up to three time zones in Settings → Widgets."); empty.VerticalAlignment = VerticalAlignment.Center;
                 view = empty;
             }
             else

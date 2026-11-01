@@ -48,10 +48,21 @@ $scenes['midnight-default-nothing-playing'] = @{ Page = 'default'; Theme = 'Midn
 # Phase 3: the readings at each size in each palette, and at 140%.
 foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = '' } } }
 foreach ($page in 'read-small', 'read-medium', 'read-large', 'read-large2') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<TextScale>1.4</TextScale>' } }
+# Failure states: Weather offline after a real reading (stale, at 60%) and unreachable with no reading
+# (--render-weather-offline, --render-weather-unreachable); no city set for Weather or Prayer; and (in every scene
+# here) hardware sensors not installed in this checkout, so CPU temperature says why.
+$scenes['midnight-read-medium-weather-offline'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-offline') }
+$scenes['midnight-read-large-weather-offline'] = @{ Page = 'read-large'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-offline') }
+$scenes['midnight-read-medium-weather-unreachable'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-unreachable') }
+$scenes['midnight-read-medium-no-city'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Places = '' }
+$scenes['midnight-read-large2-no-city'] = @{ Page = 'read-large2'; Theme = 'Midnight'; Extra = ''; Places = '' }
 # A low-space threshold of 20% so this PC's fullest drives show the caution-tape state.
 foreach ($page in 'read-small', 'read-medium', 'read-large') { $scenes["midnight-$page-low-space"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<StorageLowPercent>20</StorageLowPercent>' } }
 $scenes['midnight-five-large-nothing-playing'] = @{ Page = 'five-large'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }
 
+# Weather in London and prayer times in Riyadh, unless a scene sets its own places.
+$places = '<WeatherLocation>London, England, United Kingdom</WeatherLocation><Latitude>51.50853</Latitude><Longitude>-0.12574</Longitude><WeatherUnits>metric</WeatherUnits>' +
+    '<PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>'
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]; $layout = $pages[$scene.Page]
@@ -68,9 +79,8 @@ foreach ($name in $scenes.Keys) {
 <?xml version="1.0" encoding="utf-8"?>
 <AppSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Theme>$($scene.Theme)</Theme>$($scene.Extra)
-  <WeatherLocation>London, England, United Kingdom</WeatherLocation><Latitude>51.50853</Latitude><Longitude>-0.12574</Longitude><WeatherUnits>metric</WeatherUnits>
+  $(if ($scene.Contains('Places')) { $scene.Places } else { $places })
   <HintDismissed>true</HintDismissed>
-  <PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>
   <WorldClocks><WorldClock><Zone>Tokyo Standard Time</Zone><Label>Tokyo</Label></WorldClock><WorldClock><Zone>GMT Standard Time</Zone><Label>London</Label></WorldClock><WorldClock><Zone>Pacific Standard Time</Zone><Label>San Francisco</Label></WorldClock></WorldClocks>
   $placements
 </AppSettings>

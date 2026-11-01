@@ -52,8 +52,8 @@ namespace WidgetScreen
             FrameworkElement view;
             if (!located)
             {
-                var empty = Caption("Choose a city in Settings → Prayer, or set the weather city.");
-                empty.TextWrapping = TextWrapping.Wrap; empty.VerticalAlignment = VerticalAlignment.Center;
+                // Not set up: the reason in a dashed outline (docs/design/sticker-sheet.md).
+                var empty = Stickers.Unavailable("Choose a city in Settings → Prayer, or set the weather city."); empty.VerticalAlignment = VerticalAlignment.Center;
                 view = empty;
             }
             else if (design == CardSizing.Design.Small) view = Next(width, height, CardSizing.PrayerTime(width, height), false);

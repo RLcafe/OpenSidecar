@@ -64,7 +64,7 @@ public final class StorageWidget extends Widget {
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48 - 36);
         View body;
         if (s == null || s.error) body = ui.caption(s == null ? "Waiting for the PC…" : "The PC couldn't read its drives.");
-        else if (s.drives.isEmpty()) body = ui.caption("No fixed drives found on the PC.");
+        else if (s.drives.isEmpty()) body = Stickers.unavailableBody(ui, "No fixed drives found on the PC.");
         else {
             int capacity = CardSizing.storageCapacity(design, bodyWidth, bodyHeight, s.drives.size());
             int shown = capacity >= s.drives.size() ? s.drives.size() : Math.max(1, capacity - 1);

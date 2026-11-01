@@ -64,7 +64,7 @@ public final class ClocksWidget extends Widget {
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48 - 36);
         View body;
         if (c == null) body = ui.caption("Waiting for the PC…");
-        else if (c.clocks.isEmpty()) body = Ui.wrap(ui.caption("Choose up to three time zones in Settings → Widgets on the PC."), 3);
+        else if (c.clocks.isEmpty()) body = Stickers.unavailableBody(ui, "Choose up to three time zones in Settings → Widgets on the PC.");
         else {
             int n = c.clocks.size();
             int shown = design == CardSizing.SMALL ? Math.min(n, CardSizing.clockRows(bodyHeight)) : n;
