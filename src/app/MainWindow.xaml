@@ -262,7 +262,8 @@
                 <!-- A finished session tints the whole card until it's tapped or a minute passes. -->
                 <Border x:Name="FocusFinished" Background="{DynamicResource Accent}" Opacity="0.15" Margin="-24" CornerRadius="{DynamicResource CardRadius}" Visibility="Collapsed" IsHitTestVisible="False"/>
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                  <TextBlock Text="FOCUS TIMER" Style="{StaticResource Label}"/>
+                  <!-- Label strips: DashboardController.Stickers fills each in the widget's ink (docs/design/sticker-sheet.md). -->
+                  <Border x:Name="FocusStrip"/>
                   <!-- A large card draws the progress as a ring around the countdown (FocusDial, CardSizing.Focus). --><Grid x:Name="FocusDial" Grid.Row="1"><StackPanel x:Name="FocusMiddle" VerticalAlignment="Center"><TextBlock x:Name="FocusTime" Text="25:00" FontSize="54" FontWeight="Light" TextOptions.TextFormattingMode="Ideal" HorizontalAlignment="Center" Typography.NumeralAlignment="Tabular"/><TextBlock x:Name="FocusStatus" Text="" Style="{StaticResource Small}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,12"/><ProgressBar x:Name="FocusProgress" Maximum="1" AutomationProperties.Name="Focus session progress"/><TextBlock x:Name="FocusSessions" Text="" Style="{StaticResource Caption}" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,10,0,0"/></StackPanel></Grid>
                   <Grid x:Name="FocusPresets" Grid.Row="2" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <Button x:Name="Focus25" Content="25m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="25 minutes"/><Button x:Name="Focus50" Grid.Column="1" Content="50m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="50 minutes"/><Button x:Name="Focus5" Grid.Column="2" Content="5m" Padding="5" Margin="0,0,6,0" FontSize="16" AutomationProperties.Name="5 minutes"/><Button x:Name="FocusCustom" Grid.Column="3" Content="…" Padding="5" FontSize="16" ToolTip="Choose another length" AutomationProperties.Name="Choose another length"/>
@@ -287,7 +288,7 @@
             <Border x:Name="MediaCard" Style="{StaticResource Card}" Margin="0,0,0,16">
               <!-- A short card folds the seek row and the hint row away (CardSizing.MediaShort). -->
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition x:Name="MediaMainRow" Height="*" MinHeight="86"/><RowDefinition x:Name="MediaSeekRow" Height="48"/><RowDefinition Height="54"/><RowDefinition x:Name="MediaHintRow" Height="26"/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="NOW PLAYING" Style="{StaticResource Label}"/><TextBlock x:Name="MediaSource" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right" MaxWidth="220" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="MediaStrip"/><TextBlock x:Name="MediaSource" Text="" Style="{StaticResource Small}" HorizontalAlignment="Right" MaxWidth="220" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="MediaMain" Grid.Row="1" Margin="0,12,0,4"><Grid.ColumnDefinitions><ColumnDefinition x:Name="MediaArtColumn" Width="116"/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <Border x:Name="MediaArtBox" Background="{DynamicResource ClockSurface}" CornerRadius="14" Margin="0,0,12,0" MaxHeight="104" ClipToBounds="True"><Grid><TextBlock Text="&#xE93C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="AlbumArt" Stretch="Uniform"/></Grid></Border>
                   <StackPanel x:Name="MediaText" Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock x:Name="TrackTitle" Text="Nothing playing" FontSize="{DynamicResource TitleSize}" FontWeight="SemiBold" TextWrapping="NoWrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="TrackArtist" Text="Start music or a video in any app." FontSize="{DynamicResource SmallSize}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></StackPanel>
@@ -320,7 +321,7 @@
                     <TextBlock x:Name="DeckPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
                     <Button x:Name="DeckNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next button page"/>
                   </StackPanel>
-                  <TextBlock x:Name="DeckHeading" Text="QUICK LAUNCH" Style="{StaticResource Label}" Margin="4,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  <Border x:Name="DeckHeading" Margin="4,0,4,0"/>
                 </DockPanel>
                 <UniformGrid x:Name="ShortcutGrid" Grid.Row="1" Columns="3" Rows="2"/>
                 <Button x:Name="EmptyDeck" Grid.Row="1" Content="Add a button" Visibility="Collapsed" Margin="4" FontSize="16"/>
@@ -333,7 +334,7 @@
               <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition x:Name="SpotifyStatusRow" Height="36"/></Grid.RowDefinitions>
               <!-- A large card moves the now-playing strip into this column as a panel with a big cover (CardSizing.Spotify). -->
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition x:Name="SpotifySideColumn" Width="0"/></Grid.ColumnDefinitions>
-              <DockPanel Grid.ColumnSpan="2" LastChildFill="True"><Button x:Name="SpotifyAccount" DockPanel.Dock="Right" Content="Account" Padding="12,4" FontSize="{DynamicResource SmallSize}" ToolTip="Spotify account and setup in Settings"/><TextBlock Text="SPOTIFY" Style="{StaticResource Label}" VerticalAlignment="Center"/></DockPanel>
+              <DockPanel Grid.ColumnSpan="2" LastChildFill="True"><Button x:Name="SpotifyAccount" DockPanel.Dock="Right" Content="Account" Padding="12,4" FontSize="{DynamicResource SmallSize}" ToolTip="Spotify account and setup in Settings"/><Border x:Name="SpotifyStrip"/></DockPanel>
               <UniformGrid x:Name="SpotifyTabs" Grid.Row="1" Columns="3" Margin="0,4,0,4">
                 <Button x:Name="SpotifyAlbums" Content="Albums" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
                 <Button x:Name="SpotifyPlaylists" Content="Playlists" Padding="4" FontSize="{DynamicResource SmallSize}" Margin="0,0,4,0"/>
@@ -373,7 +374,7 @@
                   <TextBlock x:Name="SoundboardPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
                   <Button x:Name="SoundboardNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next sound page"/>
                 </StackPanel>
-                <TextBlock x:Name="SoundboardHeading" Text="SOUNDBOARD" Style="{StaticResource Label}" Margin="4,0,12,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <Border x:Name="SoundboardHeading" Margin="4,0,12,0"/>
                 <TextBlock x:Name="SoundboardChannel" Text="" Style="{StaticResource Small}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
               </DockPanel>
               <UniformGrid x:Name="SoundboardGrid" Grid.Row="1" Margin="-4,0,-4,0"/>
@@ -391,7 +392,7 @@
             <!-- Full, Compact and Master arrangements (CardSizing.Mixer): rows fold away as the card gets shorter. -->
             <Grid><Grid.RowDefinitions><RowDefinition x:Name="MixerHeaderRow" Height="34"/><RowDefinition x:Name="MixerMasterRow" Height="66"/><RowDefinition x:Name="MixerSliderRow" Height="52"/><RowDefinition x:Name="LevelRow" Height="28"/><RowDefinition x:Name="MixerAppsHeaderRow" Height="42"/><RowDefinition x:Name="MixerAppsRow" Height="*"/><RowDefinition x:Name="MixerMicrophoneRow" Height="56"/></Grid.RowDefinitions>
               <!-- On a Master card the app list is one tap away: MixerApps swaps the master rows for the list and back. -->
-              <DockPanel><Button x:Name="MixerApps" DockPanel.Dock="Right" Content="Apps" FontSize="14" Padding="12,4" Margin="8,0,0,0" Visibility="Collapsed" AutomationProperties.Name="Show app volumes"/><TextBlock Text="SOUND MIXER" Style="{StaticResource Label}" VerticalAlignment="Center"/><TextBlock x:Name="AudioStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0,0,0"/></DockPanel>
+              <DockPanel><Button x:Name="MixerApps" DockPanel.Dock="Right" Content="Apps" FontSize="14" Padding="12,4" Margin="8,0,0,0" Visibility="Collapsed" AutomationProperties.Name="Show app volumes"/><Border x:Name="MixerStrip"/><TextBlock x:Name="AudioStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="8,0,0,0"/></DockPanel>
               <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions><Button x:Name="OutputDeviceButton" Background="Transparent" BorderThickness="0" Padding="8,0" Margin="-8,0,8,0" HorizontalContentAlignment="Left" ToolTip="Choose the output device" AutomationProperties.Name="Choose output device"><StackPanel HorizontalAlignment="Left"><TextBlock Text="Master volume" FontSize="{DynamicResource TitleSize}"/><StackPanel Orientation="Horizontal" Margin="0,5,0,0"><TextBlock x:Name="AudioDevice" Text="Connecting to audio…" Style="{StaticResource Small}" MaxWidth="300"/><TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource Muted}" Margin="8,2,0,0" VerticalAlignment="Center"/></StackPanel></StackPanel></Button><TextBlock x:Name="MasterPercent" Grid.Column="1" Text="—" FontSize="36" FontWeight="Light" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
               <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition/><ColumnDefinition x:Name="MicrophoneCompactColumn" Width="0"/><ColumnDefinition x:Name="SoundSettingsColumn" Width="60"/></Grid.ColumnDefinitions><Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Mute output" AutomationProperties.Name="Mute output"/><Slider x:Name="MasterSlider" Grid.Column="1" Margin="8,0" AutomationProperties.Name="Master volume"/><Button x:Name="MicrophoneCompact" Grid.Column="2" Content="&#xE720;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" HorizontalAlignment="Right" Visibility="Collapsed" AutomationProperties.Name="Microphone"/><Button x:Name="SoundSettingsButton" Grid.Column="3" Content="&#xE713;" Style="{StaticResource IconButton}" Background="Transparent" BorderThickness="0" ToolTip="Open Windows sound settings" AutomationProperties.Name="Open Windows sound settings"/></Grid>
               <!-- Live output levels sit under the master slider, where the sound is; the row collapses when they're off or paused. -->
@@ -417,7 +418,7 @@
 
             <Border x:Name="SystemCard" Style="{StaticResource Card}" Margin="0,0,0,16">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="SYSTEM STATS" Style="{StaticResource Label}"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><TextBlock x:Name="SystemUptime" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed"/><TextBlock x:Name="SystemStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="12,0,0,0"/></StackPanel></DockPanel>
+                <DockPanel><Border x:Name="SystemStrip"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><TextBlock x:Name="SystemUptime" Text="" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed"/><TextBlock x:Name="SystemStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="12,0,0,0"/></StackPanel></DockPanel>
                 <!-- SystemStatsCard builds the Small, Medium or Large design here for the card's size (docs/design/widget-size-views.md). -->
                 <Grid x:Name="SystemBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
@@ -429,14 +430,14 @@
             <!-- Free space on the fixed drives. StorageCard builds the Small, Medium or Large design in StorageBody (docs/design/storage.md). -->
             <Border x:Name="StorageCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Storage">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="STORAGE" Style="{StaticResource Label}"/><TextBlock x:Name="StorageStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="StorageStrip"/><TextBlock x:Name="StorageStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="StorageBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
             <!-- Prayer times worked out on this PC. PrayerCard builds the Small, Medium or Large design in PrayerBody (docs/design/prayer-times.md). -->
             <Border x:Name="PrayerCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Prayer times">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="PRAYER TIMES" Style="{StaticResource Label}"/><TextBlock x:Name="PrayerStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="PrayerStrip"/><TextBlock x:Name="PrayerStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="PrayerBody" Grid.Row="1" Margin="0,8,0,0"/>
                 <!-- Shown while the alert plays. -->
                 <Button x:Name="PrayerStop" Grid.Row="1" Content="Stop" Style="{StaticResource AccentButton}" MinWidth="120" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="Collapsed" AutomationProperties.Name="Stop the prayer alert"/>
@@ -445,14 +446,14 @@
             <!-- A scratchpad and a to-do list kept on this PC. NotesCard builds the Small, Medium or Large design in NotesBody (docs/design/notes.md). -->
             <Border x:Name="NotesCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Notes and to-do">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="NOTES" Style="{StaticResource Label}"/><TextBlock x:Name="NotesStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="NotesStrip"/><TextBlock x:Name="NotesStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="NotesBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
             <!-- The last texts copied on this PC; a tap pastes one again. ClipboardCard builds the Small, Medium or Large design in ClipBody (docs/design/clipboard-history.md). -->
             <Border x:Name="ClipboardCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Clipboard history">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="CLIPBOARD" Style="{StaticResource Label}"/><TextBlock x:Name="ClipStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="ClipboardStrip"/><TextBlock x:Name="ClipStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="ClipBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
@@ -466,7 +467,7 @@
                     <TextBlock x:Name="MacroPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
                     <Button x:Name="MacroNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next macro page"/>
                   </StackPanel>
-                  <TextBlock x:Name="MacroHeading" Text="MACROS" Style="{StaticResource Label}" Margin="4,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  <Border x:Name="MacroHeading" Margin="4,0,4,0"/>
                 </DockPanel>
                 <UniformGrid x:Name="MacroGrid" Grid.Row="1" Columns="3" Rows="2"/>
                 <Button x:Name="EmptyMacros" Grid.Row="1" Content="Add a macro" Visibility="Collapsed" Margin="4" FontSize="16"/>
@@ -475,7 +476,7 @@
             <!-- Calendar and agenda from read-only ICS feeds. CalendarCard builds the Small, Medium or Large design in CalendarBody (docs/design/calendar.md). The whole card is the refresh tap. -->
             <Border x:Name="CalendarCard" Grid.Row="1" Style="{StaticResource Card}" Cursor="Hand" ToolTip="Tap to update the calendars" AutomationProperties.Name="Calendar. Tap to update.">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="CALENDAR" Style="{StaticResource Label}"/><TextBlock x:Name="CalendarStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="CalendarStrip"/><TextBlock x:Name="CalendarStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="CalendarBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
@@ -489,7 +490,7 @@
                     <TextBlock x:Name="GamesPageLabel" Width="46" TextAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"/>
                     <Button x:Name="GamesNext" Content="&#xE76C;" Style="{StaticResource IconButton}" FontSize="16" Padding="6" AutomationProperties.Name="Next games page"/>
                   </StackPanel>
-                  <TextBlock x:Name="GamesHeading" Text="GAMES" Style="{StaticResource Label}" Margin="4,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  <Border x:Name="GamesHeading" Margin="4,0,4,0"/>
                 </DockPanel>
                 <UniformGrid x:Name="GamesGrid" Grid.Row="1" Columns="3" Rows="2"/>
                 <TextBlock x:Name="GamesEmpty" Grid.Row="1" Text="" Style="{StaticResource Caption}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4"/>
@@ -498,14 +499,14 @@
             <!-- Smart home: the Home Assistant devices chosen in Settings → Home. HomeCard builds the Small, Medium or Large design in HomeBody (docs/design/smart-home.md). -->
             <Border x:Name="HomeCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Smart home">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="SMART HOME" Style="{StaticResource Label}"/><TextBlock x:Name="HomeStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="HomeStrip"/><TextBlock x:Name="HomeStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="HomeBody" Grid.Row="1" Margin="-4,4,-4,-4"/>
               </Grid>
             </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
-                <DockPanel><TextBlock Text="WORLD CLOCKS" Style="{StaticResource Label}"/><TextBlock x:Name="ClocksStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <DockPanel><Border x:Name="ClocksStrip"/><TextBlock x:Name="ClocksStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
                 <Grid x:Name="ClocksBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
@@ -551,6 +552,8 @@
               <ComboBox x:Name="ThemeChoice" AutomationProperties.Name="Theme"/>
               <TextBlock Text="Accent color" Style="{StaticResource Small}" Margin="0,10,0,6"/>
               <ComboBox x:Name="AccentChoice" AutomationProperties.Name="Accent color"/>
+              <TextBlock Text="Widget colours" Style="{StaticResource Small}" Margin="0,10,0,6"/>
+              <ComboBox x:Name="InkModeChoice" AutomationProperties.Name="Widget colours" ToolTip="Each its own: every widget wears its ink (change one in Edit layout). Accent only: every widget wears the accent colour."/>
               <DockPanel Margin="0,14,0,0">
               <TextBlock Text="Widget corners" Style="{StaticResource Small}"/>
               <TextBlock x:Name="CornersLabel" Style="{StaticResource Small}" HorizontalAlignment="Right"/>

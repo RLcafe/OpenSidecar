@@ -239,6 +239,18 @@ internal static class RemoteTests
                     var gaming = WidgetLayout.Page(afterSave, 1);
                     Assert(gaming.CanvasLayouts != null && gaming.CanvasLayouts.Single().Size == new System.Windows.Size(1480, 552) && !WidgetLayout.Saved(gaming, new System.Windows.Size(1480, 552)).First(p => p.Id == "Spotify").Visible, "The phone's layout wasn't saved for its shape on that page.");
                     Assert(WidgetLayout.Page(afterSave, 0).CanvasLayouts == null && WidgetLayout.CurrentPage(afterSave) == 0, "Saving another page's layout changed the page shown or the first page.");
+                    // Sticker Sheet inks (decision 021) ride in the layout section and come back with the phone's saves.
+                    layout = (Dictionary<string, object>)Json(get("/state?parts=layout", token).Item2)["layout"];
+                    var inks = (Dictionary<string, object>)layout["inks"];
+                    Assert((string)layout["colours"] == "Each" && WidgetLayout.Ids.Where(Inks.InScope).All(id => (string)inks[id] == Inks.Default(id)) && !inks.ContainsKey("Claude"), "The layout section doesn't carry every widget's ink and Widget colours.");
+                    string inkedLayout = phoneLayout.TrimEnd('}') + ",\"inks\":{\"Focus\":\"Mint\",\"Media\":\"Amber\",\"Claude\":\"Rose\",\"Notes\":\"Glitter\"}}";
+                    Assert(post("/command", inkedLayout, token).Item1 == 200 && SettingsStore.Load(path, out ignored).WidgetInks == "Focus=Mint", "Inks saved with the phone's layout weren't kept, or Amber, Claude or an unknown ink was accepted.");
+                    layoutState = Json(get("/state?parts=layout", token).Item2);
+                    Assert((string)((Dictionary<string, object>)((Dictionary<string, object>)layoutState["layout"])["inks"])["Focus"] == "Mint", "The PC doesn't report the phone's ink back.");
+                    string inkVersion = (string)layoutState["layoutVersion"];
+                    Assert(post("/command", "{\"action\":\"layout.inks\",\"colours\":\"Accent\"}", token).Item1 == 200 && SettingsStore.Load(path, out ignored).WidgetColours == "Accent"
+                        && (string)((Dictionary<string, object>)Json(get("/state?parts=layout", token).Item2)["layout"])["colours"] == "Accent" && (string)Json(get("/state?parts=focus", token).Item2)["layoutVersion"] != inkVersion, "Widget colours from the phone weren't saved, reported or versioned.");
+                    Assert(post("/command", "{\"action\":\"layout.inks\",\"colours\":\"Each\"}", token).Item1 == 200 && SettingsStore.Load(path, out ignored).WidgetColours == "Each", "Widget colours didn't go back to Each its own.");
                     Assert(post("/command", phoneLayout.Replace("Gaming", "Renamed"), token).Item1 == 409, "A layout for a page that changed was accepted.");
                     controller.Editor.Begin();
                     Assert(post("/command", "{\"action\":\"page.show\",\"index\":1}", token).Item1 == 409, "Pages changed while the PC was editing.");

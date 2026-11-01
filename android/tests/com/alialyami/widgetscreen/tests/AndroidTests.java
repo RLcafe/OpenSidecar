@@ -12,6 +12,7 @@ import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.GameText;
 import com.alialyami.widgetscreen.core.HomeText;
+import com.alialyami.widgetscreen.core.Inks;
 import com.alialyami.widgetscreen.core.SystemText;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.MacroText;
@@ -815,6 +816,45 @@ public final class AndroidTests {
         check("Palettes and accents match the Windows resources", new Action() { public void run() {
             Theme midnight = Theme.of("Midnight", "Lime"), slate = Theme.of("Slate", "Glacier");
             ok(midnight.page == 0xFF0C0E13 && midnight.accent == 0xFFBAF28B && slate.surface == 0xFF1B2938 && slate.accent == 0xFF8ED8F8 && Theme.of("Warm", "Amber").text == 0xFFFAF3E9, "colors");
+        } });
+
+        // Sticker Sheet foundations (decision 021, docs/design/sticker-sheet.md).
+        check("Sticker inks, defaults and strip names agree with the PC's", new Action() { public void run() throws Exception {
+            String path = System.getProperty("widgetscreen.sample");
+            File inks = path == null ? null : new File(new File(path).getParentFile(), "ink-defaults.json");
+            if (inks == null || !inks.exists()) throw new AssertionError("No ink-defaults.json. Run scripts\\build.ps1 -Test first.");
+            Map<String, Object> pc = Json.obj(Json.parse(new String(Files.readAllBytes(inks.toPath()), StandardCharsets.UTF_8)));
+            ok(Arrays.asList(Theme.INKS).equals(Arrays.asList("Lime", "Glacier", "Lavender", "Amber", "Coral", "Mint", "Rose", "Lemon")), "ink names");
+            for (String name : Theme.INKS) ok(Theme.ink(name) == (0xFF000000 | Integer.parseInt(Json.field(Json.obj(Json.value(pc, "hex")), name).substring(1), 16)), name + " differs from the PC");
+            Map<String, Object> defaults = Json.obj(Json.value(pc, "defaults")), strips = Json.obj(Json.value(pc, "strips"));
+            for (String id : WidgetLayout.IDS) {
+                ok(Inks.inScope(id) == defaults.containsKey(id), id + " in scope differs from the PC");
+                if (!Inks.inScope(id)) continue;
+                ok(Inks.defaultInk(id).equals(Json.field(defaults, id)), id + "'s default ink differs from the PC");
+                ok((Inks.stripName(id) + "|" + Inks.shortName(id)).equals(Json.field(strips, id)), id + "'s strip names differ from the PC");
+            }
+            ok(!Inks.inScope("Claude") && !Arrays.asList(Inks.CHOICES).contains("Amber"), "Claude Code or Amber");
+        } });
+        check("Widget colours: Accent only gives every card the accent; inks keep in the phone's settings", new Action() { public void run() {
+            Map<String, String> chosen = Inks.parse("Focus=Mint;Media=Lemon;Claude=Rose;Notes=Amber");
+            for (String accent : Theme.ACCENTS) for (String id : WidgetLayout.IDS) ok(Inks.resolve(id, chosen, Inks.ACCENT_ONLY, accent).equals(accent), id + " under Accent only");
+            ok(Inks.format(chosen).equals("Focus=Mint;Media=Lemon") && Inks.resolve("Media", chosen, Inks.EACH_OWN, "Lime").equals("Lemon") && Inks.resolve("Games", chosen, Inks.EACH_OWN, "Lime").equals("Lime"), "chosen inks");
+            AppSettings s = new AppSettings(); s.inks = "Spotify=Rose;Media=Rose"; s.widgetColours = "Accent"; s.accent = "Glacier";
+            AppSettings copy = s.copy();
+            ok(copy.inks.equals("Spotify=Rose") && copy.widgetColours.equals("Accent") && copy.ink("Focus") == Theme.INK_GLACIER, "settings round trip");
+            copy.widgetColours = "Each"; ok(copy.ink("Spotify") == Theme.INK_ROSE && copy.ink("Focus") == Theme.INK_CORAL, "Each its own");
+        } });
+        check("The PC's layout section brings its inks and Widget colours to the phone", new Action() { public void run() throws Exception {
+            String path = System.getProperty("widgetscreen.sample");
+            PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+            ok(state.layout != null && state.layout.inks != null && "Mint".equals(state.layout.inks.get("Focus")) && "Rose".equals(state.layout.inks.get("Media")) && !state.layout.inks.containsKey("Claude") && "Each".equals(state.layout.colours), "inks in the sample");
+            AppSettings s = new AppSettings(); s.mirror(state.layout);
+            ok(s.inks.equals("Focus=Mint") && s.ink("Focus") == Theme.INK_MINT && s.ink("Mixer") == Theme.INK_LIME, "mirrored inks");
+        } });
+        check("Status stickers and label strips follow the PC's state words and text size", new Action() { public void run() {
+            ok(Inks.stateOf("UNAVAILABLE", true) == Inks.UNAVAILABLE && Inks.stateOf("PC OFFLINE", false) == Inks.OFFLINE && Inks.stateOf("…", false) == Inks.LOADING && Inks.stateOf("C: LOW", true) == Inks.WARNING && Inks.stateOf("3 TO DO", false) == Inks.FACT, "states");
+            ok(Inks.stripTextSize(1) == 13 && Inks.stripTextSize(1.4) == 18 && Inks.stripTextSize(3) == 18 && Inks.stripTextSize(0.5) == 11.5, "strip text size");
+            ok(Inks.compact(199) && !Inks.compact(200) && Inks.shortName("Clipboard").equals("CLIPS"), "compact strips");
         } });
 
         System.out.println(passes + " passed, " + failures + " failed.");

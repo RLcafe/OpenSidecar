@@ -64,11 +64,14 @@ namespace WidgetScreen
         {
             var content = Control<StackPanel>("EditPanelContent"); content.Children.Clear();
             widgetChecks.Clear(); widgetRows.Clear();
-            content.Children.Add(PanelLabel("SHOW ON THE DASHBOARD", 4));
+            // The selected card's ink first, where it's seen without scrolling (decision 021).
+            content.Children.Add(BuildInkPicker());
+            content.Children.Add(PanelLabel("SHOW ON THE DASHBOARD", 20));
             foreach (string id in WidgetLayout.Ids)
             {
                 string widget = id;
-                var check = new CheckBox { Content = WidgetLayout.Title(id), MinHeight = 52, VerticalContentAlignment = VerticalAlignment.Center };
+                var check = new CheckBox { Content = InkLabel(id), MinHeight = 52, VerticalContentAlignment = VerticalAlignment.Center };
+                AutomationProperties.SetName(check, WidgetLayout.Title(id));
                 check.Click += (sender, e) => { Editor.SetVisible(widget, check.IsChecked == true); if (check.IsChecked == true) Editor.Select(widget); };
                 var row = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = check, Margin = new Thickness(0, 0, 0, 2) };
                 widgetChecks[id] = check; widgetRows[id] = row;
@@ -127,6 +130,7 @@ namespace WidgetScreen
                 if (selected) { row.SetResourceReference(Border.BackgroundProperty, "Selected"); row.SetResourceReference(Border.BorderBrushProperty, "Accent"); }
                 else { row.Background = Brushes.Transparent; row.BorderBrush = Brushes.Transparent; }
             }
+            UpdateInkPicker();
         }
 
         // Deleting a page asks first: a second tap within a few seconds confirms.
@@ -146,7 +150,8 @@ namespace WidgetScreen
         public void PageAction(Action change)
         {
             if (!Editor.Editing) return;
-            if (Editor.CanUndo) { SaveLayoutEdit(); if (Editor.Editing) return; }
+            bool inksChanged = editInks != null && Inks.Clean(editInks) != settings.WidgetInks;
+            if (Editor.CanUndo || inksChanged) { SaveLayoutEdit(); if (Editor.Editing) return; }
             else { CloseEditPanel(); Editor.Cancel(); }
             string problem = ChangePages(change);
             BeginLayoutEdit(); OpenEditPanel();

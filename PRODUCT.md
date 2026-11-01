@@ -45,7 +45,7 @@ A native dashboard (WPF on Windows, framework views on Android) with no WebView,
 ## Brand Commitments
 
 - Name **Widget Screen**, author **Ali Alyami**, logo `assets/WidgetScreen.ico` (also the Android launcher icon).
-- The visual system in `design specfication/as-built-specification-and-design.md` §3.3–3.5 is binding: Midnight, Slate and Warm palettes with Lime, Glacier, Lavender and Amber accents. No DESIGN.md has been written yet.
+- The visual system in `design specfication/as-built-specification-and-design.md` §3.3–3.5 is binding: Midnight, Slate and Warm palettes with Lime, Glacier, Lavender and Amber accents. Since the Sticker Sheet redesign (decision 021), widgets also wear eight inks (the four accents plus Coral, Mint, Rose and Lemon); [DESIGN.md](DESIGN.md) describes it.
 - System fonts only: Segoe UI, Segoe UI Light for the clock and Segoe MDL2 Assets glyphs on Windows; the system sans-serif and the line glyphs in `android/.../views/Glyphs.java` on Android. No images or emoji as icons, no custom fonts.
 - Voice: short and plain. Dashboard text only speaks when something is true or wrong (`docs/design/ui-polish.md`).
 

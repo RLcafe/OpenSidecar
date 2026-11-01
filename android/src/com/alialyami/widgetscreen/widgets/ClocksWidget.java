@@ -50,8 +50,8 @@ public final class ClocksWidget extends Widget {
 
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("WORLD CLOCKS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        status = ui.caption("");
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        status = sticker(false);
         header.addView(status, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 

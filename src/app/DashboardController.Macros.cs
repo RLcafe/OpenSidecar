@@ -51,7 +51,7 @@ namespace WidgetScreen
             double cardWidth = Editor.Bounds("Macros").Width;
             Control<StackPanel>("MacroPages").Visibility = pages > 1 ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("EditMacros").Visibility = CardSizing.DeckEditShown(cardWidth) ? Visibility.Visible : Visibility.Collapsed;
-            Control<TextBlock>("MacroHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
+            Control<FrameworkElement>("MacroHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("MacroPrevious").IsEnabled = macroPage > 0; Control<Button>("MacroNext").IsEnabled = macroPage < pages - 1;
             Text("MacroPageLabel", (macroPage + 1) + "/" + pages);
             Control<Button>("EmptyMacros").Visibility = macros.Length == 0 ? Visibility.Visible : Visibility.Collapsed;

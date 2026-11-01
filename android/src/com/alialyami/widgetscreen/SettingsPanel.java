@@ -15,6 +15,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.alialyami.widgetscreen.core.AppSettings;
+import com.alialyami.widgetscreen.core.Inks;
+import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.WidgetLayout;
@@ -203,6 +205,9 @@ public final class SettingsPanel {
         add(left, choices(Theme.THEMES, null, draft.theme, new Choice() { @Override public void chose(String value) { draft.theme = value; previewAppearance(); } }), 6);
         add(left, ui.smallText("Accent color"), 14);
         add(left, choices(Theme.ACCENTS, null, draft.accent, new Choice() { @Override public void chose(String value) { draft.accent = value; previewAppearance(); } }), 6);
+        // The PC's setting (decision 021): saving here changes it on the PC too.
+        add(left, ui.smallText("Widget colours"), 14);
+        add(left, choices(new String[] { Inks.EACH_OWN, Inks.ACCENT_ONLY }, new String[] { "Each its own", "Accent only" }, draft.widgetColours, new Choice() { @Override public void chose(String value) { draft.widgetColours = value; previewAppearance(); } }), 6);
         final View cornersRow = valueRow("Widget corners", Math.round(draft.cornerRadius) + "");
         add(left, cornersRow, 18);
         TouchSlider corners = new TouchSlider(dash.activity, ui).range(0, 24, 4);
@@ -377,7 +382,9 @@ public final class SettingsPanel {
     // ----- Save and cancel -----
 
     private void save() {
+        boolean coloursChanged = !draft.widgetColours.equals(dash.settings.widgetColours);
         dash.applySettings(draft);
+        if (coloursChanged) dash.command(Json.map("action", "layout.inks", "colours", draft.widgetColours), "Widget colours saved on the PC.");
         // The widgets shown belong to the PC's page: a change is saved there, for every screen.
         if (shown != null) {
             WidgetLayout.Placement[] before = dash.editor.export();

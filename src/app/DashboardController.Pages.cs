@@ -112,6 +112,7 @@ namespace WidgetScreen
             int current = WidgetLayout.CurrentPage(settings); var page = WidgetLayout.Page(settings, current);
             Size canvas = Editor.CanvasSize;
             return D("page", current, "pages", WidgetLayout.Pages(settings).Select(p => (object)p.Name).ToArray(), "snap", settings.SnapWidgets, "editing", Editor.Editing,
+                "inks", RemoteInks(), "colours", settings.WidgetColours,
                 "canvas", D("width", canvas.Width, "height", canvas.Height), "shown", RemoteWidgets(WidgetLayout.ForCanvas(settings, current, canvas)),
                 "layouts", WidgetLayout.SavedLayouts(page).Select(c => (object)D("width", c.Width, "height", c.Height, "widgets", RemoteWidgets(c.Widgets))).ToArray());
         }
@@ -159,8 +160,20 @@ namespace WidgetScreen
                         if (!(width >= 64 && width <= 100000 && height >= 64 && height <= 100000)) throw new ArgumentException("The layout's screen size is missing.");
                         var widgets = ParseWidgets(body.ContainsKey("widgets") ? body["widgets"] : null);
                         var canvas = new Size(width, height);
-                        problem = ChangePages(() => WidgetLayout.Store(settings, index, canvas, WidgetLayout.Normalize(widgets, settings, canvas)));
+                        string inksBefore = settings.WidgetInks;
+                        problem = ChangePages(() => { WidgetLayout.Store(settings, index, canvas, WidgetLayout.Normalize(widgets, settings, canvas)); TakeRemoteInks(body); });
+                        if (problem != null) settings.WidgetInks = inksBefore;
+                        else ApplyAppearance(settings);
                         done = "Layout saved on the PC.";
+                        break;
+                    }
+                case "layout.inks":
+                    {
+                        // Inks or Widget colours from the phone (decision 021); the layout itself is unchanged.
+                        string inksBefore = settings.WidgetInks, modeBefore = settings.WidgetColours;
+                        problem = ChangePages(() => TakeRemoteInks(body));
+                        if (problem != null) { settings.WidgetInks = inksBefore; settings.WidgetColours = modeBefore; }
+                        else ApplyAppearance(settings);
                         break;
                     }
                 case "page.add":

@@ -85,13 +85,13 @@ public final class SystemWidget extends Widget {
 
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("SYSTEM STATS"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
         LinearLayout right = ui.row();
-        headerUptime = ui.caption("");
+        headerUptime = sticker(false);
         headerUptime.setVisibility(design == CardSizing.LARGE && uptime ? View.VISIBLE : View.GONE);
         right.addView(headerUptime, ui.ll(Ui.WRAP, Ui.WRAP));
-        status = ui.caption("");
-        status.setTextColor(Theme.WARNING);
+        status = sticker(true);
+        
         right.addView(status, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 12, 0, 0, 0));
         header.addView(right, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));

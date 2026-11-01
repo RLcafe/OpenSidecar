@@ -44,8 +44,8 @@ public final class MediaWidget extends Widget {
         boolean folded = CardSizing.mediaShort(height), narrow = CardSizing.mediaNarrow(width);
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("NOW PLAYING"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        source = ui.smallText("");
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        source = sticker(false);
         source.setMaxWidth(ui.px(220));
         header.addView(source, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));

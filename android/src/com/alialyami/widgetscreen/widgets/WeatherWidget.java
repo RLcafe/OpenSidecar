@@ -102,8 +102,8 @@ public final class WeatherWidget extends Widget {
         boolean showHours = large || height >= 300 - 48;
         LinearLayout view = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("WEATHER"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        condition = ui.caption("");
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        condition = sticker(false);
         header.addView(condition, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         view.addView(header, ui.ll(Ui.MATCH, Ui.WRAP));
         header.setMinimumHeight(ui.px(26));

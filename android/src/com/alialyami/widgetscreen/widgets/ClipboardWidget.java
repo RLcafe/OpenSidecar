@@ -9,6 +9,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.ClipText;
 import com.alialyami.widgetscreen.core.Json;
@@ -20,7 +21,8 @@ import com.alialyami.widgetscreen.core.Theme;
 // gets short previews. Android doesn't let an app watch the clipboard in the background, so this phone's own copies
 // aren't part of the history.
 public final class ClipboardWidget extends Widget {
-    private TextView status, empty;
+    private TextView empty;
+    private Stickers.Sticker status;
     private LinearLayout rows;
     private View pause, clear;
     private String listed, builtFor = "";
@@ -41,8 +43,8 @@ public final class ClipboardWidget extends Widget {
 
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("CLIPBOARD"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        status = ui.caption("");
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        status = sticker(false);
         header.addView(status, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 
@@ -98,7 +100,7 @@ public final class ClipboardWidget extends Widget {
         if (!shape(c).equals(builtFor)) { dash.rebuildWidget(id); return; }
         if (c == null) { status.setText(!dash.online() ? "PC OFFLINE" : ""); return; }
         status.setText(ClipText.status(c));
-        status.setTextColor(c.paused ? Theme.WARNING : ui.theme.muted);
+        status.setWarns(c.paused);
         empty.setText(c.items.isEmpty() ? ClipText.empty(c) : "");
         empty.setVisibility(c.items.isEmpty() ? View.VISIBLE : View.GONE);
         Ui.enable(clear, !c.items.isEmpty());

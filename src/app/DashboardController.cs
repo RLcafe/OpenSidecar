@@ -83,7 +83,8 @@ namespace WidgetScreen
             Editor = new LayoutEditor(window);
             outputPicker = new OutputPicker(window);
             confirm = new ConfirmSheet(window);
-            systemCard = new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime"));
+            InitializeStickers();
+            systemCard =new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime"));
             weatherCard = new WeatherCard(window, Control<Grid>("WeatherBody"));
             InitializeStorage();
             InitializeClocks();
@@ -225,6 +226,7 @@ namespace WidgetScreen
             Control<Slider>("ScaleChoice").ValueChanged += (sender, e) => Text("ScaleLabel", Math.Round(e.NewValue) + "%");
             Control<ComboBox>("ThemeChoice").SelectionChanged += (sender, e) => PreviewAppearance();
             Control<ComboBox>("AccentChoice").SelectionChanged += (sender, e) => PreviewAppearance();
+            Control<ComboBox>("InkModeChoice").SelectionChanged += (sender, e) => PreviewAppearance();
             Control<Slider>("CornersChoice").ValueChanged += (sender, e) => PreviewAppearance();
             Control<Slider>("ScaleChoice").ValueChanged += (sender, e) => PreviewAppearance();
         }
@@ -365,13 +367,16 @@ namespace WidgetScreen
             window.Resources["TitleSize"] = 24.0 * appearance.TextScale;
             window.Resources["HeaderClockSize"] = 52.0 * Math.Min(1.06, appearance.TextScale);
             levels.BarBrush = accent;
+            stripScale = appearance.TextScale;
+            ApplyInks(editInks ?? appearance.WidgetInks, appearance.WidgetColours, selectedAccent);
         }
 
         private void PreviewAppearance()
         {
             if (openingSettings || Control<Grid>("SettingsOverlay").Visibility != Visibility.Visible) return;
             var appearance = new AppSettings { Theme = (string)Control<ComboBox>("ThemeChoice").SelectedItem, Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem,
-                CornerRadius = Control<Slider>("CornersChoice").Value, TextScale = Control<Slider>("ScaleChoice").Value / 100 };
+                CornerRadius = Control<Slider>("CornersChoice").Value, TextScale = Control<Slider>("ScaleChoice").Value / 100,
+                WidgetInks = settings.WidgetInks, WidgetColours = ChosenInkMode() };
             ApplyAppearance(appearance);
             Editor.Refresh();
             Text("CornersLabel", appearance.CornerRadius == 0 ? "Square" : Math.Round(appearance.CornerRadius) + " px");
@@ -386,24 +391,29 @@ namespace WidgetScreen
         private void BeginLayoutEdit()
         {
             Editor.Begin(); UpdateLevelTimer();
+            editInks = settings.WidgetInks;
             Control<Button>("SaveLayoutButton").Focus();
         }
         private void CancelLayoutEdit()
         {
             CloseEditPanel(); Editor.Cancel(); UpdateLevelTimer(); UpdateDisplayStatus();
+            editInks = null; ApplyInks(settings.WidgetInks, settings.WidgetColours, settings.Accent);
             Notify("Layout changes discarded."); Control<Button>("EditLayoutButton").Focus();
         }
         private void SaveLayoutEdit()
         {
             // The layout is saved for this canvas size of the page shown; other screen shapes keep their own.
-            var previous = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); bool previousSnap = settings.SnapWidgets;
+            var previous = WidgetLayout.Pages(settings).Select(p => p.Copy()).ToList(); bool previousSnap = settings.SnapWidgets; string previousInks = settings.WidgetInks;
             WidgetLayout.Store(settings, Editor.CanvasSize, Editor.Export()); settings.SnapWidgets = Editor.Snap;
+            // Inks belong to the widget, not to a page or screen shape (decision 021).
+            if (editInks != null) settings.WidgetInks = Inks.Clean(editInks);
             try { SaveSettingsFile(settings); }
             catch (Exception e)
             {
-                WidgetLayout.SetPages(settings, previous); settings.SnapWidgets = previousSnap;
+                WidgetLayout.SetPages(settings, previous); settings.SnapWidgets = previousSnap; settings.WidgetInks = previousInks;
                 Notify("Could not save layout: " + e.Message + ". Your changes are still in the editor."); return;
             }
+            editInks = null;
             CloseEditPanel(); Editor.Accept(); ApplySettings(); UpdateDisplayStatus();
             if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); RefreshStorage(); }
             Notify("Layout saved."); Control<Button>("EditLayoutButton").Focus();
@@ -470,7 +480,7 @@ namespace WidgetScreen
             // A narrow card keeps its pager and buttons first (CardSizing.DeckEditShown, HeadingShown).
             double cardWidth = Editor.Bounds("Shortcuts").Width;
             Control<Button>("EditDeck").Visibility = CardSizing.DeckEditShown(cardWidth) ? Visibility.Visible : Visibility.Collapsed;
-            Control<TextBlock>("DeckHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
+            Control<FrameworkElement>("DeckHeading").Visibility = CardSizing.HeadingShown(cardWidth, pages > 1) ? Visibility.Visible : Visibility.Collapsed;
             Control<Button>("DeckPrevious").IsEnabled = deckPage > 0; Control<Button>("DeckNext").IsEnabled = deckPage < pages - 1;
             Text("DeckPageLabel", (deckPage + 1) + "/" + pages);
             Control<Button>("EmptyDeck").Visibility = settings.Shortcuts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -973,6 +983,7 @@ namespace WidgetScreen
             var monitorChoice = Control<ComboBox>("MonitorChoice"); monitorChoice.ItemsSource = monitors; monitorChoice.SelectedItem = monitors.FirstOrDefault(m => m.Id == settings.Monitor) ?? monitors[0];
             var accent = Control<ComboBox>("AccentChoice"); accent.ItemsSource = new[] { "Lime", "Glacier", "Lavender", "Amber" }; accent.SelectedItem = settings.Accent;
             var theme = Control<ComboBox>("ThemeChoice"); theme.ItemsSource = new[] { "Midnight", "Slate", "Warm" }; theme.SelectedItem = settings.Theme;
+            var inkMode = Control<ComboBox>("InkModeChoice"); inkMode.ItemsSource = InkModeNames; inkMode.SelectedIndex = settings.WidgetColours == Inks.AccentOnly ? 1 : 0;
             Control<Slider>("CornersChoice").Value = settings.CornerRadius;
             Control<CheckBox>("StartFullscreenChoice").IsChecked = settings.StartFullscreen;
             Control<CheckBox>("KeepFocusChoice").IsChecked = settings.KeepGameFocus;
@@ -1014,6 +1025,7 @@ namespace WidgetScreen
             candidate.StartFullscreen = Control<CheckBox>("StartFullscreenChoice").IsChecked == true;
             candidate.KeepGameFocus = Control<CheckBox>("KeepFocusChoice").IsChecked == true;
             candidate.Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem; candidate.TextScale = Control<Slider>("ScaleChoice").Value / 100;
+            candidate.WidgetColours = ChosenInkMode();
             candidate.Monitor = monitor == null ? "" : monitor.Id; candidate.ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true;
             candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;

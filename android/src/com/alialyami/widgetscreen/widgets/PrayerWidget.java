@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
@@ -23,7 +24,8 @@ import java.util.List;
 // sunrise and the Hijri date over rows or tiles. The PC works the times out and plays the alert; while it plays, the
 // card offers Stop. The city, method and alert are set on the PC (Settings → Prayer).
 public final class PrayerWidget extends Widget {
-    private TextView status, nextName, nextTime, countdown, hijri;
+    private Stickers.Sticker status;
+    private TextView nextName, nextTime, countdown, hijri;
     private ProgressLine progress;
     private View stop;
     private final List<TextView[]> rows = new ArrayList<TextView[]>();
@@ -45,8 +47,8 @@ public final class PrayerWidget extends Widget {
 
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
-        header.addView(ui.label("PRAYER TIMES"), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        status = ui.caption("");
+        header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+        status = sticker(false);
         header.addView(status, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
         column.addView(header, ui.ll(Ui.MATCH, ui.px(28)));
 
@@ -163,7 +165,7 @@ public final class PrayerWidget extends Widget {
         boolean now_ = started || p.alerting;
         String city = p.city.contains(",") ? p.city.substring(0, p.city.indexOf(',')).trim() : p.city;
         status.setText(now_ ? (PrayerText.name(p.current) + " now").toUpperCase(java.util.Locale.US) : city);
-        status.setTextColor(now_ ? ui.theme.accent : ui.theme.muted);
+        status.setFilled(now_);
         nextName.setText(PrayerText.name(p.next));
         nextTime.setText(PrayerText.time(p.nextAt, p.pcOffset, use24));
         countdown.setText(left);

@@ -27,6 +27,26 @@ public final class Theme {
         return new Theme(colors, accentColor(accent));
     }
 
+    // The Sticker Sheet inks (decision 021), the same names and colours as the Windows "InkLime"…"InkLemon" resources.
+    // Lime, Glacier, Lavender and Amber are also the accents; text on an ink is ON_ACCENT (INK_TEXT).
+    public static final String[] INKS = { "Lime", "Glacier", "Lavender", "Amber", "Coral", "Mint", "Rose", "Lemon" };
+    public static final int INK_LIME = 0xFFBAF28B, INK_GLACIER = 0xFF8ED8F8, INK_LAVENDER = 0xFFC5AEFF, INK_AMBER = 0xFFF5C47D,
+        INK_CORAL = 0xFFFF9E85, INK_MINT = 0xFF7FE6C0, INK_ROSE = 0xFFFFA6CF, INK_LEMON = 0xFFF0E36E, INK_TEXT = ON_ACCENT;
+
+    public static int ink(String name) {
+        if (name == null) return INK_LIME;
+        switch (name) {
+            case "Glacier": return INK_GLACIER;
+            case "Lavender": return INK_LAVENDER;
+            case "Amber": return INK_AMBER;
+            case "Coral": return INK_CORAL;
+            case "Mint": return INK_MINT;
+            case "Rose": return INK_ROSE;
+            case "Lemon": return INK_LEMON;
+            default: return INK_LIME;
+        }
+    }
+
     public static int accentColor(String accent) {
         return "Glacier".equals(accent) ? 0xFF8ED8F8 : "Lavender".equals(accent) ? 0xFFC5AEFF : "Amber".equals(accent) ? 0xFFF5C47D : 0xFFBAF28B;
     }
