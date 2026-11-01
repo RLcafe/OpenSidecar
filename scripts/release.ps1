@@ -23,9 +23,15 @@ try {
     git worktree add --detach $buildCheckout $Version
     if ($LASTEXITCODE -ne 0) { throw "Could not check out $Version." }
     try {
+        # The hardware-sensor files are git-ignored: the ones already fetched and checked here go to the build checkout,
+        # whose build.ps1 checks them again against the tag's SHA256SUMS.txt.
+        $sensorBin = Join-Path $projectRoot 'third-party\LibreHardwareMonitor\bin'
+        if ((Test-Path -LiteralPath $sensorBin) -and (Test-Path -LiteralPath (Join-Path $buildCheckout 'third-party\LibreHardwareMonitor'))) {
+            Copy-Item -LiteralPath $sensorBin -Destination (Join-Path $buildCheckout 'third-party\LibreHardwareMonitor') -Recurse -Force
+        }
         & (Join-Path $buildCheckout 'scripts\build.ps1') -Test
         New-Item -ItemType Directory -Path $releasePath -Force | Out-Null
-        Copy-Item -Path (Join-Path $buildCheckout 'artifacts\app\*') -Destination $releasePath
+        Copy-Item -Path (Join-Path $buildCheckout 'artifacts\app\*') -Destination $releasePath -Recurse
         # The Android app (tags from v0.4.0 on) ships next to the exe when the Android SDK is installed.
         $androidScript = Join-Path $buildCheckout 'scripts\build-android.ps1'
         if (Test-Path -LiteralPath $androidScript) {

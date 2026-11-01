@@ -39,6 +39,8 @@ namespace WidgetScreen
                 using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WidgetScreen.MainWindow.xaml")) window = (Window)XamlReader.Load(stream);
                 string settingsPath = Argument(args, "--settings") ?? SettingsStore.DefaultPath;
                 string renderPath = Argument(args, "--render");
+                // Full-sensors mode (decision 016): a copy started normally runs the elevated one and closes.
+                if (renderPath == null && !args.Contains(FullSensors.Argument) && Argument(args, "--settings") == null && DashboardController.HandOverToElevatedCopy(settingsPath)) return 0;
                 Rendering = renderPath != null;
                 if (Rendering) ScreenSize = RenderSize(Argument(args, "--render-size"));
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))

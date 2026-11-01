@@ -43,6 +43,28 @@ $hookArguments = @('/nologo', '/target:exe', '/platform:x64', '/optimize+', '/ut
 & $compilerPath $hookArguments
 if ($LASTEXITCODE -ne 0) { throw "ClaudeHook build failed (exit $LASTEXITCODE)." }
 Write-Output "Built: $outputPath\ClaudeHook.exe"
+# Hardware sensors (decision 016): the pinned LibreHardwareMonitor files go in sensors\ when scripts\get-sensors.ps1 has
+# fetched them, each checked against SHA256SUMS.txt, with the third-party notice and licences. Without them the app
+# builds and runs as before, and says the sensors aren't installed.
+$sensorSource = Join-Path $projectRoot 'third-party\LibreHardwareMonitor'
+$sensorTarget = Join-Path $outputPath 'sensors'
+$sensorSums = @{}
+foreach ($line in Get-Content -LiteralPath (Join-Path $sensorSource 'SHA256SUMS.txt')) { if ($line -match '^([0-9a-f]{64})\s+(\S+\.dll)$') { $sensorSums[$Matches[2]] = $Matches[1] } }
+$sensorFiles = @($sensorSums.Keys | ForEach-Object { Join-Path $sensorSource "bin\$_" })
+$sensorsReady = ($sensorFiles | Where-Object { -not (Test-Path -LiteralPath $_) }).Count -eq 0
+if ($sensorsReady) {
+    foreach ($name in $sensorSums.Keys) {
+        if ((Get-FileHash -LiteralPath (Join-Path $sensorSource "bin\$name") -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sensorSums[$name]) { throw "third-party\LibreHardwareMonitorin\$name doesn't match its pinned SHA-256. Run scripts\get-sensors.ps1 again." }
+    }
+    New-Item -ItemType Directory -Path (Join-Path $sensorTarget 'licenses') -Force | Out-Null
+    foreach ($file in $sensorFiles) { Copy-Item -LiteralPath $file -Destination $sensorTarget -Force }
+    Copy-Item -LiteralPath (Join-Path $sensorSource 'THIRD-PARTY-NOTICES.txt') -Destination $sensorTarget -Force
+    Copy-Item -Path (Join-Path $sensorSource 'licenses\*.txt') -Destination (Join-Path $sensorTarget 'licenses') -Force
+    Write-Output "Sensors: $sensorTarget (LibreHardwareMonitor 0.9.6, $($sensorSums.Count) files checked)"
+} else {
+    if (Test-Path -LiteralPath $sensorTarget) { Remove-Item -LiteralPath $sensorTarget -Recurse -Force }
+    Write-Output 'Sensors: not included (run scripts\get-sensors.ps1 to add LibreHardwareMonitor)'
+}
 if ($Test) {
     $testOutput = Join-Path $projectRoot 'artifacts\tests'
     New-Item -ItemType Directory -Path $testOutput -Force | Out-Null

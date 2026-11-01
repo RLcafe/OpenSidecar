@@ -39,6 +39,30 @@ try {
         Assert ($entry.UninstallString -like '*Uninstall Widget Screen.exe" /uninstall*' -and $entry.QuietUninstallString -like '*/S') 'The uninstall commands are wrong.'
         Assert ($entry.InstallLocation -eq $installDir -and $entry.EstimatedSize -gt 0 -and $entry.NoModify -eq 1) 'The entry details are wrong.'
     }
+    # Install hardware sensors (decision 016): ticked by default, the sensors folder matches the build byte for byte;
+    # unticked (--no-sensors), the folder goes and the app is left complete; ticking it again brings it back.
+    $sourceSensors = Join-Path $Source 'sensors'
+    $installedSensors = Join-Path $installDir 'sensors'
+    if (Test-Path -LiteralPath (Join-Path $sourceSensors 'LibreHardwareMonitorLib.dll')) {
+        Check 'Setup installs the hardware sensors with their notice and licences when the box is ticked (the default)' {
+            $files = @(Get-ChildItem -LiteralPath $sourceSensors -Recurse -File)
+            Assert ($files.Count -ge 13) "The build's sensors folder looks incomplete ($($files.Count) files)."
+            foreach ($file in $files) {
+                $target = Join-Path $installedSensors $file.FullName.Substring($sourceSensors.Length + 1)
+                Assert (Test-Path -LiteralPath $target) "$($file.Name) wasn't installed."
+                Assert ((Get-FileHash -LiteralPath $target).Hash -eq (Get-FileHash -LiteralPath $file.FullName).Hash) "$($file.Name) differs from the build."
+            }
+            Assert (Test-Path -LiteralPath (Join-Path $installedSensors 'THIRD-PARTY-NOTICES.txt')) 'The third-party notice is missing.'
+            Assert (Test-Path -LiteralPath (Join-Path $installedSensors 'licenses\MPL-2.0.txt')) 'The MPL-2.0 licence is missing.'
+        }
+        Check 'Setup leaves the hardware sensors out when the box is unticked, and adds them again later' {
+            Run $Setup "/S --no-sensors --root `"$root`""
+            Assert (-not (Test-Path -LiteralPath $installedSensors)) 'The sensors folder is still there.'
+            Assert ((Get-FileHash $app).Hash -eq (Get-FileHash (Join-Path $Source 'WidgetScreen.exe')).Hash -and (Test-Path -LiteralPath $uninstaller)) 'The app went missing without the sensors.'
+            Run $Setup "/S --root `"$root`""
+            Assert (Test-Path -LiteralPath (Join-Path $installedSensors 'LibreHardwareMonitorLib.dll')) 'Running setup again with the box ticked did not add the sensors.'
+        }
+    } else { Write-Output 'NOTE This build has no hardware sensors (scripts\get-sensors.ps1), so the sensor checks were skipped.' }
     Check 'Installing again updates in place and can turn off starting with Windows' {
         Run $Setup "/S --no-startup --root `"$root`""
         Assert (-not (Test-Path -LiteralPath $startup)) 'The Startup shortcut is still there.'

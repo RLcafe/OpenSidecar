@@ -182,7 +182,7 @@ namespace WidgetScreen
         {
             if (current == null) return true;
             var p = current.First(w => w.Id == id);
-            bool hasStats = preferences.ShowCpu || preferences.ShowGpu || preferences.ShowRam || preferences.ShowNetwork || preferences.ShowUptime;
+            bool hasStats = SystemStyles.Any(preferences);
             return p.Visible && (id != "System" || hasStats);
         }
         public bool IsEnabled(string id) { return current.First(p => p.Id == id).Visible; }
@@ -212,9 +212,9 @@ namespace WidgetScreen
         public void Reset()
         {
             if (!Editing || GestureActive) return;
-            Remember(Export()); current = WidgetLayout.DefaultFor(new AppSettings {
-                ShowCpu = preferences.ShowCpu, ShowGpu = preferences.ShowGpu, ShowRam = preferences.ShowRam,
-                ShowNetwork = preferences.ShowNetwork, ShowUptime = preferences.ShowUptime }, canvasSize); Draw();
+            var readings = new AppSettings();
+            foreach (string id in SystemStyles.Ids) SystemStyles.Show(readings, id, SystemStyles.Shown(preferences, id));
+            Remember(Export()); current = WidgetLayout.DefaultFor(readings, canvasSize); Draw();
         }
         // Lines up the shown widgets neatly in their current order, filling the canvas (WidgetLayout.Arrange). One undo
         // step; returns false when they are already arranged that way.

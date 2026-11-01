@@ -50,6 +50,8 @@ namespace WidgetScreen
         private readonly DispatcherTimer levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         private readonly Dictionary<string, SessionRow> sessionRows = new Dictionary<string, SessionRow>();
         private readonly SystemStatsCard systemCard;
+        // For the checks (tests/Sensors/SensorTests.cs).
+        public SystemStatsCard SystemView { get { return systemCard; } }
         private readonly WeatherCard weatherCard;
         private readonly DeckEditor deckEditor;
         private readonly DeckHotkeys deckHotkeys;
@@ -93,6 +95,7 @@ namespace WidgetScreen
             InitializeCalendar();
             InitializeGames();
             InitializeHome();
+            InitializeSensors();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -252,7 +255,7 @@ namespace WidgetScreen
             if (ticks % interval == 0)
             {
                 RefreshAudio();
-                if (Editor.IsVisible("System") && (settings.ShowCpu || settings.ShowGpu || settings.ShowRam || settings.ShowNetwork || settings.ShowUptime)) RefreshSystem();
+                if (Editor.IsVisible("System") && SystemStyles.Any(settings)) RefreshSystem();
             }
             if (ticks % (settings.QuietMode ? 6 : 3) == 0) RefreshMedia();
             else if (lastMedia != null && lastMedia.Playing && Editor.IsVisible("Media")) mediaScrubber.Advance(1000);
@@ -377,7 +380,7 @@ namespace WidgetScreen
         private void ApplyLayout(AppSettings layout)
         {
             Editor.Apply(layout);
-            systemCard.Choose(layout.ShowCpu, layout.ShowGpu, layout.ShowRam, layout.ShowNetwork, layout.ShowUptime);
+            systemCard.Choose(layout);
         }
 
         private void BeginLayoutEdit()
@@ -797,13 +800,13 @@ namespace WidgetScreen
             try { var snapshot = await read; lastAudio = snapshot; lastAudioAt = DateTime.UtcNow; return snapshot; }
             catch (Exception) { lastAudio = null; throw; }
         }
-        private Task<SystemSnapshot> ReadSystemAsync(bool cpu, bool gpu, bool ram, bool network, bool uptime)
+        private Task<SystemSnapshot> ReadSystemAsync(SystemWants wants)
         {
-            string flags = "" + cpu + gpu + ram + network + uptime;
+            string flags = wants.Key;
             if (lastSystem != null && flags == lastSystemFlags && DateTime.UtcNow - lastSystemAt < SnapshotLifetime) return Task.FromResult(lastSystem);
             if (systemRead != null && !systemRead.IsCompleted && flags == lastSystemFlags) return systemRead;
             lastSystemFlags = flags;
-            systemRead = StoreSystem(Task.Run(() => system.Read(cpu, gpu, ram, network, uptime)));
+            systemRead = StoreSystem(Task.Run(() => system.Read(wants)));
             return systemRead;
         }
         private async Task<SystemSnapshot> StoreSystem(Task<SystemSnapshot> read)
@@ -832,7 +835,7 @@ namespace WidgetScreen
             bool readStats = Editor.IsVisible("System");
             try
             {
-                var snapshot = await ReadSystemAsync(readStats && requested.ShowCpu, readStats && requested.ShowGpu, readStats && requested.ShowRam, readStats && requested.ShowNetwork, readStats && requested.ShowUptime);
+                var snapshot = await ReadSystemAsync(SystemWants.From(requested, readStats));
                 if (disposed || requested != settings) return;
                 Text("SystemStatus", ""); systemCard.Update(snapshot);
             }
@@ -973,8 +976,6 @@ namespace WidgetScreen
             Control<Slider>("CornersChoice").Value = settings.CornerRadius;
             Control<CheckBox>("StartFullscreenChoice").IsChecked = settings.StartFullscreen;
             Control<CheckBox>("KeepFocusChoice").IsChecked = settings.KeepGameFocus;
-            Control<CheckBox>("CpuChoice").IsChecked = settings.ShowCpu; Control<CheckBox>("GpuChoice").IsChecked = settings.ShowGpu;
-            Control<CheckBox>("RamChoice").IsChecked = settings.ShowRam; Control<CheckBox>("NetworkChoice").IsChecked = settings.ShowNetwork; Control<CheckBox>("UptimeChoice").IsChecked = settings.ShowUptime;
             Control<Slider>("ScaleChoice").Value = settings.TextScale * 100;
             Control<CheckBox>("ClockChoice").IsChecked = settings.Use24HourClock; Control<CheckBox>("LevelsChoice").IsChecked = settings.ShowLevels;
             Control<CheckBox>("FocusChimeChoice").IsChecked = settings.FocusChime;
@@ -983,7 +984,7 @@ namespace WidgetScreen
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
-            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros); OpenCalendarSettings(); OpenHomeSettings();
+            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros); OpenCalendarSettings(); OpenHomeSettings(); OpenSensorSettings();
             Control<CheckBox>("SteamGamesChoice").IsChecked = settings.ShowSteamGames; Control<CheckBox>("EpicGamesChoice").IsChecked = settings.ShowEpicGames; Control<CheckBox>("XboxGamesChoice").IsChecked = settings.ShowXboxGames;
             Text("SettingsStatus", ""); UpdateRemoteSettings(); UpdateClaudeSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
@@ -1012,15 +1013,13 @@ namespace WidgetScreen
             candidate.Theme = (string)Control<ComboBox>("ThemeChoice").SelectedItem; candidate.CornerRadius = Control<Slider>("CornersChoice").Value;
             candidate.StartFullscreen = Control<CheckBox>("StartFullscreenChoice").IsChecked == true;
             candidate.KeepGameFocus = Control<CheckBox>("KeepFocusChoice").IsChecked == true;
-            candidate.ShowCpu = Control<CheckBox>("CpuChoice").IsChecked == true; candidate.ShowGpu = Control<CheckBox>("GpuChoice").IsChecked == true;
-            candidate.ShowRam = Control<CheckBox>("RamChoice").IsChecked == true; candidate.ShowNetwork = Control<CheckBox>("NetworkChoice").IsChecked == true; candidate.ShowUptime = Control<CheckBox>("UptimeChoice").IsChecked == true;
             candidate.Accent = (string)Control<ComboBox>("AccentChoice").SelectedItem; candidate.TextScale = Control<Slider>("ScaleChoice").Value / 100;
             candidate.Monitor = monitor == null ? "" : monitor.Id; candidate.ShowLevels = Control<CheckBox>("LevelsChoice").IsChecked == true;
             candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
             candidate.WorldClocks = ClockChoices();
-            SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray(); candidate.HomeEntities = HomeChoicesToSave();
+            SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray(); candidate.HomeEntities = HomeChoicesToSave(); SaveSensorChoices(candidate);
             candidate.ShowSteamGames = Control<CheckBox>("SteamGamesChoice").IsChecked == true; candidate.ShowEpicGames = Control<CheckBox>("EpicGamesChoice").IsChecked == true; candidate.ShowXboxGames = Control<CheckBox>("XboxGamesChoice").IsChecked == true;
             SaveClaudeChoices(candidate);
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;

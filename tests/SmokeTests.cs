@@ -66,6 +66,7 @@ internal static class SmokeTests
         GameTests.Run(directory, Check);
         MacroTests.Run(directory, Check);
         HomeTests.Run(directory, Check);
+        SensorTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
@@ -125,13 +126,13 @@ internal static class SmokeTests
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     click("SettingsButton");
-                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 13 && (string)((System.Windows.Controls.TabItem)tabs.Items[12]).Header == "Claude", "Settings tabs missing.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 14 && (string)((System.Windows.Controls.TabItem)tabs.Items[13]).Header == "Claude", "Settings tabs missing.");
                     ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
                     var preview = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
                     click("CancelSettings");
                     Assert(((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color != preview, "Cancel retained preview theme.");
                     click("SettingsButton"); ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Slate";
-                    foreach (string name in new[] { "CpuChoice", "GpuChoice", "RamChoice", "NetworkChoice", "UptimeChoice" }) ((System.Windows.Controls.CheckBox)window.FindName(name)).IsChecked = false;
+                    foreach (string name in SystemStyles.Ids.Select(id => id + "Choice")) ((System.Windows.Controls.CheckBox)window.FindName(name)).IsChecked = false;
                     ((System.Windows.Controls.CheckBox)window.FindName("StartFullscreenChoice")).IsChecked = false;
                     tabs.SelectedIndex = 2; click("SaveSettings");
                     string warning; var saved = SettingsStore.Load(path, out warning);
@@ -259,7 +260,7 @@ internal static class SmokeTests
                     Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
                     var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
                     var headers = tabs.Items.OfType<System.Windows.Controls.TabItem>().Select(t => (string)t.Header).ToList();
-                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Calendar", "Home", "Spotify", "Quick Launch", "Macros", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
+                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Stats", "Weather", "Prayer", "Calendar", "Home", "Spotify", "Quick Launch", "Macros", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
                     Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
                 }
                 window.Close();
@@ -425,7 +426,8 @@ internal static class SmokeTests
                     dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                     foreach (var pair in new[] { new[] { "MediaHint", "MediaCard" }, new[] { "UptimeValue", "SystemCard" }, new[] { "WeatherCredit", "WeatherCard" } })
                     {
-                        var child = (System.Windows.FrameworkElement)window.FindName(pair[0]); var card = (System.Windows.FrameworkElement)window.FindName(pair[1]);
+                        // A small System card that can't list every reading ends with "N more" instead of uptime.
+                        var child = (System.Windows.FrameworkElement)(window.FindName(pair[0]) ?? (pair[0] == "UptimeValue" ? window.FindName("SystemMore") : null)); var card = (System.Windows.FrameworkElement)window.FindName(pair[1]);
                         Assert(child.TransformToAncestor(card).Transform(new System.Windows.Point(0, child.ActualHeight)).Y <= card.ActualHeight - 20, pair[0] + " escapes minimum widget height.");
                     }
                     var progress = (System.Windows.FrameworkElement)window.FindName("FocusProgress"); var focusCard = (System.Windows.FrameworkElement)window.FindName("FocusCard"); var start = (System.Windows.FrameworkElement)window.FindName("FocusStart");
@@ -464,7 +466,7 @@ internal static class SmokeTests
                 {
                     var dashboard = (System.Windows.FrameworkElement)window.FindName("Dashboard");
                     dashboard.Measure(new System.Windows.Size(1920, 720)); dashboard.Arrange(new System.Windows.Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
-                    var uptime = (System.Windows.FrameworkElement)window.FindName("UptimeValue"); var card = (System.Windows.FrameworkElement)window.FindName("SystemCard");
+                    var uptime = (System.Windows.FrameworkElement)(window.FindName("UptimeValue") ?? window.FindName("SystemMore")); var card = (System.Windows.FrameworkElement)window.FindName("SystemCard");
                     var corner = uptime.TransformToAncestor(card).Transform(new System.Windows.Point(0, uptime.ActualHeight));
                     Assert(corner.Y <= card.ActualHeight - 20, "Uptime overflows the compact system widget.");
                     var header = (System.Windows.FrameworkElement)window.FindName("HeaderClock");
@@ -588,7 +590,8 @@ internal static class SmokeTests
         Check("System stats grow with their widget", () => {
             Func<double, double, double> cpuHeight = (width, height) => {
                 string path = Path.Combine(directory, "stats-" + width + ".xml");
-                var settings = new AppSettings();
+                // The original five readings; the sensor readings have their own checks (tests/Sensors).
+                var settings = new AppSettings { ShowCpuTemperature = false, ShowGpuTemperature = false, ShowVram = false, ShowFps = false };
                 settings.WidgetLayout = WidgetLayout.SpotifyDefault(settings).Select(p => { if (p.Id == "System") { p.Visible = true; p.X = 0; p.Y = 0; p.Width = width; p.Height = height; p.Layer = 5; } return p; }).ToArray();
                 SettingsStore.Save(path, settings);
                 using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))

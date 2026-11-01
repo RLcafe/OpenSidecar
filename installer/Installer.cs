@@ -55,6 +55,21 @@ namespace WidgetScreenSetup
 
         public bool StartsWithWindows() { return File.Exists(StartupShortcut); }
 
+        // The optional hardware sensors (decision 016): LibreHardwareMonitor and the libraries it loads, with their notice
+        // and licences, packed as payload/sensors/... and installed in the sensors folder only when chosen.
+        public const string SensorsPrefix = "payload/sensors/";
+        public string SensorsDir { get { return Path.Combine(InstallDir, "sensors"); } }
+        public static bool HasSensors { get { return Assembly.GetExecutingAssembly().GetManifestResourceNames().Any(n => n.StartsWith(SensorsPrefix, StringComparison.Ordinal)); } }
+        public bool SensorsInstalled() { return File.Exists(Path.Combine(SensorsDir, "LibreHardwareMonitorLib.dll")); }
+        public static long SensorBytes()
+        {
+            var assembly = Assembly.GetExecutingAssembly(); long total = 0;
+            foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(SensorsPrefix, StringComparison.Ordinal) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+                using (var stream = assembly.GetManifestResourceStream(name)) total += stream.Length;
+            return total;
+        }
+        public static int SensorLibraries() { return Assembly.GetExecutingAssembly().GetManifestResourceNames().Count(n => n.StartsWith(SensorsPrefix, StringComparison.Ordinal) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)); }
+
         // Copies of Widget Screen started from the install folder (other builds are left alone).
         public Process[] RunningCopies()
         {
@@ -81,7 +96,8 @@ namespace WidgetScreenSetup
             return found.ToArray();
         }
 
-        public void Install(bool startWithWindows, Action<string> progress)
+        public void Install(bool startWithWindows, Action<string> progress) { Install(startWithWindows, true, progress); }
+        public void Install(bool startWithWindows, bool sensors, Action<string> progress)
         {
             Report(progress, "Closing Widget Screen…");
             CloseRunningCopies();
@@ -89,9 +105,13 @@ namespace WidgetScreenSetup
             Directory.CreateDirectory(InstallDir);
             var assembly = Assembly.GetExecutingAssembly();
             long bytes = 0;
+            // Leaving the sensors out (or taking them out on an update) removes the whole folder.
+            if (!sensors && Directory.Exists(SensorsDir)) Retry(() => Directory.Delete(SensorsDir, true));
             foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith("payload/", StringComparison.Ordinal)))
             {
-                string target = Path.Combine(InstallDir, name.Substring("payload/".Length));
+                if (!sensors && name.StartsWith(SensorsPrefix, StringComparison.Ordinal)) continue;
+                string target = Path.Combine(InstallDir, name.Substring("payload/".Length).Replace('/', '\\'));
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
                 Retry(() =>
                 {
                     using (var source = assembly.GetManifestResourceStream(name))
@@ -135,6 +155,7 @@ namespace WidgetScreenSetup
             Report(progress, "Closing Widget Screen…");
             CloseRunningCopies();
             Report(progress, "Removing Widget Screen…");
+            RemoveFullSensorsTask(progress);
             DeleteFile(StartMenuShortcut);
             DeleteFile(StartupShortcut);
             Registry.CurrentUser.DeleteSubKeyTree(RegistryPath, false);
@@ -153,6 +174,27 @@ namespace WidgetScreenSetup
                 else Retry(() => Directory.Delete(InstallDir, true));
             }
             if (removeSettings && Directory.Exists(SettingsDir)) Retry(() => Directory.Delete(SettingsDir, true));
+        }
+
+        // Full-sensors mode's Task Scheduler task (decision 016), if Widget Screen made one: removing it needs administrator
+        // rights, so Windows asks. Never in the automated checks (a sandbox root).
+        public const string FullSensorsTask = "Widget Screen full sensors";
+        void RemoveFullSensorsTask(Action<string> progress)
+        {
+            if (Root != null) return;
+            string tasks = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "schtasks.exe");
+            try
+            {
+                using (var query = Process.Start(new ProcessStartInfo(tasks, "/Query /TN \"" + FullSensorsTask + "\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true }))
+                {
+                    query.StandardOutput.ReadToEnd(); query.StandardError.ReadToEnd(); query.WaitForExit(15000);
+                    if (!query.HasExited || query.ExitCode != 0) return;
+                }
+                Report(progress, "Removing the full-sensors task…");
+                using (var delete = Process.Start(new ProcessStartInfo(tasks, "/Delete /TN \"" + FullSensorsTask + "\" /F") { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden }))
+                    delete.WaitForExit(60000);
+            }
+            catch (Exception) { }
         }
 
         public void Launch()

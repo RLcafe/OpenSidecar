@@ -112,7 +112,7 @@ namespace WidgetScreen
         {
             string error = Validate(shortcut); if (error != null) throw new InvalidOperationException(error);
             if (shortcut.Action == "Control" || shortcut.Action == "Hotkey") throw new InvalidOperationException("This action must be dispatched by the deck.");
-            Process.Start(new ProcessStartInfo(Expanded(shortcut.Target)) { UseShellExecute = true, Arguments = shortcut.Action == "App" ? shortcut.Arguments ?? "" : "" });
+            ProcessLauncher.Start(Expanded(shortcut.Target), shortcut.Action == "App" ? shortcut.Arguments ?? "" : "", null);
         }
         public static List<Shortcut> Presets()
         {

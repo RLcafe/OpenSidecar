@@ -42,6 +42,15 @@ namespace WidgetScreen
         public bool ShowRam { get; set; }
         public bool ShowNetwork { get; set; }
         public bool ShowUptime { get; set; }
+        // Hardware sensors (decision 016): more readings, each reading's graph style, and full-sensors mode.
+        public bool ShowCpuTemperature { get; set; }
+        public bool ShowGpuTemperature { get; set; }
+        public bool ShowVram { get; set; }
+        public bool ShowFps { get; set; }
+        // "Cpu=Ring;Fps=Bars": Auto, Line, Bars, Sparkline, Ring or Gauge per reading (SystemStyles).
+        public string StatStyles { get; set; }
+        // Starts the elevated copy through the "Widget Screen full sensors" task (FullSensors).
+        public bool FullSensors { get; set; }
         public double ClockWidth { get; set; }
         public double MediaWidth { get; set; }
         public double MixerWidth { get; set; }
@@ -148,6 +157,8 @@ namespace WidgetScreen
             KeepGameFocus = true;
             SnapWidgets = true;
             ShowCpu = ShowGpu = ShowRam = ShowNetwork = ShowUptime = true;
+            ShowCpuTemperature = ShowGpuTemperature = ShowVram = ShowFps = true;
+            StatStyles = "";
             ClockWidth = 1; MediaWidth = 3; MixerWidth = 3; SystemWidth = 2;
             ClockHeight = 246; MediaHeight = 326; SystemHeight = 326; MixerHeight = 576;
             TextScale = 1;
