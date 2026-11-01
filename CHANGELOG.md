@@ -4,6 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.30.0 (1 Nov 2026)
+
 Projects with their threads on the Claude Code card, and refresh times you choose (Ali's request; Windows and the phone; decision 016).
 
 - **Each project is a big critter, and its threads are baby critters under it.** That covers every Claude Code thread of the chosen period (5 h, Today or Week), running or ended, with the titles the Claude app's sidebar shows. A thread sits under the folder it started in, with worktrees under their project. Ended threads sleep, dimmed. A project's face follows its most urgent running thread, so Needs you still turns it Amber. Under each project: how many threads and its tokens and "≈ $". Tap a running baby to bring its window forward.

@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/claude-project-tree` | Claude card: projects with their threads (from the Claude app's thread records and Claude Code's logs), collapsible project rows, thread counts in Settings → Claude, card and plan-check intervals with backoff; both apps | `33fa8f0` (v0.29.0) | In progress | `.worktrees\claude-watcher-tree` | `.worktrees\claude-watcher-tree\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-watcher-tree\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/claude-project-tree` was merged as v0.30.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
