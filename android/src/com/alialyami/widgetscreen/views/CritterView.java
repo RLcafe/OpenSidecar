@@ -18,7 +18,9 @@ public final class CritterView extends View {
     private final RectF box = new RectF();
     private final Theme theme;
     private String state = "ready", project = "";
-    private boolean phase, quiet;
+    private boolean phase, quiet, collapsed;
+    private int count;
+    private float mouth;
 
     public CritterView(Context context, Theme theme) { super(context); this.theme = theme; paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND); }
 
@@ -27,6 +29,13 @@ public final class CritterView extends View {
         if (!nextState.equals(state) || !nextProject.equals(project)) { state = nextState; project = nextProject; invalidate(); }
     }
     public void setPhase(boolean nextPhase, boolean nextQuiet) { if (nextPhase != phase || nextQuiet != quiet) { phase = nextPhase; quiet = nextQuiet; invalidate(); } }
+    // A project critter that has eaten its threads (with how many), and its mouth while it eats or spits (0–1).
+    public void setCollapsed(boolean next, int nextCount) { if (next != collapsed || nextCount != count) { collapsed = next; count = nextCount; invalidate(); } }
+    public boolean collapsed() { return collapsed; }
+    public void setMouth(float open) { if (open != mouth) { mouth = open; invalidate(); } }
+    // Where the mouth is, in this view's pixels (babies are eaten into it and spat out of it).
+    public float mouthX() { return getWidth() / 2f; }
+    public float mouthY() { float size = Math.min(getWidth(), getHeight()); return (getHeight() - size) / 2 + (float) Critter.mouthY(Critter.body(Critter.shape(project))) * size / 100f; }
 
     private void fill(int color) { paint.setStyle(Paint.Style.FILL); paint.setColor(color); }
     private void stroke(int color, float width) { paint.setStyle(Paint.Style.STROKE); paint.setColor(color); paint.setStrokeWidth(width); }
@@ -68,11 +77,32 @@ public final class CritterView extends View {
                 stroke(theme.page, 3.2f); canvas.drawPath(path, paint);
             } else { stroke(theme.page, 3.2f); canvas.drawLine(x - 6, eyeY + 1, x + 6, eyeY + 1, paint); }
         }
-        if (needs) { stroke(theme.page, 3); canvas.drawCircle(50, mouthY, 4.5f, paint); }
+        if (collapsed) {
+            // Full of threads: a belly, and puffed cheeks either side of the mouth.
+            double[] belly = Critter.belly(b);
+            fill((theme.page & 0x00FFFFFF) | 0x38000000); box.set((float) belly[0], (float) belly[1], (float) (belly[0] + belly[2]), (float) (belly[1] + belly[3])); canvas.drawRoundRect(box, (float) belly[3] / 2, (float) belly[3] / 2, paint);
+            float cheek = (float) Critter.cheekRadius(b), cx = (float) Critter.cheekX(b);
+            fill((theme.text & 0x00FFFFFF) | 0x73000000);
+            box.set(50 - cx - cheek, mouthY - 1 - cheek * 0.8f, 50 - cx + cheek, mouthY - 1 + cheek * 0.8f); canvas.drawOval(box, paint);
+            box.set(50 + cx - cheek, mouthY - 1 - cheek * 0.8f, 50 + cx + cheek, mouthY - 1 + cheek * 0.8f); canvas.drawOval(box, paint);
+        }
+        if (mouth > 0.05f) { float w = (float) Critter.mouthWidth(mouth), h = (float) Critter.mouthHeight(mouth); fill(theme.page); box.set(50 - w, mouthY - h, 50 + w, mouthY + h); canvas.drawOval(box, paint); }
+        else if (collapsed) { stroke(theme.page, 3); canvas.drawLine(45, mouthY, 55, mouthY, paint); }
+        else if (needs) { stroke(theme.page, 3); canvas.drawCircle(50, mouthY, 4.5f, paint); }
         else if (done) { path.reset(); path.moveTo(41, mouthY - 2); path.quadTo(50, mouthY + 8, 59, mouthY - 2); stroke(theme.page, 3); canvas.drawPath(path, paint); }
         else { stroke(theme.page, 3); canvas.drawLine(working ? 44 : 45, mouthY, working ? 56 : 55, mouthY, paint); }
 
-        if (working) {
+        if (collapsed) {
+            // How many threads it holds, in a bubble on its top right.
+            float bx = (float) Critter.bubbleX(b), by = (float) Critter.bubbleY(b), r2 = (float) Critter.BUBBLE_RADIUS;
+            fill(theme.page); canvas.drawCircle(bx, by, r2, paint);
+            stroke(needs ? Critter.NEEDS_YOU : accent, 2.4f); canvas.drawCircle(bx, by, r2, paint);
+            String label = count > 99 ? "99+" : String.valueOf(count);
+            fill(theme.text); paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(label.length() > 2 ? 10 : 14); paint.setFakeBoldText(true);
+            canvas.drawText(label, bx, by - (paint.descent() + paint.ascent()) / 2, paint);
+            paint.setFakeBoldText(false); paint.setTextAlign(Paint.Align.LEFT);
+            if (needs) { stroke(theme.text, 5); canvas.drawLine(50, 3, 50, 14, paint); fill(theme.text); canvas.drawCircle(50, 21.5f, 2.8f, paint); }
+        } else if (working) {
             // The thinking trail beside the head.
             fill(theme.muted); canvas.drawCircle(80, 24, 2.4f, paint); canvas.drawCircle(88, 15, 3, paint); canvas.drawCircle(95, 6, 3.6f, paint);
         } else if (needs) {

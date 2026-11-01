@@ -348,7 +348,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock); ApplyClipboard(); BuildMacros(); ApplyCalendar(); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock, ClaudePeriodChosen); claude.PlanEvery = TimeSpan.FromSeconds(settings.ClaudePlanSeconds); ApplyClipboard(); BuildMacros(); ApplyCalendar(); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)

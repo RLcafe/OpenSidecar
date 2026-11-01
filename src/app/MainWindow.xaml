@@ -870,7 +870,7 @@
                     <TextBlock Text="Your Claude plan" FontSize="24" Margin="0,0,0,12"/>
                     <TextBlock x:Name="ClaudePlanStatus" Text="Not signed in" TextWrapping="Wrap" Margin="0,0,0,8" FontSize="{DynamicResource BodySize}"/>
                     <WrapPanel><Button x:Name="ClaudeSignInButton" Content="Sign in with Claude" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8" AutomationProperties.Name="Sign in with Claude"/><Button x:Name="ClaudeSignOutButton" Content="Sign out" Margin="0,0,8,8" Visibility="Collapsed"/></WrapPanel>
-                    <TextBlock Text="Opens Claude's sign-in page in your browser. Widget Screen gets its own sign-in, which can only read your profile and your plan's usage: no chats, no credits. It's kept encrypted on this PC, renews itself, and checks your 5-hour and weekly limits every 5 minutes, whether or not Claude Code is open. Your phone gets only the percentages." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,24"/>
+                    <TextBlock Text="Opens Claude's sign-in page in your browser. Widget Screen gets its own sign-in, which can only read your profile and your plan's usage: no chats, no credits. It's kept encrypted on this PC, renews itself, and checks your 5-hour and weekly limits on the interval under Refresh (every 5 minutes unless you change it), whether or not Claude Code is open. Your phone gets only the percentages." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,24"/>
                     <TextBlock Text="Claude Code" FontSize="24" Margin="0,0,0,12"/>
                     <TextBlock x:Name="ClaudeConnectionStatus" Text="Not connected" TextWrapping="Wrap" Margin="0,0,0,6" FontSize="{DynamicResource BodySize}"/>
                     <TextBlock x:Name="ClaudeFolderText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
@@ -879,9 +879,27 @@
                     <TextBlock Text="Connect and Disconnect take effect right away; you don't need to save. Claude Code picks up the change in sessions you start afterwards." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
                     <CheckBox x:Name="ClaudeChimeChoice" Content="Chime when a session needs me"/>
                     <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
+                    <TextBlock Text="Refresh" FontSize="24" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                      <TextBlock Text="Update the card every" VerticalAlignment="Center" Width="250" FontSize="{DynamicResource BodySize}"/>
+                      <Button x:Name="ClaudeCardSecondsLess" Content="&#x2212;" Width="52" MinHeight="52" ToolTip="One second less" AutomationProperties.Name="One second less between card updates"/>
+                      <TextBox x:Name="ClaudeCardSecondsBox" Width="96" MinHeight="52" Margin="8,0" TextAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Seconds between card updates"/>
+                      <Button x:Name="ClaudeCardSecondsMore" Content="+" Width="52" MinHeight="52" ToolTip="One second more" AutomationProperties.Name="One second more between card updates"/>
+                      <TextBlock Text="seconds" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="{DynamicResource BodySize}"/>
+                    </StackPanel>
+                    <TextBlock Text="Sessions, threads, telemetry totals and logs are read again this often while the card is on a page. At least 1 second; Quiet mode doesn't change it. Your phone follows it, at most every 2 seconds." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                      <TextBlock Text="Check plan limits every" VerticalAlignment="Center" Width="250" FontSize="{DynamicResource BodySize}"/>
+                      <Button x:Name="ClaudePlanSecondsLess" Content="&#x2212;" Width="52" MinHeight="52" ToolTip="Ten seconds less" AutomationProperties.Name="Ten seconds less between plan checks"/>
+                      <TextBox x:Name="ClaudePlanSecondsBox" Width="96" MinHeight="52" Margin="8,0" TextAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Seconds between plan checks"/>
+                      <Button x:Name="ClaudePlanSecondsMore" Content="+" Width="52" MinHeight="52" ToolTip="Ten seconds more" AutomationProperties.Name="Ten seconds more between plan checks"/>
+                      <TextBlock Text="seconds" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="{DynamicResource BodySize}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ClaudePlanSecondsNote" Text="Anthropic may slow down very frequent checks." Foreground="{DynamicResource Warning}" Style="{StaticResource Small}" TextWrapping="Wrap" Visibility="Collapsed"/>
+                    <TextBlock Text="At least 10 seconds. If Anthropic asks Widget Screen to slow down, it waits twice as long each time (up to 15 minutes) and the card says when the limits are from, then goes back to your interval." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,24"/>
                     <TextBlock Text="Projects" FontSize="24" Margin="0,0,0,12"/>
                     <CheckBox x:Name="ClaudeShowNewChoice" Content="Show new projects automatically"/>
-                    <TextBlock Text="Unticked projects leave the card's sessions and usage, here and on your phone. The plan meters always show your whole plan." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,12"/>
+                    <TextBlock Text="Each project shows on the card as a big critter with its threads as babies; tap it to fold them in. Unticked projects leave the card, here and on your phone. The plan meters always show your whole plan." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,12"/>
                     <StackPanel x:Name="ClaudeProjectsList"/>
                     <TextBlock x:Name="ClaudeProjectsEmpty" Text="Projects show here once Claude Code has run on this PC." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>

@@ -38,4 +38,16 @@ public final class Critter {
     public static double pupilX(String state, boolean phase, boolean quiet) { return "working".equals(state) ? (phase && !quiet ? 3 : -3) : 0; }
     public static double pupilY(String state) { return "working".equals(state) ? 3 : needs(state) ? -1 : 0; }
     public static boolean eyesOpen(String state) { return "working".equals(state) || needs(state); }
+    // A project critter that has eaten its threads: cheeks, a belly and a count bubble on the body's top right.
+    public static double cheekRadius(double[] b) { return Math.min(9, (b[2] - b[0]) * 0.12); }
+    public static double cheekX(double[] b) { return (b[2] - b[0]) * 0.3; }
+    public static double[] belly(double[] b) { double w = (b[2] - b[0]) * 0.56, h = (b[3] - b[1]) * 0.2; return new double[] { 50 - w / 2, b[3] - h - 4, w, h }; }
+    public static final double BUBBLE_RADIUS = 13;
+    public static double bubbleX(double[] b) { return Math.min(86, b[2] - 2); }
+    public static double bubbleY(double[] b) { return Math.max(14, b[1] - 2); }
+    // The mouth opening as it eats or spits (0 closed, 1 wide).
+    public static double mouthWidth(double open) { return 6 + 8 * Math.max(0, Math.min(1, open)); }
+    public static double mouthHeight(double open) { return 1.5 + 10 * Math.max(0, Math.min(1, open)); }
+    // Babies are 40% of their project's critter, never under 24 units.
+    public static double baby(double parent) { return Math.max(24, Math.round(parent * 0.4)); }
 }

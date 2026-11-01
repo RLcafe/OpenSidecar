@@ -81,7 +81,7 @@ public final class ClaudeText {
     public static String limitsMissing(PcState.Claude claude) {
         if ("expired".equals(claude.plan)) return SIGN_IN_ENDED;
         if ("reading".equals(claude.plan)) return "Reading your plan's limits…";
-        if ("failed".equals(claude.plan)) return "Couldn't read your plan's limits. Trying again in 5 minutes.";
+        if ("failed".equals(claude.plan)) return "Couldn't read your plan's limits. Trying again soon.";
         if ("current".equals(claude.plan)) return claude.noPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
         return SIGN_IN;
     }
@@ -103,6 +103,31 @@ public final class ClaudeText {
         if (dollars < 1000) return "≈ $" + Math.round(dollars);
         return "≈ $" + shortNumber(dollars / 1e3) + "k";
     }
+    public static String threads(int count) { return count == 1 ? "1 thread" : count + " threads"; }
+    // Under a project critter: "3 threads · 1.8M · ≈ $2.01".
+    public static String groupDetail(PcState.ClaudeGroup group, boolean counted) { return threads(group.threads.size()) + (counted ? " · " + usage(group.tokens, group.cost) : ""); }
+    // "3:40 pm" today, otherwise the day ("Thu").
+    public static String ago(double at, double now, boolean use24) {
+        java.time.ZonedDateTime local = Instant.ofEpochMilli((long) (at * 1000)).atZone(ZoneId.systemDefault()), today = Instant.ofEpochMilli((long) (now * 1000)).atZone(ZoneId.systemDefault());
+        return local.toLocalDate().equals(today.toLocalDate()) ? clock(at, use24) : local.format(DateTimeFormatter.ofPattern("EEE", Locale.US));
+    }
+    // A baby's label: the title the Claude app (or the user) gave the thread; never its prompts.
+    public static String threadTitle(PcState.ClaudeThread thread, double now, boolean use24) {
+        return thread.title != null && !thread.title.trim().isEmpty() ? thread.title.trim() : "Untitled · " + ago(thread.lastActive, now, use24);
+    }
+    public static String noThreads(int period) { return "No Claude Code threads " + (period == 0 ? "in the last 5 hours." : period == 1 ? "today." : "this week."); }
+    // A project critter's face: the most urgent running thread's (needs, working, done, ready); asleep with none running.
+    public static int rank(String state) { return "needs".equals(state) ? 0 : "working".equals(state) ? 1 : "done".equals(state) ? 2 : 3; }
+    public static String groupState(PcState.Claude claude, PcState.ClaudeGroup group) {
+        String best = "ready"; int rank = 9;
+        for (String id : group.threads) { PcState.ClaudeThread t = claude.thread(id); if (t != null && t.running && rank(t.state) < rank) { rank = rank(t.state); best = t.state; } }
+        return best;
+    }
+    public static boolean groupNeeds(PcState.Claude claude, PcState.ClaudeGroup group) { return "needs".equals(groupState(claude, group)); }
+    // The phone asks the PC for the claude section on the PC card's interval, never more often than every 2 s.
+    public static int pollEvery(PcState.Claude claude) { return Math.max(2, claude == null ? 2 : claude.every); }
+    public static int period(String name) { return "FiveHour".equals(name) ? 0 : "Week".equals(name) ? 2 : 1; }
+
     // A project row's or session's usage: "1.8M · ≈ $2.01".
     public static String usage(long tokens, double cost) { return tokens(tokens) + " · " + money(cost); }
 

@@ -98,6 +98,15 @@ namespace WidgetScreen
         public bool ClaudeShowNewProjects { get; set; }
         [XmlArray("ClaudeProjects"), XmlArrayItem("Project")]
         public ClaudeProjectChoice[] ClaudeProjects { get; set; }
+        // How often the card re-reads sessions, threads, telemetry totals and logs while it's on a page (default 2 s),
+        // and how often the plan check asks Anthropic (default 300 s): the user's numbers, Quiet mode or not (Ali, 1 Nov 2026).
+        public int ClaudeCardSeconds { get; set; }
+        public int ClaudePlanSeconds { get; set; }
+        // Project folders folded into their big critter on the card (the phone shares them), and the period the card
+        // and the phone count threads and usage over: FiveHour, Today or Week.
+        [XmlArray("ClaudeCollapsed"), XmlArrayItem("Folder")]
+        public string[] ClaudeCollapsed { get; set; }
+        public string ClaudePeriod { get; set; }
         // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
         public int ClipboardSize { get; set; }
         public bool ClipboardKeep { get; set; }
@@ -150,6 +159,8 @@ namespace WidgetScreen
             FocusChime = true;
             StorageLowPercent = StorageService.DefaultLowPercent;
             ClaudeShowNewProjects = true;
+            ClaudeCardSeconds = ClaudeIntervals.CardDefault; ClaudePlanSeconds = ClaudeIntervals.PlanDefault;
+            ClaudePeriod = "Today";
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
@@ -171,6 +182,7 @@ namespace WidgetScreen
             copy.Macros = Macros == null ? null : Macros.Where(m => m != null).Select(m => m.Copy()).ToArray();
             copy.WorldClocks = WorldClocks == null ? null : WorldClocks.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.ClaudeProjects = ClaudeProjects == null ? null : ClaudeProjects.Where(c => c != null).Select(c => c.Copy()).ToArray();
+            copy.ClaudeCollapsed = ClaudeCollapsed == null ? null : ClaudeCollapsed.ToArray();
             copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
             return copy;
         }
@@ -204,6 +216,10 @@ namespace WidgetScreen
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             WorldClocks = WorldClockService.Clean(WorldClocks);
             ClipboardSize = ClipboardHistory.ClampSize(ClipboardSize);
+            ClaudeCardSeconds = ClaudeCardSeconds == 0 ? ClaudeIntervals.CardDefault : ClaudeIntervals.Card(ClaudeCardSeconds);
+            ClaudePlanSeconds = ClaudePlanSeconds == 0 ? ClaudeIntervals.PlanDefault : ClaudeIntervals.Plan(ClaudePlanSeconds);
+            ClaudeCollapsed = (ClaudeCollapsed ?? new string[0]).Select(ClaudeUsage.Key).Where(f => f.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (ClaudePeriod != "FiveHour" && ClaudePeriod != "Today" && ClaudePeriod != "Week") ClaudePeriod = "Today";
             HomeEntities = (HomeEntities ?? new string[0]).Where(id => !String.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct().Take(HomeAssistantService.MaxEntities).ToArray();
             Macros = MacroActions.Clean(Macros).ToArray();
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
