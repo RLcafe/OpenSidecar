@@ -4,6 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.35.1 (1 Nov 2026)
+
+GitHub, CI and a release for every merge (decision 022).
+
 - **The project is on GitHub** at RLcafe/OpenSidecar, with `main`, every tag and the open branches.
 - **CI on GitHub Actions** (`.github/workflows/ci.yml`): every push and pull request builds and tests the Windows app, the setup exe and the Android app on a Windows runner; Markdown-only and docs-only changes skip it. CLAUDE.md and BRANCHES.md now say to push branches and tags and to wait for a green run before merging.
 - **Every merge gets a GitHub Release** (`.github/workflows/release.yml`): pushing a `vX.Y.Z` tag builds and tests it, then publishes the setup exe, a portable zip and the APK with the version's changelog notes. Merges that only touch docs, tests, scripts or CI now get a PATCH version too.
