@@ -275,7 +275,7 @@ public final class SettingsPanel {
         }
 
         add(right, heading("On the PC"), 0);
-        add(right, note("The cards show and control your PC. Quick Launch buttons, System stats readings, the weather city, the world clocks' cities, prayer times, calendars, macros, Spotify and Discord are set up in Settings on the PC, and the phone follows."), 10);
+        add(right, note("The cards show and control your PC. Quick Launch buttons, System stats readings, the weather city, the world clocks' cities, prayer times, calendars, macros, the games' stores, Spotify and Discord are set up in Settings on the PC, and the phone follows."), 10);
     }
 
     // ----- PC -----

@@ -133,6 +133,13 @@ public final class PcState {
         public final List<CalendarItem> events = new ArrayList<CalendarItem>();
     }
 
+    // The PC's installed games (docs/design/games.md); playtime and last played only where the store keeps them.
+    public static final class Game { public String id = "", name = "", store = ""; public Integer playtime; public double lastPlayed; }
+    public static final class Games {
+        public boolean read, failed;
+        public final List<Game> items = new ArrayList<Game>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -185,6 +192,7 @@ public final class PcState {
     public Clipboard clipboard;
     public Macros macros;
     public Calendar calendar;
+    public Games games;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -350,6 +358,20 @@ public final class PcState {
                 if (event.start > 0) calendar.events.add(event);
             }
             state.calendar = calendar;
+        }
+        if (Json.has(root, "games")) {
+            Map<String, Object> g = Json.obj(Json.value(root, "games"));
+            Games games = new Games();
+            games.read = flag(g, "read"); games.failed = flag(g, "failed");
+            for (Object item : Json.array(g, "items")) {
+                Map<String, Object> m = Json.obj(item);
+                Game game = new Game();
+                game.id = text(m, "id"); game.name = text(m, "name"); game.store = text(m, "store");
+                Double playtime = maybe(m, "playtime"); game.playtime = playtime == null ? null : (int) Math.round(playtime);
+                Double last = maybe(m, "lastPlayed"); game.lastPlayed = last == null ? 0 : last;
+                if (!game.id.isEmpty() && !game.name.isEmpty()) games.items.add(game);
+            }
+            state.games = games;
         }
         return state;
     }

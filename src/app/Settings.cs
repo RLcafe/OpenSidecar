@@ -90,6 +90,10 @@ namespace WidgetScreen
         // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
         public int ClipboardSize { get; set; }
         public bool ClipboardKeep { get; set; }
+        // Games (Settings → Widgets): which stores the Games widget lists.
+        public bool ShowSteamGames { get; set; }
+        public bool ShowEpicGames { get; set; }
+        public bool ShowXboxGames { get; set; }
         // Macros (Settings → Macros): buttons that each run a chain of steps (docs/design/macros.md). Empty by default.
         [XmlArray("Macros"), XmlArrayItem("Macro")]
         public Macro[] Macros { get; set; }
@@ -136,6 +140,7 @@ namespace WidgetScreen
             WeatherUnits = RegionWeatherUnits();
             PrayerLocation = ""; PrayerSound = "";
             ClipboardSize = ClipboardHistory.DefaultSize;
+            ShowSteamGames = ShowEpicGames = ShowXboxGames = true;
             PrayerMethod = PrayerService.RegionMethod();
             Shortcuts = DefaultShortcuts();
         }

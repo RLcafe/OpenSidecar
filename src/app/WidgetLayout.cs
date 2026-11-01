@@ -54,7 +54,7 @@ namespace WidgetScreen
         // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
         private const double MinimumShrink = 0.78;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros", "Calendar" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros", "Calendar", "Games" };
         public static string Title(string id)
         {
             switch (id) {
@@ -71,6 +71,7 @@ namespace WidgetScreen
                 case "Clipboard": return "Clipboard history";
                 case "Macros": return "Macros";
                 case "Calendar": return "Calendar";
+                case "Games": return "Games";
                 default: return id;
             }
         }
@@ -94,6 +95,7 @@ namespace WidgetScreen
                 case "Clipboard": return new Size(240, 200);
                 case "Macros": return new Size(288, 204);
                 case "Calendar": return new Size(240, 152);
+                case "Games": return new Size(288, 204);
                 default: return new Size(232, 152);
             }
         }
@@ -113,7 +115,7 @@ namespace WidgetScreen
             Size minimum = Minimum(id), k = KeepsSix(id) ? new Size(1, 1) : Compact(canvas);
             return new Size(Math.Min(canvas.Width, Math.Round(minimum.Width * k.Width)), Math.Min(canvas.Height, Math.Round(minimum.Height * k.Height)));
         }
-        public static bool KeepsSix(string id) { return id == "Shortcuts" || id == "Soundboard" || id == "Macros"; }
+        public static bool KeepsSix(string id) { return id == "Shortcuts" || id == "Soundboard" || id == "Macros" || id == "Games"; }
         // Layouts are kept per canvas size, rounded down to the 8-unit snap grid.
         public static Size Key(Size canvas) { return new Size(Math.Max(8, Math.Floor(canvas.Width / 8) * 8), Math.Max(8, Math.Floor(canvas.Height / 8) * 8)); }
         public static bool IsReference(Size canvas) { return Key(canvas) == Reference; }
@@ -149,7 +151,8 @@ namespace WidgetScreen
                 new WidgetPlacement { Id = "Claude", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
                 new WidgetPlacement { Id = "Clipboard", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
                 new WidgetPlacement { Id = "Macros", X = 336, Y = 326, Width = 472, Height = 250, Visible = false },
-                new WidgetPlacement { Id = "Calendar", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false }
+                new WidgetPlacement { Id = "Calendar", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
+                new WidgetPlacement { Id = "Games", X = 336, Y = 326, Width = 472, Height = 250, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)
@@ -411,7 +414,7 @@ namespace WidgetScreen
                 case "Focus": return new Size(320, 400);
                 case "Mixer": return new Size(456, 576);
                 case "Spotify": return new Size(560, 576);
-                case "Shortcuts": case "Macros": case "Weather": case "Soundboard": case "Storage": case "Clocks": case "Prayer": return new Size(472, 250);
+                case "Shortcuts": case "Macros": case "Games": case "Weather": case "Soundboard": case "Storage": case "Clocks": case "Prayer": return new Size(472, 250);
                 default: return new Size(472, 310);
             }
         }

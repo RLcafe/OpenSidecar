@@ -91,6 +91,7 @@ namespace WidgetScreen
             InitializeClipboard();
             InitializeMacros();
             InitializeCalendar();
+            InitializeGames();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -255,7 +256,7 @@ namespace WidgetScreen
             if (ticks % (settings.QuietMode ? 6 : 3) == 0) RefreshMedia();
             else if (lastMedia != null && lastMedia.Playing && Editor.IsVisible("Media")) mediaScrubber.Advance(1000);
             if (!String.IsNullOrWhiteSpace(settings.WeatherLocation) && DateTime.UtcNow - lastWeatherAttempt >= TimeSpan.FromMinutes(15)) RefreshWeather();
-            TickStorage(); TickClocks(); TickCalendar();
+            TickStorage(); TickClocks(); TickCalendar(); TickGames();
             TickClaude();
         }
 
@@ -982,6 +983,7 @@ namespace WidgetScreen
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
             OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros); OpenCalendarSettings();
+            Control<CheckBox>("SteamGamesChoice").IsChecked = settings.ShowSteamGames; Control<CheckBox>("EpicGamesChoice").IsChecked = settings.ShowEpicGames; Control<CheckBox>("XboxGamesChoice").IsChecked = settings.ShowXboxGames;
             Text("SettingsStatus", ""); UpdateRemoteSettings(); UpdateClaudeSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
@@ -1018,6 +1020,7 @@ namespace WidgetScreen
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
             candidate.WorldClocks = ClockChoices();
             SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray();
+            candidate.ShowSteamGames = Control<CheckBox>("SteamGamesChoice").IsChecked == true; candidate.ShowEpicGames = Control<CheckBox>("EpicGamesChoice").IsChecked == true; candidate.ShowXboxGames = Control<CheckBox>("XboxGamesChoice").IsChecked == true;
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true; candidate.ClaudeOnlineLimits = Control<CheckBox>("ClaudeOnlineChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
@@ -1025,7 +1028,8 @@ namespace WidgetScreen
             try { SaveSettingsFile(candidate); }
             catch (Exception e) { Text("SettingsStatus", "Could not save settings: " + e.Message); return; }
             bool locationChanged = settings.WeatherLocation != candidate.WeatherLocation || settings.Latitude != candidate.Latitude || settings.Longitude != candidate.Longitude || settings.WeatherUnits != candidate.WeatherUnits;
-            settings = candidate; CloseSettings(); RefreshSystem();
+            bool storesChanged = settings.ShowSteamGames != candidate.ShowSteamGames || settings.ShowEpicGames != candidate.ShowEpicGames || settings.ShowXboxGames != candidate.ShowXboxGames;
+            settings = candidate; CloseSettings(); if (storesChanged) ApplyGames(); RefreshSystem();
             if (fullscreen) { if (!DisplayService.Fullscreen(window, settings.Monitor)) { DisplayService.Windowed(window); fullscreen = false; } UpdateDisplayStatus(); }
             FitScreen();
             if (locationChanged) { weatherGeneration++; weatherCard.Forget(); RefreshWeather(); }

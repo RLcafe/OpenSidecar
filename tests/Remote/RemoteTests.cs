@@ -179,12 +179,13 @@ internal static class RemoteTests
                     Assert(post("/command", "{\"action\":\"macro.run\",\"index\":0,\"label\":\"Renamed\"}", token).Item1 == 409, "A changed macro ran.");
                     var calendarState = (Dictionary<string, object>)Json(get("/state?parts=calendar", token).Item2)["calendar"];
                     Assert(post("/command", "{\"action\":\"calendar.refresh\"}", token).Item1 == 200 && Convert.ToInt32(calendarState["feeds"]) == 0 && !(bool)calendarState["read"] && ((object[])calendarState["events"]).Length == 0 && !get("/state?parts=calendar", token).Item2.Contains("ics"), "Calendar state wrong.");
+                    Assert(Json(get("/state?parts=games", token).Item2).ContainsKey("games") && post("/command", "{\"action\":\"games.launch\",\"id\":\"steam:none\"}", token).Item1 == 409, "Games state wrong, or an unknown game was started.");
                     controller.Clipboard.Offer("TEST FIXTURE: copied text");
                     var clipState = (Dictionary<string, object>)Json(get("/state?parts=clipboard", token).Item2)["clipboard"];
                     Assert(((object[])clipState["items"]).Length == 1 && (string)((Dictionary<string, object>)((object[])clipState["items"])[0])["text"] == "TEST FIXTURE: copied text" && !(bool)clipState["paused"], "Clipboard state wrong.");
                     Assert(post("/command", "{\"action\":\"clipboard.pause\",\"paused\":true}", token).Item1 == 200 && controller.Clipboard.Paused && post("/command", "{\"action\":\"clipboard.pause\",\"paused\":false}", token).Item1 == 200 && !controller.Clipboard.Paused, "Pausing from the phone failed.");
                     Assert(post("/command", "{\"action\":\"clipboard.paste\",\"id\":\"missing\"}", token).Item1 == 409, "Pasting a missing text wasn't refused.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros,calendar", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros,calendar,games", token).Item2);
                     Assert(post("/command", "{\"action\":\"clipboard.clear\"}", token).Item1 == 200 && controller.Clipboard.History.Items.Count == 0, "Clearing from the phone failed.");
                     int art = get("/art", token).Item1;
                     Assert(art == 200 || art == 404, "Artwork request failed.");
@@ -238,7 +239,7 @@ internal static class RemoteTests
                     controller.Editor.Cancel();
                     Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
                     Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros,calendar,layout", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros,calendar,games,layout", token).Item2);
                     Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");
