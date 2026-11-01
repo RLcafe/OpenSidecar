@@ -6,6 +6,19 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.26.0 (1 Nov 2026)
+
+A Calendar and agenda widget (user request; Windows and the phone, the same designs on both):
+
+- **What's next, with a countdown.** The next event's day, time, title and place, and "in 25 m" (or "now · 45 m left"). Turn it on in Edit layout; it starts hidden.
+- **From your calendar feeds, no sign-in.** Add up to eight read-only calendar addresses in the new Settings → Calendar tab: Google Calendar's "Secret address in iCal format", an Outlook calendar published as ICS, or any other .ics address. The widget only reads them. Signing in with a Google or Microsoft account instead would need an app registered with them, which this app doesn't have.
+- **The addresses stay private.** Anyone with one could read that calendar, so they're kept encrypted for your Windows account, shown shortened in Settings, and never sent to your phone.
+- **Repeating events, time zones and changes** are understood: weekly, monthly ("last Friday"), yearly and daily repeats, skipped and moved occurrences, cancelled events, all-day events, and each feed's own time zones and daylight saving.
+- **Updated every 15 minutes** while the widget is shown (30 in Quiet mode), and when you tap the card. If a feed can't be read, it keeps its last copy and the heading says so.
+- **Small, medium and large designs**: the next event; the next event with the ones after it; and an agenda for two weeks grouped by day, with a coloured dot per calendar.
+- Settings tabs are a little narrower so all twelve stay on one row.
+- Not yet tried with real Google and Outlook feeds (the checks use feeds in their formats), or on a phone.
+
 ## v0.25.0 (1 Nov 2026)
 
 A Macros widget (user request; Windows and the phone):
