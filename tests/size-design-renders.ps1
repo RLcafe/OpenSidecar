@@ -31,12 +31,14 @@ $scenes = [ordered]@{
     'prayer-medium' = @{ Prayer = @(0, 0, 472, 250); Focus = @(488, 0, 320, 576) }
     'prayer-large'  = @{ Prayer = @(0, 0, 472, 576); Focus = @(488, 0, 320, 576) }
     'prayer-wide'   = @{ Prayer = @(0, 0, 1200, 420) }
+    'notes'         = @{ Notes = @(0, 0, 472, 310); Prayer = @(488, 0, 300, 200) }
+    'notes-large'   = @{ Notes = @(0, 0, 1000, 420) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]
     $settings = Join-Path $output ($name + '-settings.xml')
-    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage', 'Clocks', 'Prayer') {
+    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage', 'Clocks', 'Prayer', 'Notes') {
         $b = if ($scene.Contains($id)) { $scene[$id] } else { @(0, 0, 320, 300) }
         $visible = if ($scene.Contains($id)) { 'true' } else { 'false' }
         "<WidgetPlacement><Id>$id</Id><X>$($b[0])</X><Y>$($b[1])</Y><Width>$($b[2])</Width><Height>$($b[3])</Height><Visible>$visible</Visible></WidgetPlacement>"
@@ -51,6 +53,9 @@ foreach ($name in $scenes.Keys) {
   <WidgetLayout>$($placements -join '')</WidgetLayout>
 </AppSettings>
 "@ | Set-Content -Encoding UTF8 $settings
+    # A labelled fixture for the Notes card: made-up notes in the scene's own notes.xml.
+    $notesFile = Join-Path $output 'notes.xml'
+    '<?xml version="1.0"?><NotesData><Text>TEST FIXTURE: example notes. Call about the order on Tuesday.</Text><Items><TodoItem><Id>a1</Id><Text>Example: renew the domain</Text><Done>true</Done></TodoItem><TodoItem><Id>a2</Id><Text>Example: back up the photos</Text><Done>false</Done></TodoItem><TodoItem><Id>a3</Id><Text>Example: book a haircut</Text><Done>false</Done></TodoItem></Items></NotesData>' | Set-Content -Encoding UTF8 $notesFile
     $png = Join-Path $output ($name + '.png')
     $process = Start-Process -FilePath $exe -ArgumentList @('--settings', "`"$settings`"", '--render', "`"$png`"", '--render-wait', $Wait) -PassThru -Wait
     if ($process.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "Render failed: $name" }

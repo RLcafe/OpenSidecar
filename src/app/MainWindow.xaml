@@ -438,6 +438,13 @@
                 <Button x:Name="PrayerStop" Grid.Row="1" Content="Stop" Style="{StaticResource AccentButton}" MinWidth="120" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="Collapsed" AutomationProperties.Name="Stop the prayer alert"/>
               </Grid>
             </Border>
+            <!-- A scratchpad and a to-do list kept on this PC. NotesCard builds the Small, Medium or Large design in NotesBody (docs/design/notes.md). -->
+            <Border x:Name="NotesCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Notes and to-do">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="NOTES" Style="{StaticResource Label}"/><TextBlock x:Name="NotesStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="NotesBody" Grid.Row="1" Margin="0,8,0,0"/>
+              </Grid>
+            </Border>
             <!-- World clocks: up to three time zones. WorldClocksCard builds the Small, Medium or Large design in ClocksBody (docs/design/world-clocks.md). -->
             <Border x:Name="ClocksCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="World clocks">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>

@@ -171,6 +171,10 @@ namespace WidgetScreen
         public static bool PrayerTilesAcross(double width) { return width >= 860; }
         public static double PrayerLargeTop(double height, bool across) { return across ? Clamp(height - 120, 140, 260) : Clamp(Math.Round(height * 0.38), 140, 220); }
         public static double PrayerTileTime(double tileWidth, bool use24) { return Clamp(Math.Round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
+        // Notes and to-do (docs/design/notes.md): the scratchpad or the list behind two tabs under 700 wide or 300 tall
+        // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.
+        public static Design Notes(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 700 && height >= 300 ? Design.Large : Design.Medium; }
+        public static double NotesListColumn(double width) { return Clamp(Math.Floor(width * 0.46), 300, 520); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

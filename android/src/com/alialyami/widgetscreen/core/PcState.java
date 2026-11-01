@@ -79,6 +79,14 @@ public final class PcState {
         public final double[] times = new double[5];
     }
 
+    // The PC's notes (docs/design/notes.md): the scratchpad and the to-do list, with the PC's version of them.
+    public static final class Todo { public String id = "", text = ""; public boolean done; }
+    public static final class Notes {
+        public int version;
+        public String text = "";
+        public final List<Todo> items = new ArrayList<Todo>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -123,6 +131,7 @@ public final class PcState {
     public Storage storage;
     public Clocks clocks;
     public Prayer prayer;
+    public Notes notes;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -247,6 +256,7 @@ public final class PcState {
             if (prayer.located && (times.size() != 5 || prayer.nextAt <= 0)) prayer.located = false;
             state.prayer = prayer;
         }
+        if (Json.has(root, "notes")) state.notes = parseNotes(Json.obj(Json.value(root, "notes")));
         return state;
     }
 
@@ -288,6 +298,18 @@ public final class PcState {
         for (WidgetLayout.Placement p : layout)
             result.add(Json.map("id", p.id, "x", p.x, "y", p.y, "width", p.width, "height", p.height, "visible", p.visible, "layer", p.layer));
         return result;
+    }
+
+    public static Notes parseNotes(Map<String, Object> n) {
+        Notes notes = new Notes();
+        notes.version = (int) Json.number(n, "version"); notes.text = text(n, "text");
+        for (Object item : Json.array(n, "items")) {
+            Map<String, Object> m = Json.obj(item);
+            Todo todo = new Todo();
+            todo.id = text(m, "id"); todo.text = text(m, "text"); todo.done = flag(m, "done");
+            if (!todo.id.isEmpty()) notes.items.add(todo);
+        }
+        return notes;
     }
 
     public static Discord parseDiscord(Map<String, Object> d) {
