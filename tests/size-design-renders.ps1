@@ -23,12 +23,16 @@ $scenes = [ordered]@{
     'storage-medium' = @{ Storage = @(0, 0, 472, 250); Focus = @(488, 0, 320, 576) }
     'storage-large' = @{ Storage = @(0, 0, 640, 576); Focus = @(656, 0, 320, 576) }
     'storage-wide'  = @{ Storage = @(0, 0, 1200, 400) }
+    'clocks'        = @{ Clocks = @(0, 0, 300, 184); Weather = @(0, 200, 472, 250); System = @(316, 0, 472, 184) }
+    'clocks-sizes'  = @{ Clocks = @(0, 0, 472, 250); Storage = @(488, 0, 1368, 576) }
+    'clocks-large'  = @{ Clocks = @(0, 0, 1000, 340); Focus = @(1016, 0, 320, 576) }
+    'clocks-tall'   = @{ Clocks = @(0, 0, 472, 576); Focus = @(488, 0, 320, 576) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]
     $settings = Join-Path $output ($name + '-settings.xml')
-    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage') {
+    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage', 'Clocks') {
         $b = if ($scene.Contains($id)) { $scene[$id] } else { @(0, 0, 320, 300) }
         $visible = if ($scene.Contains($id)) { 'true' } else { 'false' }
         "<WidgetPlacement><Id>$id</Id><X>$($b[0])</X><Y>$($b[1])</Y><Width>$($b[2])</Width><Height>$($b[3])</Height><Visible>$visible</Visible></WidgetPlacement>"
@@ -38,6 +42,7 @@ foreach ($name in $scenes.Keys) {
 <AppSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <WeatherLocation>London, England, United Kingdom</WeatherLocation><Latitude>51.50853</Latitude><Longitude>-0.12574</Longitude><WeatherUnits>metric</WeatherUnits>
   <HintDismissed>true</HintDismissed>
+  <WorldClocks><WorldClock><Zone>Tokyo Standard Time</Zone><Label>Tokyo</Label></WorldClock><WorldClock><Zone>GMT Standard Time</Zone><Label>London</Label></WorldClock><WorldClock><Zone>Pacific Standard Time</Zone><Label>San Francisco</Label></WorldClock></WorldClocks>
   <WidgetLayout>$($placements -join '')</WidgetLayout>
 </AppSettings>
 "@ | Set-Content -Encoding UTF8 $settings

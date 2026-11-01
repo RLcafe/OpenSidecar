@@ -13,6 +13,7 @@ import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.Weather;
 import com.alialyami.widgetscreen.core.WidgetLayout;
+import com.alialyami.widgetscreen.core.WorldClockText;
 import com.alialyami.widgetscreen.core.WidgetLayout.Box;
 import com.alialyami.widgetscreen.core.WidgetLayout.Placement;
 import com.sun.net.httpserver.HttpExchange;
@@ -351,7 +352,8 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null && state.clocks != null, "every part");
+            ok(state.clocks != null && state.clocks.clocks.size() == 2 && state.clocks.clocks.get(0).label.equals("Tokyo") && state.clocks.clocks.get(0).offset == 540 && state.clocks.clocks.get(1).label.equals("UTC"), "clocks");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
@@ -415,6 +417,20 @@ public final class AndroidTests {
             ok(PcState.parse(Json.obj(Json.parse("{\"storage\":{\"error\":true}}"))).storage.error, "error");
             WidgetLayout.Placement storage = WidgetLayout.find(WidgetLayout.defaults(), "Storage");
             ok(storage != null && !storage.visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Storage").visible, "hidden by default");
+        } });
+        check("World clocks pick the PC's designs and word days and hours like the PC", new Action() { public void run() {
+            ok(CardSizing.clocks(240, 152) == CardSizing.SMALL && CardSizing.clocks(600, 199) == CardSizing.SMALL && CardSizing.clocks(472, 250) == CardSizing.MEDIUM && CardSizing.clocks(439, 576) == CardSizing.MEDIUM && CardSizing.clocks(440, 300) == CardSizing.LARGE, "designs");
+            ok(CardSizing.clockRows(68) == 1 && CardSizing.clockRows(112) == 3 && CardSizing.clockTilesAcross(1000, 3) && !CardSizing.clockTilesAcross(392, 3) && CardSizing.clockTilesAcross(392, 2) && CardSizing.clockColumnTime(133, 166, false) == 36 && CardSizing.clockListTime(50) == 28, "sizes");
+            ok(WorldClockText.difference(0).equals("Same time") && WorldClockText.difference(180).equals("+3 h") && WorldClockText.difference(-330).equals("−5:30 h") && WorldClockText.difference(345).equals("+5:45 h"), "hours");
+            ok(WorldClockText.day(0).equals("Today") && WorldClockText.day(1).equals("Tomorrow") && WorldClockText.day(-1).equals("Yesterday") && WorldClockText.day(2).equals("+2 days"), "days");
+            // 1 Nov 2026 20:30 UTC, the PC in Riyadh (+3): Tokyo (+9) is 05:30 tomorrow, Honolulu (-10) 10:30 today.
+            long now = java.time.LocalDateTime.of(2026, 11, 1, 20, 30).toEpochSecond(java.time.ZoneOffset.UTC) * 1000;
+            ok(WorldClockText.at(now, 540).getHour() == 5 && WorldClockText.dayOffset(now, 540, 180) == 1 && WorldClockText.dayOffset(now, -600, 180) == 0 && WorldClockText.at(now, -600).getHour() == 10, "times");
+            ok(WorldClockText.date(WorldClockText.at(now, 540), 1).equals("Tomorrow, Nov 2") && Format.clockTime(WorldClockText.at(now, 540), false).equals("5:30") && Format.clockPeriod(WorldClockText.at(now, 540)).equals("AM"), "date");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"clocks\":{\"pcOffset\":180,\"clocks\":[{\"label\":\"Tokyo\",\"offset\":540},{\"label\":\"Bad\",\"offset\":99999}]}}")));
+            ok(state.clocks != null && state.clocks.pcOffset == 180 && state.clocks.clocks.size() == 1 && state.clocks.clocks.get(0).label.equals("Tokyo"), "parse");
+            WidgetLayout.Placement clocks = WidgetLayout.find(WidgetLayout.defaults(), "Clocks");
+            ok(clocks != null && !clocks.visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Clocks").visible && WidgetLayout.title("Clocks").equals("World clocks"), "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

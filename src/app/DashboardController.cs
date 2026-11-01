@@ -84,6 +84,7 @@ namespace WidgetScreen
             systemCard = new SystemStatsCard(window, Control<Grid>("SystemBody"), Control<TextBlock>("SystemUptime"));
             weatherCard = new WeatherCard(window, Control<Grid>("WeatherBody"));
             InitializeStorage();
+            InitializeClocks();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -247,7 +248,7 @@ namespace WidgetScreen
             if (ticks % (settings.QuietMode ? 6 : 3) == 0) RefreshMedia();
             else if (lastMedia != null && lastMedia.Playing && Editor.IsVisible("Media")) mediaScrubber.Advance(1000);
             if (!String.IsNullOrWhiteSpace(settings.WeatherLocation) && DateTime.UtcNow - lastWeatherAttempt >= TimeSpan.FromMinutes(15)) RefreshWeather();
-            TickStorage();
+            TickStorage(); TickClocks();
         }
 
         private void UpdateClock()
@@ -337,7 +338,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -959,6 +960,7 @@ namespace WidgetScreen
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
+            OpenClockSettings();
             Text("SettingsStatus", ""); UpdateRemoteSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
@@ -989,6 +991,7 @@ namespace WidgetScreen
             candidate.Use24HourClock = Control<CheckBox>("ClockChoice").IsChecked == true;
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
+            candidate.WorldClocks = ClockChoices();
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             candidate.WeatherUnits = Control<ComboBox>("WeatherUnitsChoice").SelectedIndex == 1 ? "imperial" : "metric";

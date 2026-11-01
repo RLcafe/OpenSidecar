@@ -63,6 +63,13 @@ public final class PcState {
         public final List<Drive> drives = new ArrayList<Drive>();
     }
 
+    // The PC's world clocks (docs/design/world-clocks.md): each city and its offset from UTC now, and the PC's own offset.
+    public static final class Clock { public String label = ""; public int offset; }
+    public static final class Clocks {
+        public int pcOffset;
+        public final List<Clock> clocks = new ArrayList<Clock>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -105,6 +112,7 @@ public final class PcState {
     public SpotifyFlags spotify;
     public Discord discord;
     public Storage storage;
+    public Clocks clocks;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -203,6 +211,18 @@ public final class PcState {
                 if (!drive.name.isEmpty() && drive.total > 0) storage.drives.add(drive);
             }
             state.storage = storage;
+        }
+        if (Json.has(root, "clocks")) {
+            Map<String, Object> c = Json.obj(Json.value(root, "clocks"));
+            Clocks clocks = new Clocks();
+            clocks.pcOffset = (int) Json.number(c, "pcOffset");
+            for (Object item : Json.array(c, "clocks")) {
+                Map<String, Object> m = Json.obj(item);
+                Clock clock = new Clock();
+                clock.label = text(m, "label"); clock.offset = (int) Json.number(m, "offset");
+                if (Math.abs(clock.offset) <= 18 * 60) clocks.clocks.add(clock);
+            }
+            state.clocks = clocks;
         }
         return state;
     }

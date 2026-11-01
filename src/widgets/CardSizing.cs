@@ -150,6 +150,18 @@ namespace WidgetScreen
         public static int StorageTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.Min(count, 4) : Math.Min(count, 2); }
         public static double StorageRing(double tileWidth, double tileHeight) { return Clamp(Math.Floor(Math.Min(tileWidth - 24, tileHeight - 24 - 72)), 56, 200); }
         public static double StorageListValue(double rowHeight) { return Clamp(Math.Round(rowHeight * 0.5), 18, 32); }
+        // World clocks (docs/design/world-clocks.md): rows under 340 wide or 200 tall, cities side by side at the
+        // reference 472 × 250, and tiles from 440 × 300 (side by side while each is 170 wide, stacked otherwise). A
+        // small row keeps its day line from 46 units; a small card holds as many 32-unit rows as fit.
+        public static Design Clocks(double width, double height) { return width < 340 || height < 200 ? Design.Small : width >= 440 && height >= 300 ? Design.Large : Design.Medium; }
+        public const double ClockRow = 32, ClockDetailRow = 46;
+        public static int ClockRows(double height) { return Math.Max(1, (int)Math.Floor((height + 8) / (ClockRow + 8))); }
+        public static double ClockListTime(double rowHeight) { return Clamp(Math.Round(rowHeight * 0.55), 18, 40); }
+        // A time is about 2.5 ems wide; a 12-hour clock leaves room for AM or PM beside it.
+        public static double ClockColumnTime(double column, double height, bool use24) { return Clamp(Math.Round(Math.Min((column - (use24 ? 4 : 34)) * 0.36, (height - 80) * 0.75)), 22, 72); }
+        public static bool ClockTilesAcross(double width, int count) { return count <= 1 || (width - 12 * (count - 1)) / count >= 170; }
+        public static double ClockTileTime(double tileWidth, double tileHeight, bool use24) { return Clamp(Math.Round(Math.Min((tileWidth - 32 - (use24 ? 4 : 34)) * 0.36, (tileHeight - 32 - 80) * 0.8)), 28, 120); }
+        public static double ClockStackedTime(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min((tileWidth - 32) * 0.18, (tileHeight - 20) * 0.75)), 24, 72); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }
