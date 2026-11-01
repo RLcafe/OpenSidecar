@@ -231,8 +231,8 @@ namespace WidgetScreen
         public const double ClaudePlanHeight = 124, ClaudeSideWidth = 300;
         public static bool ClaudeRevs(double bodyWidth) { return bodyWidth >= 860; }
         public static bool ClaudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-        public static bool ClaudeModels(double tableWidth) { return tableWidth >= 560; }
-        public static bool ClaudeLines(double tableWidth) { return tableWidth >= 660; }
+        public static bool ClaudeModels(double tableWidth) { return tableWidth >= 640; }
+        public static bool ClaudeLines(double tableWidth) { return tableWidth >= 740; }
         // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
         // beside the project's name when they leave it 110 units.
         public const double ClaudeMiniHeight = 84;

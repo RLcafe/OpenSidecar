@@ -4,7 +4,21 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Claude watcher fixes from the live app (Ali's report; Windows and the phone; decision 019):
+
+- **The cars move again.** Quiet mode was holding them still. Now they keep driving, revving and rolling into their garages in Quiet mode too. Settings → Claude → **Keep the cars still in Quiet mode** brings back the old way. They still stop whenever the card is hidden or the window is minimised.
+- **"Waiting for me" stands apart from idle.**
+  - **Needs you:** amber hazards, an amber roof beacon and an Amber chip.
+  - **Your turn:** Claude has finished; brake lights on and a blue chip.
+  - **Idle:** your turn for over 30 minutes, or nothing asked yet; engine off, dimmed, grey chip.
+  - The heading counts "your turn".
+- **Plan meters match the Claude app.** The plan's newer limits list is read (for example "Fable only 2%"). When the plan has no 5-hour window, the card says so instead of showing an empty meter.
+- **Tokens no longer count cache reads**, which made them hundreds of times too big (207M became 2.1M for one thread). Cache reads have their own column. The API value is hidden by default, since your plan doesn't pay those prices; replies show instead. Settings → Claude can bring the API value back.
+- **Every project shows.**
+  - **Periods are rolling:** the last 5 hours, today, the last 7 days. "Week" used to follow the plan's week, which had just reset.
+  - **Quiet garages:** a ticked project with no thread in the period still has a garage, dimmed, with when it was last used.
+- **The 5-hour chart** has a lane for every project used in that time, and under a busy project, its busiest threads.
+- **Working cars kick up dust** behind their tyres, more when they burn more, over a ground line that scrolls by.
 
 ## v0.32.1 (1 Nov 2026)
 

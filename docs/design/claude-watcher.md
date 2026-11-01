@@ -2,6 +2,20 @@
 
 The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
 
+## Fixes from the live app (decision 019)
+
+From Ali's first look at v0.32.1, both apps:
+
+- **Motion.** The cars move in Quiet mode unless Settings → Claude → Keep the cars still in Quiet mode is ticked.
+- **States.** Needs you (beacon and hazards), Your turn (brake lights on, Glacier chip) and Idle (after 30 minutes or before anything ran: lights off, 70%, grey chip).
+- **Ledger columns.** Tokens without cache reads, a Cache reads column on Large, and Replies in place of the API value unless Settings → Claude shows it.
+- **Plan meters.** The usage answer's `limits` list is read, and "No 5-hour limit on your plan right now" shows when the plan has none.
+- **Projects.** Rolling periods, and a quiet garage ("Quiet · last used Oct 25") for every ticked known project.
+- **Lanes.** Projects, with a busy project's threads under it.
+- **Dust.** Working cars kick up dust behind their tyres.
+
+See [decision 019](../decisions/019-claude-live-fixes.md) for the evidence.
+
 ## Thread names (decision 018)
 
 Ali reported (1 Nov 2026) that threads had no names: the Claude app titles every Remote Control thread "Remote Control session (from a project)". Placeholders now count as no title. A thread is named by a rename, then a generated title (Claude Code's or the app's), then the first line of its first request (60 characters, cut at a word). An id label ("Thread 1b2187") is the last resort. Remote Control shows as where it runs ("Remote Control · ended 1 h ago"), in the ledger, the Pit stop strip and tooltips, on both apps. The name is picked again on every refresh, so a better title replaces the request.

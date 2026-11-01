@@ -491,7 +491,7 @@ public final class AndroidTests {
             ok(PitArt.hash("a") == 3826002220L && PitArt.hash("") == 2166136261L && PitArt.hash("api-server") == PitArt.hash(" API-Server "), "hash");
             ok(PitArt.accent("api-server") == PitArt.ACCENTS[1] && PitArt.accent("notes") == PitArt.ACCENTS[0] && PitArt.accent("photo-manager") == PitArt.ACCENTS[2], "the same project colours as the PC");
             ok(CardSizing.claude(260, 180) == CardSizing.SMALL && CardSizing.claude(359, 400) == CardSizing.SMALL && CardSizing.claude(600, 279) == CardSizing.SMALL && CardSizing.claude(472, 310) == CardSizing.MEDIUM && CardSizing.claude(639, 576) == CardSizing.MEDIUM && CardSizing.claude(640, 420) == CardSizing.LARGE, "designs");
-            ok(CardSizing.claudeRevs(860) && !CardSizing.claudeRevs(859) && CardSizing.claudeSide(1000) && !CardSizing.claudeSide(999) && CardSizing.claudeModels(560) && !CardSizing.claudeModels(559) && CardSizing.claudeLines(660) && !CardSizing.claudeLines(659)
+            ok(CardSizing.claudeRevs(860) && !CardSizing.claudeRevs(859) && CardSizing.claudeSide(1000) && !CardSizing.claudeSide(999) && CardSizing.claudeModels(640) && !CardSizing.claudeModels(639) && CardSizing.claudeLines(740) && !CardSizing.claudeLines(739)
                 && CardSizing.claudeMediumRow(1) == 44 && CardSizing.claudeMediumRow(1.4) == 52 && CardSizing.claudeInlineCars(300, 5) == 3 && CardSizing.claudeInlineCars(200, 5) == 1 && CardSizing.claudeInlineCars(200, 2) == 2 && CardSizing.claudeInlineCars(100, 4) == 0
                 && CardSizing.claudeSmallMeter(152, 1) && !CardSizing.claudeSmallMeter(132, 1.4) && CardSizing.claudeSmallCar(252, 100) == 85 && CardSizing.claudeSmallCar(100, 20) == 48, "sizes as on the PC");
             WidgetLayout.Placement claude = WidgetLayout.find(WidgetLayout.defaults(), "Claude");
@@ -512,7 +512,7 @@ public final class AndroidTests {
             for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.WORK, new PitArt.Look(), 0)) first.append(op.path).append(op.matrix == null ? "" : java.util.Arrays.toString(op.matrix));
             for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.WORK, new PitArt.Look(), 1)) second.append(op.path).append(op.matrix == null ? "" : java.util.Arrays.toString(op.matrix));
             ok(!first.toString().equals(second.toString()), "working wheels don't turn");
-            ok(PitArt.fps(PitArt.WORK, 0, false) == 4 && PitArt.fps(PitArt.WORK, 1, false) == 24 && PitArt.fps(PitArt.IDLE, 0, false) == 0 && PitArt.fps(PitArt.IDLE, 0, true) == 6 && PitArt.still(PitArt.DONE) == 7 && PitArt.still(PitArt.END) == 7 && PitArt.still(PitArt.NEED) == 0 && PitArt.once(PitArt.END) && !PitArt.once(PitArt.WORK), "frame rates as on the PC");
+            ok(PitArt.fps(PitArt.WORK, 0, false) == 4 && PitArt.fps(PitArt.WORK, 1, false) == 24 && PitArt.fps(PitArt.IDLE, 0, false) == 0 && PitArt.fps(PitArt.IDLE, 0, true) == 6 && PitArt.still(PitArt.DONE) == 0 && PitArt.fps(PitArt.DONE, 0, false) == 2 && !PitArt.once(PitArt.DONE) && PitArt.still(PitArt.END) == 7 && PitArt.still(PitArt.NEED) == 0 && PitArt.once(PitArt.END) && !PitArt.once(PitArt.WORK), "frame rates as on the PC");
             ok(PitArt.state("pit") == PitArt.PIT && PitArt.state("nonsense") == PitArt.IDLE && PitArt.car("gt") == PitArt.GT && PitArt.car("hatch") == PitArt.HATCH && PitArt.car("") == PitArt.SPORT && PitArt.pixelSize(150) == 3 && PitArt.pixelSize(48) == 2, "names");
             ok(PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 0).size() > PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 1).size() && PitArt.front(PitArt.LIME, true).size() > PitArt.front(PitArt.LIME, false).size(), "the beacon blinks, the headlights light");
         } });
@@ -525,6 +525,22 @@ public final class AndroidTests {
             PcState.ClaudeThread placeholder = state.claude.thread("1b21871a-de34"), named = state.claude.thread("t2");
             ok(ClaudeText.threadTitle(placeholder, 1700003600, true).equals("Thread 1b2187") && ClaudeText.threadTitle(named, 1700000000, true).equals("Add a dark mode toggle"), "thread names");
             ok(ClaudeText.where(placeholder, 1700003600).equals("Remote Control · ended 1 h ago") && ClaudeText.where(named, 1700000000).equals("Remote Control · 6 min"), "where a thread ran");
+        } });
+        check("Claude tells Needs you, Your turn and Idle apart, and follows the PC's still flag and thread lanes", new Action() { public void run() {
+            ok(ClaudeText.chip("need").equals("Needs you") && ClaudeText.chip("done").equals("Your turn") && ClaudeText.chip("idle").equals("Idle") && ClaudeText.state("done").equals("Your turn"), "chips");
+            // The art: Your turn's brake glow in every frame, Idle's headlights off, Needs you's roof beacon in every frame.
+            int turn = 0, idle = 0, need0 = 0, need5 = 0;
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.DONE, new PitArt.Look(), 6)) if (op.fill == PitArt.alpha(0xFFF09A9A, 0.4) || op.fill == 0xFFFF8A8A) turn++;
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.IDLE, new PitArt.Look(), 0)) if (op.fill == 0xFF4A5361 || op.fill == 0xFFFF8A8A) idle += op.fill == 0xFF4A5361 ? 1 : 100;
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.NEED, new PitArt.Look(), 0)) if (op.fill == PitArt.AMBER) need0++;
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.NEED, new PitArt.Look(), 5)) if (op.fill == PitArt.AMBER) need5++;
+            ok(turn >= 2 && idle == 1 && need0 >= 3 && need5 >= 1, "the art doesn't tell the states apart: " + turn + " " + idle + " " + need0 + " " + need5);
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"still\":true,\"sessions\":[],\"threads\":[{\"id\":\"t1\",\"project\":\"alpha\",\"running\":true,\"state\":\"done\",\"pit\":\"done\"}],"
+                + "\"lanes\":[{\"key\":\"C:\\\\Code\\\\alpha\",\"project\":\"alpha\",\"thread\":false,\"color\":\"alpha\",\"bins\":[1,2]},{\"key\":\"C:\\\\Code\\\\alpha\",\"project\":\"Fix the login\",\"thread\":true,\"color\":\"alpha\",\"bins\":[3]}]}}")));
+            PcState.Claude c = state.claude;
+            ok(c.still && c.lanes.size() == 2 && !c.lanes.get(0).thread && c.lanes.get(1).thread && c.lanes.get(1).color.equals("alpha") && c.lanes.get(1).project.equals("Fix the login") && c.lanes.get(1).bins[0] == 3, "still flag and thread lanes");
+            ok(ClaudeText.summary(c, 1, false).equals("1 your turn"), "the summary counts your turn: " + ClaudeText.summary(c, 1, false));
+            ok(!PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true}}"))).claude.still, "the cars stand still without being asked");
         } });
         check("Claude pace, laps and the rev counter work out like the PC's", new Action() { public void run() {
             double now = 1700000000;
@@ -564,7 +580,7 @@ public final class AndroidTests {
         } });
         check("Claude words, meters and the claude section read like the PC's", new Action() { public void run() {
             ok(ClaudeText.tokens(950).equals("950") && ClaudeText.tokens(12400).equals("12.4k") && ClaudeText.tokens(1234567).equals("1.2M") && ClaudeText.tokens(3400000000L).equals("3.4B") && ClaudeText.tokens(999999).equals("999k") && ClaudeText.tokens(2000).equals("2k"), "tokens");
-            ok(ClaudeText.stateWords("needs", 1000, 1120, false).equals("Needs you · 2 min") && ClaudeText.stateWords("working", 0, 10, false).equals("Working") && ClaudeText.stateWords("done", 0, 3 * 3600 + 5, true).equals("Done · 3 h") && ClaudeText.stateWords("ready", 0, 99, true).equals("Ready"), "state words");
+            ok(ClaudeText.stateWords("needs", 1000, 1120, false).equals("Needs you · 2 min") && ClaudeText.stateWords("working", 0, 10, false).equals("Working") && ClaudeText.stateWords("done", 0, 3 * 3600 + 5, true).equals("Your turn · 3 h") && ClaudeText.stateWords("ready", 0, 99, true).equals("Ready"), "state words");
             ok(ClaudeText.ask("Claude needs your permission to use Bash").equals("Wants to use Bash") && ClaudeText.ask("Pick one").equals("Pick one"), "asks");
             ok(ClaudeText.lit(23) == 2 && ClaudeText.lit(3) == 1 && ClaudeText.lit(0) == 0 && ClaudeText.lit(99) == 9 && ClaudeText.lit(100) == 10 && ClaudeText.warns(80) && !ClaudeText.warns(79.9), "meters");
             PcState.ClaudeWindow full = new PcState.ClaudeWindow(); full.pct = 100; full.resetsAt = 1000 + 3600;

@@ -10,13 +10,15 @@ import java.util.Locale;
 // The Claude card's words (docs/design/claude-watcher.md), the same as ClaudeText in the Windows ClaudeCard.cs.
 // Times are Unix seconds.
 public final class ClaudeText {
+    // The plan reports no 5-hour window (only weekly ones), as Anthropic's usage answer can.
+    public static final String NO_FIVE_HOUR = "No 5-hour limit on your plan right now";
     public static final String NOT_CONNECTED = "Connect Claude Code in Settings → Claude on the PC.", NO_SESSIONS = "No Claude Code sessions running.", NO_LOGS = "Can't read Claude Code's logs.";
     public static final String[] PERIOD_NAMES = { "5 h", "Today", "Week" };
     // Older than this, the meters say when they were read (15 minutes).
     public static final double STALE = 15 * 60;
 
     public static String state(String state) {
-        return "needs".equals(state) ? "Needs you" : "working".equals(state) ? "Working" : "done".equals(state) ? "Done" : "Ready";
+        return "needs".equals(state) ? "Needs you" : "working".equals(state) ? "Working" : "done".equals(state) ? "Your turn" : "Ready";
     }
     // "now", "2 min", "3 h".
     public static String duration(double seconds) {
@@ -98,6 +100,8 @@ public final class ClaudeText {
     public static String cars(int count) { return count == 1 ? "1 car" : count + " cars"; }
     // Under a project's name: "3 threads · 2 running · Claude app", or when its threads ended.
     public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now) {
+        // A project with no thread in the period: when it was last used.
+        if (group.threads.isEmpty()) return group.lastActive > 0 ? "Quiet · last used " + Instant.ofEpochMilli((long) (group.lastActive * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MMM d", Locale.US)) : "Quiet";
         List<String> parts = new ArrayList<String>(); parts.add(threads(group.threads.size()));
         int running = 0; String where = null; boolean mixed = false; double last = 0;
         for (String id : group.threads) {
@@ -139,6 +143,8 @@ public final class ClaudeText {
         if (!claude.connected && claude.threads.isEmpty()) return "Not connected";
         List<String> parts = new ArrayList<String>();
         if (claude.needsYou() > 0) parts.add(claude.needsYou() + " needs you");
+        int turn = 0; for (PcState.ClaudeThread t : claude.threads) if (t.running && "done".equals(t.pit)) turn++;
+        if (turn > 0) parts.add(turn + " your turn");
         if (claude.working() > 0) parts.add(claude.working() + " running");
         if (threads) {
             int count = 0; for (PcState.ClaudeGroup g : claude.groups[period]) count += g.threads.size();
@@ -179,7 +185,7 @@ public final class ClaudeText {
     public static String chip(String pit) {
         switch (pit == null ? "" : pit) {
             case "need": return "Needs you"; case "work": return "Working"; case "rev": return "Tool run"; case "pit": return "Compacting";
-            case "stuck": return "Retrying"; case "done": return "Done"; case "end": return "Ended"; default: return "Ready";
+            case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; default: return "Idle";
         }
     }
     // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").
@@ -188,6 +194,7 @@ public final class ClaudeText {
         String age = duration(now - thread.since);
         return thread.where.isEmpty() ? age : thread.where + " · " + age;
     }
+    public static String replies(int count) { return count == 1 ? "1 reply" : count + " replies"; }
     public static String added(long lines) { return "+" + tokens(lines); }
     public static String removed(long lines) { return "−" + tokens(lines); }
     // The ledger's dollars without the "≈" (the column says it): "7.10", "12", "1.2k".

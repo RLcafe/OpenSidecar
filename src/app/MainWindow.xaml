@@ -910,7 +910,11 @@
                     <TextBlock x:Name="ClaudeTelemetryText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                     <TextBlock Text="Connect and Disconnect take effect right away; you don't need to save. Claude Code picks up the change in sessions you start afterwards." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
                     <CheckBox x:Name="ClaudeChimeChoice" Content="Chime when a session needs me"/>
-                    <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
+                    <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <CheckBox x:Name="ClaudeStillChoice" Content="Keep the cars still in Quiet mode" AutomationProperties.Name="Keep the Claude cars still in Quiet mode"/>
+                    <TextBlock Text="Off: the cars keep driving, revving and rolling into their garages even in Quiet mode. They stop whenever the card is hidden or the window is minimised." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <CheckBox x:Name="ClaudeApiValueChoice" Content="Show what the tokens would cost at API list prices" AutomationProperties.Name="Show the API value of the tokens on the Claude card"/>
+                    <TextBlock Text="Your Claude plan doesn't pay these prices; the plan meters show your plan's use. Off: the card shows each thread's replies instead." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
                     <TextBlock Text="Refresh" FontSize="24" Margin="0,0,0,12"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                       <TextBlock Text="Update the card every" VerticalAlignment="Center" Width="250" FontSize="{DynamicResource BodySize}"/>

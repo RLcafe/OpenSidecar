@@ -309,6 +309,22 @@ namespace WidgetScreen
                 if (!String.IsNullOrWhiteSpace(name) && window != null && !limits.Extra.Any(p => p.Key.StartsWith(name.Trim() + " ", StringComparison.OrdinalIgnoreCase)))
                     limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(name.Trim() + " week", window));
             }
+            // The newer "limits" list ({kind, percent, resets_at, scope}) is what the Claude app shows: it fills a window
+            // the older fields left out, and its model-scoped weekly windows ("Fable 2%") become extra lines.
+            foreach (var item in (ClaudeJson.List(o, "limits") ?? new List<object>()).OfType<JsonObject>())
+            {
+                string kind = (ClaudeJson.Str(item, "kind") ?? "").ToLowerInvariant();
+                var window = ParseWindow(item, "percent");
+                if (window == null) continue;
+                if (kind == "weekly_all") { if (limits.Week == null) limits.Week = window; }
+                else if (kind.Contains("five_hour") || kind.Contains("session") || kind.Contains("5h")) { if (limits.FiveHour == null) limits.FiveHour = window; }
+                else if (kind == "weekly_scoped")
+                {
+                    string name = ClaudeJson.Str(ClaudeJson.Obj(ClaudeJson.Obj(item, "scope"), "model"), "display_name");
+                    if (!String.IsNullOrWhiteSpace(name) && !limits.Extra.Any(p => p.Key.StartsWith(name.Trim() + " ", StringComparison.OrdinalIgnoreCase)))
+                        limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(name.Trim() + " week", window));
+                }
+            }
             return limits.Known ? limits : null;
         }
 

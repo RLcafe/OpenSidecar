@@ -45,11 +45,11 @@ namespace WidgetScreen
 
         // Side views, facing left: body, glass, door pillar, front and rear wheel centres, wheel radius, headlight and
         // tail light.
-        private sealed class Shape { public string Body, Glass, Pillar; public double FrontWheel, RearWheel, Wheel; public double[] Head, Tail; }
+        private sealed class Shape { public string Body, Glass, Pillar; public double FrontWheel, RearWheel, Wheel, Roof, RoofX; public double[] Head, Tail; }
         private static readonly Shape[] Shapes = {
-            new Shape { Body = "M4 41 Q4 34 14 32 L40 29 Q54 18 74 17 L92 17 Q110 18 124 28 L134 31 Q138 33 138 39 L138 43 Q138 46 134 46 L8 46 Q4 46 4 41Z", Glass = "M50 29 Q60 20 74 20 L90 20 Q104 21 114 29Z", Pillar = "M84 20 L83 29", FrontWheel = 28, RearWheel = 114, Wheel = 10.5, Head = new double[] { 8, 35 }, Tail = new double[] { 134, 34 } },
-            new Shape { Body = "M6 42 Q6 36 14 34 L36 31 Q50 19 70 17 L88 17 Q104 19 118 29 L130 32 Q136 34 136 40 L136 43 Q136 46 132 46 L10 46 Q6 46 6 42Z", Glass = "M46 31 Q58 21 72 20 L86 20 Q98 22 108 30Z", Pillar = "M80 20 L80 30", FrontWheel = 30, RearWheel = 110, Wheel = 11, Head = new double[] { 10, 37 }, Tail = new double[] { 132, 35 } },
-            new Shape { Body = "M8 43 Q8 35 16 33 L30 31 Q40 15 60 13 L112 13 Q124 13 128 23 L130 33 Q132 37 132 41 L132 43 Q132 46 128 46 L12 46 Q8 46 8 43Z", Glass = "M38 31 Q46 17 62 16 L108 16 Q118 16 122 25 L123 31Z", Pillar = "M84 16 L84 31", FrontWheel = 32, RearWheel = 108, Wheel = 11, Head = new double[] { 11, 37 }, Tail = new double[] { 128, 30 } } };
+            new Shape { Body = "M4 41 Q4 34 14 32 L40 29 Q54 18 74 17 L92 17 Q110 18 124 28 L134 31 Q138 33 138 39 L138 43 Q138 46 134 46 L8 46 Q4 46 4 41Z", Glass = "M50 29 Q60 20 74 20 L90 20 Q104 21 114 29Z", Pillar = "M84 20 L83 29", FrontWheel = 28, RearWheel = 114, Wheel = 10.5, Roof = 17, RoofX = 84, Head = new double[] { 8, 35 }, Tail = new double[] { 134, 34 } },
+            new Shape { Body = "M6 42 Q6 36 14 34 L36 31 Q50 19 70 17 L88 17 Q104 19 118 29 L130 32 Q136 34 136 40 L136 43 Q136 46 132 46 L10 46 Q6 46 6 42Z", Glass = "M46 31 Q58 21 72 20 L86 20 Q98 22 108 30Z", Pillar = "M80 20 L80 30", FrontWheel = 30, RearWheel = 110, Wheel = 11, Roof = 17, RoofX = 80, Head = new double[] { 10, 37 }, Tail = new double[] { 132, 35 } },
+            new Shape { Body = "M8 43 Q8 35 16 33 L30 31 Q40 15 60 13 L112 13 Q124 13 128 23 L130 33 Q132 37 132 41 L132 43 Q132 46 128 46 L12 46 Q8 46 8 43Z", Glass = "M38 31 Q46 17 62 16 L108 16 Q118 16 122 25 L123 31Z", Pillar = "M84 16 L84 31", FrontWheel = 32, RearWheel = 108, Wheel = 11, Roof = 13, RoofX = 84, Head = new double[] { 11, 37 }, Tail = new double[] { 128, 30 } } };
 
         // What a side-view car frame shows besides its state.
         public struct CarLook
@@ -94,18 +94,20 @@ namespace WidgetScreen
             bool spins = state == PitState.Work || state == PitState.Stuck;
             double rot = spins ? f * Math.PI * 2 / 5 / 8 : 0;
             bool hazard = state == PitState.Need && f < 4, flash = state == PitState.Need && (f == 0 || f == 2);
-            // Done: the brake lights glow, then fade (frames 0–3, then out).
-            bool brake = state == PitState.Done && f < 4;
+            // Your turn: the brake lights stay on, their glow breathing (bigger on frames 0–3).
+            bool brake = state == PitState.Done;
             var lights = new List<PitOp> {
-                E(K.Head[0], K.Head[1], 3.4, 2.4, state == PitState.End ? 0xFF4A5361 : flash ? 0xFFFFFFFF : 0xFFDDE3EA),
+                E(K.Head[0], K.Head[1], 3.4, 2.4, state == PitState.End || state == PitState.Idle ? 0xFF4A5361 : flash ? 0xFFFFFFFF : 0xFFDDE3EA),
                 R(K.Tail[0] - 2, K.Tail[1] - 2, 4, 4.5, brake ? 0xFFFF8A8A : 0xFF7A3434),
                 R(K.Head[0] + 1, K.Head[1] + 4, 5, 3, hazard ? Amber : 0xFF5E4A2A),
                 R(K.Tail[0] - 4, K.Tail[1] + 4, 5, 3, hazard ? Amber : 0xFF5E4A2A) };
             if (flash) lights.Add(P("M" + N(K.Head[0] - 2) + " " + N(K.Head[1] - 2) + " L-16 " + N(K.Head[1] - 8) + " L-16 " + N(K.Head[1] + 8) + " L" + N(K.Head[0] - 2) + " " + N(K.Head[1] + 2) + "Z", Alpha(Text, 0.55)));
-            if (hazard) { lights.Add(C(K.Head[0] + 3, K.Head[1] + 5, 6, Alpha(Amber, 0.4))); lights.Add(C(K.Tail[0] - 2, K.Tail[1] + 5, 6, Alpha(Amber, 0.4))); }
+            if (hazard) { lights.Add(C(K.Head[0] + 3, K.Head[1] + 5, 8, Alpha(Amber, 0.45))); lights.Add(C(K.Tail[0] - 2, K.Tail[1] + 5, 8, Alpha(Amber, 0.45))); }
+            // Needs you: an amber beacon on the roof, lit in every frame and flaring with the hazards.
+            if (state == PitState.Need) { if (f < 4) lights.Add(C(K.RoofX, K.Roof - 4, 9, Alpha(Amber, 0.5))); lights.Add(R(K.RoofX - 5, K.Roof - 7, 10, 6, Amber, 2)); }
             if (look.Lights) { lights.Add(P("M" + N(K.Head[0] - 2) + " " + N(K.Head[1] - 2) + " L-12 " + N(K.Head[1] - 6) + " L-12 " + N(K.Head[1] + 6) + " L" + N(K.Head[0] - 2) + " " + N(K.Head[1] + 2) + "Z", Alpha(0xFFFFF6D8, 0.45))); lights.Add(E(K.Head[0], K.Head[1], 3.6, 2.6, 0xFFFFFFFF)); }
             if (look.Reverse) { lights.Add(C(K.Tail[0] + 1, K.Tail[1] + 1, 7, Alpha(0xFFFFFFFF, 0.4))); lights.Add(R(K.Tail[0] - 1, K.Tail[1] - 1, 4, 4, 0xFFFFFFFF)); }
-            if (brake) lights.Add(C(K.Tail[0], K.Tail[1], 7, Alpha(0xFFF09A9A, 0.45)));
+            if (brake) lights.Add(C(K.Tail[0], K.Tail[1], f < 4 ? 8 : 6, Alpha(0xFFF09A9A, f < 4 ? 0.5 : 0.4)));
 
             var body = new List<PitOp> {
                 P(K.Body, color, Alpha(Page, 0.7), 2),
@@ -121,6 +123,19 @@ namespace WidgetScreen
             ops.Add(E(70, 57, 62, 3, Alpha(0xFF000000, 0.4)));
             // Exhaust puffs on a long tool run or a heavy burn; tyre smoke rolling back when stuck.
             if (state == PitState.Rev || (state == PitState.Work && look.Fast)) { double k = (f % 4) / 4.0; ops.Add(C(K.Tail[0] + 5 + k * 14, cy - 2 - k * 5, 2 + k * 4, Alpha(Muted, 0.8 - k * 0.7))); }
+            // Working: dust kicked up behind both tyres, drifting back and up and breaking up over four frames (a speck
+            // when light, a trail when heavy; the frame rate follows the burn), and the ground dashes scrolling back.
+            if (state == PitState.Work)
+            {
+                for (double x = -12 + (f % 3) * 4; x < 140; x += 12) ops.Add(R(x, cy + K.Wheel + 1, 6, 1, Alpha(0xFF606D81, 0.9)));
+                int puffs = look.Fast ? 3 : 1;
+                foreach (double wx in new[] { K.FrontWheel, K.RearWheel })
+                    for (int j = 0; j < puffs; j++)
+                    {
+                        double q = ((f + j * 2) % 4) / 4.0;
+                        ops.Add(C(wx + K.Wheel * 0.7 + q * 14, cy + K.Wheel - 2 - q * 5, 1.5 + q * 2.5, Alpha(0xFFB8A88E, 0.85 - q * 0.6)));
+                    }
+            }
             if (state == PitState.Stuck) for (int j = 0; j < 3; j++) { double q = ((f + j * 3) % 8) / 8.0; ops.Add(C(K.RearWheel + 6 + q * 22, cy + 6 - q * 12, 5 + q * 8, Alpha(0xFFC9D0DA, 0.85 - q * 0.75))); }
             double dy = spins && f % 2 == 1 ? 1 : 0;
             bool tilt = state == PitState.Rev && f < 2, sputter = look.Fuel && (f == 5 || f == 7);
@@ -419,14 +434,16 @@ namespace WidgetScreen
                 case PitState.Stuck: return 24;
                 case PitState.Need: return 6;
                 case PitState.Rev: return 8;
-                case PitState.Done: return 8;
+                case PitState.Done: return 2;
                 case PitState.End: return 12;
                 case PitState.Pit: return 2;
                 default: return fuel ? 6 : 0;
             }
         }
-        // The frame that stands for a state when nothing moves: Done's faded lights and Ended's dropped cover.
-        public static int StillFrame(PitState state) { return state == PitState.Done || state == PitState.End ? 7 : 0; }
+        // The frame that stands for a state when nothing moves: Ended's dropped cover, the first frame otherwise.
+        public static int StillFrame(PitState state) { return state == PitState.End ? 7 : 0; }
+        // Ended plays its cover drop once; everything else loops.
+        public static bool PlaysOnce(PitState state) { return state == PitState.End; }
     }
 
     // The one frame clock for a card's pit sprites (the user asked for the motion; decision 017). It runs only while the

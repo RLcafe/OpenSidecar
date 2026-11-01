@@ -49,7 +49,7 @@ public final class PitArt {
     private static final String[] GLASS = { "M50 29 Q60 20 74 20 L90 20 Q104 21 114 29Z", "M46 31 Q58 21 72 20 L86 20 Q98 22 108 30Z", "M38 31 Q46 17 62 16 L108 16 Q118 16 122 25 L123 31Z" };
     private static final double[] GLASS_X = { 50, 46, 38 };
     private static final String[] PILLAR = { "M84 20 L83 29", "M80 20 L80 30", "M84 16 L84 31" };
-    private static final double[] FRONT_WHEEL = { 28, 30, 32 }, REAR_WHEEL = { 114, 110, 108 }, WHEEL = { 10.5, 11, 11 };
+    private static final double[] FRONT_WHEEL = { 28, 30, 32 }, REAR_WHEEL = { 114, 110, 108 }, WHEEL = { 10.5, 11, 11 }, ROOF = { 17, 17, 13 }, ROOF_X = { 84, 80, 84 };
     private static final double[][] HEAD = { { 8, 35 }, { 10, 37 }, { 11, 37 } }, TAIL = { { 134, 34 }, { 132, 35 }, { 128, 30 } };
 
     // What a side-view car frame shows besides its state.
@@ -96,17 +96,20 @@ public final class PitArt {
         List<Op> ops = new ArrayList<Op>();
         boolean spins = state == WORK || state == STUCK;
         double rot = spins ? f * Math.PI * 2 / 5 / 8 : 0;
-        boolean hazard = state == NEED && f < 4, flash = state == NEED && (f == 0 || f == 2), brake = state == DONE && f < 4;
+        // Your turn keeps its brake lights on, their glow breathing; Idle has its lights off (decision 019).
+        boolean hazard = state == NEED && f < 4, flash = state == NEED && (f == 0 || f == 2), brake = state == DONE;
         List<Op> lights = new ArrayList<Op>();
-        lights.add(e(hx, hy, 3.4, 2.4, state == END ? 0xFF4A5361 : flash ? 0xFFFFFFFF : 0xFFDDE3EA));
+        lights.add(e(hx, hy, 3.4, 2.4, state == END || state == IDLE ? 0xFF4A5361 : flash ? 0xFFFFFFFF : 0xFFDDE3EA));
         lights.add(r(tx - 2, ty - 2, 4, 4.5, brake ? 0xFFFF8A8A : 0xFF7A3434));
         lights.add(r(hx + 1, hy + 4, 5, 3, hazard ? AMBER : 0xFF5E4A2A));
         lights.add(r(tx - 4, ty + 4, 5, 3, hazard ? AMBER : 0xFF5E4A2A));
         if (flash) lights.add(p("M" + n(hx - 2) + " " + n(hy - 2) + " L-16 " + n(hy - 8) + " L-16 " + n(hy + 8) + " L" + n(hx - 2) + " " + n(hy + 2) + "Z", alpha(TEXT, 0.55)));
-        if (hazard) { lights.add(c(hx + 3, hy + 5, 6, alpha(AMBER, 0.4))); lights.add(c(tx - 2, ty + 5, 6, alpha(AMBER, 0.4))); }
+        if (hazard) { lights.add(c(hx + 3, hy + 5, 8, alpha(AMBER, 0.45))); lights.add(c(tx - 2, ty + 5, 8, alpha(AMBER, 0.45))); }
+        // Needs you: an amber beacon on the roof, lit in every frame and flaring with the hazards.
+        if (state == NEED) { if (f < 4) lights.add(c(ROOF_X[k], ROOF[k] - 4, 9, alpha(AMBER, 0.5))); lights.add(r(ROOF_X[k] - 5, ROOF[k] - 7, 10, 6, AMBER, 2)); }
         if (look.lights) { lights.add(p("M" + n(hx - 2) + " " + n(hy - 2) + " L-12 " + n(hy - 6) + " L-12 " + n(hy + 6) + " L" + n(hx - 2) + " " + n(hy + 2) + "Z", alpha(0xFFFFF6D8, 0.45))); lights.add(e(hx, hy, 3.6, 2.6, 0xFFFFFFFF)); }
         if (look.reverse) { lights.add(c(tx + 1, ty + 1, 7, alpha(0xFFFFFFFF, 0.4))); lights.add(r(tx - 1, ty - 1, 4, 4, 0xFFFFFFFF)); }
-        if (brake) lights.add(c(tx, ty, 7, alpha(0xFFF09A9A, 0.45)));
+        if (brake) lights.add(c(tx, ty, f < 4 ? 8 : 6, alpha(0xFFF09A9A, f < 4 ? 0.5 : 0.4)));
 
         List<Op> body = new ArrayList<Op>();
         body.add(p(BODY[k], color, alpha(PAGE, 0.7), 2));
@@ -120,6 +123,17 @@ public final class PitArt {
 
         ops.add(e(70, 57, 62, 3, alpha(0xFF000000, 0.4)));
         if (state == REV || (state == WORK && look.fast)) { double q = (f % 4) / 4.0; ops.add(c(tx + 5 + q * 14, cy - 2 - q * 5, 2 + q * 4, alpha(MUTED, 0.8 - q * 0.7))); }
+        // Working: dust kicked up behind both tyres, drifting back and up and breaking up over four frames (a speck when
+        // light, a trail when heavy; the frame rate follows the burn), and the ground dashes scrolling back.
+        if (state == WORK) {
+            for (double x = -12 + (f % 3) * 4; x < 140; x += 12) ops.add(r(x, cy + wr + 1, 6, 1, alpha(0xFF606D81, 0.9)));
+            int puffs = look.fast ? 3 : 1;
+            for (double wx : new double[] { fw, rw })
+                for (int j = 0; j < puffs; j++) {
+                    double q = ((f + j * 2) % 4) / 4.0;
+                    ops.add(c(wx + wr * 0.7 + q * 14, cy + wr - 2 - q * 5, 1.5 + q * 2.5, alpha(0xFFB8A88E, 0.85 - q * 0.6)));
+                }
+        }
         if (state == STUCK) for (int j = 0; j < 3; j++) { double q = ((f + j * 3) % 8) / 8.0; ops.add(c(rw + 6 + q * 22, cy + 6 - q * 12, 5 + q * 8, alpha(0xFFC9D0DA, 0.85 - q * 0.75))); }
         double dy = spins && f % 2 == 1 ? 1 : 0;
         boolean tilt = state == REV && f < 2, sputter = look.fuel && (f == 5 || f == 7);
@@ -223,20 +237,21 @@ public final class PitArt {
     }
 
     // How fast a car's frames step in each state (working cars go with their burn), and the frame that stands for a
-    // state when nothing moves: Done's faded lights and Ended's dropped cover.
+    // state when nothing moves: Ended's dropped cover, the first frame otherwise.
     public static double fps(int state, double share, boolean fuel) {
         switch (state) {
             case WORK: return ClaudePit.wheelFps(share);
             case STUCK: return 24;
             case NEED: return 6;
-            case REV: case DONE: return 8;
+            case REV: return 8;
+            case DONE: return 2;
             case END: return 12;
             case PIT: return 2;
             default: return fuel ? 6 : 0;
         }
     }
-    public static int still(int state) { return state == DONE || state == END ? 7 : 0; }
-    public static boolean once(int state) { return state == DONE || state == END; }
+    public static int still(int state) { return state == END ? 7 : 0; }
+    public static boolean once(int state) { return state == END; }
     // A sprite's pixel size for a box this wide: 2 units a pixel under 150 wide, 3 from there.
     public static int pixelSize(double width) { return width >= 150 ? 3 : 2; }
 }

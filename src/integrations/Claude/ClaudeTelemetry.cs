@@ -66,7 +66,7 @@ namespace WidgetScreen
                                 long hour = Math.Min(creation, Long(attributes, "cache_creation_1h_tokens"));
                                 cost = ClaudePrices.Cost(model, input, output, creation - hour, hour, read);
                             }
-                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + read + creation, Prompt = input + read + creation, CacheRead = read, Cost = Math.Max(0, cost), FromTelemetry = true };
+                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + creation, Prompt = input + read + creation, CacheRead = read, Cost = Math.Max(0, cost), FromTelemetry = true };
                         }
                         else if (name == "tool_decision") { e.Decision = Value(attributes, "decision") ?? ""; e.Source = Value(attributes, "source") ?? ""; }
                         result.Add(e);
