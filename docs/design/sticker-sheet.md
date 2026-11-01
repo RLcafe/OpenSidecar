@@ -151,3 +151,42 @@ Branch `feature/sticker-defaults`. The default five, on both apps unless a line 
 - **Performance check** (1 Nov 2026): the default layout for 60 s after a 10 s warm-up, windowed with isolated settings.
   - v0.35.1 release: 0.07% CPU, 126.7 MB private memory.
   - This branch: 0.05% CPU, 125.6 MB.
+
+## What phase 3 built
+
+Branch `feature/sticker-readings`. The readings, on both apps unless a line says otherwise. The drawn parts are in `src/widgets/ReadingParts.cs` and `android/.../views/ReadingParts.java`; the rules they follow are in the services and `core/` so both apps check the same numbers.
+
+- **System stats**
+  - A peak sticker in the heading names the busiest shown reading of CPU, GPU, RAM and VRAM ("GPU 92%"), filled from 80% (`SystemReadings.PeakId`/`PeakText`, `SystemText.peakId`/`peakText`).
+  - CPU and GPU rings and gauges wear their temperature as a badge sticker at the top right ("58°", in the chosen unit).
+  - Large tiles add "min 12% · max 87%" under each reading from the 48 readings the card already keeps (`Range`).
+  - The CPU and GPU details show short model names ("Ryzen 7 7800X3D", "RTX 4070"; `SystemService.ShortModel`, `SystemText.shortModel`). The CPU name is read once from the registry and sent to the phone as `system.cpuName`.
+- **Weather**
+  - The reading sits on a sky band, a rounded panel in the sky's ink fading downwards: Lemon for a clear day, Glacier for cloud, rain and snow, Lavender for storms and night (`SkyInk`, `SkyStrength`). Day is between sunrise and sunset in the city, from Open-Meteo's `utc_offset_seconds`.
+  - The condition glyph sits on a die-cut disc sticker in the sky's ink, drawn in dark text.
+  - Chips: Feels, Humidity and Rain on Medium; Large adds UV ("6 High"), Wind and High / Low as far as they fit (`CardSizing.WeatherChips`, three to six).
+  - Large, and Medium from 300 tall, show the next 12 hours as a temperature curve over rain bars (`TemperatureCurve`): the highest and lowest temperatures by their points, a dot at now and a label every three hours. Rain bars show from a 5% chance.
+  - Large cards from 380 units of body width show a sunrise–sunset arc (`SunArc`): the day gone in Lemon and the sun at now, or a hollow dot at the end after sunset, with the two times under it.
+  - The same single Open-Meteo request now asks for `relative_humidity_2m`, `precipitation_probability`, `uv_index_max`, `sunrise` and `sunset`. A missing extra leaves the rest of the reading intact.
+  - Offline keeps the last reading at 60% with OFFLINE in the status sticker and "last update" in the credit. No city, or the service unreachable with nothing to show, puts the reason in the dashed unavailable outline.
+- **Storage**
+  - Each drive is a lidded jar (`StorageJar`) with a keyline and lift, filled from the bottom by its used space in the Storage ink (`CardSizing.JarLevel`; any use shows at least a sliver).
+  - A drive under the low-space threshold fills with Amber caution tape, keeps the warning colour on its free space, and the heading names it. Small's thin bar uses the same tape.
+  - Medium puts a small jar beside each drive's name, free space and used of total (the bar is gone). Large gives each drive a big jar labelled with its free percentage on a pill in the card's colour.
+  - "Used this week" stays deferred: it needs a history the app doesn't keep.
+- **World clocks**
+  - Each city gets an analog face (`ClockFace`), Lemon from 7 AM to 7 PM in that city and Lavender otherwise, labelled Day or Evening in the same ink (`WorldClockService.Ink`/`PartOfDay`, `WorldClockText`). It's about the hours people keep, not sunlight.
+  - Faces sit beside roomy Small rows, atop Medium columns from a 150-unit body (shorter cards keep the plain columns), on Large tiles and at the left of stacked tiles.
+  - Large tiles add a 24-hour band (`DayBand`): midnight to midnight, 9 to 5 shaded in the city's ink, and a line at the city's time now. Stacked tiles get it from 110 units tall.
+  - Faces and bands redraw only when a minute turns, as the times do.
+- **Prayer**
+  - The day's sun path (`PrayerPath`): an arc from Fajr (left) to Isha (right) with each prayer placed by its time (`PrayerService.PathPart`, `PrayerText.pathPart`), sunrise as a short Lemon mark, the day gone in the Prayer ink and the sun at now. Prayers gone are filled, the next one is larger, the rest hollow. After Isha the whole arc is lit and tomorrow's Fajr is the next prayer in the list.
+  - Medium shows it under the countdown when there's room. It takes what the text leaves, so larger text shrinks it; without room the progress line stays.
+  - Large sets it beside the next prayer and countdown, with Hijri, Method ("Umm al-Qura") and Alert (Off, Chime or Your sound) chips under them from a 301-unit body, then today's times (with sunrise when the list keeps 22 units a row) or tiles across a wide card. The phone link adds `prayer.alert`.
+  - No city puts the reason in the dashed unavailable outline. World clocks without zones and Storage without drives do the same.
+- **Render flags** `--render-weather-offline` (a real reading, then a failed update, so the card shows it stale) and `--render-weather-unreachable` (the first update fails). They show failure states, never made-up readings. `tests\sticker-renders.ps1` adds the five readings at Small, Medium and Large in each palette, at 140%, with a 20% low-space threshold (so this PC's fuller drives show caution tape), Weather offline and unreachable, and no city set. Hardware sensors aren't installed in the worktree, so CPU temperature shows "Not installed" in every scene.
+- **Not rendered:** a system under strain (a filled peak sticker and hot badges need a real load; the 80% rule and badge words are checked), and the clock faces at a fixed hour (they follow the real time; the inks and hands are checked).
+- **Performance check** (1 Nov 2026): 60 s after a 10 s warm-up, windowed with isolated settings, on the default layout and on the medium readings page (all five readings shown, Weather fetching for London).
+  - Default layout: v0.36.0 release 0.07% CPU and 128.4 MB private memory; this branch 0.08% CPU and 123.0 MB.
+  - Readings page: v0.36.0 release 0.01% CPU and 129.8 MB; this branch 0.02% CPU and 131.9 MB.
+  - Both are within the targets (CPU within 0.5 points, memory within 10%).

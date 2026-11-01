@@ -65,3 +65,18 @@ The insides of Focus, Now Playing, Quick Launch, the mixer and Spotify, on both 
 - **The phone has no level meter or ladder.** The link doesn't carry output levels, and sending them would mean polling several times a second. The Large phone card shows the strips without the ladder.
 - **ON AIR is a status sticker with a glyph.** A glyph sticker needs 62 units of room, or it steps aside, so small cards keep just the microphone button.
 - **`--render-no-media`** renders Now Playing's empty state on a PC that's playing something. It shows an absence, not a made-up reading, so it needs no label.
+
+## Phase 3: the readings
+
+System stats, Weather, Storage, World clocks and Prayer, on both apps (branch `feature/sticker-readings`). The details are in "What phase 3 built" in `docs/design/sticker-sheet.md`. The choices behind them:
+
+- **No new requests or timers.** Weather's extras (humidity, rain chance, UV, sunrise, sunset) ride on the one Open-Meteo request the card already makes. Min and max come from the history System stats already keeps. The CPU's name is read once from the registry. Clock faces and bands redraw when a minute turns, on the existing heartbeat.
+- **Shared rules live beside the data,** not in the drawing: `SystemReadings`, `WeatherService`, `WorldClockService`, `PrayerService` and `CardSizing` on Windows, and `SystemText`, `Weather`, `WorldClockText`, `PrayerText` and `CardSizing` in the phone's `core/`. The checks on both apps assert the same values, because the JVM checks can't build views.
+- **Weather takes its ink from the sky** for its band and glyph sticker (Lemon, Glacier or Lavender), while the label strip keeps the widget's ink, which the user can change in Edit layout.
+- **Day and Evening on World clocks follow the clock, not the sun** (7 AM to 7 PM), as the brief asked: they answer "is it a reasonable hour to call?", which sunlight doesn't.
+- **The Prayer sun path is placed by time between Fajr and Isha,** so its spacing shows how the day is shared out; the times themselves stay in the list or tiles.
+- **Storage jars replace the rings and bars** on Medium and Large. Small keeps its thin bar, which fills with caution tape like the jars when a drive is low.
+- **Room decides what shows.** Medium World clocks need a 150-unit body for faces, Large Prayer a 301-unit body for chips, Medium Prayer 44 units under the countdown for the sun path, and Weather's sun arc 380 units of body width. Below those, the card keeps its earlier layout rather than crowd or clip, at 100% and 140% text.
+- **Not set up is a dashed outline** (Weather and Prayer without a city, World clocks without zones, Storage without drives, Weather unreachable with nothing to show), following the state language from phase 1.
+- **"Used this week" on Storage stays deferred.** It would need the app to keep a history of drive sizes, which it doesn't.
+- **Not verified on hardware:** the phone views were checked on the JVM and by building the APK, not on a device or emulator.
