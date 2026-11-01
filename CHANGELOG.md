@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.27.0 (1 Nov 2026)
+
+A Games widget (user request; Windows and the phone):
+
+- **Your installed games, one tap to play.** Games from Steam, the Epic Games Launcher and the Xbox app, recently played first, six a page like Quick Launch. A tap starts the game through its store. Turn it on in Edit layout; it starts hidden.
+- **Playtime only where it's real.** Steam games show how long you've played and when you last played. Epic and the Xbox app keep that online, so their games show nothing rather than a guess.
+- **Read from the PC, no accounts.** The stores' own files are read with their apps closed and no internet. Choose which stores to list in Settings → Widgets → Games.
+- **The phone** shows the same games and starts them on the PC.
+- Not yet tried: starting games from the card (no check starts a game), Xbox games (none on the development PC; checked with sample files), and the phone on a device.
+
 ## v0.26.0 (1 Nov 2026)
 
 A Calendar and agenda widget (user request; Windows and the phone, the same designs on both):
