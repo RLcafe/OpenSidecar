@@ -6,6 +6,18 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.29.0 (1 Nov 2026)
+
+The Claude Code widget now works with the Claude app's Code tab (Ali's report: "it's not working"; Windows and the phone; decision 015). The fix was merged just before the v0.28.0 tag, so that tag already contains it; this is where it's described.
+
+- **Every Claude Code session shows**, whether it runs in the Claude app's Code tab, a terminal or an editor, including ones started before you connected. Before, idle Code tab sessions never showed. The card now also reads Claude Code's own list of running sessions. Needs you also catches permission dialogs (a new permission hook) and questions.
+- **Plan meters that actually fill: Settings → Claude → Sign in with Claude.** The Code tab never sends the plan's limits, and keeps Claude Code's sign-in where the widget can't use it, so the meters stayed empty. Widget Screen now has its own Claude sign-in in your browser. It can only read your profile and plan usage (no chats, no credits), is kept encrypted on this PC and renews itself. It checks your 5-hour and weekly limits every 5 minutes, whether or not Claude Code is open. When a check fails, the card keeps the numbers and says "Plan limits as of 10:42"; when the sign-in ends, it says so. Opus and Sonnet weekly limits show too when your plan has them. Your phone gets only the percentages.
+- **Live usage through Claude Code's own telemetry.** Connect (or **Update connection**, for a connection from v0.23–v0.27) turns on Claude Code's OpenTelemetry and sends it only to Widget Screen on this PC (127.0.0.1, port 43832, not reachable from the network). It never includes prompts, replies or tool details. Telemetry settings you already have are left alone. It reaches sessions started after you update.
+- **Usage per project and per session, with cost.** Tokens and what they'd cost at API prices ("≈ $"; your plan doesn't pay these), from Claude Code's logs plus telemetry, each reply counted once. A session that moves into a worktree stays under the folder it started in.
+- **Choose which projects show:** Settings → Claude → Projects has a tick per project (newest first, with when it was last used and this week's tokens and cost) and "Show new projects automatically". Unticked projects leave the card's sessions and usage on the PC and the phone. The plan meters always show your whole plan.
+- **Medium shows the plan and the projects together** (project rows beside the critters, plan meters below). Small shows the 5-hour percentage when there's room. The phone's card matches.
+- Verified on this PC, read-only: the hooks fire from Code tab sessions, and the new reader finds the three running desktop sessions with their states and this week's usage per project. Not yet tried: your own sign-in (it needs your browser and account), telemetry from a session restarted after Update connection, and the phone card on a device.
+
 ## v0.28.0 (1 Nov 2026)
 
 ### Added
