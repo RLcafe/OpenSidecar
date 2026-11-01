@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.22.0 (1 Nov 2026)
+
+A Notes and to-do widget (user request; Windows and the phone, the same designs on both):
+
+- **A scratchpad and a to-do list on the dashboard.** Type notes, add to-dos with Add (or Enter), tick them off, delete one, or clear all the done ones (it asks first). The heading counts what's left ("3 TO DO"). Turn it on in Edit layout; it starts hidden.
+- **Kept on the PC** in `notes.xml` next to your settings, saved a second after you stop typing and at once for list changes. Typing in the notes takes the keyboard like any text box on the dashboard.
+- **Edit from your phone too.** The phone shows the same notes and list and changes them on the PC; what you type on the phone stays on screen until the PC has it.
+- **Small, medium and large designs**: tabs for Notes and To-do on smaller cards, and both side by side on a large one.
+- Not yet tried on a phone or emulator.
+
 ## v0.21.0 (1 Nov 2026)
 
 A Prayer times widget (user request; Windows and the phone, the same designs on both):
