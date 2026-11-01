@@ -6,7 +6,6 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/github-ci` | GitHub remote (RLcafe/OpenSidecar), CI for the Windows and Android tests, GitHub steps in this process | b3c6e0c | In progress | `.worktrees\github-ci` | CI artifacts on GitHub |
 | `feature/sticker-defaults` | Sticker Sheet phase 2 (paused; checkpoint 00463a5 doesn't build yet) | b3c6e0c | In progress | `.worktrees\sticker-defaults` | `.worktrees\sticker-defaults\artifacts\app\WidgetScreen.exe` |
 | `fix/claude-review` | Claude watcher fixes for v0.35.1 (paused, no commits yet) | b3c6e0c | In progress | `.worktrees\claude-review` | `.worktrees\claude-review\artifacts\app\WidgetScreen.exe` |
 
