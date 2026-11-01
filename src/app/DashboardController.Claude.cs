@@ -76,6 +76,8 @@ namespace WidgetScreen
         {
             bool shown = Editor.IsVisible("Claude") && !Editor.Editing;
             if (claudeSample) { if (shown) claudeCard.Tick(ticks % 2 == 0, settings.QuietMode); pillCritter.Phase = ticks % 2 == 0 && !settings.QuietMode; return; }
+            // Renders never read this PC's sessions or logs, or ask for the plan's usage; they use the labelled sample.
+            if (Program.Rendering) return;
             if (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage) { if (claudeView != null && claudeView.NeedsYou > 0) { claudeView = null; UpdateClaudePill(); } return; }
             DateTime now = DateTime.UtcNow;
             bool changed = claude.ReadSessions(now, ticks % 5 == 0);

@@ -249,7 +249,7 @@ internal static class SmokeTests
                     Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
                     var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
                     var headers = tabs.Items.OfType<System.Windows.Controls.TabItem>().Select(t => (string)t.Header).ToList();
-                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Phone", "Discord" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
+                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
                     Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
                 }
                 window.Close();
