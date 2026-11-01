@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace WidgetScreen
 {
     // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3): Weather's 12-hour temperature
-    // curve with rain bars and its sunrise–sunset arc, Storage's jars, and World clocks' faces and 24-hour bands. Like StickerParts, they draw only when their data changes, never
+    // curve with rain bars and its sunrise–sunset arc, Storage's jars, World clocks' faces and 24-hour bands, and Prayer's sun path. Like StickerParts, they draw only when their data changes, never
     // animate and use no effects; brushes come from resources so palettes and inks apply live. The phone's
     // views/ReadingParts.java draws the same.
     public sealed class TemperatureCurve : FrameworkElement
@@ -292,6 +292,77 @@ namespace WidgetScreen
             foreach (int hour in new[] { 6, 12, 18 }) context.DrawLine(PartCache.Pen(Track, 1), new Point(w * hour / 24, top - 2), new Point(w * hour / 24, top));
             double x = Math.Max(1.5, Math.Min(w - 1.5, w * now));
             context.DrawLine(PartCache.Pen(Line, 2.5), new Point(x, 0), new Point(x, h));
+        }
+    }
+
+    // The day's sun path (Prayer): an arc from Fajr (left) to Isha (right) with each prayer placed by its time, sunrise
+    // as a short Lemon mark, the part of the day gone in the ink and the sun at now. Prayers gone are filled, the next
+    // one is larger, the rest are hollow.
+    public sealed class PrayerPath : FrameworkElement
+    {
+        public static readonly DependencyProperty InkProperty = DependencyProperty.Register("Ink", typeof(Brush), typeof(PrayerPath), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty TrackProperty = DependencyProperty.Register("Track", typeof(Brush), typeof(PrayerPath), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty KeylineProperty = DependencyProperty.Register("Keyline", typeof(Brush), typeof(PrayerPath), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty SunProperty = DependencyProperty.Register("Sun", typeof(Brush), typeof(PrayerPath), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public static readonly DependencyProperty FaceProperty = DependencyProperty.Register("Face", typeof(Brush), typeof(PrayerPath), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        public Brush Ink { get { return (Brush)GetValue(InkProperty); } set { SetValue(InkProperty, value); } }
+        public Brush Track { get { return (Brush)GetValue(TrackProperty); } set { SetValue(TrackProperty, value); } }
+        public Brush Keyline { get { return (Brush)GetValue(KeylineProperty); } set { SetValue(KeylineProperty, value); } }
+        public Brush Sun { get { return (Brush)GetValue(SunProperty); } set { SetValue(SunProperty, value); } }
+        public Brush Face { get { return (Brush)GetValue(FaceProperty); } set { SetValue(FaceProperty, value); } }
+        private double[] parts = new double[0];
+        private double sunrise = Double.NaN, now = Double.NaN;
+        private int next = -1;
+        private static Pen dashed;
+        public int Points { get { return parts.Length; } }
+        public double NowPart { get { return now; } }
+
+        public PrayerPath()
+        {
+            IsHitTestVisible = false;
+            SetResourceReference(InkProperty, Stickers.InkKey("Prayer")); SetResourceReference(TrackProperty, "Muted"); SetResourceReference(KeylineProperty, "Text");
+            SetResourceReference(SunProperty, "InkLemon"); SetResourceReference(FaceProperty, "Surface");
+        }
+        // The prayers' places (PrayerService.PathPart), sunrise's, now's, and which prayer is next (-1 for none today).
+        public void Show(double[] parts, double sunrise, double now, int next)
+        {
+            this.parts = parts ?? new double[0]; this.sunrise = sunrise; this.now = now; this.next = next;
+            InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext context)
+        {
+            if (parts.Length == 0 || ActualWidth < 60 || ActualHeight < 28) return;
+            double r = Math.Min(ActualWidth / 2 - 10, ActualHeight - 12); if (r < 16) return;
+            var c = new Point(ActualWidth / 2, ActualHeight - 6);
+            if (dashed == null || dashed.Brush != Track) { dashed = new Pen(Track, 2) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) }; dashed.Freeze(); }
+            context.DrawLine(PartCache.Pen(Track, 1.5), new Point(c.X - r - 8, c.Y), new Point(c.X + r + 8, c.Y));
+            context.DrawGeometry(null, dashed, PartCache.Get("prayerarc" + Math.Round(r) + "x" + Math.Round(c.X) + "y" + Math.Round(c.Y), () => Arc(c, r, 1)));
+            if (!Double.IsNaN(now) && now > 0.01) { var lit = Arc(c, r, Math.Min(1, now)); lit.Freeze(); context.DrawGeometry(null, PartCache.Pen(Ink, 3), lit); }
+            if (!Double.IsNaN(sunrise) && sunrise > 0 && sunrise < 1)
+            {
+                var outer = SunArc.Place(c, r + 7, sunrise); var inner = SunArc.Place(c, r - 7, sunrise);
+                context.DrawLine(PartCache.Pen(Sun, 3), inner, outer);
+            }
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (Double.IsNaN(parts[i])) continue;
+                var at = SunArc.Place(c, r, parts[i]);
+                if (i == next) context.DrawEllipse(Ink, PartCache.Pen(Keyline, 2.5), at, 8, 8);
+                else if (!Double.IsNaN(now) && parts[i] <= now) context.DrawEllipse(Ink, PartCache.Pen(Keyline, 1.5), at, 5, 5);
+                else context.DrawEllipse(Face, PartCache.Pen(Track, 2), at, 5, 5);
+            }
+            if (!Double.IsNaN(now) && now >= 0 && now <= 1) context.DrawEllipse(Sun, PartCache.Pen(Keyline, 2), SunArc.Place(c, r, now), 5.5, 5.5);
+        }
+        private static Geometry Arc(Point c, double r, double part)
+        {
+            var geometry = new StreamGeometry();
+            using (var figure = geometry.Open())
+            {
+                figure.BeginFigure(SunArc.Place(c, r, 0), false, false);
+                figure.ArcTo(SunArc.Place(c, r, part), new Size(r, r), 0, false, SweepDirection.Clockwise, true, false);
+            }
+            return geometry;
         }
     }
 }

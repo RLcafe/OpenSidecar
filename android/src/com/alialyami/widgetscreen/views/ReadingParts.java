@@ -14,7 +14,7 @@ import com.alialyami.widgetscreen.core.Weather;
 
 // Drawn parts of the Sticker Sheet's readings (docs/design/sticker-sheet.md, phase 3), the same as the PC's
 // ReadingParts.cs: Weather's 12-hour temperature curve over rain bars and its sunrise–sunset arc, Storage's jars, and
-// World clocks' faces and 24-hour bands. Paints are made with
+// World clocks' faces and 24-hour bands, and Prayer's sun path. Paints are made with
 // the view and paths when the data or size changes; onDraw allocates nothing.
 public final class ReadingParts {
     private ReadingParts() { }
@@ -285,6 +285,58 @@ public final class ReadingParts {
             for (int hour : new int[] { 6, 12, 18 }) canvas.drawLine(getWidth() * hour / 24f, bar.top - ui.fpx(2), getWidth() * hour / 24f, bar.top, tick);
             float x = Math.max(ui.fpx(1.5), Math.min(getWidth() - ui.fpx(1.5), (float) (getWidth() * now)));
             canvas.drawLine(x, 0, x, getHeight(), line);
+        }
+    }
+
+    // The day's sun path (Prayer): an arc from Fajr (left) to Isha (right) with each prayer placed by its time, sunrise
+    // as a short Lemon mark, the part of the day gone in the ink and the sun at now. Prayers gone are filled, the next
+    // one is larger, the rest are hollow.
+    public static final class PrayerPath extends View {
+        private final Ui ui;
+        private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG), horizon = new Paint(Paint.ANTI_ALIAS_FLAG), lit = new Paint(Paint.ANTI_ALIAS_FLAG), dot = new Paint(Paint.ANTI_ALIAS_FLAG),
+            keyline = new Paint(Paint.ANTI_ALIAS_FLAG), hollow = new Paint(Paint.ANTI_ALIAS_FLAG), face = new Paint(Paint.ANTI_ALIAS_FLAG), sun = new Paint(Paint.ANTI_ALIAS_FLAG), mark = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF oval = new RectF();
+        private double[] parts = new double[0];
+        private double sunrise = Double.NaN, now = Double.NaN;
+        private int next = -1;
+        private float cx, cy, r;
+
+        public PrayerPath(Ui ui, int inkColour) {
+            super(ui.context);
+            this.ui = ui;
+            track.setStyle(Paint.Style.STROKE); track.setStrokeWidth(ui.fpx(2)); track.setColor(ui.theme.muted); track.setPathEffect(new DashPathEffect(new float[] { ui.fpx(2), ui.fpx(2) }, 0));
+            horizon.setStyle(Paint.Style.STROKE); horizon.setStrokeWidth(ui.fpx(1.5)); horizon.setColor(ui.theme.muted);
+            lit.setStyle(Paint.Style.STROKE); lit.setStrokeWidth(ui.fpx(3)); lit.setStrokeCap(Paint.Cap.ROUND); lit.setColor(inkColour);
+            dot.setColor(inkColour); keyline.setStyle(Paint.Style.STROKE); keyline.setColor(ui.theme.text);
+            hollow.setStyle(Paint.Style.STROKE); hollow.setStrokeWidth(ui.fpx(2)); hollow.setColor(ui.theme.muted); face.setColor(ui.theme.surface);
+            sun.setColor(Theme.ink("Lemon")); mark.setStyle(Paint.Style.STROKE); mark.setStrokeWidth(ui.fpx(3)); mark.setColor(Theme.ink("Lemon"));
+        }
+        // The prayers' places (PrayerText.pathPart), sunrise's, now's, and which prayer is next (-1 for none today).
+        public void show(double[] parts, double sunrise, double now, int next) { this.parts = parts; this.sunrise = sunrise; this.now = now; this.next = next; invalidate(); }
+        public int points() { return parts.length; }
+        public double nowPart() { return now; }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            r = Math.min(w / 2f - ui.fpx(10), h - ui.fpx(12)); cx = w / 2f; cy = h - ui.fpx(6);
+            oval.set(cx - r, cy - r, cx + r, cy + r);
+        }
+        private float x(double part, float radius) { return cx - radius * (float) Math.cos(Math.PI * Math.max(0, Math.min(1, part))); }
+        private float y(double part, float radius) { return cy - radius * (float) Math.sin(Math.PI * Math.max(0, Math.min(1, part))); }
+
+        @Override protected void onDraw(Canvas canvas) {
+            if (parts.length == 0 || r < ui.fpx(16)) return;
+            canvas.drawLine(cx - r - ui.fpx(8), cy, cx + r + ui.fpx(8), cy, horizon);
+            canvas.drawArc(oval, 180, 180, false, track);
+            if (!Double.isNaN(now) && now > 0.01) canvas.drawArc(oval, 180, 180 * (float) Math.min(1, now), false, lit);
+            if (!Double.isNaN(sunrise) && sunrise > 0 && sunrise < 1) canvas.drawLine(x(sunrise, r - ui.fpx(7)), y(sunrise, r - ui.fpx(7)), x(sunrise, r + ui.fpx(7)), y(sunrise, r + ui.fpx(7)), mark);
+            for (int i = 0; i < parts.length; i++) {
+                if (Double.isNaN(parts[i])) continue;
+                float px = x(parts[i], r), py = y(parts[i], r);
+                if (i == next) { keyline.setStrokeWidth(ui.fpx(2.5)); canvas.drawCircle(px, py, ui.fpx(8), dot); canvas.drawCircle(px, py, ui.fpx(8), keyline); }
+                else if (!Double.isNaN(now) && parts[i] <= now) { keyline.setStrokeWidth(ui.fpx(1.5)); canvas.drawCircle(px, py, ui.fpx(5), dot); canvas.drawCircle(px, py, ui.fpx(5), keyline); }
+                else { canvas.drawCircle(px, py, ui.fpx(5), face); canvas.drawCircle(px, py, ui.fpx(5), hollow); }
+            }
+            if (!Double.isNaN(now) && now >= 0 && now <= 1) { keyline.setStrokeWidth(ui.fpx(2)); canvas.drawCircle(x(now, r), y(now, r), ui.fpx(5.5), sun); canvas.drawCircle(x(now, r), y(now, r), ui.fpx(5.5), keyline); }
         }
     }
 }

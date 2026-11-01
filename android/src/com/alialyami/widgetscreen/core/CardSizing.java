@@ -215,6 +215,14 @@ public final class CardSizing {
     public static double clockTileFace(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min((tileWidth - 32) * 0.34, (tileHeight - 32) * 0.3)), 40, 96); }
     public static double clockStackedFace(double tileHeight) { return clamp(Math.floor(tileHeight - 20 - 4 - (clockStackedBand(tileHeight) ? 24 : 0)), 28, 64); }
     public static boolean clockStackedBand(double tileHeight) { return tileHeight >= 110; }
+    // Prayer (Sticker Sheet phase 3): the room a Medium next-prayer column leaves under its countdown for the sun path
+    // (it shows from 44 units, else a progress line), whether a Large list has room for sunrise, and the Large top row.
+    public static final double PRAYER_PATH_MINIMUM = 44;
+    public static double prayerPathRoom(double height, double timeSize) { return Math.floor(height - 22 - Math.round(timeSize * 1.12) - 4 - 20 - 10); }
+    public static boolean prayerSunriseRow(double listHeight) { return listHeight / 6 >= 22; }
+    // Large has room for the chips from a 301-unit body (the list keeps 20 units a row under them).
+    public static boolean prayerChips(double height) { return height >= 301; }
+    public static double prayerPathTop(double height, boolean across) { return across ? clamp(height - 120, 120, 240) : clamp(Math.round(height * 0.36), 120, 200); }
     public static double jarLevel(double used) { double v = Math.max(0, Math.min(100, Double.isNaN(used) ? 0 : used)) / 100; return v > 0 && v < 0.03 ? 0.03 : v; }
 
     // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference

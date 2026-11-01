@@ -6,10 +6,12 @@ using System.Windows.Controls;
 
 namespace WidgetScreen
 {
-    // Prayer times in three designs that follow the card's size (CardSizing.Prayer; docs/design/prayer-times.md).
-    // Small is the next prayer with its countdown; Medium puts it beside today's five times; Large adds the progress
-    // since the last prayer, sunrise and the Hijri date, with the times as tiles across a wide card. The phone's
-    // PrayerWidget.java draws the same three.
+    // Prayer times in three designs that follow the card's size (CardSizing.Prayer; docs/design/prayer-times.md),
+    // with the day's sun path (Sticker Sheet phase 3, docs/design/sticker-sheet.md): an arc from Fajr to Isha with each
+    // prayer placed by its time and the sun at now. Small is the next prayer with its countdown; Medium puts it (over the
+    // sun path when there's room, else a progress line) beside today's five times; Large sets the sun path beside the
+    // next prayer, Hijri, Method and Alert chips under them, and today's times (with sunrise when there's room) as rows,
+    // or as tiles across a wide card. The phone's PrayerWidget.java draws the same three.
     public sealed class PrayerCard : CardParts
     {
         private readonly Grid host;
@@ -19,8 +21,10 @@ namespace WidgetScreen
         private string built = "", rendered = "";
         private CardSizing.Design design;
         private bool use24, located;
-        private TextBlock nextName, nextTime, countdown, hijri;
+        private string alert = "Off";
+        private TextBlock nextName, nextTime, countdown, hijri, method, alertChip;
         private MeterBar progress;
+        private PrayerPath path;
         private readonly List<TextBlock[]> rows = new List<TextBlock[]>();
 
         public PrayerCard(FrameworkElement scope, Grid host, TextBlock status) { this.host = host; this.status = status; names = new PartNames(scope); }
@@ -28,7 +32,8 @@ namespace WidgetScreen
         public CardSizing.Design Current { get { return design; } }
 
         public void Fit(Rect card) { bounds = card; Rebuild(); }
-        public void Configure(bool located, bool use24) { this.located = located; this.use24 = use24; rendered = ""; Rebuild(); }
+        // Whether there's a city, the clock's choice, and the alert chip's words (PrayerService.AlertText).
+        public void Configure(bool located, bool use24, string alert = "Off") { this.located = located; this.use24 = use24; this.alert = alert ?? "Off"; rendered = ""; Rebuild(); }
 
         private void Rebuild()
         {
@@ -40,7 +45,7 @@ namespace WidgetScreen
         private void Build()
         {
             host.Children.Clear(); names.Clear(); rows.Clear();
-            nextName = nextTime = countdown = hijri = null; progress = null;
+            nextName = nextTime = countdown = hijri = method = alertChip = null; progress = null; path = null;
             // The body: the card less its 24-unit padding, the 28-unit heading and the 8-unit gap under it.
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48 - 36);
             design = CardSizing.Prayer(bounds.Width, bounds.Height);
@@ -62,10 +67,17 @@ namespace WidgetScreen
             else
             {
                 bool across = CardSizing.PrayerTilesAcross(width);
-                double top = CardSizing.PrayerLargeTop(height, across);
-                var grid = Rows(new GridLength(top), new GridLength(16), Star);
-                grid.Children.Add(Next(width, top, CardSizing.PrayerTime(width * 0.6, top), true));
-                grid.Children.Add(At(across ? Tiles(width) : List(height - top - 16, true), 2));
+                bool rail = CardSizing.PrayerChips(height);
+                double chips = rail ? 57 + 12 : 0, top = CardSizing.PrayerPathTop(height - chips, across);
+                var grid = Rows(new GridLength(top), new GridLength(12), Auto, new GridLength(12), Star);
+                var upper = Columns(Star, Star);
+                upper.Children.Add(Next(width / 2, top, CardSizing.PrayerTime(width * 0.46, top), false));
+                path = names.Add(new PrayerPath { Height = Math.Min(top, Math.Round(width / 4 + 12)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) }, "PrayerPath");
+                upper.Children.Add(At(path, 0, 1));
+                grid.Children.Add(upper);
+                if (rail) grid.Children.Add(At(Chips(), 2));
+                double rest = height - top - chips - 12;
+                grid.Children.Add(At(across ? Tiles(width) : List(rest, CardSizing.PrayerSunriseRow(rest)), 4));
                 view = grid;
             }
             host.Children.Add(names.Add(view, "PrayerView"));
@@ -87,10 +99,36 @@ namespace WidgetScreen
                 panel.Children.Add(top); panel.Children.Add(nextTime);
                 return panel;
             }
+            // Medium: the sun path under the countdown when it has room (taking what the text leaves, so larger text
+            // shrinks it), or else a progress line.
+            double room = CardSizing.PrayerPathRoom(height, size);
+            if (line && room >= CardSizing.PrayerPathMinimum)
+            {
+                var stack = Rows(Auto, Auto, Auto, Star); stack.MaxHeight = height;
+                stack.Children.Add(nextName); stack.Children.Add(At(nextTime, 1)); stack.Children.Add(At(countdown, 2));
+                path = names.Add(new PrayerPath { MaxHeight = 80, Margin = new Thickness(0, 10, 0, 0), VerticalAlignment = VerticalAlignment.Top }, "PrayerPath");
+                stack.Children.Add(At(path, 3));
+                return stack;
+            }
             panel.Children.Add(nextName); panel.Children.Add(nextTime); panel.Children.Add(countdown);
             if (line && height >= 150) { progress = Bar(); progress.Margin = new Thickness(0, 12, 0, 0); progress.Height = 6; panel.Children.Add(progress); }
-            if (design == CardSizing.Design.Large) { hijri = names.Add(Caption(""), "PrayerHijri"); hijri.Margin = new Thickness(0, 10, 0, 0); panel.Children.Add(hijri); }
             return panel;
+        }
+
+        // Large: Hijri, Method and Alert as fact-rail chips.
+        private FrameworkElement Chips()
+        {
+            var rail = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Columns = 3 };
+            string[] captions = { "Hijri", "Method", "Alert" };
+            for (int i = 0; i < 3; i++)
+            {
+                TextBlock value;
+                var chip = Stickers.FactChip(captions[i], "", out value);
+                chip.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == 2 ? 0 : 4, 0);
+                if (i == 0) hijri = names.Add(value, "PrayerHijri"); else if (i == 1) method = names.Add(value, "PrayerMethod"); else alertChip = names.Add(value, "PrayerAlertChip");
+                rail.Children.Add(chip);
+            }
+            return names.Add(rail, "PrayerChips");
         }
         private static MeterBar Bar() { var bar = new MeterBar(); bar.SetResourceReference(MeterBar.TrackProperty, "Track"); bar.SetResourceReference(MeterBar.FillProperty, "Accent"); return bar; }
 
@@ -154,7 +192,14 @@ namespace WidgetScreen
             nextTime.Text = PrayerService.Time(next.At.ToLocalTime(), use24);
             countdown.Text = left;
             if (progress != null) progress.Value = 100 * Math.Max(0, Math.Min(1, (utcNow - next.Previous).TotalMinutes / Math.Max(1, (next.At - next.Previous).TotalMinutes)));
-            if (hijri != null) hijri.Text = PrayerService.Hijri(localNow.Date) + "  ·  " + PrayerService.Method(schedule.MethodId).Name;
+            if (hijri != null) { hijri.Text = PrayerService.Hijri(localNow.Date); method.Text = PrayerService.MethodShort(PrayerService.Method(schedule.MethodId).Name); alertChip.Text = alert; }
+            if (path != null)
+            {
+                DateTime fajr = today.Prayers[0], isha = today.Prayers[4];
+                var parts = today.Prayers.Select(t => PrayerService.PathPart(t, fajr, isha)).ToArray();
+                int nextToday = Array.IndexOf(today.Prayers, next.At);
+                path.Show(parts, PrayerService.PathPart(today.Sunrise, fajr, isha), PrayerService.PathPart(utcNow, fajr, isha), nextToday);
+            }
             // Rows: Fajr, (Sunrise), Dhuhr, Asr, Maghrib, Isha; the next one in the accent, past ones muted.
             var entries = new List<Tuple<string, DateTime, int>>();
             for (int i = 0; i < 5; i++)

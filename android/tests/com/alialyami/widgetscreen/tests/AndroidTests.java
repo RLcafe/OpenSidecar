@@ -974,6 +974,21 @@ public final class AndroidTests {
             ok(WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 12, 0)) == 0.5 && WorldClockText.dayFraction(LocalDateTime.of(2026, 11, 1, 18, 0)) == 0.75, "day fraction");
             ok(CardSizing.clockListFace(300, 40) == 34 && CardSizing.clockListFace(240, 60) == 0 && CardSizing.clockFace(140, 166) == 42 && CardSizing.clockTileFace(220, 300) == 64 && CardSizing.clockStackedBand(120) && !CardSizing.clockStackedBand(90) && CardSizing.clockColumnFaces(166) && !CardSizing.clockColumnFaces(116), "face sizes");
         } });
+        check("Prayer: the sun path places prayers by time, the chips and the alert words match the PC", new Action() { public void run() {
+            double fajr = 1793583660000.0, isha = fajr + 14 * 3600000.0;
+            ok(PrayerText.pathPart(fajr, fajr, isha) == 0 && PrayerText.pathPart(isha, fajr, isha) == 1 && PrayerText.pathPart(fajr + 7 * 3600000.0, fajr, isha) == 0.5 && PrayerText.pathPart(fajr - 3600000.0, fajr, isha) < 0 && Double.isNaN(PrayerText.pathPart(fajr, isha, fajr)), "path parts");
+            ok(PrayerText.methodShort("Umm al-Qura, Makkah").equals("Umm al-Qura") && PrayerText.methodShort("Muslim World League").equals("Muslim World League") && PrayerText.methodShort(null).isEmpty(), "method names");
+            ok(CardSizing.prayerPathRoom(166, 47) == 57 && CardSizing.prayerSunriseRow(132) && !CardSizing.prayerSunriseRow(120) && CardSizing.prayerPathTop(267, false) == 120 && CardSizing.prayerPathTop(500, false) == 180, "prayer sizes");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"prayer\":{\"located\":true,\"alert\":\"Chime\",\"nextAt\":1,\"times\":[1,2,3,4,5]}}")));
+            ok(state.prayer != null && state.prayer.alert.equals("Chime"), "alert words from the PC");
+            String path = System.getProperty("widgetscreen.sample");
+            if (path != null && new File(path).exists()) {
+                try {
+                    PcState sample = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(new File(path).toPath()), StandardCharsets.UTF_8))));
+                    ok(sample.prayer == null || !sample.prayer.located || sample.prayer.alert.length() > 0, "sample alert");
+                } catch (java.io.IOException e) { throw new AssertionError(e.toString()); }
+            }
+        } });
         System.out.println(passes + " passed, " + failures + " failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

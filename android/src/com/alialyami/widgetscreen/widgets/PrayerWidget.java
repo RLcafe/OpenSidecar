@@ -15,18 +15,22 @@ import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.PrayerText;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.views.ProgressLine;
+import com.alialyami.widgetscreen.views.ReadingParts;
 
 import java.util.ArrayList;
 import java.util.List;
 
 // The PC's prayer times, in the same three designs as the Windows PrayerCard (CardSizing.prayer;
-// docs/design/prayer-times.md): the next prayer with its countdown; beside today's five times; and with its progress,
-// sunrise and the Hijri date over rows or tiles. The PC works the times out and plays the alert; while it plays, the
-// card offers Stop. The city, method and alert are set on the PC (Settings → Prayer).
+// docs/design/prayer-times.md), with the day's sun path (Sticker Sheet phase 3, docs/design/sticker-sheet.md): an arc
+// from Fajr to Isha with each prayer placed by its time and the sun at now. The next prayer with its countdown; beside
+// today's five times (over the sun path when there's room, else a progress line); and on Large beside the sun path,
+// with Hijri, Method and Alert chips over rows or tiles. The PC works the times out and plays the alert; while it
+// plays, the card offers Stop. The city, method and alert are set on the PC (Settings → Prayer).
 public final class PrayerWidget extends Widget {
     private Stickers.Sticker status;
-    private TextView nextName, nextTime, countdown, hijri;
+    private TextView nextName, nextTime, countdown, hijri, method, alert;
     private ProgressLine progress;
+    private ReadingParts.PrayerPath path;
     private View stop;
     private final List<TextView[]> rows = new ArrayList<TextView[]>();
     private String builtFor = "", rendered = "";
@@ -42,7 +46,7 @@ public final class PrayerWidget extends Widget {
     @Override protected View create() {
         PcState.Prayer p = prayer();
         builtFor = shape(p); rendered = "";
-        rows.clear(); nextName = nextTime = countdown = hijri = null; progress = null;
+        rows.clear(); nextName = nextTime = countdown = hijri = method = alert = null; progress = null; path = null;
         design = CardSizing.prayer(width, height);
 
         LinearLayout column = ui.column();
@@ -61,17 +65,21 @@ public final class PrayerWidget extends Widget {
         else if (design == CardSizing.MEDIUM) {
             LinearLayout row = ui.row();
             double left = CardSizing.prayerNextColumn(bodyWidth);
-            row.addView(next(bodyHeight, CardSizing.prayerTime(left, bodyHeight), true), ui.ll(ui.px(left), Ui.WRAP));
+            row.addView(next(bodyHeight, CardSizing.prayerTime(left, bodyHeight), true), ui.ll(ui.px(left), Ui.MATCH));
             row.addView(list(bodyHeight, false), ui.margins(ui.ll(0, Ui.WRAP, 1), 20, 0, 0, 0));
             body = row;
         } else {
             boolean across = CardSizing.prayerTilesAcross(bodyWidth);
-            double top = CardSizing.prayerLargeTop(bodyHeight, across);
+            boolean rail = CardSizing.prayerChips(bodyHeight);
+            double chips = rail ? 57 + 12 : 0, top = CardSizing.prayerPathTop(bodyHeight - chips, across), rest = bodyHeight - top - chips - 12;
             LinearLayout stack = ui.column();
-            FrameLayout topBox = new FrameLayout(ui.context);
-            topBox.addView(next(top, CardSizing.prayerTime(bodyWidth * 0.6, top), true), ui.frame(Ui.MATCH, Ui.WRAP, Gravity.CENTER_VERTICAL));
-            stack.addView(topBox, ui.ll(Ui.MATCH, ui.px(top)));
-            stack.addView(across ? tiles(bodyWidth) : list(bodyHeight - top - 16, true), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 16, 0, 0));
+            LinearLayout upper = ui.row(); upper.setGravity(Gravity.CENTER_VERTICAL);
+            upper.addView(next(top, CardSizing.prayerTime(bodyWidth * 0.46, top), false), ui.ll(0, Ui.WRAP, 1));
+            path = new ReadingParts.PrayerPath(ui, dash.ink(id));
+            upper.addView(path, ui.margins(ui.ll(0, ui.px(Math.min(top, Math.round(bodyWidth / 4 + 12))), 1), 12, 0, 0, 0));
+            stack.addView(upper, ui.ll(Ui.MATCH, ui.px(top)));
+            if (rail) stack.addView(chips(), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
+            stack.addView(across ? tiles(bodyWidth) : list(rest, CardSizing.prayerSunriseRow(rest)), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 12, 0, 0));
             body = stack;
         }
         FrameLayout content = new FrameLayout(ui.context);
@@ -104,9 +112,32 @@ public final class PrayerWidget extends Widget {
         panel.addView(nextName, ui.ll(Ui.MATCH, Ui.WRAP));
         panel.addView(nextTime, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 2, 0, 2));
         panel.addView(countdown, ui.ll(Ui.MATCH, Ui.WRAP));
-        if (line && height >= 150) { progress = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track); panel.addView(progress, ui.margins(ui.ll(Ui.MATCH, ui.px(6)), 0, 12, 0, 0)); }
-        if (design == CardSizing.LARGE) { hijri = ui.caption(""); panel.addView(hijri, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0)); }
+        // Medium: the sun path under the countdown when it has room, or else a progress line.
+        double room = CardSizing.prayerPathRoom(height, size);
+        // The path takes what the text leaves, so larger text shrinks it.
+        if (line && room >= CardSizing.PRAYER_PATH_MINIMUM) {
+            panel.setGravity(Gravity.TOP);
+            path = new ReadingParts.PrayerPath(ui, dash.ink(id));
+            FrameLayout holder = new FrameLayout(ui.context);
+            holder.addView(path, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+            panel.addView(holder, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 10, 0, 0));
+        }
+        else if (line && height >= 150) { progress = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track); panel.addView(progress, ui.margins(ui.ll(Ui.MATCH, ui.px(6)), 0, 12, 0, 0)); }
         return panel;
+    }
+
+    // Large: Hijri, Method and Alert as fact-rail chips.
+    private View chips() {
+        LinearLayout rail = ui.row();
+        String[] captions = { "Hijri", "Method", "Alert" };
+        for (int i = 0; i < 3; i++) {
+            LinearLayout chip = Stickers.factChip(ui, captions[i], "");
+            TextView value = (TextView) chip.getChildAt(1);
+            value.setSingleLine(true); value.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            if (i == 0) hijri = value; else if (i == 1) method = value; else alert = value;
+            rail.addView(chip, ui.margins(ui.ll(0, Ui.WRAP, 1), i == 0 ? 0 : 4, 0, i == 2 ? 0 : 4, 0));
+        }
+        return rail;
     }
 
     // Today's times as rows; Large adds sunrise and spreads them over its room.
@@ -170,7 +201,12 @@ public final class PrayerWidget extends Widget {
         nextTime.setText(PrayerText.time(p.nextAt, p.pcOffset, use24));
         countdown.setText(left);
         if (progress != null) progress.setValue(PrayerText.progress(now, p.previousAt, p.nextAt));
-        if (hijri != null) hijri.setText(p.hijri + "  ·  " + p.method);
+        if (hijri != null) { hijri.setText(p.hijri); method.setText(PrayerText.methodShort(p.method)); alert.setText(p.alert); }
+        if (path != null) {
+            double[] parts = new double[5]; int nextToday = -1;
+            for (int i = 0; i < 5; i++) { parts[i] = PrayerText.pathPart(p.times[i], p.times[0], p.times[4]); if (p.times[i] == p.nextAt) nextToday = i; }
+            path.show(parts, PrayerText.pathPart(p.sunrise, p.times[0], p.times[4]), PrayerText.pathPart(now, p.times[0], p.times[4]), nextToday);
+        }
         int r = 0;
         for (int i = 0; i < 5 && r < rows.size(); i++) {
             fill(rows.get(r++), PrayerText.name(i), p.times[i], p, i, now, started, use24);

@@ -61,7 +61,7 @@ namespace WidgetScreen
             if (next == null || !next.Same(prayerSchedule)) prayerSchedule = next;
             // Changing the city or method never sounds an alert for a prayer that has already begun.
             if (prayerSchedule != null) prayerAlerted = prayerSchedule.Next(DateTime.UtcNow, TimeZoneInfo.Local).Previous;
-            prayerCard.Configure(prayerSchedule != null, settings.Use24HourClock);
+            prayerCard.Configure(prayerSchedule != null, settings.Use24HourClock, PrayerService.AlertText(settings.PrayerAlert, settings.PrayerSound));
             RenderPrayer();
         }
 
@@ -157,7 +157,7 @@ namespace WidgetScreen
             var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.Local);
             var today = prayerSchedule.Day(localNow.Date);
             return D("located", true, "city", prayerSchedule.City, "method", PrayerService.Method(prayerSchedule.MethodId).Name, "hijri", PrayerService.Hijri(localNow.Date),
-                "pcOffset", (int)Math.Round(TimeZoneInfo.Local.GetUtcOffset(now).TotalMinutes), "alerting", prayerAlert.Playing,
+                "pcOffset", (int)Math.Round(TimeZoneInfo.Local.GetUtcOffset(now).TotalMinutes), "alerting", prayerAlert.Playing, "alert", PrayerService.AlertText(settings.PrayerAlert, settings.PrayerSound),
                 "next", next.Index, "nextAt", Epoch(next.At), "previousAt", Epoch(next.Previous), "current", next.CurrentIndex, "sunrise", Epoch(today.Sunrise),
                 "times", today.Prayers.Select(t => (object)Epoch(t)).ToArray());
         }

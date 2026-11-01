@@ -219,5 +219,43 @@ internal static class ReadingsTests
                     finally { window.Close(); }
                 }
         });
+        check("Prayer: the sun path places prayers by time, and the chips read the same on both apps", () => {
+            var fajr = new DateTime(2026, 11, 1, 1, 41, 0, DateTimeKind.Utc); var isha = new DateTime(2026, 11, 1, 15, 41, 0, DateTimeKind.Utc);
+            Assert(PrayerService.PathPart(fajr, fajr, isha) == 0 && PrayerService.PathPart(isha, fajr, isha) == 1 && PrayerService.PathPart(fajr.AddHours(7), fajr, isha) == 0.5 && PrayerService.PathPart(fajr.AddHours(-1), fajr, isha) < 0 && Double.IsNaN(PrayerService.PathPart(fajr, isha, fajr)), "Path parts.");
+            Assert(PrayerService.AlertText(false, "x.mp3") == "Off" && PrayerService.AlertText(true, "") == "Chime" && PrayerService.AlertText(true, @"C:\a.mp3") == "Your sound", "Alert words.");
+            Assert(PrayerService.MethodShort("Umm al-Qura, Makkah") == "Umm al-Qura" && PrayerService.MethodShort("Muslim World League") == "Muslim World League" && PrayerService.MethodShort(null) == "", "Method names.");
+            Assert(CardSizing.PrayerPathRoom(166, 47) == 57 && CardSizing.PrayerSunriseRow(132) && !CardSizing.PrayerSunriseRow(120) && CardSizing.PrayerPathTop(267, false) == 120 && CardSizing.PrayerPathTop(500, false) == 180, "Prayer sizes " + CardSizing.PrayerPathRoom(166, 47));
+        });
+        check("Prayer: the sun path, chips and times fit their card at every design at 100% and 140%", () => {
+            foreach (double scale in new[] { 1.0, 1.4 })
+                foreach (var size in new[] { new Size(300, 180), new Size(456, 280), new Size(472, 250), new Size(440, 360), new Size(560, 420), new Size(900, 460), new Size(440, 576) })
+                {
+                    var settings = Alone("Prayer", size, scale);
+                    settings.PrayerLocation = "Riyadh, Riyadh Region, Saudi Arabia"; settings.PrayerLatitude = 24.6877; settings.PrayerLongitude = 46.7219; settings.PrayerMethod = "Makkah"; settings.PrayerAlert = true;
+                    string path = Path.Combine(directory, "prayer-readings.xml"); SettingsStore.Save(path, settings);
+                    var window = Window();
+                    try
+                    {
+                        using (var controller = new DashboardController(window, path, true))
+                        {
+                            Lay(window);
+                            controller.PrayerView.Render(controller.Prayer, DateTime.UtcNow, false);
+                            Lay(window);
+                            var card = (FrameworkElement)window.FindName("PrayerCard"); var design = CardSizing.Prayer(size.Width, size.Height);
+                            var sunPath = Descendants(card).OfType<PrayerPath>().FirstOrDefault(p => Shown(p, card));
+                            if (design == CardSizing.Design.Large)
+                            {
+                                Assert(sunPath != null && sunPath.Points == 5, "No sun path on Large at " + size + ".");
+                                if (CardSizing.PrayerChips(size.Height - 84))
+                                Assert(((TextBlock)window.FindName("PrayerAlertChip")).Text == "Chime" && ((TextBlock)window.FindName("PrayerMethod")).Text.Length > 0 && ((TextBlock)window.FindName("PrayerHijri")).Text.Length > 0, "Large chips are empty at " + size + ".");
+                            }
+                            else if (design == CardSizing.Design.Small) Assert(sunPath == null, "Small has a sun path.");
+                            foreach (var part in Descendants(card).OfType<FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is TextBlock || e is PrayerPath)))
+                                Inside(part, card, "Prayer " + part.GetType().Name + " at " + size + " and " + scale * 100 + "%");
+                        }
+                    }
+                    finally { window.Close(); }
+                }
+        });
     }
 }

@@ -236,6 +236,15 @@ namespace WidgetScreen
         public static double PrayerNextColumn(double width) { return Math.Floor(width * 0.46); }
         public static bool PrayerTilesAcross(double width) { return width >= 860; }
         public static double PrayerLargeTop(double height, bool across) { return across ? Clamp(height - 120, 140, 260) : Clamp(Math.Round(height * 0.38), 140, 220); }
+        // Sticker Sheet phase 3: the room a Medium next-prayer column leaves under its countdown for the sun path (it
+        // shows from 44 units, else a progress line), and whether a Large list has room for sunrise (22 units a row).
+        public const double PrayerPathMinimum = 44;
+        public static double PrayerPathRoom(double height, double timeSize) { return Math.Floor(height - 22 - Math.Round(timeSize * 1.12) - 4 - 20 - 10); }
+        public static bool PrayerSunriseRow(double listHeight) { return listHeight / 6 >= 22; }
+        // The Large top row (the next prayer beside the sun path) for the room left after the chips.
+        // Large has room for the chips from a 301-unit body (the list keeps 20 units a row under them).
+        public static bool PrayerChips(double height) { return height >= 301; }
+        public static double PrayerPathTop(double height, bool across) { return across ? Clamp(height - 120, 120, 240) : Clamp(Math.Round(height * 0.36), 120, 200); }
         public static double PrayerTileTime(double tileWidth, bool use24) { return Clamp(Math.Round((tileWidth - 24) / (use24 ? 2.7 : 3.9)), 18, 34); }
         // Notes and to-do (docs/design/notes.md): the scratchpad or the list behind two tabs under 700 wide or 300 tall
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.

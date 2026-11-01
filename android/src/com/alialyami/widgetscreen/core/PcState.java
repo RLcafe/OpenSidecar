@@ -80,7 +80,7 @@ public final class PcState {
     // The PC's prayer times (docs/design/prayer-times.md): today's five as moments, the next and the current prayer.
     public static final class Prayer {
         public boolean located, alerting;
-        public String city = "", method = "", hijri = "";
+        public String city = "", method = "", hijri = "", alert = "Off";
         public int pcOffset, next, current;
         public double nextAt, previousAt, sunrise;
         public final double[] times = new double[5];
@@ -423,6 +423,7 @@ public final class PcState {
             Prayer prayer = new Prayer();
             prayer.located = flag(p, "located"); prayer.alerting = flag(p, "alerting");
             prayer.city = text(p, "city"); prayer.method = text(p, "method"); prayer.hijri = text(p, "hijri");
+            if (Json.field(p, "alert") != null) prayer.alert = Json.field(p, "alert");
             prayer.pcOffset = (int) Json.number(p, "pcOffset");
             prayer.next = Math.max(0, Math.min(4, (int) Json.number(p, "next"))); prayer.current = Math.max(0, Math.min(4, (int) Json.number(p, "current")));
             prayer.nextAt = Json.number(p, "nextAt"); prayer.previousAt = Json.number(p, "previousAt"); prayer.sunrise = Json.number(p, "sunrise");

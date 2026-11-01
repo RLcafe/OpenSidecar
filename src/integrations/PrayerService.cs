@@ -168,6 +168,18 @@ namespace WidgetScreen
         }
         public static string Time(DateTime local, bool use24) { return local.ToString(use24 ? "HH:mm" : "h:mm tt", CultureInfo.InvariantCulture); }
 
+        // Sticker Sheet phase 3 (docs/design/sticker-sheet.md); the phone's PrayerText has the same rules.
+        // Where a moment sits on the day's sun path: 0 at Fajr, 1 at Isha, outside that range before or after them.
+        public static double PathPart(DateTime at, DateTime fajr, DateTime isha)
+        {
+            if (fajr == DateTime.MinValue || isha <= fajr) return Double.NaN;
+            return (at - fajr).TotalMinutes / (isha - fajr).TotalMinutes;
+        }
+        // The alert chip: Off, Chime (the built-in one) or Your sound.
+        public static string AlertText(bool alert, string sound) { return !alert ? "Off" : String.IsNullOrWhiteSpace(sound) ? "Chime" : "Your sound"; }
+        // A method's name for a chip: "Umm al-Qura, Makkah" is "Umm al-Qura".
+        public static string MethodShort(string name) { int comma = (name ?? "").IndexOf(','); return comma > 0 ? name.Substring(0, comma).Trim() : (name ?? ""); }
+
         // Today's Hijri date by the Umm al-Qura calendar, "12 Jumada al-Awwal 1448".
         private static readonly string[] Months = { "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani", "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Shaban", "Ramadan", "Shawwal", "Dhu al-Qadah", "Dhu al-Hijjah" };
         public static string Hijri(DateTime localDate)
