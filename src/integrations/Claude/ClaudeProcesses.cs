@@ -56,6 +56,30 @@ namespace WidgetScreen
             return owner;
         }
 
+        // The window of a Claude Code process found some other way (Claude Code's own session list): its first ancestor
+        // with a window, such as the Claude desktop app for its Code tab, or the terminal a CLI runs in.
+        public static Owner OwnerOf(int claudePid)
+        {
+            var owner = new Owner { ClaudePid = claudePid };
+            if (claudePid <= 0) return owner;
+            try
+            {
+                var tree = Snapshot();
+                int pid = claudePid;
+                for (int depth = 0; depth < 24; depth++)
+                {
+                    Entry entry; if (!tree.TryGetValue(pid, out entry)) break;
+                    int parent = entry.Parent;
+                    Entry up; if (parent == 0 || parent == pid || !tree.TryGetValue(parent, out up) || StopsWalk(up.Exe)) break;
+                    IntPtr window = MainWindow(parent);
+                    if (window != IntPtr.Zero) { owner.WindowPid = parent; owner.Window = window.ToInt64(); break; }
+                    pid = parent;
+                }
+            }
+            catch (Exception) { }
+            return owner;
+        }
+
         // Whether the session's Claude Code still runs. A reused process id belongs to another program, so the name counts too.
         public static bool Alive(int pid)
         {

@@ -1,12 +1,32 @@
 # Claude Code watcher (1 Nov 2026)
 
-The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md).
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md) and, since the fix that made it work with the Claude app's Code tab, [decision 015](../decisions/015-claude-sign-in-and-telemetry.md).
 
-## As built
+## Since the fix (decision 015)
+
+The first version only worked fully for terminal sessions. Ali runs Claude Code in the Claude desktop app's Code tab, which never runs a status line and keeps its sign-in out of `.credentials.json`, so the plan meters stayed empty. Idle sessions that started before Connect didn't show either. What changed:
+
+- **Sessions come from three sources, merged by newest news.** The hook files, Claude Code's own session list (`sessions\<pid>.json`: busy, idle or waiting) and telemetry events. Every running session shows, including Code tab sessions and ones started before Connect. A Code tab session's tap brings the Claude app forward, and its Large row says "Desktop", "VS Code" or "Terminal".
+- **Needs you** comes from the permission hooks (Notification and the new PermissionRequest) and from Claude Code's "waiting" status ("Has a question for you").
+- **Plan meters** come from Settings → Claude → **Sign in with Claude**: the widget's own browser sign-in (`user:profile` only, DPAPI in `claude-session.dat`, renews itself), checked every 5 minutes while signed in, whether or not Claude Code is open. The status line stays a second source.
+  - Signed out, the meters area says "Sign in to Claude in Settings → Claude to see plan limits."
+  - A failed check keeps the numbers with "Plan limits as of 10:42" (Large) and "AS OF 10:42" (Medium's flag).
+  - An ended sign-in says "Your Claude sign-in has ended. Sign in again in Settings → Claude."
+  - Opus, Sonnet and model-scoped weekly windows, when the plan has them, add lines under the Large meters.
+- **Usage is tokens and cost.** Every project row and session shows tokens and "≈ $" (what it would cost at API prices). It comes from the logs (history) plus telemetry (live, Claude Code's own cost), with each reply counted once by its request id.
+- **Medium shows plan and projects together.** Usage by project sits beside the critter lineup from 400 units of body width (a 190–300 column, up to four rows), under it on a tall narrow card (up to three), and the two plan meters stay in the strip. At the preferred 472 × 310 that is two project rows beside two critters.
+- **Small** shows the 5-hour percentage beside its meter when there is room for a caption line (body height ≥ 8 + 104 × text scale). Otherwise it shows the bar alone, as before.
+- **Settings → Claude** is now three parts:
+  - Your Claude plan: sign in, sign out and status.
+  - Claude Code: Connect, or Update connection for a v0.23–v0.25 connection, Disconnect, the telemetry status or the keys that keep it out, and the chime.
+  - Projects: "Show new projects automatically" and a tick per project, newest first, with its last-used date and this week's tokens and cost. Unticked projects leave the card's sessions and usage on both apps. The plan meters always show the whole plan.
+- **The phone's `claude` section** adds `plan`, `where` and `cost` per session, `cost` per project row, and `limits.extra`. The PC filters projects before it answers.
+
+## As built (v0.23.0)
 
 Where the build differs from the brief, or fills in what it left open:
 
-- **The plan check runs every 5 minutes while the app runs** with the Claude card on any page, whether or not a session is open or Claude Code is running (Ali's change, 1 Nov 2026, replacing "only when the status-line numbers are older than 5 minutes" and the 15-minute Quiet-mode pace). Settings → Claude → *Check my plan's limits online every 5 minutes* turns it off. After any problem (no `.credentials.json`, an expired token, a 401, no network, an answer it can't read) it stays quiet for an hour. The token is read from the file for each request and dropped; it is never stored, logged, refreshed or sent anywhere but `api.anthropic.com`, and the phone gets only percentages and times.
+- ~~The plan check borrowed Claude Code's token from `.credentials.json`~~ (replaced by the widget's own sign-in in decision 015: the Code tab keeps no token there).
 - **Small is under 360 wide or 280 tall** (the brief suggested 240): below 280 the lineup's critters, names and the meter strip don't all fit at 140% text.
 - **Entries are found again by the exe's name** (`ClaudeHook.exe` in the command), not the full `WidgetScreen/claude/` path, so isolated settings folders (checks, `--settings`) work the same.
 - **The Notification hook only matches `permission_prompt|elicitation_dialog`.** `idle_prompt` needs no hook (it stays Done), so it isn't registered.
@@ -17,7 +37,7 @@ Where the build differs from the brief, or fills in what it left open:
 - **Updating Widget Screen refreshes the bridge**: at start, a connected app copies its own `ClaudeHook.exe` over the one in `%LOCALAPPDATA%\WidgetScreen\claude` when they differ (skipped while Claude Code is running it). Uninstalling Widget Screen doesn't disconnect Claude Code; disconnect first, or Claude Code reports a missing hook.
 - **Renders and checks use a labelled fixture** (`--render-claude-sample`, `--render-claude-needs`; "SAMPLE" in the card's heading). `tests\size-design-renders.ps1` renders `claude-small`, `claude-medium`, `claude-large`, `claude-needs`, `claude-needs-large` and `claude-pill`.
 
-Not verified: real hooks firing in Claude Code (Ali presses Connect himself), bringing a real terminal forward, the plan check against the live endpoint (there was no `.credentials.json` in the Claude folder on this PC when it was built, so the check stays quiet until there is one), and the phone card on a device.
+Not verified at v0.23.0: real hooks firing in Claude Code, bringing a real terminal forward, the plan check against the live endpoint, and the phone card on a device. (Hooks firing from the Code tab was confirmed live on 1 Nov 2026; see decision 015.)
 
 ## The brief
 

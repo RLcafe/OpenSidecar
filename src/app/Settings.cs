@@ -19,6 +19,14 @@ namespace WidgetScreen
         public Shortcut Copy() { return (Shortcut)MemberwiseClone(); }
     }
 
+    // A project's tick in Settings → Claude → Projects, by its folder (docs/design/claude-watcher.md).
+    public sealed class ClaudeProjectChoice
+    {
+        [XmlAttribute] public string Folder { get; set; }
+        [XmlAttribute] public bool Shown { get; set; }
+        public ClaudeProjectChoice Copy() { return (ClaudeProjectChoice)MemberwiseClone(); }
+    }
+
     public sealed class AppSettings
     {
         public int Version { get; set; }
@@ -84,9 +92,12 @@ namespace WidgetScreen
         public bool PrayerHanafi { get; set; }
         public bool PrayerAlert { get; set; }
         public string PrayerSound { get; set; }
-        // Claude Code (Settings → Claude): a chime when a session starts needing you, and the read-only plan usage check.
+        // Claude Code (Settings → Claude): a chime when a session starts needing you, and which projects the card shows.
+        // A project with no choice follows ClaudeShowNewProjects (on by default). The plan meters always show the plan.
         public bool ClaudeChime { get; set; }
-        public bool ClaudeOnlineLimits { get; set; }
+        public bool ClaudeShowNewProjects { get; set; }
+        [XmlArray("ClaudeProjects"), XmlArrayItem("Project")]
+        public ClaudeProjectChoice[] ClaudeProjects { get; set; }
         // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
         public int ClipboardSize { get; set; }
         public bool ClipboardKeep { get; set; }
@@ -138,7 +149,7 @@ namespace WidgetScreen
             HideToTrayWithPhone = false;
             FocusChime = true;
             StorageLowPercent = StorageService.DefaultLowPercent;
-            ClaudeOnlineLimits = true;
+            ClaudeShowNewProjects = true;
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
@@ -159,6 +170,7 @@ namespace WidgetScreen
             copy.CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.Macros = Macros == null ? null : Macros.Where(m => m != null).Select(m => m.Copy()).ToArray();
             copy.WorldClocks = WorldClocks == null ? null : WorldClocks.Where(c => c != null).Select(c => c.Copy()).ToArray();
+            copy.ClaudeProjects = ClaudeProjects == null ? null : ClaudeProjects.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
             return copy;
         }
@@ -234,6 +246,8 @@ namespace WidgetScreen
         public static string DiscordPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "discord-session.dat"); }
         // The Claude Code bridge's folder (ClaudeHook.exe, sessions\, limits.json) beside settings.xml.
         public static string ClaudePath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "claude"); }
+        // The widget's own Claude sign-in (DPAPI-encrypted), beside settings.xml.
+        public static string ClaudeSignInPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "claude-session.dat"); }
         public static string DefaultPath
         {
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WidgetScreen", "settings.xml"); }

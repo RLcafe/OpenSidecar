@@ -60,29 +60,52 @@ namespace WidgetScreen
             var needs = view.Sessions.Where(s => s.State == ClaudeState.NeedsYou).ToList();
             return needs.Count == 0 ? "CLAUDE CODE" : needs.Count == 1 ? needs[0].ProjectName + " needs you" : needs.Count + " sessions need you";
         }
-        // The flag at the heading's right: "SAMPLE · 3 RUNNING", "AS OF 10:42" when the meters are old.
+        // The flag at the heading's right: "SAMPLE · 3 RUNNING", "AS OF 10:42" when the meters are old or the last check failed.
         public static string Flag(ClaudeView view, DateTime now, bool use24, bool withAge)
         {
             var parts = new List<string>();
             if (view.Sample) parts.Add("SAMPLE");
             if (view.Sessions.Count > 0) parts.Add(view.Sessions.Count + " RUNNING");
-            if (withAge && view.Limits != null && view.Limits.Known && now - view.Limits.UpdatedAt > ClaudeService.Stale) parts.Add("AS OF " + Clock(view.Limits.UpdatedAt, use24).ToUpperInvariant());
+            if (withAge && Old(view, now)) parts.Add("AS OF " + Clock(view.Limits.UpdatedAt, use24).ToUpperInvariant());
             return String.Join(" · ", parts);
         }
+        // The meters show numbers that may have moved since: older than 15 minutes, or the last check didn't go through.
+        public static bool Old(ClaudeView view, DateTime now)
+        {
+            return view.Limits != null && view.Limits.Known && (now - view.Limits.UpdatedAt > ClaudeService.Stale || view.Plan == ClaudePlanState.Failed || view.Plan == ClaudePlanState.Expired);
+        }
+        public static string PlanName(ClaudePlanState plan)
+        {
+            return plan == ClaudePlanState.Current ? "current" : plan == ClaudePlanState.Reading ? "reading" : plan == ClaudePlanState.Failed ? "failed" : plan == ClaudePlanState.Expired ? "expired" : "signedOut";
+        }
         public static string Clock(DateTime time, bool use24) { return time.ToLocalTime().ToString(use24 ? "HH:mm" : "h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant(); }
-        // The meters' empty states.
+        // The meters' empty states: the widget's own sign-in is what fills them (decision 015).
         public static string LimitsMissing(ClaudeView view)
         {
-            return view.NoPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
+            switch (view.Plan)
+            {
+                case ClaudePlanState.Expired: return SignInEnded;
+                case ClaudePlanState.Reading: return "Reading your plan's limits…";
+                case ClaudePlanState.Failed: return "Couldn't read your plan's limits. Trying again in 5 minutes.";
+                case ClaudePlanState.Current: return view.NoPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
+                default: return SignIn;
+            }
         }
+        public const string SignIn = "Sign in to Claude in Settings → Claude to see plan limits.", SignInEnded = "Your Claude sign-in has ended. Sign in again in Settings → Claude.";
         public const string NotConnected = "Connect Claude Code in Settings → Claude.", NoSessions = "No Claude Code sessions running.", NoLogs = "Can't read Claude Code's logs.";
         public static string PeriodName(ClaudePeriod period) { return period == ClaudePeriod.FiveHour ? "5 h" : period == ClaudePeriod.Today ? "Today" : "Week"; }
-        // "as of 10:42 · from Claude Code" under the Large panel.
-        public static string Source(ClaudeLimits limits, bool use24)
+        // "as of 10:42 · checked online" under the Large panel; "Plan limits as of 10:42" when a check failed, and the
+        // sign-in's end when it has.
+        public static string Source(ClaudeView view, bool use24)
         {
+            var limits = view.Limits;
             if (limits == null || !limits.Known) return "";
+            if (view.Plan == ClaudePlanState.Expired) return "as of " + Clock(limits.UpdatedAt, use24) + " · sign in again in Settings → Claude";
+            if (view.Plan == ClaudePlanState.Failed) return "Plan limits as of " + Clock(limits.UpdatedAt, use24);
             return "as of " + Clock(limits.UpdatedAt, use24) + " · " + (limits.Source == "online" ? "checked online" : "from Claude Code");
         }
+        // A project row's or session's usage: "1.8M · ≈ $2.01".
+        public static string Usage(long tokens, double cost) { return ClaudeUsage.Format(tokens) + " · " + ClaudeUsage.Money(cost); }
     }
 
     // Claude Code in three designs that follow the card's size (CardSizing.Claude; docs/design/claude-watcher.md).
@@ -106,11 +129,12 @@ namespace WidgetScreen
         private readonly List<Part> parts = new List<Part>();
         private readonly List<ProjectRow> projects = new List<ProjectRow>();
         private Meter fiveHour, week;
-        private TextBlock heading, flag, more, limitsMessage, source, logsMessage;
+        private TextBlock heading, flag, more, limitsMessage, source, logsMessage, smallPercent;
         private MeterBar smallMeter;
+        private readonly List<Meter> extras = new List<Meter>();
         private readonly List<Button> periodButtons = new List<Button>();
 
-        private sealed class Part { public ClaudeCritter Critter; public TextBlock Title, State, Detail, Tokens; public string Id; }
+        private sealed class Part { public ClaudeCritter Critter; public TextBlock Title, State, Detail, Tokens, Cost; public string Id; }
         private sealed class Meter { public TextBlock Percent, Reset; public SegmentBar Bar; public FrameworkElement Root; }
         private sealed class ProjectRow { public TextBlock Name, Tokens; public MeterBar Share; }
 
@@ -143,13 +167,13 @@ namespace WidgetScreen
         private string Shape()
         {
             if (view == null) return "-";
-            return view.Connected + "|" + view.Sample + "|" + String.Join(",", view.Sessions.Select(s => s.Id + ":" + s.CanFocus)) + "|" + (view.Limits != null && view.Limits.Known) + view.NoPlan + "|" + view.LogsFailed + "|" + view.UsageFor(period).Count;
+            return view.Connected + "|" + view.Sample + "|" + String.Join(",", view.Sessions.Select(s => s.Id + ":" + s.CanFocus)) + "|" + (view.Limits != null && view.Limits.Known) + view.NoPlan + view.Plan + "|" + (view.Limits == null ? 0 : view.Limits.Extra.Count) + "|" + view.LogsFailed + "|" + view.UsageFor(period).Count;
         }
 
         private void Build()
         {
-            host.Children.Clear(); names.Clear(); parts.Clear(); projects.Clear(); periodButtons.Clear();
-            fiveHour = week = null; heading = flag = more = limitsMessage = source = logsMessage = null; smallMeter = null;
+            host.Children.Clear(); names.Clear(); parts.Clear(); projects.Clear(); periodButtons.Clear(); extras.Clear();
+            fiveHour = week = null; heading = flag = more = limitsMessage = source = logsMessage = smallPercent = null; smallMeter = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Claude(bounds.Width, bounds.Height);
             FrameworkElement content;
@@ -197,9 +221,12 @@ namespace WidgetScreen
         // Small: the most urgent session's critter at the left, its project and state at the right, the 5-hour meter below.
         private FrameworkElement BuildSmall(double width, double height)
         {
-            bool meter = view.Connected || (view.Limits != null && view.Limits.Known);
+            bool meter = view.Limits != null && view.Limits.Known;
             var root = Rows(Star, Auto);
-            double room = height - (meter ? 16 : 0), size = CardSizing.ClaudeSmallCritter(width, room);
+            // The meter's percentage needs a caption line; the shortest cards keep the bar alone.
+            bool percent = meter && CardSizing.ClaudeSmallPercent(height, textScale);
+            bool caption = CardSizing.ClaudeSmallPercent(height, textScale);
+            double room = height - (percent ? 8 + Math.Ceiling(18 * textScale) : meter ? 16 : caption ? Math.Ceiling(18 * textScale) + 6 : 0), size = CardSizing.ClaudeSmallCritter(width, room);
             var row = Columns(Auto, Star);
             var first = view.Sessions.FirstOrDefault();
             var part = new Part { Id = first == null ? null : first.Id, Critter = Critter(size, 0) };
@@ -225,9 +252,23 @@ namespace WidgetScreen
             root.Children.Add(row);
             if (meter)
             {
-                smallMeter = names.Add(new MeterBar { Height = 6, Margin = new Thickness(0, 10, 0, 0) }, "ClaudeSmallMeter");
+                // The 5-hour meter along the bottom, with its percentage at the right.
+                var line = Columns(Star, Auto); line.Margin = new Thickness(0, percent ? 8 : 10, 0, 0);
+                smallMeter = names.Add(new MeterBar { Height = 6, VerticalAlignment = VerticalAlignment.Center }, "ClaudeSmallMeter");
                 smallMeter.SetResourceReference(MeterBar.TrackProperty, "Track");
-                root.Children.Add(At(smallMeter, 1));
+                line.Children.Add(smallMeter);
+                if (percent)
+                {
+                    smallPercent = names.Add(Caption(""), "ClaudeSmallPercent"); smallPercent.Margin = new Thickness(8, 0, 0, 0); smallPercent.VerticalAlignment = VerticalAlignment.Center;
+                    line.Children.Add(At(smallPercent, 0, 1));
+                }
+                root.Children.Add(At(line, 1));
+            }
+            else if (caption)
+            {
+                limitsMessage = names.Add(Caption(view.Plan == ClaudePlanState.Expired ? "Claude sign-in ended" : view.Plan == ClaudePlanState.SignedOut ? "Sign in for plan limits" : ""), "ClaudeLimits");
+                limitsMessage.Margin = new Thickness(0, 6, 0, 0);
+                root.Children.Add(At(limitsMessage, 1));
             }
             return root;
         }
@@ -235,47 +276,89 @@ namespace WidgetScreen
         // Medium: the heading, a lineup of critters with their projects, and the two plan meters in a strip.
         private FrameworkElement BuildMedium(double width, double height)
         {
-            bool strip = view.Connected || (view.Limits != null && view.Limits.Known);
-            double stripHeight = strip ? CardSizing.ClaudeStrip(textScale) + 12 : 0;
-            var root = Rows(new GridLength(28), new GridLength(8), Star, Auto);
+            double stripHeight = CardSizing.ClaudeStrip(textScale) + 12;
+            var root = Rows(new GridLength(28), new GridLength(8), Star, Auto, Auto);
             root.Children.Add(HeadingRow());
-            double rowHeight = height - 36 - stripHeight;
-            if (view.Sessions.Count == 0) root.Children.Add(At(Empty(Math.Min(96, Math.Max(40, rowHeight - 8)), rowHeight), 2));
+            double room = height - 36 - stripHeight, lineupWidth = width, rowHeight = room;
+            // Usage by project beside the lineup on a wide card, under it on a tall narrow one: the plan meters and
+            // the projects are what this card is for, so both show whenever they fit.
+            var usage = view.UsageFor(period);
+            var label = Label("BY PROJECT · " + ClaudeText.PeriodName(period).ToUpperInvariant());
+            bool beside = CardSizing.ClaudeMediumBeside(width);
+            int projectRows = view.LogsFailed ? 0 : CardSizing.ClaudeMediumProjects(room, textScale, beside, view.Sessions.Count > 0);
+            if (projectRows > 0 && beside)
+            {
+                double column = CardSizing.ClaudeMediumColumn(width);
+                lineupWidth = width - column - 16;
+                var body = Columns(Star, new GridLength(16), new GridLength(column));
+                var list = names.Add(ProjectRows(projectRows, usage, label), "ClaudeProjects"); ((FrameworkElement)list).VerticalAlignment = VerticalAlignment.Center;
+                body.Children.Add(At(list, 0, 2));
+                root.Children.Add(At(body, 2));
+                body.Children.Add(Lineup(lineupWidth, rowHeight));
+            }
             else
             {
-                int columns = CardSizing.ClaudeLineup(width), count = view.Sessions.Count;
-                int shown = count <= columns ? count : columns - 1;
-                double columnWidth = width / Math.Max(columns, Math.Min(count, columns));
-                bool state = CardSizing.ClaudeLineupState(rowHeight, textScale);
-                double size = CardSizing.ClaudeLineupCritter(rowHeight, columnWidth, textScale, state);
-                var lineup = new Grid { VerticalAlignment = VerticalAlignment.Center };
-                for (int c = 0; c < Math.Min(count, columns); c++) lineup.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
-                for (int i = 0; i < shown; i++)
+                if (projectRows > 0)
                 {
-                    var session = view.Sessions[i];
-                    var part = new Part { Id = session.Id, Critter = Critter(size, i) }; parts.Add(part);
-                    var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                    part.Critter.HorizontalAlignment = HorizontalAlignment.Center; stack.Children.Add(part.Critter);
-                    part.Title = names.Add(Text("", "SmallSize", "Text"), "ClaudeTitle" + i); part.Title.HorizontalAlignment = HorizontalAlignment.Center; part.Title.MaxWidth = Math.Max(40, columnWidth - 8); part.Title.Margin = new Thickness(0, 6, 0, 0);
-                    stack.Children.Add(part.Title);
-                    if (state) { part.State = names.Add(Caption(""), "ClaudeState" + i); part.State.HorizontalAlignment = HorizontalAlignment.Center; part.State.MaxWidth = Math.Max(40, columnWidth - 8); part.State.Margin = new Thickness(0, 2, 0, 0); stack.Children.Add(part.State); }
-                    lineup.Children.Add(At(Tappable(stack, session), 0, i));
+                    rowHeight = room - 26 - projectRows * CardSizing.ClaudeProjectRow(textScale);
+                    root.Children.Add(At(names.Add(ProjectRows(projectRows, usage, label), "ClaudeProjects"), 3));
                 }
-                if (shown < count)
-                {
-                    var rest = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                    more = names.Add(Reading("+" + (count - shown), 28), "ClaudeMore"); more.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); more.HorizontalAlignment = HorizontalAlignment.Center; rest.Children.Add(more);
-                    var label = Caption("more"); label.HorizontalAlignment = HorizontalAlignment.Center; rest.Children.Add(label);
-                    lineup.Children.Add(At(rest, 0, shown));
-                }
-                root.Children.Add(At(lineup, 2));
+                root.Children.Add(At(Lineup(lineupWidth, rowHeight), 2));
             }
-            if (strip)
-            {
-                var tile = Tile(Meters(false), 14, new Thickness(14, 10, 14, 10)); tile.Margin = new Thickness(0, 12, 0, 0);
-                root.Children.Add(At(names.Add(tile, "ClaudeStrip"), 3));
-            }
+            var tile = Tile(Meters(false), 14, new Thickness(14, 10, 14, 10)); tile.Margin = new Thickness(0, 12, 0, 0);
+            root.Children.Add(At(names.Add(tile, "ClaudeStrip"), 4));
             return root;
+        }
+
+        // The Medium lineup: a critter per session with its project (and state, when there's room), or a dozing one.
+        private FrameworkElement Lineup(double width, double rowHeight)
+        {
+            if (view.Sessions.Count == 0) return Empty(Math.Min(96, Math.Max(40, rowHeight - 8)), rowHeight);
+            int columns = CardSizing.ClaudeLineup(width), count = view.Sessions.Count;
+            int shown = count <= columns ? count : columns - 1;
+            double columnWidth = width / Math.Max(columns, Math.Min(count, columns));
+            bool state = CardSizing.ClaudeLineupState(rowHeight, textScale);
+            double size = CardSizing.ClaudeLineupCritter(rowHeight, columnWidth, textScale, state);
+            var lineup = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            for (int c = 0; c < Math.Min(count, columns); c++) lineup.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
+            for (int i = 0; i < shown; i++)
+            {
+                var session = view.Sessions[i];
+                var part = new Part { Id = session.Id, Critter = Critter(size, i) }; parts.Add(part);
+                var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                part.Critter.HorizontalAlignment = HorizontalAlignment.Center; stack.Children.Add(part.Critter);
+                part.Title = names.Add(Text("", "SmallSize", "Text"), "ClaudeTitle" + i); part.Title.HorizontalAlignment = HorizontalAlignment.Center; part.Title.MaxWidth = Math.Max(40, columnWidth - 8); part.Title.Margin = new Thickness(0, 6, 0, 0);
+                stack.Children.Add(part.Title);
+                if (state) { part.State = names.Add(Caption(""), "ClaudeState" + i); part.State.HorizontalAlignment = HorizontalAlignment.Center; part.State.MaxWidth = Math.Max(40, columnWidth - 8); part.State.Margin = new Thickness(0, 2, 0, 0); stack.Children.Add(part.State); }
+                lineup.Children.Add(At(Tappable(stack, session), 0, i));
+            }
+            if (shown < count)
+            {
+                var others = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                more = names.Add(Reading("+" + (count - shown), 28), "ClaudeMore"); more.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); more.HorizontalAlignment = HorizontalAlignment.Center; others.Children.Add(more);
+                var word = Caption("more"); word.HorizontalAlignment = HorizontalAlignment.Center; others.Children.Add(word);
+                lineup.Children.Add(At(others, 0, shown));
+            }
+            return lineup;
+        }
+
+        // Usage by project: name, then tokens and the cost at API prices at the right, over a thin share bar.
+        private FrameworkElement ProjectRows(int rows, List<ClaudeProjectUsage> usage, TextBlock label)
+        {
+            var panel = new StackPanel();
+            label.Margin = new Thickness(0, 4, 0, 6); panel.Children.Add(label);
+            if (usage.Count == 0) { panel.Children.Add(names.Add(Caption(view.LogsRead ? "No usage in this period." : "Reading Claude Code's logs…"), "ClaudeNoUsage")); return panel; }
+            for (int i = 0; i < Math.Min(rows, usage.Count); i++)
+            {
+                var row = new ProjectRow();
+                var top = new DockPanel { Margin = new Thickness(0, i == 0 ? 0 : 6, 0, 0) };
+                row.Tokens = names.Add(Text("", "SmallSize", "Muted"), "ClaudeProjectTokens" + i); row.Tokens.Margin = new Thickness(8, 0, 0, 0); DockPanel.SetDock(row.Tokens, Dock.Right); top.Children.Add(row.Tokens);
+                row.Name = names.Add(Text("", "SmallSize", "Text"), "ClaudeProject" + i); top.Children.Add(row.Name);
+                row.Share = new MeterBar { Height = 4, Margin = new Thickness(0, 3, 0, 0) }; row.Share.SetResourceReference(MeterBar.TrackProperty, "Track"); row.Share.SetResourceReference(MeterBar.FillProperty, "Accent");
+                panel.Children.Add(top); panel.Children.Add(row.Share);
+                projects.Add(row);
+            }
+            return panel;
         }
 
         // A dozing critter and what to do next, for no sessions or no connection.
@@ -350,8 +433,10 @@ namespace WidgetScreen
                     part.Detail = names.Add(Caption(""), "ClaudeDetail" + i); part.Detail.Margin = new Thickness(10, 0, 0, 0); part.Detail.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(part.Detail);
                     text.Children.Add(line);
                     row.Children.Add(At(text, 0, 1));
-                    part.Tokens = names.Add(Reading("", 22), "ClaudeTokens" + i); part.Tokens.VerticalAlignment = VerticalAlignment.Center; part.Tokens.Margin = new Thickness(12, 0, 0, 0);
-                    row.Children.Add(At(part.Tokens, 0, 2));
+                    var numbers = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+                    part.Tokens = names.Add(Reading("", 22), "ClaudeTokens" + i); part.Tokens.HorizontalAlignment = HorizontalAlignment.Right; numbers.Children.Add(part.Tokens);
+                    part.Cost = names.Add(Caption(""), "ClaudeCost" + i); part.Cost.HorizontalAlignment = HorizontalAlignment.Right; numbers.Children.Add(part.Cost);
+                    row.Children.Add(At(numbers, 0, 2));
                     var tappable = Tappable(row, session); tappable.Margin = new Thickness(0, i == 0 ? 0 : 8, 0, 0);
                     list.Children.Add(tappable);
                 }
@@ -367,6 +452,16 @@ namespace WidgetScreen
         {
             var panel = new StackPanel();
             panel.Children.Add(Meters(true));
+            // Narrower weekly windows (Opus, Sonnet, a model's own) as one line each, when the panel has room.
+            int extraRows = view.Limits == null || !view.Limits.Known ? 0 : Math.Min(view.Limits.Extra.Count, CardSizing.ClaudeExtras(height, textScale));
+            for (int i = 0; i < extraRows; i++)
+            {
+                var extra = new Meter();
+                var line = new DockPanel { Margin = new Thickness(0, i == 0 ? 10 : 4, 0, 0) };
+                extra.Percent = names.Add(Text("", "SmallSize", "Text"), "ClaudeExtraPercent" + i); DockPanel.SetDock(extra.Percent, Dock.Right); line.Children.Add(extra.Percent);
+                extra.Reset = names.Add(Caption(view.Limits.Extra[i].Key.ToUpperInvariant()), "ClaudeExtra" + i); extra.Reset.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(extra.Reset);
+                extra.Root = line; panel.Children.Add(line); extras.Add(extra);
+            }
             var periods = Columns(Star, Star, Star); periods.Margin = new Thickness(0, 14, 0, 0);
             int index = 0;
             foreach (ClaudePeriod choice in new[] { ClaudePeriod.FiveHour, ClaudePeriod.Today, ClaudePeriod.Week })
@@ -383,23 +478,13 @@ namespace WidgetScreen
                 periods.Children.Add(At(button, 0, index++));
             }
             panel.Children.Add(periods);
-            int rows = CardSizing.ClaudeProjects(height, textScale);
+            int rows = CardSizing.ClaudeProjects(height, textScale, extraRows);
             if (view.LogsFailed) { logsMessage = names.Add(Wrapped(ClaudeText.NoLogs, "SmallSize", 60), "ClaudeLogs"); logsMessage.Margin = new Thickness(0, 16, 0, 0); panel.Children.Add(logsMessage); }
             else if (rows > 0)
             {
-                var label = Label("BY PROJECT"); label.Margin = new Thickness(0, 16, 0, 8); panel.Children.Add(label);
-                var usage = view.UsageFor(period);
-                if (usage.Count == 0) { var none = Caption(view.LogsRead ? "No usage in this period." : "Reading Claude Code's logs…"); panel.Children.Add(none); }
-                for (int i = 0; i < Math.Min(rows, usage.Count); i++)
-                {
-                    var row = new ProjectRow();
-                    var top = new DockPanel { Margin = new Thickness(0, i == 0 ? 0 : 8, 0, 0) };
-                    row.Tokens = names.Add(Text("", "SmallSize", "Muted"), "ClaudeProjectTokens" + i); row.Tokens.Margin = new Thickness(8, 0, 0, 0); DockPanel.SetDock(row.Tokens, Dock.Right); top.Children.Add(row.Tokens);
-                    row.Name = names.Add(Text("", "SmallSize", "Text"), "ClaudeProject" + i); top.Children.Add(row.Name);
-                    row.Share = new MeterBar { Height = 4, Margin = new Thickness(0, 4, 0, 0) }; row.Share.SetResourceReference(MeterBar.TrackProperty, "Track"); row.Share.SetResourceReference(MeterBar.FillProperty, "Accent");
-                    panel.Children.Add(top); panel.Children.Add(row.Share);
-                    projects.Add(row);
-                }
+                var label = Label("BY PROJECT"); var list = ProjectRows(rows, view.UsageFor(period), label);
+                ((FrameworkElement)list).Margin = new Thickness(0, 12, 0, 0);
+                panel.Children.Add(list);
             }
             source = names.Add(Caption(""), "ClaudeSource"); source.Margin = new Thickness(0, 12, 0, 0); panel.Children.Add(source);
             return panel;
@@ -432,10 +517,12 @@ namespace WidgetScreen
                 }
                 if (part.Detail != null)
                 {
-                    part.Detail.Text = asks && !String.IsNullOrWhiteSpace(session.Message) ? ClaudeText.Ask(session.Message) : String.Join(" · ", new[] { session.ProjectName, session.Model }.Where(t => !String.IsNullOrWhiteSpace(t)).Distinct());
+                    part.Detail.Text = asks && !String.IsNullOrWhiteSpace(session.Message) ? ClaudeText.Ask(session.Message) : String.Join(" · ", new[] { session.ProjectName, session.Model, session.Where }.Where(t => !String.IsNullOrWhiteSpace(t)).Distinct());
                     part.Detail.SetResourceReference(TextBlock.ForegroundProperty, asks ? "Warning" : "Muted");
                 }
-                if (part.Tokens != null) part.Tokens.Text = view.LogsRead && !view.LogsFailed ? ClaudeUsage.Format(session.TokensFor(period)) : "—";
+                bool counted = view.LogsRead && !view.LogsFailed;
+                if (part.Tokens != null) part.Tokens.Text = counted ? ClaudeUsage.Format(session.TokensFor(period)) : "—";
+                if (part.Cost != null) part.Cost.Text = counted ? ClaudeUsage.Money(session.CostFor(period)) : "";
             }
             if (more != null)
             {
@@ -448,16 +535,23 @@ namespace WidgetScreen
             {
                 double pct = ClaudeText.Percent(limits == null ? null : limits.FiveHour, now);
                 smallMeter.Value = pct; smallMeter.SetResourceReference(MeterBar.FillProperty, ClaudeText.Warns(pct) ? "Warning" : "Accent");
+                if (smallPercent != null) { smallPercent.Text = "5h " + Math.Round(pct) + "%" + (ClaudeText.Old(view, now) && bounds.Width >= 340 ? " · as of " + ClaudeText.Clock(limits.UpdatedAt, use24) : ""); smallPercent.SetResourceReference(TextBlock.ForegroundProperty, ClaudeText.Warns(pct) ? "Warning" : "Muted"); }
+            }
+            for (int i = 0; i < extras.Count && limits != null && i < limits.Extra.Count; i++)
+            {
+                double pct = ClaudeText.Percent(limits.Extra[i].Value, now);
+                extras[i].Percent.Text = Math.Round(pct) + "%";
+                extras[i].Percent.SetResourceReference(TextBlock.ForegroundProperty, ClaudeText.Warns(pct) ? "Warning" : "Text");
             }
             RenderMeter(fiveHour, limits == null ? null : limits.FiveHour, now);
             RenderMeter(week, limits == null ? null : limits.Week, now);
-            var usage = view.UsageFor(period); long biggest = usage.Count == 0 ? 1 : Math.Max(1, usage.Max(p => p.Value));
+            var usage = view.UsageFor(period); long biggest = usage.Count == 0 ? 1 : Math.Max(1, usage.Max(p => p.Tokens));
             for (int i = 0; i < projects.Count && i < usage.Count; i++)
             {
-                projects[i].Name.Text = usage[i].Key; projects[i].Tokens.Text = ClaudeUsage.Format(usage[i].Value);
-                projects[i].Share.Value = 100.0 * usage[i].Value / biggest;
+                projects[i].Name.Text = usage[i].Name; projects[i].Tokens.Text = ClaudeText.Usage(usage[i].Tokens, usage[i].Cost);
+                projects[i].Share.Value = 100.0 * usage[i].Tokens / biggest;
             }
-            if (source != null) source.Text = ClaudeText.Source(limits, use24);
+            if (source != null) source.Text = ClaudeText.Source(view, use24);
         }
         private void RenderMeter(Meter meter, ClaudeLimitWindow window, DateTime now)
         {

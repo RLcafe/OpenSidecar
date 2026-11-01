@@ -63,7 +63,10 @@ internal static class ClaudeTests
             Assert(connector.IsConnected() && File.Exists(connector.HookPath), "Connect didn't connect or copy the bridge.");
             Assert(File.ReadAllText(connector.SettingsPath + ClaudeConnector.BackupSuffix) == original, "The backup isn't the file as it was.");
             var root = (JsonObject)ClaudeJson.Parse(File.ReadAllText(connector.SettingsPath));
-            Assert(root.Select(p => p.Key).SequenceEqual(new[] { "model", "hooks", "statusLine", "enabledPlugins" }), "Keys moved.");
+            Assert(root.Select(p => p.Key).SequenceEqual(new[] { "model", "hooks", "statusLine", "enabledPlugins", "env" }), "Keys moved.");
+            var env = ClaudeJson.Obj(root, "env");
+            Assert(ClaudeJson.Str(env, "CLAUDE_CODE_ENABLE_TELEMETRY") == "1" && ClaudeJson.Str(env, "OTEL_EXPORTER_OTLP_ENDPOINT") == "http://127.0.0.1:" + ClaudeTelemetry.DefaultPort && ClaudeJson.Str(env, "OTEL_EXPORTER_OTLP_PROTOCOL") == "http/json" && !env.Contains("OTEL_LOG_USER_PROMPTS") && !env.Contains("OTEL_LOG_TOOL_DETAILS"), "Telemetry settings missing, or prompts would be logged.");
+            Assert(!connector.NeedsUpdate() && connector.TelemetryConflicts().Count == 0, "A fresh connection asks for an update.");
             var hooks = ClaudeJson.Obj(root, "hooks");
             var post = (List<object>)hooks.Get("PostToolUse");
             Assert(post.Count == 2 && ClaudeJson.Str(ClaudeJson.Obj(post[0]), "matcher") == "Edit" && ClaudeJson.Str(ClaudeJson.Obj(((List<object>)ClaudeJson.Obj(post[0]).Get("hooks"))[0]), "command") == "npx prettier --write", "The user's own hook was replaced.");
@@ -88,7 +91,7 @@ internal static class ClaudeTests
             var connector = new ClaudeConnector(Path.Combine(config, "nested"), bridge);
             connector.Connect(Path.Combine(directory, ClaudeBridge.HookExe));
             var root = (JsonObject)ClaudeJson.Parse(File.ReadAllText(connector.SettingsPath));
-            Assert(root.Count == 2 && root.Contains("hooks") && root.Contains("statusLine") && !File.Exists(connector.SettingsPath + ClaudeConnector.BackupSuffix), "A new settings.json is wrong.");
+            Assert(root.Count == 3 && root.Contains("hooks") && root.Contains("statusLine") && root.Contains("env") && !File.Exists(connector.SettingsPath + ClaudeConnector.BackupSuffix), "A new settings.json is wrong.");
             connector.Disconnect();
             Assert(File.ReadAllText(connector.SettingsPath).Trim() == "{}", "Disconnect left something behind: " + File.ReadAllText(connector.SettingsPath));
 
@@ -144,9 +147,9 @@ internal static class ClaudeTests
             // An API-key session: Claude Code answered, but no limits came.
             string api = Fresh(directory, "bridge-api");
             Assert(ClaudeBridge.StatusLine("{\"session_id\":\"s2\",\"cost\":{\"total_api_duration_ms\":900}}", api, null, Now) == "Claude Code", "A line with nothing known isn't the default.");
-            var view = new ClaudeView { Limits = ClaudeBridge.ReadLimits(api) };
+            var view = new ClaudeView { Limits = ClaudeBridge.ReadLimits(api), Plan = ClaudePlanState.Current };
             Assert(view.NoPlan && ClaudeText.LimitsMissing(view) == "Plan limits need a Claude Pro or Max login.", "No-plan state not recognised.");
-            Assert(ClaudeText.LimitsMissing(new ClaudeView()) == "Plan limits show after Claude Code's next reply.", "Unknown limits message wrong.");
+            Assert(ClaudeText.LimitsMissing(new ClaudeView()) == "Sign in to Claude in Settings → Claude to see plan limits." && ClaudeText.LimitsMissing(new ClaudeView { Plan = ClaudePlanState.Expired }) == "Your Claude sign-in has ended. Sign in again in Settings → Claude.", "Plan sign-in messages wrong.");
         });
 
         check("Claude rate limits and the usage check parse epoch and ISO times", () => {
@@ -165,7 +168,7 @@ internal static class ClaudeTests
         });
 
         check("Claude usage counts each reply once, by project, session and period", () => {
-            var seen = new HashSet<string>();
+            var seen = new Dictionary<string, ClaudeUsageEntry>();
             string text = String.Join("\n", new[] {
                 "{\"type\":\"user\",\"message\":{\"content\":\"usage assistant\"}}",
                 Line("m1", "r1", "2026-11-01T11:00:00Z", "C:\\Code\\api-server", "s1", 10, 20, 30, 40),
@@ -176,16 +179,16 @@ internal static class ClaudeTests
                 "not json at all",
                 "" });
             var entries = ClaudeUsage.Parse(text, seen, "file");
-            Assert(entries.Count == 4 && entries[0].Tokens == 100 && entries[0].Project == "api-server" && entries[2].Project == "widget-screen" && entries[2].Session == "s2" && entries[3].Project == "widget-screen", "Usage lines parsed wrongly, or a folder change became another project.");
+            Assert(entries.Count == 4 && entries[0].Tokens == 100 && ClaudeBridge.ProjectName(entries[0].Folder) == "api-server" && ClaudeBridge.ProjectName(entries[2].Folder) == "widget-screen" && entries[2].Session == "s2" && ClaudeBridge.ProjectName(entries[3].Folder) == "widget-screen", "Usage lines parsed wrongly, or a folder change became another project.");
             Assert(ClaudeUsage.Parse(Line("m1", "r1", "2026-11-01T11:00:00Z", "C:/x", "s1", 1, 1, 1, 1), seen, "file").Count == 0, "A repeated reply counted twice across reads.");
             var limits = new ClaudeLimits { FiveHour = new ClaudeLimitWindow { Percent = 10, ResetsAt = Now.AddHours(1) } };
             Assert(ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now) == Now.AddHours(-4) && ClaudeUsage.Start(ClaudePeriod.FiveHour, null, Now) == Now.AddHours(-5) && ClaudeUsage.Start(ClaudePeriod.Week, null, Now) == Now.AddDays(-7), "Period starts wrong.");
             Assert(ClaudeUsage.Total(entries, ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now)) == 100 && ClaudeUsage.Total(entries, Now.AddDays(-7)) == 1601 && ClaudeUsage.Total(entries, Now.AddDays(-7), "s1") == 1100, "Totals wrong.");
             var top = ClaudeUsage.ByProject(entries, Now.AddDays(-7), 6);
-            Assert(top.Count == 2 && top[0].Key == "api-server" && top[0].Value == 1100, "By-project totals wrong.");
-            var many = Enumerable.Range(0, 9).Select(i => new ClaudeUsageEntry { At = Now, Project = "p" + i, Tokens = 100 - i }).ToList();
+            Assert(top.Count == 2 && top[0].Name == "api-server" && top[0].Tokens == 1100 && top[0].Folder == "C:\\Code\\api-server" && top[1].Folder == "D:\\work\\widget-screen", "By-project totals wrong.");
+            var many = Enumerable.Range(0, 9).Select(i => new ClaudeUsageEntry { At = Now, Folder = "C:\\p" + i, Tokens = 100 - i, Cost = 1 }).ToList();
             var six = ClaudeUsage.ByProject(many, Now.AddHours(-1), 6);
-            Assert(six.Count == 6 && six[5].Key == "Other" && six[5].Value == 95 + 94 + 93 + 92, "The rest isn't added up as Other.");
+            Assert(six.Count == 6 && six[5].Name == "Other" && six[5].Tokens == 95 + 94 + 93 + 92 && six[5].Cost == 4, "The rest isn't added up as Other.");
             Assert(ClaudeUsage.Format(950) == "950" && ClaudeUsage.Format(12400) == "12.4k" && ClaudeUsage.Format(1234567) == "1.2M" && ClaudeUsage.Format(3400000000) == "3.4B" && ClaudeUsage.Format(999999) == "999k", "Token counts are formatted wrongly.");
 
             // Incremental reads: only new lines, and a line still being written waits.
@@ -232,8 +235,11 @@ internal static class ClaudeTests
         check("Claude picks small, medium and large designs", () => {
             Assert(CardSizing.Claude(260, 180) == CardSizing.Design.Small && CardSizing.Claude(359, 400) == CardSizing.Design.Small && CardSizing.Claude(600, 279) == CardSizing.Design.Small && CardSizing.Claude(472, 310) == CardSizing.Design.Medium && CardSizing.Claude(639, 576) == CardSizing.Design.Medium && CardSizing.Claude(640, 420) == CardSizing.Design.Large, "Claude designs picked at the wrong sizes.");
             Assert(CardSizing.ClaudeLineup(424) == 4 && CardSizing.ClaudeLineup(200) == 1 && CardSizing.ClaudeLineup(1400) == 5 && CardSizing.ClaudeStrip(1) == 84 && CardSizing.ClaudeStrip(1.4) == 94 && CardSizing.ClaudeRowHeight(1) == 64 && CardSizing.ClaudeRowHeight(1.4) == 70 && CardSizing.ClaudeRows(472, 1) == 6 && CardSizing.ClaudePanel(592) == 240, "Claude sizes wrong.");
+            // The same numbers as the phone's CardSizing (AndroidTests: "Claude plan sign-in states…").
+            Assert(CardSizing.ClaudeMediumBeside(424) && !CardSizing.ClaudeMediumBeside(399) && CardSizing.ClaudeMediumColumn(424) == 195 && CardSizing.ClaudeMediumColumn(1000) == 300 && CardSizing.ClaudeMediumProjects(130, 1, true, true) == 2 && CardSizing.ClaudeMediumProjects(130, 1, false, true) == 0
+                && !CardSizing.ClaudeSmallPercent(132, 1.4) && CardSizing.ClaudeSmallPercent(132, 1) && CardSizing.ClaudeExtras(592, 1) >= 1 && CardSizing.ClaudeProjects(400, 1, 2) < CardSizing.ClaudeProjects(400, 1), "Claude project rows and captions sized wrongly.");
             Assert(!WidgetLayout.Default(new AppSettings()).First(p => p.Id == "Claude").Visible && WidgetLayout.Minimum("Claude") == new Size(260, 180) && WidgetLayout.Title("Claude") == "Claude Code", "Claude isn't a hidden widget with its minimum.");
-            Assert(!new AppSettings().ClaudeChime && new AppSettings().ClaudeOnlineLimits, "Claude settings defaults wrong.");
+            Assert(!new AppSettings().ClaudeChime && new AppSettings().ClaudeShowNewProjects && new AppSettings().ClaudeProjects == null, "Claude settings defaults wrong.");
         });
 
         check("Claude designs keep text and critters inside the card at 140%", () => {
@@ -242,6 +248,8 @@ internal static class ClaudeTests
                 { "sample", () => ClaudeView.Fixture(fixtureNow, false) },
                 { "needs", () => { var v = ClaudeView.Fixture(fixtureNow, true); v.Sessions[0].Title = "A very long session title that never ends and keeps going"; v.Sessions[0].ProjectName = "an-extremely-long-project-folder-name-for-checks"; return v; } },
                 { "unconnected", () => new ClaudeView { Connected = false, Sample = true } },
+                { "signedout", () => { var v = ClaudeView.Fixture(fixtureNow, false); v.Limits = null; v.Plan = ClaudePlanState.SignedOut; return v; } },
+                { "expired", () => { var v = ClaudeView.Fixture(fixtureNow, false); v.Plan = ClaudePlanState.Expired; v.Limits.UpdatedAt = fixtureNow.AddHours(-2); return v; } },
                 { "empty", () => new ClaudeView { Connected = true, Sample = true, LogsRead = true, Limits = new ClaudeLimits { MissingAt = fixtureNow } } } };
             foreach (var size in new[] { new Size(260, 180), new Size(359, 300), new Size(472, 310), new Size(360, 280), new Size(639, 576), new Size(640, 420), new Size(900, 576), new Size(1856, 576) })
             {
