@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.24.0 (1 Nov 2026)
+
+A Clipboard history widget (user request; Windows, with the phone as a remote):
+
+- **The last texts you copied, one tap from pasting again.** A tap puts the text back on the clipboard and pastes it into the app you're using; the dashboard never takes the keyboard away from that app. Turn it on in Edit layout; it starts hidden.
+- **Private copies stay private.** Text that password managers mark as private (the same marks Windows' own clipboard history respects) is never kept. The clipboard is only watched while the widget is on one of your pages, and Windows tells the app about each copy, so nothing polls.
+- **Pause and Clear** on the card (Clear asks first). Settings → Widgets → Clipboard history sets how many texts to keep (5–50, default 10).
+- **Memory only by default.** The history is gone when the app closes, unless you turn on "Keep the history when Widget Screen closes", which saves it encrypted for your Windows account.
+- **Small, medium and large designs**: one-line rows; rows with when each was copied; and two-line previews with their length.
+- The phone shows short previews of the PC's history and pastes on the PC. It can't keep a history of the phone's own copies, because Android doesn't let apps watch the clipboard in the background. Not yet tried on a phone, and a live copy and paste weren't tried by the checks (they would touch your real clipboard).
+
 ## v0.23.0 (1 Nov 2026)
 
 A Claude Code widget (user request; Windows and the phone, the same designs on both):
