@@ -30,6 +30,7 @@ namespace WidgetScreen
             claudeCard.Fit(Editor.Bounds("Claude"), settings.TextScale);
             clipCard.Fit(Editor.Bounds("Clipboard"));
             FitMacros();
+            calendarCard.Fit(Editor.Bounds("Calendar"));
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
             Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;

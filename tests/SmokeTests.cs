@@ -57,6 +57,7 @@ internal static class SmokeTests
         NotesTests.Run(directory, Check);
         ClaudeTests.Run(directory, Check);
         ClipboardTests.Run(directory, Check);
+        CalendarTests.Run(directory, Check);
         MacroTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
@@ -117,7 +118,7 @@ internal static class SmokeTests
                 {
                     Action<string> click = name => ((System.Windows.Controls.Button)window.FindName(name)).RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     click("SettingsButton");
-                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 11 && (string)((System.Windows.Controls.TabItem)tabs.Items[10]).Header == "Claude", "Settings tabs missing.");
+                    var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs"); Assert(tabs.Items.Count == 12 && (string)((System.Windows.Controls.TabItem)tabs.Items[11]).Header == "Claude", "Settings tabs missing.");
                     ((System.Windows.Controls.ComboBox)window.FindName("ThemeChoice")).SelectedItem = "Warm";
                     var preview = ((System.Windows.Media.SolidColorBrush)window.Resources["Page"]).Color;
                     click("CancelSettings");
@@ -251,7 +252,7 @@ internal static class SmokeTests
                     Assert(hint.Visibility == System.Windows.Visibility.Collapsed && SettingsStore.Load(path, out warning).HintDismissed, "Got it didn't put the tips away for good.");
                     var tabs = (System.Windows.Controls.TabControl)window.FindName("SettingsTabs");
                     var headers = tabs.Items.OfType<System.Windows.Controls.TabItem>().Select(t => (string)t.Header).ToList();
-                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Spotify", "Quick Launch", "Macros", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
+                    Assert(headers.SequenceEqual(new[] { "Theme", "Display", "Widgets", "Weather", "Prayer", "Calendar", "Spotify", "Quick Launch", "Macros", "Phone", "Discord", "Claude" }), "The Settings tabs aren't in order: " + String.Join(", ", headers));
                     Assert(!new AppSettings().HideToTrayWithPhone, "Tray mode with the phone is on by default.");
                 }
                 window.Close();

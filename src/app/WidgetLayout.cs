@@ -54,7 +54,7 @@ namespace WidgetScreen
         // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
         private const double MinimumShrink = 0.78;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros", "Calendar" };
         public static string Title(string id)
         {
             switch (id) {
@@ -70,6 +70,7 @@ namespace WidgetScreen
                 case "Claude": return "Claude Code";
                 case "Clipboard": return "Clipboard history";
                 case "Macros": return "Macros";
+                case "Calendar": return "Calendar";
                 default: return id;
             }
         }
@@ -92,6 +93,7 @@ namespace WidgetScreen
                 case "Claude": return new Size(260, 180);
                 case "Clipboard": return new Size(240, 200);
                 case "Macros": return new Size(288, 204);
+                case "Calendar": return new Size(240, 152);
                 default: return new Size(232, 152);
             }
         }
@@ -146,7 +148,8 @@ namespace WidgetScreen
                 new WidgetPlacement { Id = "Notes", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
                 new WidgetPlacement { Id = "Claude", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
                 new WidgetPlacement { Id = "Clipboard", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false },
-                new WidgetPlacement { Id = "Macros", X = 336, Y = 326, Width = 472, Height = 250, Visible = false }
+                new WidgetPlacement { Id = "Macros", X = 336, Y = 326, Width = 472, Height = 250, Visible = false },
+                new WidgetPlacement { Id = "Calendar", X = 1384, Y = 0, Width = 472, Height = 310, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)

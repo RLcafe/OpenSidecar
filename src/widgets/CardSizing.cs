@@ -206,6 +206,14 @@ namespace WidgetScreen
         // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
         // each text was copied at the reference size, and two-line previews with their length from 440 × 400.
         public static Design Clip(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 400 ? Design.Large : Design.Medium; }
+        // Calendar (docs/design/calendar.md): the next event under 340 wide or 220 tall, the next event over the ones after
+        // it at the reference 472 × 250, and the agenda grouped by day from 440 × 380. Medium rows are 30 units under the
+        // next-event block (its three lines and the rule under it, which grow with the text size); the time column fits
+        // "12:30 PM" (or "Tmrw 12:30") at the small size.
+        public static Design Calendar(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 380 ? Design.Large : Design.Medium; }
+        public const double CalendarRow = 30;
+        public static double CalendarNextHeight(double textScale) { return Math.Ceiling(27 + 72 * textScale); }
+        public static double CalendarTimeColumn(bool use24) { return use24 ? 96 : 128; }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

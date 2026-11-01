@@ -24,6 +24,7 @@ import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ScaledHost;
+import com.alialyami.widgetscreen.widgets.CalendarWidget;
 import com.alialyami.widgetscreen.widgets.ClipboardWidget;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
 import com.alialyami.widgetscreen.views.CritterView;
@@ -107,6 +108,7 @@ public final class Dashboard {
         widgets.put("Claude", new ClaudeWidget(this));
         widgets.put("Clipboard", new ClipboardWidget(this));
         widgets.put("Macros", new MacrosWidget(this));
+        widgets.put("Calendar", new CalendarWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
         if (warning[0] != null) say(warning[0], true);
@@ -578,6 +580,7 @@ public final class Dashboard {
             case "Claude": return 330;
             case "Clipboard": return 400;
             case "Macros": return 290;
+            case "Calendar": return 420;
             default: return 640;
         }
     }
