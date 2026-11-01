@@ -30,6 +30,7 @@ import com.alialyami.widgetscreen.widgets.QuickLaunchWidget;
 import com.alialyami.widgetscreen.widgets.MixerWidget;
 import com.alialyami.widgetscreen.widgets.SoundboardWidget;
 import com.alialyami.widgetscreen.widgets.SpotifyWidget;
+import com.alialyami.widgetscreen.widgets.StorageWidget;
 import com.alialyami.widgetscreen.widgets.SystemWidget;
 import com.alialyami.widgetscreen.widgets.WeatherWidget;
 import com.alialyami.widgetscreen.widgets.Widget;
@@ -92,6 +93,7 @@ public final class Dashboard {
         widgets.put("Weather", new WeatherWidget(this));
         widgets.put("Spotify", new SpotifyWidget(this));
         widgets.put("Soundboard", new SoundboardWidget(this));
+        widgets.put("Storage", new StorageWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
         if (warning[0] != null) say(warning[0], true);
@@ -519,6 +521,7 @@ public final class Dashboard {
             case "Mixer": return 560;
             case "System": return 330;
             case "Weather": return 270;
+            case "Storage": return 300;
             default: return 640;
         }
     }

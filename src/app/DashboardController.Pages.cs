@@ -63,7 +63,7 @@ namespace WidgetScreen
         private void PagesChanged()
         {
             ApplyLayout(settings); UpdatePages(); UpdateLevelTimer();
-            if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); }
+            if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); RefreshStorage(); }
         }
 
         private void UpdatePages()

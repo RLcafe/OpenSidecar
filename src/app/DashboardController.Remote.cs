@@ -347,6 +347,7 @@ namespace WidgetScreen
             if (parts.Contains("spotify"))
                 state["spotify"] = D("connected", spotifyService.Connected, "canControl", spotifyService.CanControl, "canReadRecent", spotifyService.CanReadRecent);
             if (parts.Contains("discord")) state["discord"] = await RemoteDiscord(false);
+            if (parts.Contains("storage")) state["storage"] = await RemoteStorage();
             return state;
         }
 

@@ -49,6 +49,7 @@ internal static class SmokeTests
         RemoteTests.Run(directory, Check);
         ScreenSizeTests.Run(directory, Check);
         OrganizeTests.Run(directory, Check);
+        StorageTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {

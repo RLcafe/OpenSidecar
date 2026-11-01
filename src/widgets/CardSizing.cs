@@ -134,6 +134,22 @@ namespace WidgetScreen
         public static Design Tile(double cellWidth, double cellHeight) { return cellHeight < 64 || cellWidth < 100 ? Design.Small : cellWidth >= 150 && cellHeight >= 110 ? Design.Large : Design.Medium; }
         // The hours a Large forecast shows: up to five, as many as fit 72 units each.
         public static int WeatherHours(double width) { return (int)Clamp(Math.Floor((width - 48 - 16) / 72), 3, 5); }
+        // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
+        // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
+        // counted in a last line.
+        public static Design Storage(double width, double height) { return width < 340 || height < 200 ? Design.Small : width >= 440 && height >= 340 ? Design.Large : Design.Medium; }
+        // Medium rows carry a used-of-total line while every drive fits with it, and drop it to fit more drives.
+        public const double StorageListRow = 40, StorageRowHeight = 76, StorageCompactRow = 36, StorageTileHeight = 150;
+        public static bool StorageDetailRows(double height, int count) { return count * StorageRowHeight + (count - 1) * 8 <= height; }
+        public static int StorageCapacity(Design design, double width, double height, int count)
+        {
+            if (design == Design.Small) return Math.Max(1, (int)Math.Floor((height + 8) / (StorageListRow + 8)));
+            if (design == Design.Medium) return Math.Max(1, (int)Math.Floor((height + 4) / (StorageCompactRow + 4)));
+            return StorageTileColumns(width, count) * Math.Max(1, (int)Math.Floor((height + 12) / (StorageTileHeight + 12)));
+        }
+        public static int StorageTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.Min(count, 4) : Math.Min(count, 2); }
+        public static double StorageRing(double tileWidth, double tileHeight) { return Clamp(Math.Floor(Math.Min(tileWidth - 24, tileHeight - 24 - 72)), 56, 200); }
+        public static double StorageListValue(double rowHeight) { return Clamp(Math.Round(rowHeight * 0.5), 18, 32); }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }

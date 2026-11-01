@@ -23,6 +23,7 @@ namespace WidgetScreen
             // System stats and Weather switch between a Small, Medium and Large design (docs/design/widget-size-views.md).
             systemCard.Fit(Editor.Bounds("System"));
             weatherCard.Fit(Editor.Bounds("Weather"));
+            storageCard.Fit(Editor.Bounds("Storage"));
             FitSpotify(Editor.Bounds("Spotify"));
             var board = Editor.Bounds("Soundboard");
             Control<TextBlock>("SoundboardChannel").MaxWidth = CardSizing.SoundboardChannelShown(board.Width) ? Double.PositiveInfinity : 0;

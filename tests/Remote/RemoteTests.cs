@@ -142,8 +142,10 @@ internal static class RemoteTests
                     Assert(live.Item1 == 200, "Live state failed: " + live.Item2);
                     var liveState = Json(live.Item2);
                     // The Android checks parse this real answer, so both apps agree on the format.
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage", token).Item2);
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
+                    var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];
+                    Assert(Convert.ToInt32(storageState["lowPercent"]) == 10 && ((object[])storageState["drives"]).Length > 0 && ((Dictionary<string, object>)((object[])storageState["drives"])[0]).ContainsKey("free"), "Storage state wrong.");
                     int art = get("/art", token).Item1;
                     Assert(art == 200 || art == 404, "Artwork request failed.");
 
@@ -196,7 +198,7 @@ internal static class RemoteTests
                     controller.Editor.Cancel();
                     Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
                     Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,layout", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,layout", token).Item2);
                     Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");

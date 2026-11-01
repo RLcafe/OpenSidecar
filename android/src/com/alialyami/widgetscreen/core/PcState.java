@@ -55,6 +55,14 @@ public final class PcState {
 
     public static final class Weather { public String location = ""; public double latitude, longitude; public boolean imperial; }
 
+    // The PC's fixed drives and its low-space threshold (docs/design/storage.md).
+    public static final class Drive { public String name = "", label = ""; public double total, free; }
+    public static final class Storage {
+        public boolean error;
+        public int lowPercent = 10;
+        public final List<Drive> drives = new ArrayList<Drive>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -96,6 +104,7 @@ public final class PcState {
     public Weather weather;
     public SpotifyFlags spotify;
     public Discord discord;
+    public Storage storage;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -181,6 +190,19 @@ public final class PcState {
         if (Json.has(root, "discord")) {
             Map<String, Object> d = Json.obj(Json.value(root, "discord"));
             state.discord = parseDiscord(d);
+        }
+        if (Json.has(root, "storage")) {
+            Map<String, Object> s = Json.obj(Json.value(root, "storage"));
+            Storage storage = new Storage();
+            storage.error = flag(s, "error");
+            if (Json.has(s, "lowPercent")) storage.lowPercent = (int) Json.number(s, "lowPercent");
+            for (Object item : Json.array(s, "drives")) {
+                Map<String, Object> d = Json.obj(item);
+                Drive drive = new Drive();
+                drive.name = text(d, "name"); drive.label = text(d, "label"); drive.total = Json.number(d, "total"); drive.free = Json.number(d, "free");
+                if (!drive.name.isEmpty() && drive.total > 0) storage.drives.add(drive);
+            }
+            state.storage = storage;
         }
         return state;
     }

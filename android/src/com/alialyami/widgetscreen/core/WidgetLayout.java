@@ -14,7 +14,7 @@ public final class WidgetLayout {
     // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
     private static final double MINIMUM_SHRINK = 0.78;
     // The same widgets as the Windows dashboard, which the phone mirrors.
-    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
+    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage" };
 
     public static final class Box {
         public final double x, y, width, height;
@@ -51,6 +51,7 @@ public final class WidgetLayout {
             case "Shortcuts": return "Quick launch";
             case "Mixer": return "Sound mixer";
             case "System": return "System stats";
+            case "Storage": return "Storage";
             default: return id;
         }
     }
@@ -66,6 +67,7 @@ public final class WidgetLayout {
             case "Mixer": return new double[] { 320, 224 };
             case "System": return new double[] { 260, 280 };
             case "Soundboard": return new double[] { 300, 240 };
+            case "Storage": return new double[] { 240, 152 };
             default: return new double[] { 232, 152 };
         }
     }
@@ -103,7 +105,9 @@ public final class WidgetLayout {
             new Placement("System", 1384, 0, 472, 310, false),
             new Placement("Weather", 1384, 326, 472, 250, false),
             new Placement("Spotify", 1296, 0, 560, 576, true),
-            new Placement("Soundboard", 336, 326, 472, 250, false)
+            new Placement("Soundboard", 336, 326, 472, 250, false),
+            // New widgets start hidden, so the default layout stays the same.
+            new Placement("Storage", 1384, 326, 472, 250, false)
         };
     }
 
@@ -225,7 +229,7 @@ public final class WidgetLayout {
             case "Focus": return new double[] { 320, 400 };
             case "Mixer": return new double[] { 456, 576 };
             case "Spotify": return new double[] { 560, 576 };
-            case "Shortcuts": case "Weather": case "Soundboard": return new double[] { 472, 250 };
+            case "Shortcuts": case "Weather": case "Soundboard": case "Storage": return new double[] { 472, 250 };
             default: return new double[] { 472, 310 };
         }
     }

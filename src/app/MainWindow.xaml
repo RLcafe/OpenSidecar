@@ -422,6 +422,13 @@
             <Border x:Name="WeatherCard" Grid.Row="1" Style="{StaticResource Card}" Cursor="Hand" ToolTip="Tap to update the weather" AutomationProperties.Name="Weather. Tap to update.">
               <Grid x:Name="WeatherBody"/>
             </Border>
+            <!-- Free space on the fixed drives. StorageCard builds the Small, Medium or Large design in StorageBody (docs/design/storage.md). -->
+            <Border x:Name="StorageCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Storage">
+              <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
+                <DockPanel><TextBlock Text="STORAGE" Style="{StaticResource Label}"/><TextBlock x:Name="StorageStatus" Text="" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
+                <Grid x:Name="StorageBody" Grid.Row="1" Margin="0,8,0,0"/>
+              </Grid>
+            </Border>
           </Grid>
         </Grid>
 
@@ -524,6 +531,13 @@
               <TextBlock Text="Arrange widgets right on the dashboard: drag to move, stretch a corner to resize, and show or hide each one. Undo, snapping to other widgets, Arrange and Reset are in the editor." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
               <Button x:Name="OpenLayoutEditor" Content="Edit layout" HorizontalAlignment="Left" MinWidth="200" Margin="0,0,0,12"/>
               <TextBlock Text="Opening the editor closes Settings without saving other changes here." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+              <TextBlock Text="Storage" FontSize="24" Margin="0,8,0,10"/>
+              <TextBlock Text="The Storage widget shows free space on this PC's drives. A drive with less free space than this turns to the warning colour." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+              <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                <Slider x:Name="StorageLowChoice" Minimum="1" Maximum="50" SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1" AutomationProperties.Name="Low space warning"/>
+                <TextBlock x:Name="StorageLowLabel" Grid.Column="1" Text="10% free" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+              </Grid>
+              <TextBlock Text="Drives are read once a minute while the widget is shown (every two minutes in Quiet mode). Network and removable drives aren't listed." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
               </StackPanel>
               </ScrollViewer>
               <StackPanel Grid.Column="2">
