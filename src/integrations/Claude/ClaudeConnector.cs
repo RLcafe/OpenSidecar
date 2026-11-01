@@ -15,6 +15,9 @@ namespace WidgetScreen
     public sealed class ClaudeConnector
     {
         public const string BackupSuffix = ".widgetscreen-backup";
+        // Besides the latest backup, dated copies (settings.json.widgetscreen-backup-20261101-174512); the newest
+        // KeptBackups stay, so a second Connect never loses the original (review fix 11).
+        public const int KeptBackups = 5;
         // The events the bridge listens to. Notification only for questions (a permission or an elicitation).
         public static readonly string[][] Events = {
             new[] { "SessionStart", null }, new[] { "UserPromptSubmit", null }, new[] { "PostToolUse", "*" },
@@ -254,7 +257,23 @@ namespace WidgetScreen
 
         private void Backup()
         {
-            if (File.Exists(SettingsPath)) File.Copy(SettingsPath, SettingsPath + BackupSuffix, true);
+            if (!File.Exists(SettingsPath)) return;
+            File.Copy(SettingsPath, SettingsPath + BackupSuffix, true);
+            string dated = SettingsPath + BackupSuffix + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            for (int n = 2; File.Exists(dated); n++) dated = SettingsPath + BackupSuffix + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + "-" + n;
+            File.Copy(SettingsPath, dated);
+            try
+            {
+                foreach (var old in DatedBackups().Skip(KeptBackups)) File.Delete(old);
+            }
+            catch (Exception) { }
+        }
+        // The dated backups, newest first.
+        public List<string> DatedBackups()
+        {
+            string folder = Path.GetDirectoryName(SettingsPath), prefix = Path.GetFileName(SettingsPath) + BackupSuffix + "-";
+            if (!Directory.Exists(folder)) return new List<string>();
+            return Directory.GetFiles(folder, prefix + "*").OrderByDescending(f => File.GetLastWriteTimeUtc(f)).ThenByDescending(f => f, StringComparer.Ordinal).ToList();
         }
 
         private void Save(JsonObject root)

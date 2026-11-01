@@ -296,7 +296,8 @@ namespace WidgetScreen
             foreach (var line in lines.Skip(1)) { int colon = line.IndexOf(':'); if (colon > 0) headers[line.Substring(0, colon).Trim()] = line.Substring(colon + 1).Trim(); }
             if (path != "/v1/logs" && path != "/v1/metrics") return 404;
             if (request[0] != "POST") return 405;
-            string type; if (headers.TryGetValue("Content-Type", out type) && type.IndexOf("json", StringComparison.OrdinalIgnoreCase) < 0) return 415;
+            // JSON only, and it must say so: a web page can post to 127.0.0.1 without a Content-Type (review fix 11).
+            string type; if (!headers.TryGetValue("Content-Type", out type) || type.IndexOf("application/json", StringComparison.OrdinalIgnoreCase) < 0) return 415;
             byte[] raw;
             string encoding;
             if (headers.TryGetValue("Transfer-Encoding", out encoding) && encoding.IndexOf("chunked", StringComparison.OrdinalIgnoreCase) >= 0) raw = Chunked(stream);

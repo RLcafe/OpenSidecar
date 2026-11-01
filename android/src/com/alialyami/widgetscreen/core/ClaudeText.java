@@ -63,10 +63,13 @@ public final class ClaudeText {
         return message.toLowerCase(Locale.ROOT).startsWith(permission.toLowerCase(Locale.ROOT)) && message.length() > permission.length() ? "Wants to use " + message.substring(permission.length()) : message;
     }
     // The flag at the heading's right: "SAMPLE", and "AS OF 10:42" when the meters are old or the last check failed.
-    public static String flag(PcState.Claude claude, double now, boolean use24) {
+    public static String flag(PcState.Claude claude, double now, boolean use24) { return flag(claude, now, use24, false); }
+    // Large always says how fresh the plan numbers are, like the PC (review fix 10).
+    public static String flag(PcState.Claude claude, double now, boolean use24, boolean fresh) {
         List<String> parts = new ArrayList<String>();
         if (claude.sample) parts.add("SAMPLE");
         if (old(claude, now)) parts.add("AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
+        else if (fresh && claude.limitsKnown()) parts.add("LIVE · AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
         return join(parts);
     }
     public static final String SIGN_IN = "Sign in to Claude in Settings → Claude on the PC to see plan limits.", SIGN_IN_ENDED = "The PC's Claude sign-in has ended. Sign in again in Settings → Claude on the PC.";
@@ -99,7 +102,9 @@ public final class ClaudeText {
     public static String threads(int count) { return count == 1 ? "1 thread" : count + " threads"; }
     public static String cars(int count) { return count == 1 ? "1 car" : count + " cars"; }
     // Under a project's name: "3 threads · 2 running · Claude app", or when its threads ended.
-    public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now) {
+    public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now) { return groupDetail(claude, group, now, false); }
+    // Compact (Medium) leaves out where it runs, so "+N hidden" still fits (review fix 3).
+    public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now, boolean compact) {
         // A project with no thread in the period: when it was last used.
         // Threads Settings → Claude hides on the PC (archived, or idle when asked) are counted (decision 020).
         if (group.threads.isEmpty()) return (group.hidden > 0 ? group.hidden + " hidden · " : "") + (group.lastActive > 0 ? "Quiet · last used " + Instant.ofEpochMilli((long) (group.lastActive * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MMM d", Locale.US)) : "Quiet");
@@ -113,7 +118,7 @@ public final class ClaudeText {
             if (!t.where.isEmpty()) { if (where == null) where = t.where; else if (!where.equals(t.where)) mixed = true; }
         }
         if (running > 0) parts.add(running + " running");
-        if (where != null && !mixed) parts.add("Desktop".equals(where) ? "Claude app" : where);
+        if (where != null && !mixed) { if (!compact) parts.add("Desktop".equals(where) ? "Claude app" : where); }
         else if (running == 0 && last > 0) parts.add("ended " + duration(now - last) + " ago");
         if (group.hidden > 0) parts.add("+" + group.hidden + " hidden");
         return join(parts);
@@ -153,6 +158,8 @@ public final class ClaudeText {
             parts.add(threads(count) + (period == 0 ? " in 5 h" : period == 1 ? " today" : " this week"));
         }
         if (parts.isEmpty()) parts.add(claude.sessions.isEmpty() ? "Nothing running" : "All quiet");
+        // Medium and Small keep the two most urgent parts, like the PC (review fix 3).
+        if (!threads && parts.size() > 2) parts = new ArrayList<String>(parts.subList(0, 2));
         return join(parts);
     }
     // "resets 4:18 pm · in 1 h 38 m".
@@ -185,6 +192,9 @@ public final class ClaudeText {
     }
     // Archived or resolved: under the cover, dimmed the most, last in its project (decision 020).
     public static boolean parked(String pit) { return "archived".equals(pit) || "resolved".equals(pit); }
+    // The tools fact (review fix 2), like the PC's: tool calls from the logs, "asked" from telemetry, partial when
+    // telemetry saw fewer of them.
+    public static String toolsKey(PcState.ClaudeFacts f) { return !f.telemetry ? "TOOLS" : "TOOLS · " + f.asked + " ASKED" + (f.askedPartial ? " · PARTIAL" : ""); }
     // A thread's chip: what its car is doing.
     public static String chip(String pit) {
         switch (pit == null ? "" : pit) {

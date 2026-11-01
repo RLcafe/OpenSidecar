@@ -87,6 +87,60 @@ namespace WidgetScreen
         }
     }
 
+    // What the logs say Claude did, by tool id (review fix 2): each tool call (a tool_use block in a reply) and the lines
+    // each edit or write changed (its result's structuredPatch: "+" and "-" lines; a new file's lines when it has
+    // none). Only counts are kept, never the text.
+    public sealed class ClaudeLogActivity
+    {
+        public readonly Dictionary<string, ClaudeToolEntry> Tools = new Dictionary<string, ClaudeToolEntry>();
+        public readonly Dictionary<string, ClaudeLinesEntry> Lines = new Dictionary<string, ClaudeLinesEntry>();
+
+        public void Calls(JsonObject line, JsonObject message, string session)
+        {
+            var at = ClaudeBridge.ParseTime(ClaudeJson.Str(line, "timestamp"));
+            if (!at.HasValue) return;
+            foreach (var block in (ClaudeJson.List(message, "content") ?? new List<object>()).OfType<JsonObject>())
+            {
+                if (ClaudeJson.Str(block, "type") != "tool_use") continue;
+                string id = ClaudeJson.Str(block, "id");
+                if (String.IsNullOrEmpty(id) || Tools.ContainsKey(id)) continue;
+                Tools[id] = new ClaudeToolEntry { At = at.Value, Session = session };
+            }
+        }
+
+        public void Result(JsonObject line, string session)
+        {
+            var result = ClaudeJson.Obj(line, "toolUseResult");
+            var at = ClaudeBridge.ParseTime(ClaudeJson.Str(line, "timestamp"));
+            if (result == null || !at.HasValue) return;
+            var block = (ClaudeJson.List(ClaudeJson.Obj(line, "message"), "content") ?? new List<object>()).OfType<JsonObject>().FirstOrDefault(b => ClaudeJson.Str(b, "type") == "tool_result");
+            string id = ClaudeJson.Str(block, "tool_use_id") ?? ClaudeJson.Str(line, "uuid");
+            if (String.IsNullOrEmpty(id) || Lines.ContainsKey(id)) return;
+            long added = 0, removed = 0;
+            var patch = ClaudeJson.List(result, "structuredPatch");
+            foreach (var hunk in (patch ?? new List<object>()).OfType<JsonObject>())
+                foreach (var text in (ClaudeJson.List(hunk, "lines") ?? new List<object>()).OfType<string>())
+                {
+                    if (text.StartsWith("+", StringComparison.Ordinal)) added++;
+                    else if (text.StartsWith("-", StringComparison.Ordinal)) removed++;
+                }
+            // A new file comes with its content and an empty patch: every line is added.
+            if (added == 0 && removed == 0 && ClaudeJson.Str(result, "type") == "create")
+            {
+                string content = ClaudeJson.Str(result, "content") ?? "";
+                if (content.Length > 0) added = content.Split('\n').Length - (content.EndsWith("\n", StringComparison.Ordinal) ? 1 : 0);
+            }
+            if (added + removed == 0) return;
+            Lines[id] = new ClaudeLinesEntry { At = at.Value, Session = session, Added = added, Removed = removed };
+        }
+
+        public void Prune(DateTime oldest)
+        {
+            foreach (var key in Tools.Where(p => p.Value.At < oldest).Select(p => p.Key).ToList()) Tools.Remove(key);
+            foreach (var key in Lines.Where(p => p.Value.At < oldest).Select(p => p.Key).ToList()) Lines.Remove(key);
+        }
+    }
+
     // Tokens and cost per project and per session, from Claude Code's logs (projects\<encoded folder>\<session>.jsonl
     // under the Claude folder) and its telemetry (ClaudeTelemetry). Assistant lines carry message.usage; a streamed
     // reply repeats it on several lines, so each reply counts once, by its request id (message.id when there is none),
@@ -104,21 +158,44 @@ namespace WidgetScreen
         private readonly Dictionary<string, string> titles = new Dictionary<string, string>();
         private readonly Dictionary<string, string> prompts = new Dictionary<string, string>();
         private List<ClaudeUsageEntry> entries = new List<ClaudeUsageEntry>();
+        // Tool calls (tool_use blocks) and lines changed (edit and write results), by tool id so a reply split over
+        // several lines counts each once (review fix 2: telemetry missed most sessions). Counts only; no content kept.
+        private readonly ClaudeLogActivity activity = new ClaudeLogActivity();
         private readonly object gate = new object();
         public bool Failed { get; private set; }
         public bool Scanned { get; private set; }
 
         public ClaudeUsage(string configFolder) { projects = Path.Combine(configFolder, "projects"); }
 
-        public List<ClaudeUsageEntry> Entries { get { lock (gate) return entries.ToList(); } }
+        // The readings are published as a snapshot after each scan and each telemetry reply, so the dashboard never waits
+        // on a scan in progress (the first one reads a week of logs; review fix 6).
+        private sealed class Snapshot
+        {
+            public List<ClaudeUsageEntry> Entries = new List<ClaudeUsageEntry>();
+            public Dictionary<string, string> Folders = new Dictionary<string, string>(), Titles = new Dictionary<string, string>(), Prompts = new Dictionary<string, string>();
+            public Dictionary<string, DateTime> LastSeen = new Dictionary<string, DateTime>();
+            public List<ClaudeToolEntry> Tools = new List<ClaudeToolEntry>();
+            public List<ClaudeLinesEntry> Lines = new List<ClaudeLinesEntry>();
+        }
+        private volatile Snapshot published = new Snapshot();
+        // Called with gate held.
+        private void Publish()
+        {
+            published = new Snapshot { Entries = entries.ToList(), Folders = new Dictionary<string, string>(folders), Titles = new Dictionary<string, string>(titles), Prompts = new Dictionary<string, string>(prompts),
+                LastSeen = new Dictionary<string, DateTime>(lastSeen), Tools = activity.Tools.Values.ToList(), Lines = activity.Lines.Values.ToList() };
+        }
+
+        public List<ClaudeUsageEntry> Entries { get { return published.Entries.ToList(); } }
         // The folder each session started in, as the logs say.
-        public Dictionary<string, string> Folders { get { lock (gate) return new Dictionary<string, string>(folders); } }
+        public Dictionary<string, string> Folders { get { return new Dictionary<string, string>(published.Folders); } }
         // When each log last changed, by session: the project list's "last used" for projects no session runs in now.
-        public Dictionary<string, DateTime> LastSeen { get { lock (gate) return new Dictionary<string, DateTime>(lastSeen); } }
+        public Dictionary<string, DateTime> LastSeen { get { return new Dictionary<string, DateTime>(published.LastSeen); } }
         // A title the user gave a session in Claude Code (its custom-title lines), by session.
-        public Dictionary<string, string> Titles { get { lock (gate) return new Dictionary<string, string>(titles); } }
+        public Dictionary<string, string> Titles { get { return new Dictionary<string, string>(published.Titles); } }
         // The first line of each session's first request (ClaudeTitles.FromPrompt), for a thread with no real title.
-        public Dictionary<string, string> Prompts { get { lock (gate) return new Dictionary<string, string>(prompts); } }
+        public Dictionary<string, string> Prompts { get { return new Dictionary<string, string>(published.Prompts); } }
+        public List<ClaudeToolEntry> Tools { get { return published.Tools.ToList(); } }
+        public List<ClaudeLinesEntry> Lines { get { return published.Lines.ToList(); } }
 
         public void Scan(DateTime now)
         {
@@ -126,7 +203,7 @@ namespace WidgetScreen
             {
                 try
                 {
-                    if (!Directory.Exists(projects)) { Failed = true; Scanned = true; return; }
+                    if (!Directory.Exists(projects)) { Failed = true; Publish(); Scanned = true; return; }
                     DateTime oldest = now - Kept;
                     foreach (var file in new DirectoryInfo(projects).EnumerateFiles("*.jsonl", SearchOption.AllDirectories))
                     {
@@ -142,6 +219,7 @@ namespace WidgetScreen
                     Failed = false;
                 }
                 catch (Exception) { Failed = true; }
+                Publish();
                 Scanned = true;
             }
         }
@@ -159,16 +237,19 @@ namespace WidgetScreen
                     known.Cost = entry.Cost; known.FromTelemetry = true;
                     if (known.Model.Length == 0) known.Model = entry.Model;
                     if (known.Prompt == 0) { known.Prompt = entry.Prompt; known.CacheRead = entry.CacheRead; }
+                    Publish();
                     return;
                 }
                 if (entry.At < now - Kept) return;
                 replies[key] = entry; entries.Add(entry);
+                Publish();
             }
         }
 
         private void Prune(DateTime oldest)
         {
             entries.RemoveAll(e => e.At < oldest);
+            activity.Prune(oldest);
             foreach (var key in replies.Where(p => p.Value.At < oldest).Select(p => p.Key).ToList()) replies.Remove(key);
         }
 
@@ -191,7 +272,7 @@ namespace WidgetScreen
                 if (end < 0) return offset;
                 string text = Encoding.UTF8.GetString(buffer, 0, end + 1);
                 string session = Path.GetFileNameWithoutExtension(path);
-                foreach (var entry in Parse(text, replies, session, folders, titles, prompts)) if (entry.At >= oldest) entries.Add(entry);
+                foreach (var entry in Parse(text, replies, session, folders, titles, prompts, activity)) if (entry.At >= oldest) entries.Add(entry);
                 return offset + end + 1;
             }
         }
@@ -199,7 +280,7 @@ namespace WidgetScreen
         // The usage in a piece of a log; replies holds the replies already counted (from either source). A session's
         // project is the folder it started in: its cwd moves when its shell changes folders, which isn't another
         // project (folders remembers it).
-        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null, Dictionary<string, string> titles = null, Dictionary<string, string> prompts = null)
+        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null, Dictionary<string, string> titles = null, Dictionary<string, string> prompts = null, ClaudeLogActivity activity = null)
         {
             if (folders == null) folders = new Dictionary<string, string>();
             if (titles == null) titles = new Dictionary<string, string>();
@@ -213,7 +294,8 @@ namespace WidgetScreen
                 if (line.Length == 0) continue;
                 bool usageLine = line.IndexOf("\"usage\"", StringComparison.Ordinal) >= 0 && line.IndexOf("\"assistant\"", StringComparison.Ordinal) >= 0;
                 bool titleLine = !usageLine && line.IndexOf("\"custom-title\"", StringComparison.Ordinal) >= 0;
-                if (!usageLine && !titleLine && line.IndexOf("\"cwd\"", StringComparison.Ordinal) < 0) continue;
+                bool resultLine = !usageLine && line.IndexOf("\"toolUseResult\"", StringComparison.Ordinal) >= 0;
+                if (!usageLine && !titleLine && !resultLine && line.IndexOf("\"cwd\"", StringComparison.Ordinal) < 0) continue;
                 object parsed; if (!ClaudeJson.TryParse(line, out parsed)) continue;
                 var o = ClaudeJson.Obj(parsed);
                 string id = ClaudeJson.Str(o, "sessionId") ?? session ?? "", folder;
@@ -232,8 +314,11 @@ namespace WidgetScreen
                         if (asked.Length > 0) prompts[id] = asked;
                     }
                 }
+                if (activity != null && resultLine) activity.Result(o, id);
                 if (!usageLine || ClaudeJson.Str(o, "type") != "assistant") continue;
                 var message = ClaudeJson.Obj(o, "message"); var usage = ClaudeJson.Obj(message, "usage");
+                // Every tool call in the reply, before the reply itself is skipped as already counted.
+                if (activity != null) activity.Calls(o, message, id);
                 if (usage == null) continue;
                 string request = ClaudeJson.Str(o, "requestId") ?? "", key = request.Length > 0 ? request : (ClaudeJson.Str(message, "id") ?? "");
                 if (key.Length > 0 && replies.ContainsKey(key)) continue;

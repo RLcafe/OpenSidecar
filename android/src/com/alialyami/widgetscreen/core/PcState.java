@@ -156,7 +156,8 @@ public final class PcState {
         public long tokens, prompt, cacheRead, added, removed;
         public double cost;
         public int tools, asked, denied, linesThreads, replies;
-        public boolean telemetry;
+        // Telemetry seen (it alone knows which tool calls asked you), and whether it saw fewer than the logs today.
+        public boolean telemetry, askedPartial;
         public double cacheHit() { return prompt <= 0 ? Double.NaN : (double) cacheRead / prompt; }
     }
     public static final class Claude {
@@ -573,7 +574,7 @@ public final class PcState {
         ClaudeFacts f = claude.facts;
         f.tokens = (long) Json.number(facts, "tokens"); f.cost = Json.number(facts, "cost"); f.prompt = (long) Json.number(facts, "prompt"); f.cacheRead = (long) Json.number(facts, "cacheRead");
         f.tools = (int) Json.number(facts, "tools"); f.asked = (int) Json.number(facts, "asked"); f.denied = (int) Json.number(facts, "denied"); f.replies = (int) Json.number(facts, "replies");
-        f.added = (long) Json.number(facts, "added"); f.removed = (long) Json.number(facts, "removed"); f.linesThreads = (int) Json.number(facts, "linesThreads"); f.telemetry = flag(facts, "telemetry");
+        f.added = (long) Json.number(facts, "added"); f.removed = (long) Json.number(facts, "removed"); f.linesThreads = (int) Json.number(facts, "linesThreads"); f.telemetry = flag(facts, "telemetry"); f.askedPartial = flag(facts, "askedPartial");
         Map<String, Object> usage = Json.obj(Json.value(c, "usage"));
         for (int i = 0; i < 3; i++)
             for (Object item : Json.array(usage, PERIODS[i])) {

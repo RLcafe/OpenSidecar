@@ -250,7 +250,11 @@ namespace WidgetScreen
         private readonly string bridge;
         private readonly Dictionary<string, Cached> files = new Dictionary<string, Cached>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ClaudeTelemetryEvent> activity = new Dictionary<string, ClaudeTelemetryEvent>();
-        private readonly Dictionary<int, ClaudeProcesses.Owner> owners = new Dictionary<int, ClaudeProcesses.Owner>();
+        // The window found for each running Claude Code process, looked up again after OwnerKept and forgotten when the
+        // process leaves Claude Code's list, so a reused process id never finds an old window (review fix 11).
+        private readonly Dictionary<int, KeyValuePair<DateTime, ClaudeProcesses.Owner>> owners = new Dictionary<int, KeyValuePair<DateTime, ClaudeProcesses.Owner>>();
+        public static readonly TimeSpan OwnerKept = TimeSpan.FromMinutes(10);
+        public int CachedOwners { get { return owners.Count; } }
         private readonly object activityGate = new object();
         private DateTime limitsWrite = DateTime.MinValue;
         private ClaudeLimits fileLimits, onlineLimits;
@@ -284,10 +288,12 @@ namespace WidgetScreen
         public void Receive(List<ClaudeTelemetryEvent> events)
         {
             DateTime now = DateTime.UtcNow;
+            // Usage first and outside activityGate: Usage.Add may wait for a scan, and the dashboard reads activity
+            // (review fix 6).
+            foreach (var e in events) if (e.Usage != null) Usage.Add(e.Usage, now);
             lock (activityGate)
                 foreach (var e in events)
                 {
-                    if (e.Usage != null) Usage.Add(e.Usage, now);
                     if (Track(e, now)) continue;
                     ClaudeTelemetryEvent known;
                     if (!activity.TryGetValue(e.Session, out known) || known.At <= e.At)
@@ -523,6 +529,8 @@ namespace WidgetScreen
                     Compacting = file.Compacting && now - ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since)) < ClaudePace.CompactForgotten };
                 stateAt[file.Id] = ClaudeBridge.FromEpoch(file.Since);
             }
+            var listedPids = new HashSet<int>(Registry.Entries.Select(e => e.Pid));
+            foreach (var pid in owners.Keys.Where(p => !listedPids.Contains(p)).ToList()) owners.Remove(pid);
             foreach (var entry in Registry.Entries)
             {
                 ClaudeSession s;
@@ -535,9 +543,9 @@ namespace WidgetScreen
                 s.Where = ClaudeRegistry.Where(entry.Entrypoint);
                 if (s.Window == 0 && s.WindowPid == 0 && entry.Pid > 0)
                 {
-                    ClaudeProcesses.Owner owner;
-                    if (!owners.TryGetValue(entry.Pid, out owner)) { owner = ClaudeProcesses.OwnerOf(entry.Pid); owners[entry.Pid] = owner; }
-                    s.Window = owner.Window; s.WindowPid = owner.WindowPid;
+                    KeyValuePair<DateTime, ClaudeProcesses.Owner> cached;
+                    if (!owners.TryGetValue(entry.Pid, out cached) || now - cached.Key > OwnerKept) { cached = new KeyValuePair<DateTime, ClaudeProcesses.Owner>(now, ClaudeProcesses.OwnerOf(entry.Pid)); owners[entry.Pid] = cached; }
+                    s.Window = cached.Value.Window; s.WindowPid = cached.Value.WindowPid;
                 }
                 // Claude Code's own list wins when it changed after the hook's news.
                 if (listed.HasValue && entry.StatusChanged > stateAt[entry.Session].AddSeconds(1))
@@ -653,7 +661,9 @@ namespace WidgetScreen
             view.Burn = ClaudePace.Bins(mine, now, minute, ClaudePace.BurnMinutes);
             view.Rate = ClaudePace.Rate(mine, now);
             view.Scale = ClaudePace.Scale(Math.Max(view.Burn.Max(), view.Rate));
-            var linesBySession = lineList.Where(l => ids.Contains(l.Session)).GroupBy(l => l.Session).ToDictionary(g => g.Key, g => g.ToList());
+            // Tools and lines from the logs (review fix 2); telemetry only says which tool calls asked you.
+            var logTools = Usage.Tools; var logLines = Usage.Lines;
+            var linesBySession = logLines.Where(l => ids.Contains(l.Session)).GroupBy(l => l.Session).ToDictionary(g => g.Key, g => g.ToList());
             foreach (var t in view.Threads)
             {
                 List<ClaudeUsageEntry> entries; if (!perSession.TryGetValue(t.Id, out entries)) entries = new List<ClaudeUsageEntry>();
@@ -680,14 +690,15 @@ namespace WidgetScreen
             // Today's facts.
             DateTime today = view.Starts[ClaudePeriod.Today];
             var todays = mine.Where(e => e.At >= today).ToList();
-            var todayTools = toolList.Where(t => t.At >= today && ids.Contains(t.Session)).ToList();
-            var todayLines = lineList.Where(l => l.At >= today && ids.Contains(l.Session)).ToList();
-            int results = todayTools.Count(t => t.Result);
+            var todayDecisions = toolList.Where(t => t.At >= today && ids.Contains(t.Session) && !t.Result).ToList();
+            int todayCalls = logTools.Count(t => t.At >= today && ids.Contains(t.Session));
+            var todayLines = logLines.Where(l => l.At >= today && ids.Contains(l.Session)).ToList();
             view.Facts = new ClaudeFacts {
                 Tokens = todays.Sum(e => e.Tokens), Cost = todays.Sum(e => e.Cost), Replies = todays.Count, Prompt = todays.Sum(e => e.Prompt), CacheRead = todays.Sum(e => e.CacheRead),
-                Tools = results > 0 ? results : todayTools.Count(t => !t.Result), Asked = todayTools.Count(t => !t.Result && t.Asked), Denied = todayTools.Count(t => !t.Result && t.Denied),
+                Tools = todayCalls, Asked = todayDecisions.Count(t => t.Asked), Denied = todayDecisions.Count(t => t.Denied),
                 Added = todayLines.Sum(l => l.Added), Removed = todayLines.Sum(l => l.Removed), LinesThreads = todayLines.Select(l => l.Session).Distinct().Count(),
                 Telemetry = Telemetry.LastReceived > DateTime.MinValue || toolList.Count > 0 || lineList.Count > 0 };
+            view.Facts.AskedPartial = view.Facts.Telemetry && todayDecisions.Count < todayCalls;
             view.MadeAt = now;
         }
 

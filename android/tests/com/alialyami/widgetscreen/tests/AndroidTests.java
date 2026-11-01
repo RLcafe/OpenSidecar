@@ -618,6 +618,26 @@ public final class AndroidTests {
             c.thread("t1").running = false; ok(ClaudeText.groupState(c, g).equals("ready"), "a project with nothing running sleeps");
             ok(ClaudeText.groupDetail(c, g, 1700000000 + 3600).equals("2 threads · ended 1 h ago") && ClaudeText.cars(2).equals("2 cars"), "an ended project's words");
         } });
+        check("Claude review fixes on the phone: two-part Medium summary, compact project line, freshness stamp, title room, whole rows, Coral strip", new Action() { public void run() {
+            double now = System.currentTimeMillis() / 1000.0;
+            PcState.Claude c = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sample\":true,\"plan\":\"current\",\"limits\":{\"fiveHour\":{\"pct\":40},\"week\":{\"pct\":60},\"updatedAt\":" + (now - 60) + ",\"source\":\"online\"},"
+                + "\"sessions\":[{\"id\":\"a\",\"project\":\"x\",\"state\":\"needs\"},{\"id\":\"b\",\"project\":\"x\",\"state\":\"working\"}],"
+                + "\"threads\":[{\"id\":\"a\",\"project\":\"x\",\"running\":true,\"state\":\"needs\",\"pit\":\"need\",\"where\":\"Desktop\"},{\"id\":\"b\",\"project\":\"x\",\"running\":true,\"state\":\"working\",\"pit\":\"work\",\"where\":\"Desktop\"},{\"id\":\"d\",\"project\":\"x\",\"running\":true,\"state\":\"done\",\"pit\":\"done\",\"where\":\"Desktop\"}],"
+                + "\"groups\":{\"week\":[{\"key\":\"k\",\"project\":\"x\",\"threads\":[\"a\",\"b\",\"d\"],\"hidden\":1}]}}}"))).claude;
+            ok(ClaudeText.summary(c, 2, false).split("·").length == 2 && ClaudeText.summary(c, 2, true).contains("this week"), "summary: " + ClaudeText.summary(c, 2, false));
+            PcState.ClaudeGroup g = c.groups[2].get(0);
+            ok(!ClaudeText.groupDetail(c, g, now, true).contains("Claude app") && ClaudeText.groupDetail(c, g, now).contains("Claude app") && ClaudeText.groupDetail(c, g, now, true).endsWith("+1 hidden"), "compact: " + ClaudeText.groupDetail(c, g, now, true));
+            ok(ClaudeText.flag(c, now, false, true).startsWith("SAMPLE · LIVE · AS OF ") && ClaudeText.flag(c, now, false).equals("SAMPLE"), "flag: " + ClaudeText.flag(c, now, false, true));
+            double narrow = 1216 - 48 - 16 - 300;
+            ok(!CardSizing.claudeWhere(narrow, 1.4) && CardSizing.claudeCache(narrow, 1.4) && CardSizing.claudeWhere(narrow, 1) && !CardSizing.claudeCache(640 - 48, 1.4), "title room");
+            ok(CardSizing.claudeWholeRows(new double[] { 52, 36, 36, 52 }, 150) == 124 && CardSizing.claudeWholeRows(new double[] { 80 }, 50) == 50 && CardSizing.claudeWholeRows(new double[0], 100) == 0, "whole rows");
+            ok("Coral".equals(Inks.defaultInk("Claude")) && !Inks.inScope("Claude"), "Claude's strip ink");
+        } });
+        check("Claude's tools fact reads like the PC's, partial when telemetry saw fewer calls", new Action() { public void run() {
+            PcState.Claude c = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"facts\":{\"tools\":1878,\"asked\":5,\"telemetry\":true,\"askedPartial\":true,\"added\":426}}}"))).claude;
+            ok(c.facts.tools == 1878 && c.facts.askedPartial && ClaudeText.toolsKey(c.facts).equals("TOOLS · 5 ASKED · PARTIAL"), "partial: " + ClaudeText.toolsKey(c.facts));
+            c.facts.telemetry = false; ok(ClaudeText.toolsKey(c.facts).equals("TOOLS"), "no telemetry");
+        } });
         check("Claude archived threads and hidden counts read like the PC's", new Action() { public void run() {
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],"
                 + "\"threads\":[{\"id\":\"t1\",\"project\":\"alpha\",\"running\":false,\"pit\":\"archived\",\"archived\":true,\"lastActive\":1700000000},"

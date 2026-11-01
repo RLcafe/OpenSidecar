@@ -121,7 +121,7 @@ internal static class StickerTests
             }
             finally { window.Close(); }
         });
-        check("Every card but Claude Code has a label strip that stays inside it, at text 100% and 140%", () => {
+        check("Every card has a label strip that stays inside it, at text 100% and 140%", () => {
             foreach (double scale in new[] { 1.0, 1.4 })
                 foreach (string id in WidgetLayout.Ids)
                     foreach (var size in new[] { WidgetLayout.Minimum(id), new Size(Math.Max(WidgetLayout.Minimum(id).Width, 560), Math.Max(WidgetLayout.Minimum(id).Height, 400)) })
@@ -137,8 +137,14 @@ internal static class StickerTests
                             {
                                 Lay(window);
                                 var card = (FrameworkElement)window.FindName(CardName(id));
-                                if (id == "Claude") { Assert(!controller.Strips.ContainsKey("Claude") && !Descendants(card).OfType<SpacedText>().Any(), "Claude Code got a label strip."); continue; }
                                 LabelStrip strip; controller.Strips.TryGetValue(id, out strip);
+                                // Claude Code builds its own heading, with the strip since review fix 9 (none on Small).
+                                if (id == "Claude")
+                                {
+                                    controller.UseClaudeSample(false); Lay(window);
+                                    strip = controller.ClaudeCardView.Strip;
+                                    if (CardSizing.Claude(size.Width, size.Height) == CardSizing.Design.Small) { Assert(strip == null, "Small Claude grew a heading."); continue; }
+                                }
                                 if (strip == null && id == "Weather") strip = controller.WeatherStrip;
                                 if (id == "Weather" && CardSizing.Weather(size.Width, size.Height) == CardSizing.Design.Small) { Assert(strip == null, "Small weather grew a heading."); continue; }
                                 Assert(strip != null, id + " has no label strip.");

@@ -240,6 +240,25 @@ public final class CardSizing {
     public static double claudeFixedColumns(double textScale) { return 52 + Math.round(72 * textScale) + 10 + Math.round(80 * textScale) + 10 + Math.round(64 * textScale) + 10; }
     public static boolean claudeModels(double tableWidth, double textScale) { return tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + 240; }
     public static boolean claudeLines(double tableWidth, double textScale) { return claudeModels(tableWidth, textScale) && tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + Math.round(84 * textScale) + 10 + 240; }
+    // A thread title keeps room for about 14 characters, like the PC (review fix 4): the "Desktop · 2 min" text steps
+    // aside first, then the Cache reads column.
+    public static final double CLAUDE_CHIP = 70, CLAUDE_WHERE = 103;
+    // The ledger shows whole rows only, like the PC (review fix 7): the tallest run from the top that fits, and always
+    // the first row.
+    public static double claudeWholeRows(double[] heights, double room) {
+        double used = 0; boolean first = true;
+        for (double h : heights) {
+            if (!first && used + h > room + 0.5) break;
+            used += h; first = false;
+        }
+        return used <= Math.max(room, 0) ? used : Math.max(0, room);
+    }
+    public static double claudeTitleMin(double textScale) { return Math.round(110 * textScale); }
+    public static double claudeTitleRoom(double tableWidth, double textScale) {
+        return tableWidth - claudeFixedColumns(textScale) - (claudeModels(tableWidth, textScale) ? Math.round(150 * textScale) + 10 : 0) - (claudeLines(tableWidth, textScale) ? Math.round(84 * textScale) + 10 : 0);
+    }
+    public static boolean claudeWhere(double tableWidth, double textScale) { return claudeTitleRoom(tableWidth, textScale) - CLAUDE_CHIP - CLAUDE_WHERE >= claudeTitleMin(textScale); }
+    public static boolean claudeCache(double tableWidth, double textScale) { return claudeTitleRoom(tableWidth, textScale) - CLAUDE_CHIP >= claudeTitleMin(textScale); }
     public static final double CLAUDE_MINI_HEIGHT = 84;
     public static double claudeMediumRow(double textScale) { return Math.max(44, Math.ceil(Math.round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
     public static int claudeInlineCars(double nameRoom, int threads) {
