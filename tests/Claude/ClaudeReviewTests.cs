@@ -205,6 +205,33 @@ internal static class ClaudeReviewTests
                 }
         });
 
+        check("Claude counts a completed thread as resolved by its newest reply, not by when its log was last touched", () => {
+            // Review, 1 Nov 2026: Claude Code touches a log about an hour after a turn, which kept every ended thread from
+            // resolving. A reply after the app's record still un-resolves it.
+            string config = Fresh(directory, "resolved-config"), app = Fresh(directory, "resolved-app"), logs = Path.Combine(config, "projects", "C--Code-res");
+            Directory.CreateDirectory(logs);
+            DateTime active = DateTime.UtcNow.AddHours(-3);
+            Func<string, DateTime, string> reply = (id, at) => "{\"type\":\"assistant\",\"sessionId\":\"" + id + "\",\"cwd\":\"C:\\\\Code\\\\res\",\"timestamp\":\"" + at.ToString("o") + "\",\"requestId\":\"r-" + id + at.Ticks + "\",\"message\":{\"id\":\"m-" + id + at.Ticks + "\",\"model\":\"claude-opus-5-5\",\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}}\n";
+            foreach (var pair in new[] { new { Id = "done-quiet", Last = active }, new { Id = "done-again", Last = active.AddMinutes(10) } })
+            {
+                string log = Path.Combine(logs, pair.Id + ".jsonl");
+                File.WriteAllText(log, reply(pair.Id, active.AddMinutes(-5)) + reply(pair.Id, pair.Last));
+                File.SetLastWriteTimeUtc(log, active.AddMinutes(61));
+                string record = Path.Combine(app, "org", "account", "local_" + pair.Id + ".json");
+                Directory.CreateDirectory(Path.GetDirectoryName(record));
+                File.WriteAllText(record, "{\"cliSessionId\":\"" + pair.Id + "\",\"originCwd\":\"C:\\\\Code\\\\res\",\"createdAt\":" + ClaudeBridge.Epoch(active.AddHours(-1)) + ",\"lastActivityAt\":" + ClaudeBridge.Epoch(active)
+                    + ",\"isArchived\":false,\"title\":\"" + pair.Id + "\",\"postTurnSummary\":{\"status_category\":\"completed\",\"summarizes_uuid\":\"u\"},\"lastAssistantUuid\":\"u\"}");
+            }
+            using (var service = new ClaudeService(Fresh(directory, "resolved-bridge"), config, appThreads: new ClaudeAppThreads(() => new[] { app })))
+            {
+                service.Usage.Scan(DateTime.UtcNow);
+                service.ReadSessions(DateTime.UtcNow, true);
+                var view = service.View(DateTime.UtcNow, service.Usage.Entries);
+                var quiet = view.Threads.First(t => t.Id == "done-quiet"); var again = view.Threads.First(t => t.Id == "done-again");
+                Assert(quiet.Pit == PitState.Resolved && again.Pit == PitState.End, "Resolved is decided wrongly: " + quiet.Pit + " / " + again.Pit);
+            }
+        });
+
         check("Claude Large says how fresh the plan numbers are", () => {
             // Review fix 10: "LIVE · AS OF …" on Large, "AS OF …" alone when they're old, nothing extra on Medium.
             var view = ClaudeView.Fixture(DateTime.UtcNow, false);

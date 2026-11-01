@@ -8,6 +8,8 @@ On 1 Nov 2026 the Claude watcher was reviewed against its spec (`docs/design/cla
    - A running thread is Resolved only after it has sat idle for 30 minutes (`ClaudePace.TurnIdle`). Ended threads still turn Resolved at once.
    - Working, needs you and compacting always win (`ClaudePace.State`).
 
+   - Ended threads didn't resolve either. A completed thread counted as active again if its log changed more than two minutes after the app's record, and Claude Code touches a log about an hour after a turn (all 25 completed threads on Ali's PC showed this). Now only a newer reply in the log (`ClaudeUsageEntry.At`) un-resolves a thread. On all 25, the newest reply matched the app's time to the second.
+
 2. **Tool calls and lines changed come from the logs.** Telemetry only reached the widget from some sessions. On Ali's PC the card showed 8 tools and no lines, while the logs held 1,878 tool calls and 426 edits.
    - `ClaudeLogActivity` counts each `tool_use` block by its id, and each edit or write result's `structuredPatch` "+" and "−" lines (a new file's lines when it has no patch). Only counts are kept; no text.
    - Telemetry still says which calls asked you and which were denied. When it saw fewer calls than the logs, the fact reads "TOOLS · N ASKED · PARTIAL" and the tooltip explains why.

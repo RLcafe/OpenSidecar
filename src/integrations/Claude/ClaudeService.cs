@@ -617,8 +617,11 @@ namespace WidgetScreen
                 if (a != null && a.Remote) s.Where = "Remote Control";
                 else if (!s.Running && s.Where.Length == 0 && a != null) s.Where = "Desktop";
                 DateTime seen; lastSeen.TryGetValue(s.Id, out seen);
-                // Resolved only while the logs show nothing newer than the app's record (a new prompt un-resolves it).
-                s.Resolved = a != null && a.Completed && !a.Archived && seen <= a.LastActive + ResolvedSlack;
+                // Resolved only while the logs hold no reply newer than the app's record (a new turn un-resolves it). The
+                // log file's own time doesn't tell: Claude Code touches it about an hour after a turn (review, 1 Nov 2026).
+                List<ClaudeUsageEntry> replied; DateTime lastReply = DateTime.MinValue;
+                if (perSession.TryGetValue(s.Id, out replied) && replied.Count > 0) lastReply = replied.Max(u => u.At);
+                s.Resolved = a != null && a.Completed && !a.Archived && lastReply <= a.LastActive + ResolvedSlack;
                 foreach (var at in new[] { s.Since, seen, a == null ? DateTime.MinValue : a.LastActive }) if (at > s.LastActive) s.LastActive = at;
                 s.CanFocus = s.Running && (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;
                 List<ClaudeUsageEntry> mine;

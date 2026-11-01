@@ -6,7 +6,7 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Claude watcher review fixes (Ali's review, 1 Nov 2026; Windows and the phone; decision 022):
 
-- **Your turn stays visible.** An open thread whose latest reply the Claude app marked "completed" shows as Your turn. It only counts as resolved, and is hidden, after 30 idle minutes. Working, needs you and compacting always show.
+- **Your turn stays visible.** An open thread whose latest reply the Claude app marked "completed" shows as Your turn. It only counts as resolved, and is hidden, after 30 idle minutes. Working, needs you and compacting always show. Ended "completed" threads now really do count as resolved: before, a later write to their log kept every one of them showing.
 - **Tools and lines come from Claude Code's logs**, so they're right for every session. "Asked" still comes from telemetry, and says PARTIAL when telemetry saw fewer calls.
 - **Text fits.**
   - Medium no longer cuts off the heading, the project lines or the replies.
