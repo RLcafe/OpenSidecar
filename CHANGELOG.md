@@ -6,6 +6,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.28.0 (1 Nov 2026)
+
+### Added
+
+- **Smart home widget** (Windows and the phone): turn Home Assistant lights, switches and plugs on and off, dim lights and set thermostats from the dashboard. Settings → Home connects with Home Assistant's address and a long-lived access token (kept encrypted for your Windows account; home-network addresses only) and picks up to 24 devices. Small rows that scroll, Medium tiles, Large tiles with dimmers. The phone controls the same devices through the PC and never gets the token. Hidden by default. See `docs/design/smart-home.md`.
+
 ## v0.27.0 (1 Nov 2026)
 
 A Games widget (user request; Windows and the phone):
