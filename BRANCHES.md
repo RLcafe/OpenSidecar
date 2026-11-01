@@ -6,7 +6,9 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-None right now. `feature/sticker-foundations` was merged as v0.35.0.
+| `feature/github-ci` | GitHub remote (RLcafe/OpenSidecar), CI for the Windows and Android tests, GitHub steps in this process | b3c6e0c | In progress | `.worktrees\github-ci` | CI artifacts on GitHub |
+| `feature/sticker-defaults` | Sticker Sheet phase 2 (paused; checkpoint 00463a5 doesn't build yet) | b3c6e0c | In progress | `.worktrees\sticker-defaults` | `.worktrees\sticker-defaults\artifacts\app\WidgetScreen.exe` |
+| `fix/claude-review` | Claude watcher fixes for v0.35.1 (paused, no commits yet) | b3c6e0c | In progress | `.worktrees\claude-review` | `.worktrees\claude-review\artifacts\app\WidgetScreen.exe` |
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
@@ -25,19 +27,30 @@ None yet.
   ```
 
 - Build and test inside the worktree. The scripts resolve paths from their own folder, so the builds land in `.worktrees\<name>\artifacts\app\WidgetScreen.exe` and `.worktrees\<name>\artifacts\android\WidgetScreen.apk` and never lock the main app. `build.ps1` only compiles `src\` and `tests\`, so the worktrees under `.worktrees\` never leak into the main build.
+- Push the new branch to GitHub with `git push -u origin <branch>`, and push again after each commit worth keeping. Every push runs CI (see [GitHub and CI](#github-and-ci)).
 - Add a row to the table above when the branch is created, and keep its status and test build path current.
 - A branch build uses your real preferences unless you start it with `--settings <path>`.
 
 ## After a merge
 
 1. From the main folder, on `main`: `git merge --no-ff <branch>`.
-2. Run `scripts\build.ps1 -Test` and `scripts\build-android.ps1 -Test` on `main` and confirm every check passes.
-3. Pick the new version (see [Versions](#versions)), move the branch's changes into a new section of [CHANGELOG.md](CHANGELOG.md), and remove its row here. Commit that, then tag it: `git tag -a vX.Y.Z -m "<one-line summary>"`.
+2. Check that the branch's latest CI run on GitHub is green, then push `main` (`git push origin main`) and wait for its CI run (`build.ps1 -Test`, `package.ps1 -Test` and `build-android.ps1 -Test`) to pass before tagging.
+3. Pick the new version (see [Versions](#versions)), move the branch's changes into a new section of [CHANGELOG.md](CHANGELOG.md), and remove its row here. Commit that, then tag it: `git tag -a vX.Y.Z -m "<one-line summary>"`, and push both: `git push origin main vX.Y.Z`.
 4. Remove the worktree with `git worktree remove ".worktrees\<name>"`. Its `artifacts\` goes with it. If git refuses because of untracked files, look at them first, then use `--force` only if nothing in them is worth keeping.
 5. Delete any build of the branch made from the main folder, such as `artifacts\<name>`.
-6. Delete the branch with `git branch -d <branch>`. Lowercase `-d` refuses to delete unmerged work, which is the point. Use `-D` only for a branch the user has dropped.
+6. Delete the branch with `git branch -d <branch>`, and on GitHub with `git push origin --delete <branch>`. Lowercase `-d` refuses to delete unmerged work, which is the point. Use `-D` only for a branch the user has dropped.
 7. Run `git worktree prune` to clear stale worktree records.
 8. Make the release copy with `scripts\release.ps1 -UpdateShortcut` (see [Releases](#releases)).
+
+## GitHub and CI
+
+The repository lives at [RLcafe/OpenSidecar](https://github.com/RLcafe/OpenSidecar) (remote `origin`). `main`, every `vX.Y.Z` tag and every open branch are pushed there; this folder stays the working copy.
+
+- `.github/workflows/ci.yml` runs on every push to any branch and on pull requests: it fetches the pinned sensor files, then runs `build.ps1 -Test`, `package.ps1 -Test` and `build-android.ps1 -Test` on a GitHub Windows runner in one job (the Android checks read the phone-link sample the Windows checks save). The exe, setup exe and APK are kept with the run for 14 days.
+- Pushes that only change Markdown files, `docs\` or `design specfication\` don't start a run.
+- Tests run on GitHub (Ali, 1 Nov 2026): push and read the branch's CI run. A branch is ready to merge, and `main` ready to tag, only when its latest run is green. Local runs are still fine for quick feedback and renders, and CI doesn't replace trying the app on the PC.
+- The runner has no touchscreen, audio devices, GPU sensors or Claude Code, so those integrations still need checking on the PC. Its APK is signed with the runner's own debug key and won't install over a PC-built one.
+- Release folders (`releases\`) and every build output stay out of git (`.gitignore`). Releases are still made on the PC with `release.ps1`.
 
 ## Releases
 

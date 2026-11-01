@@ -4,7 +4,8 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+- **The project is on GitHub** at RLcafe/OpenSidecar, with `main`, every tag and the open branches.
+- **CI on GitHub Actions** (`.github/workflows/ci.yml`): every push and pull request builds and tests the Windows app, the setup exe and the Android app on a Windows runner; Markdown-only and docs-only changes skip it. CLAUDE.md and BRANCHES.md now say to push branches and tags and to wait for a green run before merging.
 
 ## v0.35.0 (1 Nov 2026)
 
