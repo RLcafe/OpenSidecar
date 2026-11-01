@@ -235,7 +235,7 @@ namespace WidgetScreen
         public static bool ClaudeLines(double tableWidth) { return tableWidth >= 660; }
         // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
         // beside the project's name when they leave it 110 units.
-        public const double ClaudeMiniHeight = 80;
+        public const double ClaudeMiniHeight = 84;
         public static double ClaudeMediumRow(double textScale) { return Math.Max(44, Math.Ceiling(Math.Round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
         public static int ClaudeInlineCars(double nameRoom, int threads)
         {

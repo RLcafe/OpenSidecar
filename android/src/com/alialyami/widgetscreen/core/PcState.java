@@ -111,18 +111,36 @@ public final class PcState {
         public double since, lastActive;
         public final long[] tokens = new long[3];
         public final double[] cost = new double[3];
+        // The pit wall (decision 017): its car ("gt", "sport", "hatch"), what the car does ("idle", "work", "rev",
+        // "need", "pit", "stuck", "done", "end"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
+        // Haiku shares) and lines added and removed.
+        public String pit = "idle", car = "sport";
+        public double rate;
+        public final double[][] mix = new double[3][3];
+        public final long[][] lines = new long[3][2];
     }
     // A project on the card: its folder (the key claude.collapse names), name, threads in the period by id, whether
     // it's folded into its critter, and its usage.
     public static final class ClaudeGroup {
         public String key = "", project = "";
         public boolean collapsed;
-        public long tokens;
+        public long tokens, added, removed;
         public double cost;
+        public double[] mix = new double[3];
         public final List<String> threads = new ArrayList<String>();
     }
     public static final class ClaudeWindow { public double pct; public double resetsAt; public String name = ""; }
     public static final class ClaudeProject { public String project = ""; public long tokens; public double cost; }
+    // A project's lane on the 5-hour timeline: tokens per 10-minute bin, oldest first.
+    public static final class ClaudeLane { public String key = "", project = ""; public double[] bins = new double[30]; }
+    // Today's facts beside the timeline.
+    public static final class ClaudeFacts {
+        public long tokens, prompt, cacheRead, added, removed;
+        public double cost;
+        public int tools, asked, denied, linesThreads;
+        public boolean telemetry;
+        public double cacheHit() { return prompt <= 0 ? Double.NaN : (double) cacheRead / prompt; }
+    }
     public static final class Claude {
         public boolean connected, sample, logsFailed, logsRead, noPlan;
         // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed or expired.
@@ -142,7 +160,13 @@ public final class PcState {
         public String source = "";
         @SuppressWarnings("unchecked")
         public final List<ClaudeProject>[] usage = new List[] { new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>() };
+        // The last hour's tokens a minute (oldest first), now, and the rev counter's scale; the lanes and facts.
+        public double[] burn = new double[60];
+        public double rate, scale = 60000;
+        public final List<ClaudeLane> lanes = new ArrayList<ClaudeLane>();
+        public ClaudeFacts facts = new ClaudeFacts();
         public boolean limitsKnown() { return fiveHour != null || week != null; }
+        public int working() { int n = 0; for (ClaudeSession s : sessions) if ("working".equals(s.state)) n++; return n; }
         public int needsYou() { int n = 0; for (ClaudeSession s : sessions) if ("needs".equals(s.state)) n++; return n; }
     }
     // The PC's clipboard history (docs/design/clipboard-history.md): short previews, newest first.
@@ -470,6 +494,11 @@ public final class PcState {
             Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
             for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }
             if (thread.state.isEmpty()) thread.state = "ready";
+            if (!text(t, "pit").isEmpty()) thread.pit = text(t, "pit");
+            if (!text(t, "car").isEmpty()) thread.car = text(t, "car");
+            thread.rate = Json.number(t, "rate");
+            Map<String, Object> mix = Json.obj(Json.value(t, "mix")), lines = Json.obj(Json.value(t, "lines"));
+            for (int i = 0; i < 3; i++) { numbers(Json.array(mix, PERIODS[i]), thread.mix[i]); double[] l = new double[2]; numbers(Json.array(lines, PERIODS[i]), l); thread.lines[i][0] = (long) l[0]; thread.lines[i][1] = (long) l[1]; }
             if (!thread.id.isEmpty()) claude.threads.add(thread);
         }
         Map<String, Object> groups = Json.obj(Json.value(c, "groups"));
@@ -478,6 +507,7 @@ public final class PcState {
                 Map<String, Object> g = Json.obj(item);
                 ClaudeGroup group = new ClaudeGroup(); group.key = text(g, "key"); group.project = text(g, "project"); group.collapsed = flag(g, "collapsed");
                 group.tokens = (long) Json.number(g, "tokens"); group.cost = Json.number(g, "cost");
+                numbers(Json.array(g, "mix"), group.mix); group.added = (long) Json.number(g, "added"); group.removed = (long) Json.number(g, "removed");
                 for (Object id : Json.array(g, "threads")) if (id instanceof String && claude.thread((String) id) != null) group.threads.add((String) id);
                 if (!group.key.isEmpty()) claude.groups[i].add(group);
             }
@@ -497,6 +527,20 @@ public final class PcState {
             ClaudeWindow extra = window(item);
             if (extra != null) { extra.name = text(Json.obj(item), "name"); if (!extra.name.isEmpty()) claude.extra.add(extra); }
         }
+        Map<String, Object> burn = Json.obj(Json.value(c, "burn"));
+        claude.rate = Json.number(burn, "rate");
+        if (Json.number(burn, "scale") > 0) claude.scale = Json.number(burn, "scale");
+        numbers(Json.array(burn, "minutes"), claude.burn);
+        for (Object item : Json.array(c, "lanes")) {
+            Map<String, Object> l = Json.obj(item);
+            ClaudeLane lane = new ClaudeLane(); lane.key = text(l, "key"); lane.project = text(l, "project"); numbers(Json.array(l, "bins"), lane.bins);
+            if (!lane.project.isEmpty()) claude.lanes.add(lane);
+        }
+        Map<String, Object> facts = Json.obj(Json.value(c, "facts"));
+        ClaudeFacts f = claude.facts;
+        f.tokens = (long) Json.number(facts, "tokens"); f.cost = Json.number(facts, "cost"); f.prompt = (long) Json.number(facts, "prompt"); f.cacheRead = (long) Json.number(facts, "cacheRead");
+        f.tools = (int) Json.number(facts, "tools"); f.asked = (int) Json.number(facts, "asked"); f.denied = (int) Json.number(facts, "denied");
+        f.added = (long) Json.number(facts, "added"); f.removed = (long) Json.number(facts, "removed"); f.linesThreads = (int) Json.number(facts, "linesThreads"); f.telemetry = flag(facts, "telemetry");
         Map<String, Object> usage = Json.obj(Json.value(c, "usage"));
         for (int i = 0; i < 3; i++)
             for (Object item : Json.array(usage, PERIODS[i])) {
@@ -505,6 +549,10 @@ public final class PcState {
                 if (!project.project.isEmpty()) claude.usage[i].add(project);
             }
         return claude;
+    }
+    // Numbers from a JSON array into a fixed array (missing ones stay 0).
+    private static void numbers(List<Object> items, double[] into) {
+        for (int i = 0; i < into.length && items != null && i < items.size(); i++) if (items.get(i) instanceof Number) into[i] = ((Number) items.get(i)).doubleValue();
     }
     private static ClaudeWindow window(Object value) {
         if (!(value instanceof Map)) return null;

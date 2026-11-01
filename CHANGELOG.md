@@ -4,7 +4,30 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Claude Watcher v2, the pit wall (Ali's approved design; Windows and the phone; decision 017):
+
+- **Projects are pit garages and threads are race cars,** drawn in code as pixel art (no images). A car's class follows the model the thread used most: a grand tourer for Opus, a sports car for Sonnet, a hot hatch for Haiku. Its colour is the project's. No faces: a car shows what its thread is doing.
+  - **Working:** its wheels turn as fast as it burns tokens, with exhaust puffs when heavy.
+  - **Long tool run:** it revs on its brakes.
+  - **Needs you:** hazards blink and the headlights flash.
+  - **Compacting:** it's up on the jack.
+  - **Rate-limited or an API error:** wheelspin in tyre smoke.
+  - **Done:** the brake lights glow, then fade.
+  - **Ended:** a cover drops over it.
+  - Near the 5-hour limit a fuel lamp blinks; at the redline the brake discs glow.
+  - Garages show a light under the shutter when busy, an amber beacon when a car inside needs you, and their car count when folded.
+- **Tap a garage to roll its cars in or out.** Going in, each car backs out of its row, turns and drives into the bay with its tail lights toward you. Coming out, it drives toward you with its headlights on, then into its row. It takes about a second; Quiet mode skips the motion.
+- **Large is a pit wall:**
+  - the 5-hour tank gauge with your pace ("on pace for 92%", Amber when you'd run out);
+  - the week as seven day-laps;
+  - a rev counter in tokens a minute with the last hour's burn;
+  - a pit stop strip for the thread waiting on you, with what it wants and **Go to it**;
+  - a ledger of projects and threads with tokens, ≈ $, model mix and lines added and removed;
+  - on wide cards, a 5-hour timeline per project and today's tokens, cache hit rate, tool calls and lines.
+- **Medium** shows the two plan meters with pace over your top projects with their cars. **Small** shows the car that needs you over the 5-hour meter.
+- **Motion costs nothing when unseen:** the cars only move while the card is on screen, the window isn't minimised and Quiet mode is off.
+- **Settings → Claude offers Update connection once:** it adds a PreCompact hook so compacting shows. Tool calls and lines changed come from Claude Code's telemetry, in sessions started after connecting.
+- Not yet tried: the phone card on a device, and live tool, lines and compaction readings from a real session.
 
 ## v0.31.0 (1 Nov 2026)
 
