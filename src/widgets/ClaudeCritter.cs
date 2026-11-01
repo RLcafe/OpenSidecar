@@ -43,6 +43,20 @@ namespace WidgetScreen
         public static double PupilX(ClaudeState state, bool phase, bool quiet) { return state == ClaudeState.Working ? (phase && !quiet ? 3 : -3) : 0; }
         public static double PupilY(ClaudeState state) { return state == ClaudeState.Working ? 3 : state == ClaudeState.NeedsYou ? -1 : 0; }
         public static bool EyesOpen(ClaudeState state) { return state == ClaudeState.Working || state == ClaudeState.NeedsYou; }
+        // A project critter that has eaten its threads: puffed cheeks beside a closed mouth, a belly and a count bubble
+        // at its top right (where the thinking trail would be).
+        public static double CheekRadius(double[] body) { return Math.Min(9, (body[2] - body[0]) * 0.12); }
+        public static double CheekX(double[] body) { return (body[2] - body[0]) * 0.3; }
+        public static double[] Belly(double[] body) { double w = (body[2] - body[0]) * 0.56, h = (body[3] - body[1]) * 0.2; return new[] { 50 - w / 2, body[3] - h - 4, w, h }; }
+        // The bubble sits on the body's top right corner, whatever the body's shape.
+        public const double BubbleRadius = 13;
+        public static double BubbleX(double[] body) { return Math.Min(86, body[2] - 2); }
+        public static double BubbleY(double[] body) { return Math.Max(14, body[1] - 2); }
+        // The mouth opening as it eats or spits (0 closed, 1 wide): half-widths and half-height in the 100 box.
+        public static double MouthWidth(double open) { return 6 + 8 * Math.Max(0, Math.Min(1, open)); }
+        public static double MouthHeight(double open) { return 1.5 + 10 * Math.Max(0, Math.Min(1, open)); }
+        // Babies are 40% of their project's critter (Ali, 1 Nov 2026), never under 24 units.
+        public static double Baby(double parent) { return Math.Max(24, Math.Round(parent * 0.4)); }
     }
 
     // One drawn critter. Brushes follow the theme through resource references; nothing animates except the pupils
@@ -62,6 +76,13 @@ namespace WidgetScreen
         public static readonly DependencyProperty RaisedProperty = DependencyProperty.Register("Raised", typeof(Brush), typeof(ClaudeCritter), Renders(null));
         public static readonly DependencyProperty OutlineProperty = DependencyProperty.Register("Outline", typeof(Brush), typeof(ClaudeCritter), Renders(null));
         public static readonly DependencyProperty MutedProperty = DependencyProperty.Register("Muted", typeof(Brush), typeof(ClaudeCritter), Renders(null));
+        // The project critter's extras: Collapsed with Count threads inside it, and Mouth (0–1) while it eats or spits.
+        public static readonly DependencyProperty CollapsedProperty = DependencyProperty.Register("Collapsed", typeof(bool), typeof(ClaudeCritter), Renders(false));
+        public static readonly DependencyProperty CountProperty = DependencyProperty.Register("Count", typeof(int), typeof(ClaudeCritter), Renders(0));
+        public static readonly DependencyProperty MouthProperty = DependencyProperty.Register("Mouth", typeof(double), typeof(ClaudeCritter), Renders(0.0));
+        public bool Collapsed { get { return (bool)GetValue(CollapsedProperty); } set { SetValue(CollapsedProperty, value); } }
+        public int Count { get { return (int)GetValue(CountProperty); } set { SetValue(CountProperty, value); } }
+        public double Mouth { get { return (double)GetValue(MouthProperty); } set { SetValue(MouthProperty, value); } }
         public ClaudeState State { get { return (ClaudeState)GetValue(StateProperty); } set { SetValue(StateProperty, value); } }
         public bool Phase { get { return (bool)GetValue(PhaseProperty); } set { SetValue(PhaseProperty, value); } }
         public string Project { get { return (string)GetValue(ProjectProperty); } set { SetValue(ProjectProperty, value); } }
@@ -72,6 +93,14 @@ namespace WidgetScreen
             SetResourceReference(PageProperty, "Page"); SetResourceReference(TextProperty, "Text"); SetResourceReference(RaisedProperty, "Raised");
             SetResourceReference(OutlineProperty, "ControlBorder"); SetResourceReference(MutedProperty, "Muted");
             IsHitTestVisible = false;
+        }
+
+        // Where the mouth is, in this element's coordinates (babies are eaten into it and spat out of it).
+        public Point MouthPoint()
+        {
+            double size = Math.Min(ActualWidth, ActualHeight);
+            var b = CritterPose.Body(CritterPose.Shape(Project));
+            return new Point(ActualWidth / 2, (ActualHeight - size) / 2 + CritterPose.MouthY(b) * size / 100);
         }
 
         protected override void OnRender(DrawingContext context)
@@ -120,7 +149,21 @@ namespace WidgetScreen
                 else context.DrawLine(round(page, 3.2), new Point(x - 6, eyeY + 1), new Point(x + 6, eyeY + 1));
             }
 
-            if (state == ClaudeState.NeedsYou) context.DrawEllipse(null, round(page, 3), new Point(50, mouthY), 4.5, 4.5);
+            bool collapsed = Collapsed; double open = Mouth;
+            if (collapsed)
+            {
+                // Full of threads: a belly, and puffed cheeks either side of the mouth.
+                var belly = CritterPose.Belly(b);
+                context.PushOpacity(0.22); context.DrawRoundedRectangle(page, null, new Rect(belly[0], belly[1], belly[2], belly[3]), belly[3] / 2, belly[3] / 2); context.Pop();
+                double cheek = CritterPose.CheekRadius(b), cx = CritterPose.CheekX(b);
+                context.PushOpacity(0.45);
+                context.DrawEllipse(text, null, new Point(50 - cx, mouthY - 1), cheek, cheek * 0.8);
+                context.DrawEllipse(text, null, new Point(50 + cx, mouthY - 1), cheek, cheek * 0.8);
+                context.Pop();
+            }
+            if (open > 0.05) context.DrawEllipse(page, null, new Point(50, mouthY), CritterPose.MouthWidth(open), CritterPose.MouthHeight(open));
+            else if (collapsed) context.DrawLine(round(page, 3), new Point(45, mouthY), new Point(55, mouthY));
+            else if (state == ClaudeState.NeedsYou) context.DrawEllipse(null, round(page, 3), new Point(50, mouthY), 4.5, 4.5);
             else if (state == ClaudeState.Done)
             {
                 var smile = new StreamGeometry();
@@ -129,7 +172,17 @@ namespace WidgetScreen
             }
             else context.DrawLine(round(page, 3), new Point(state == ClaudeState.Working ? 44 : 45, mouthY), new Point(state == ClaudeState.Working ? 56 : 55, mouthY));
 
-            if (state == ClaudeState.Working)
+            if (collapsed)
+            {
+                // How many threads it holds, in a bubble where the thinking trail would be.
+                double bx = CritterPose.BubbleX(b), by = CritterPose.BubbleY(b);
+                context.DrawEllipse(page, new Pen(state == ClaudeState.NeedsYou ? Amber : accent, 2.4), new Point(bx, by), CritterPose.BubbleRadius, CritterPose.BubbleRadius);
+                string count = Count > 99 ? "99+" : Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var label = new FormattedText(count, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), count.Length > 2 ? 10 : 14, text, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                context.DrawText(label, new Point(bx - label.Width / 2, by - label.Height / 2));
+                if (state == ClaudeState.NeedsYou) { context.DrawLine(round(text, 5), new Point(50, 3), new Point(50, 14)); context.DrawEllipse(text, null, new Point(50, 21.5), 2.8, 2.8); }
+            }
+            else if (state == ClaudeState.Working)
             {
                 // The thinking trail beside the head.
                 context.DrawEllipse(muted, null, new Point(80, 24), 2.4, 2.4);

@@ -4,7 +4,13 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Projects with their threads on the Claude Code card, and refresh times you choose (Ali's request; Windows and the phone; decision 016).
+
+- **Each project is a big critter, and its threads are baby critters under it.** That covers every Claude Code thread of the chosen period (5 h, Today or Week), running or ended, with the titles the Claude app's sidebar shows. A thread sits under the folder it started in, with worktrees under their project. Ended threads sleep, dimmed. A project's face follows its most urgent running thread, so Needs you still turns it Amber. Under each project: how many threads and its tokens and "≈ $". Tap a running baby to bring its window forward.
+- **Tap a project to fold its threads in.** The babies get eaten (they shrink into its mouth), and it shows a count bubble and full cheeks. Tap again and they pop back out. Quiet mode skips the motion. The choice is kept and shared with the phone, and a folded project still lights up when a thread inside needs you.
+- **Large:** the plan meters and period switch in a strip, then a column per project with its babies, scrolling inside the column when there are many. **Medium:** a row of projects with up to three babies each, over the plan meters. Small is unchanged.
+- **Settings → Claude → Refresh:** "Update the card every … seconds" (default 2, minimum 1) and "Check plan limits every … seconds" (default 300, minimum 10, with a note under 60 that Anthropic may slow down very frequent checks). If Anthropic answers 429 or 5xx, the check waits twice as long each time (up to 15 minutes), and the card shows "Plan limits as of hh:mm" until it gets through again. Quiet mode no longer stretches these. The phone follows the card's interval, at most every 2 seconds.
+- Settings → Claude → Projects shows how many threads each project had this week.
 
 ## v0.29.0 (1 Nov 2026)
 

@@ -12,6 +12,10 @@ namespace WidgetScreen
         public string Id = "", Project = "", ProjectName = "", Title = "", Message = "", Model = "", Where = "";
         public ClaudeState State;
         public DateTime Since;
+        // Running: Claude Code has the session open now. An ended thread (from the Claude app's list or the logs) keeps
+        // its title, last activity and usage, and shows asleep.
+        public bool Running;
+        public DateTime LastActive;
         public int Pid, WindowPid;
         public long Window;
         public bool CanFocus;
@@ -32,7 +36,25 @@ namespace WidgetScreen
         public DateTime LastUsed;
         public long WeekTokens;
         public double WeekCost;
+        public int Threads;
         public bool Shown;
+    }
+
+    // A project on the card: its big critter and the threads (baby critters) active in the period, most urgent first,
+    // then newest. Its face is the most urgent running thread's; with none running it sleeps. Collapsed folds the
+    // threads into it, but a thread that needs you still turns it Amber.
+    public sealed class ClaudeProjectGroup
+    {
+        public string Folder = "", Name = "";
+        public List<ClaudeSession> Threads = new List<ClaudeSession>();
+        public long Tokens;
+        public double Cost;
+        public bool Collapsed;
+        public int Running { get { return Threads.Count(t => t.Running); } }
+        public bool NeedsYou { get { return Threads.Any(t => t.Running && t.State == ClaudeState.NeedsYou); } }
+        public bool Asleep { get { return !Threads.Any(t => t.Running); } }
+        public ClaudeState State { get { var first = Threads.Where(t => t.Running).OrderBy(t => ClaudeView.Rank(t.State)).FirstOrDefault(); return first == null ? ClaudeState.Ready : first.State; } }
+        public DateTime LastActive { get { return Threads.Count == 0 ? DateTime.MinValue : Threads.Max(t => t.LastActive); } }
     }
 
     // Everything the Claude card shows at one moment.
@@ -40,10 +62,29 @@ namespace WidgetScreen
     {
         public bool Connected, Sample, LogsFailed, LogsRead;
         public ClaudePlanState Plan;
+        // The running sessions (the critters Small shows and the pill counts), and every thread of the last week,
+        // running or ended, that the projects group.
         public List<ClaudeSession> Sessions = new List<ClaudeSession>();
+        public List<ClaudeSession> Threads = new List<ClaudeSession>();
         public ClaudeLimits Limits;
         public readonly Dictionary<ClaudePeriod, List<ClaudeProjectUsage>> Usage = new Dictionary<ClaudePeriod, List<ClaudeProjectUsage>>();
+        public readonly Dictionary<ClaudePeriod, DateTime> Starts = new Dictionary<ClaudePeriod, DateTime>();
+        public readonly HashSet<string> Collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public int NeedsYou { get { return Sessions.Count(s => s.State == ClaudeState.NeedsYou); } }
+
+        // The projects with a thread active in the period (or running), a project that needs you first, then ones with
+        // something running, then the most recently active.
+        public List<ClaudeProjectGroup> Groups(ClaudePeriod period)
+        {
+            DateTime start; if (!Starts.TryGetValue(period, out start)) start = DateTime.MinValue;
+            return Threads.Where(t => t.Running || t.LastActive >= start)
+                .GroupBy(t => t.Project, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new ClaudeProjectGroup {
+                    Folder = g.Key, Name = g.First().ProjectName, Collapsed = Collapsed.Contains(g.Key),
+                    Threads = g.OrderBy(t => t.Running ? Rank(t.State) : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
+                    Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)) })
+                .OrderBy(g => g.NeedsYou ? 0 : g.Running > 0 ? 1 : 2).ThenByDescending(g => g.LastActive).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
         // A session has run and answered without rate limits: an API key or a logged-out Claude Code.
         public bool NoPlan { get { return Limits != null && !Limits.Known && Limits.MissingAt.HasValue; } }
         public List<ClaudeProjectUsage> UsageFor(ClaudePeriod period) { List<ClaudeProjectUsage> list; return Usage.TryGetValue(period, out list) ? list : new List<ClaudeProjectUsage>(); }
@@ -59,19 +100,30 @@ namespace WidgetScreen
         public static ClaudeView Fixture(DateTime now, bool needsYou)
         {
             var view = new ClaudeView { Connected = true, Sample = true, LogsRead = true, Plan = ClaudePlanState.Current };
-            Func<string, string, string, ClaudeState, double, string, long, ClaudeSession> make = (id, project, title, state, minutes, model, tokens) => {
-                var s = new ClaudeSession { Id = id, Project = "C:\\Code\\" + project, ProjectName = project, Title = title, State = state, Since = now.AddMinutes(-minutes), Model = model, CanFocus = true, Where = "Desktop" };
-                s.Tokens[ClaudePeriod.FiveHour] = tokens; s.Tokens[ClaudePeriod.Today] = tokens * 2; s.Tokens[ClaudePeriod.Week] = tokens * 9;
-                s.Cost[ClaudePeriod.FiveHour] = tokens / 1e6 * 1.1; s.Cost[ClaudePeriod.Today] = tokens / 1e6 * 2.2; s.Cost[ClaudePeriod.Week] = tokens / 1e6 * 9.9;
+            foreach (ClaudePeriod period in Enum.GetValues(typeof(ClaudePeriod))) view.Starts[period] = ClaudeUsage.Start(period, null, now);
+            // A running thread when state is given; an ended one (asleep) otherwise, last active minutes ago.
+            Func<string, string, string, ClaudeState?, double, string, long, ClaudeSession> make = (id, project, title, state, minutes, model, tokens) => {
+                var s = new ClaudeSession { Id = id, Project = "C:\\Code\\" + project, ProjectName = project, Title = title, State = state ?? ClaudeState.Ready, Running = state.HasValue,
+                    Since = now.AddMinutes(-minutes), LastActive = now.AddMinutes(-minutes), Model = model, CanFocus = state.HasValue, Where = state.HasValue ? "Desktop" : "" };
+                bool fiveHour = minutes <= 300, today = minutes <= 600;
+                s.Tokens[ClaudePeriod.FiveHour] = fiveHour ? tokens : 0; s.Tokens[ClaudePeriod.Today] = today ? tokens * 2 : 0; s.Tokens[ClaudePeriod.Week] = tokens * 9;
+                s.Cost[ClaudePeriod.FiveHour] = fiveHour ? tokens / 1e6 * 1.1 : 0; s.Cost[ClaudePeriod.Today] = today ? tokens / 1e6 * 2.2 : 0; s.Cost[ClaudePeriod.Week] = tokens / 1e6 * 9.9;
                 return s;
             };
-            var list = new List<ClaudeSession> {
+            var threads = new List<ClaudeSession> {
                 make("sample-1", "api-server", "Fix the login timeout", needsYou ? ClaudeState.NeedsYou : ClaudeState.Working, 2, "Opus 5.5", 412000),
+                make("sample-5", "api-server", "Rate limit middleware", null, 95, "Opus 5.5", 268000),
+                make("sample-6", "api-server", "Bump dependencies", null, 1500, "Sonnet 5.5", 41000),
                 make("sample-2", "widget-screen", "Claude card critters", ClaudeState.Working, 14, "Opus 5.5", 1830000),
-                make("sample-3", "photo-manager", "", ClaudeState.Done, 6, "Sonnet 5.5", 96400),
-                make("sample-4", "notes", "Tidy the README", ClaudeState.Ready, 1, "Haiku 5.5", 0) };
-            if (needsYou) list[0].Message = "Claude needs your permission to use Bash";
-            view.Sessions = Order(list);
+                make("sample-7", "widget-screen", "Phone polling interval", ClaudeState.Done, 31, "Opus 5.5", 640000),
+                make("sample-8", "widget-screen", "Fix the Arrange button", null, 180, "Opus 5.5", 905000),
+                make("sample-9", "widget-screen", "Release notes for v0.29", null, 420, "Sonnet 5.5", 122000),
+                make("sample-10", "widget-screen", "", null, 2900, "Opus 5.5", 77000),
+                make("sample-3", "photo-manager", "Face grouping", ClaudeState.Done, 6, "Sonnet 5.5", 96400),
+                make("sample-11", "photo-manager", "Thumbnail cache", null, 260, "Sonnet 5.5", 58000) };
+            if (needsYou) threads[0].Message = "Claude needs your permission to use Bash";
+            view.Threads = threads;
+            view.Sessions = Order(threads.Where(t => t.Running));
             view.Limits = new ClaudeLimits { FiveHour = new ClaudeLimitWindow { Percent = needsYou ? 84 : 23, ResetsAt = now.AddMinutes(100) }, Week = new ClaudeLimitWindow { Percent = 41, ResetsAt = now.AddDays(3).AddHours(5) }, UpdatedAt = now.AddMinutes(-1), Source = "online" };
             view.Limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>("Opus week", new ClaudeLimitWindow { Percent = 18, ResetsAt = now.AddDays(3).AddHours(5) }));
             view.Usage[ClaudePeriod.FiveHour] = new List<ClaudeProjectUsage> { P("widget-screen", 1830000, 2.01), P("api-server", 412000, 0.45), P("photo-manager", 96400, 0.11) };
@@ -89,7 +141,7 @@ namespace WidgetScreen
     // here writes to Claude Code's folder except the connector, and only when the user taps Connect or Disconnect.
     public sealed class ClaudeService : IDisposable
     {
-        public static readonly TimeSpan OnlineEvery = TimeSpan.FromMinutes(5), Stale = TimeSpan.FromMinutes(15);
+        public static readonly TimeSpan Stale = TimeSpan.FromMinutes(15);
         // A session only telemetry knows about (no hook, not in Claude Code's list) shows while it was this recent.
         public static readonly TimeSpan TelemetryOnly = TimeSpan.FromMinutes(2);
         public readonly ClaudeConnector Connector;
@@ -97,6 +149,7 @@ namespace WidgetScreen
         public readonly ClaudeRegistry Registry;
         public readonly ClaudeAccount Account;
         public readonly ClaudeTelemetry Telemetry;
+        public readonly ClaudeAppThreads AppThreads;
         private readonly string bridge;
         private readonly Dictionary<string, Cached> files = new Dictionary<string, Cached>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ClaudeTelemetryEvent> activity = new Dictionary<string, ClaudeTelemetryEvent>();
@@ -106,10 +159,13 @@ namespace WidgetScreen
         private ClaudeLimits fileLimits, onlineLimits;
         private DateTime lastOnline = DateTime.MinValue;
         private bool onlineFailed;
+        // The plan check's interval (Settings → Claude) and, after Anthropic turned a check away, the longer wait.
+        private TimeSpan onlineEvery = TimeSpan.FromSeconds(ClaudeIntervals.PlanDefault), backoff = TimeSpan.Zero;
         private sealed class Cached { public DateTime Written; public long Length; public ClaudeSessionFile Session; }
 
-        public ClaudeService(string bridgeFolder, string configFolder, string signInPath = null, int telemetryPort = ClaudeTelemetry.DefaultPort, ClaudeAccount account = null)
+        public ClaudeService(string bridgeFolder, string configFolder, string signInPath = null, int telemetryPort = ClaudeTelemetry.DefaultPort, ClaudeAccount account = null, ClaudeAppThreads appThreads = null)
         {
+            AppThreads = appThreads ?? new ClaudeAppThreads();
             bridge = bridgeFolder;
             Connector = new ClaudeConnector(configFolder, bridgeFolder, telemetryPort);
             Usage = new ClaudeUsage(configFolder);
@@ -183,6 +239,7 @@ namespace WidgetScreen
                 }
             }
             changed |= Registry.Read(RegistryAlive ?? (pid => pid > 0 && ClaudeProcesses.Alive(pid)), checkAlive);
+            changed |= AppThreads.Read(now);
             return changed;
         }
         // The checks replace the process test, since their sample processes aren't Claude Code.
@@ -228,8 +285,12 @@ namespace WidgetScreen
             }
         }
 
-        // Every 5 minutes while signed in (Ali, 1 Nov 2026), whether or not Claude Code is running.
-        public bool OnlineDue(DateTime now) { return Account != null && Account.SignedIn && now - lastOnline >= OnlineEvery; }
+        // Every PlanEvery while signed in (300 s unless Settings → Claude says otherwise), whether or not Claude Code is
+        // running; longer after Anthropic turned a check away (ClaudeIntervals.Backoff).
+        public TimeSpan PlanEvery { get { return onlineEvery; } set { onlineEvery = value < TimeSpan.FromSeconds(ClaudeIntervals.PlanMinimum) ? TimeSpan.FromSeconds(ClaudeIntervals.PlanMinimum) : value; } }
+        public TimeSpan NextWait { get { return backoff > TimeSpan.Zero ? backoff : onlineEvery; } }
+        public bool BackingOff { get { return backoff > TimeSpan.Zero; } }
+        public bool OnlineDue(DateTime now) { return Account != null && Account.SignedIn && now - lastOnline >= NextWait; }
         public void CheckSoon() { lastOnline = DateTime.MinValue; }
 
         public async Task<bool> CheckOnlineAsync(DateTime now)
@@ -239,11 +300,20 @@ namespace WidgetScreen
             try
             {
                 var limits = await Account.UsageAsync(DateTime.UtcNow).ConfigureAwait(false);
+                backoff = TimeSpan.Zero;
                 if (limits == null) { onlineFailed = false; return true; }
                 onlineLimits = limits; onlineFailed = false;
                 return true;
             }
-            catch (Exception) { onlineFailed = true; return true; }
+            catch (Exception e) { Refused(e); return true; }
+        }
+        // A failed check: Anthropic turning it away (429, or a 5xx) doubles the wait up to 15 minutes; anything else
+        // (no internet, an unreadable answer) tries again at the chosen interval.
+        public void Refused(Exception e)
+        {
+            onlineFailed = true;
+            var refused = e as ClaudeHttpException;
+            backoff = refused != null && refused.Throttled ? ClaudeIntervals.Backoff(onlineEvery, backoff) : TimeSpan.Zero;
         }
 
         // ----- What the card shows -----
@@ -257,15 +327,30 @@ namespace WidgetScreen
             foreach (var e in Registry.Entries) if (e.Folder.Length > 0) result[e.Session] = e.Folder;
             foreach (var s in Sessions) if (s.Project.Length > 0) result[s.Id] = s.Project;
             foreach (var pair in Usage.Folders) if (!String.IsNullOrEmpty(pair.Value)) result[pair.Key] = pair.Value;
+            // The Claude app records the folder a Code-tab thread started in, whatever its shell did since.
+            foreach (var t in AppThreads.Threads) if (t.Folder.Length > 0) result[t.Session] = t.Folder;
             return result;
+        }
+
+        // A thread's project: the folder it started in, with a worktree (…\.claude\worktrees\x or …\.worktrees\x)
+        // counted under the folder it was made from.
+        public static string ProjectOf(string folder)
+        {
+            string key = ClaudeUsage.Key(folder);
+            foreach (var marker in new[] { "\\.claude\\worktrees\\", "\\.worktrees\\" })
+            {
+                int at = key.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (at > 0) return key.Substring(0, at);
+            }
+            return key;
         }
         // A reply's project folder; telemetry's replies come without one, so the session's or the repository's.
         private static Func<ClaudeUsageEntry, string> FolderOf(Dictionary<string, string> folders, Dictionary<string, ClaudeTelemetryEvent> activity)
         {
             return e => {
-                if (e.Folder.Length > 0) return e.Folder;
-                string folder; if (folders.TryGetValue(e.Session, out folder)) return folder;
-                ClaudeTelemetryEvent a; if (activity.TryGetValue(e.Session, out a) && a.Repository.Length > 0) return a.Repository;
+                string folder; if (folders.TryGetValue(e.Session, out folder)) return ProjectOf(folder);
+                if (e.Folder.Length > 0) return ProjectOf(e.Folder);
+                ClaudeTelemetryEvent a; if (activity.TryGetValue(e.Session, out a) && a.Repository.Length > 0) return ProjectOf(a.Repository);
                 return "";
             };
         }
@@ -344,22 +429,52 @@ namespace WidgetScreen
                 }
             }
 
+            foreach (var s in sessions.Values) s.Running = true;
+            // The ended threads of the last week: the Claude app's list (archived ones stay hidden, as in its sidebar)
+            // and the logs, which know every way Claude Code runs.
+            var lastSeen = Usage.LastSeen; var titles = Usage.Titles;
+            var app = new Dictionary<string, ClaudeAppThread>();
+            foreach (var t in AppThreads.Threads) { ClaudeAppThread known; if (!app.TryGetValue(t.Session, out known) || known.LastActive < t.LastActive) app[t.Session] = t; }
+            DateTime oldest = starts[ClaudePeriod.Week];
+            foreach (var id in app.Keys.Concat(lastSeen.Keys).Distinct().ToList())
+            {
+                if (sessions.ContainsKey(id)) continue;
+                ClaudeAppThread a; app.TryGetValue(id, out a);
+                if (a != null && a.Archived) continue;
+                DateTime seen; lastSeen.TryGetValue(id, out seen);
+                DateTime last = a != null && a.LastActive > seen ? a.LastActive : seen;
+                if (last < oldest) continue;
+                sessions[id] = new ClaudeSession { Id = id, State = ClaudeState.Ready, Since = last, LastActive = last };
+            }
+            var perSession = usage == null ? new Dictionary<string, List<ClaudeUsageEntry>>() : usage.GroupBy(u => u.Session).ToDictionary(g => g.Key, g => g.ToList());
+
             var list = new List<ClaudeSession>();
             foreach (var s in sessions.Values)
             {
                 string started; if (folders.TryGetValue(s.Id, out started)) s.Project = started;
-                s.Project = ClaudeUsage.Key(s.Project);
+                s.Project = ProjectOf(s.Project);
                 if (shown != null && !shown(s.Project)) continue;
                 s.ProjectName = ClaudeBridge.ProjectName(s.Project);
-                s.CanFocus = (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;
-                if (usage != null)
+                ClaudeAppThread a; app.TryGetValue(s.Id, out a);
+                // The title: one the user typed (Claude Code's list or its log), else the one the Claude app shows.
+                string typed; if (s.Title.Length == 0 && titles.TryGetValue(s.Id, out typed)) s.Title = typed;
+                if (s.Title.Length == 0 && a != null) s.Title = a.Title;
+                DateTime seen; lastSeen.TryGetValue(s.Id, out seen);
+                foreach (var at in new[] { s.Since, seen, a == null ? DateTime.MinValue : a.LastActive }) if (at > s.LastActive) s.LastActive = at;
+                s.CanFocus = s.Running && (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;
+                List<ClaudeUsageEntry> mine;
+                if (usage != null && perSession.TryGetValue(s.Id, out mine))
                 {
-                    if (s.Model.Length == 0) { var last = usage.Where(u => u.Session == s.Id && u.Model.Length > 0).OrderByDescending(u => u.At).FirstOrDefault(); if (last != null) s.Model = ModelName(last.Model); }
-                    foreach (var pair in starts) { s.Tokens[pair.Key] = ClaudeUsage.Total(usage, pair.Value, s.Id); s.Cost[pair.Key] = ClaudeUsage.Cost(usage, pair.Value, s.Id); }
+                    if (s.Model.Length == 0) { var last = mine.Where(u => u.Model.Length > 0).OrderByDescending(u => u.At).FirstOrDefault(); if (last != null) s.Model = ModelName(last.Model); }
+                    if (mine.Count > 0) { var newest = mine.Max(u => u.At); if (newest > s.LastActive) s.LastActive = newest; }
+                    foreach (var pair in starts) { s.Tokens[pair.Key] = ClaudeUsage.Total(mine, pair.Value); s.Cost[pair.Key] = ClaudeUsage.Cost(mine, pair.Value); }
                 }
+                else if (usage != null) foreach (var pair in starts) { s.Tokens[pair.Key] = 0; s.Cost[pair.Key] = 0; }
                 list.Add(s);
             }
-            view.Sessions = ClaudeView.Order(list);
+            view.Threads = list;
+            view.Sessions = ClaudeView.Order(list.Where(s => s.Running));
+            foreach (var pair in starts) view.Starts[pair.Key] = pair.Value;
             if (usage != null) foreach (var pair in starts) view.Usage[pair.Key] = ClaudeUsage.ByProject(usage, pair.Value, 6, folderOf, shown);
             return view;
         }
@@ -384,8 +499,9 @@ namespace WidgetScreen
             var folders = SessionFolders();
             var folderOf = FolderOf(folders, act);
             var found = new Dictionary<string, ClaudeProjectInfo>(StringComparer.OrdinalIgnoreCase);
+            var threads = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
             Action<string, DateTime> seen = (folder, at) => {
-                string key = ClaudeUsage.Key(folder);
+                string key = ProjectOf(folder);
                 if (key.Length == 0) return;
                 ClaudeProjectInfo info;
                 if (!found.TryGetValue(key, out info)) { info = new ClaudeProjectInfo { Folder = key, Name = ClaudeBridge.ProjectName(key) }; found[key] = info; }
@@ -395,7 +511,7 @@ namespace WidgetScreen
             foreach (var e in Usage.Entries)
             {
                 string folder = folderOf(e); seen(folder, e.At);
-                string key = ClaudeUsage.Key(folder);
+                string key = ProjectOf(folder);
                 if (e.At >= week && found.ContainsKey(key)) { found[key].WeekTokens += e.Tokens; found[key].WeekCost += e.Cost; }
             }
             foreach (var pair in Usage.LastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) seen(folder, pair.Value); }
@@ -403,7 +519,18 @@ namespace WidgetScreen
             foreach (var e in Registry.Entries) seen(startedIn(e.Session, e.Folder), e.StatusChanged);
             foreach (var s in Sessions) seen(startedIn(s.Id, s.Project), ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since)));
             foreach (var a in act.Values) { string folder; seen(folders.TryGetValue(a.Session, out folder) ? folder : a.Repository, a.At); }
-            foreach (var info in found.Values) info.Shown = shown == null || shown(info.Folder);
+            foreach (var t in AppThreads.Threads) if (!t.Archived) seen(startedIn(t.Session, t.Folder), t.LastActive);
+            // Each project's threads this week, as the card counts them.
+            Action<string, string, DateTime> thread = (id, folder, at) => {
+                string key = ProjectOf(folder); if (key.Length == 0 || at < week || !found.ContainsKey(key)) return;
+                HashSet<string> ids; if (!threads.TryGetValue(key, out ids)) threads[key] = ids = new HashSet<string>();
+                ids.Add(id);
+            };
+            foreach (var pair in Usage.LastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) thread(pair.Key, folder, pair.Value); }
+            foreach (var t in AppThreads.Threads) if (!t.Archived) thread(t.Session, startedIn(t.Session, t.Folder), t.LastActive);
+            foreach (var e in Registry.Entries) thread(e.Session, startedIn(e.Session, e.Folder), now);
+            foreach (var s in Sessions) thread(s.Id, startedIn(s.Id, s.Project), now);
+            foreach (var info in found.Values) { HashSet<string> ids; info.Threads = threads.TryGetValue(info.Folder, out ids) ? ids.Count : 0; info.Shown = shown == null || shown(info.Folder); }
             return found.Values.OrderByDescending(p => p.LastUsed).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 

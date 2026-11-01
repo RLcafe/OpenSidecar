@@ -29,6 +29,7 @@ import com.alialyami.widgetscreen.widgets.ClipboardWidget;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
 import com.alialyami.widgetscreen.views.CritterView;
 import com.alialyami.widgetscreen.widgets.ClaudeWidget;
+import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.GamesWidget;
 import com.alialyami.widgetscreen.widgets.HomeWidget;
@@ -164,9 +165,17 @@ public final class Dashboard {
     private final java.util.Set<String> extraParts = new java.util.LinkedHashSet<String>();
     public void wantPart(String part, boolean want) { if (want ? extraParts.add(part) : extraParts.remove(part)) if (want) refreshSoon(); }
 
+    // The claude section follows the PC card's interval (Settings → Claude, at least 2 s), whatever the rest does.
+    private int claudePolled = -1000;
+    private boolean claudeDue() { return isActive("Claude") && ticks - claudePolled >= ClaudeText.pollEvery(pc.state == null ? null : pc.state.claude); }
+
     private void poll(boolean force) {
         List<String> parts = new ArrayList<String>();
-        for (Widget widget : widgets.values()) if (isActive(widget.id) && !parts.contains(widget.part())) parts.add(widget.part());
+        for (Widget widget : widgets.values()) {
+            if (!isActive(widget.id) || parts.contains(widget.part())) continue;
+            if (widget.id.equals("Claude")) { if (!force && !claudeDue()) continue; claudePolled = ticks; }
+            parts.add(widget.part());
+        }
         for (String part : extraParts) if (!parts.contains(part)) parts.add(part);
         if (!editor.editing() && (mirroredVersion.isEmpty() || (pc.state != null && !pc.state.layoutVersion.equals(mirroredVersion)))) parts.add("layout");
         pc.poll(parts, new Runnable() { @Override public void run() { stateChanged(); } }, force);
@@ -254,7 +263,7 @@ public final class Dashboard {
         updateClock();
         if (ticks >= statusClearsAt && !editor.editing()) { setStatus(""); statusClearsAt = Integer.MAX_VALUE; }
         // The PC is asked every 2 s, or every 5 s in its Quiet mode, like the Windows refresh cadence.
-        if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll(false);
+        if (pc.paired() && (ticks % (quiet() ? 5 : 2) == 0 || claudeDue())) poll(false);
         if (claudePill != null && claudePill.getVisibility() == View.VISIBLE) updateClaudePill();
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.tick(ticks, quiet()); }

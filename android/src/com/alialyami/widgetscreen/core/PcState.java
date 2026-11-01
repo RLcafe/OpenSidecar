@@ -98,13 +98,38 @@ public final class PcState {
         public final double[] cost = new double[3];
         public String shown() { return title == null || title.trim().isEmpty() ? project : title; }
     }
+    // A thread of the last week (running or ended), as the PC groups them under its projects: the title the Claude
+    // app shows (never prompts), its state while running, and when it was last active.
+    public static final class ClaudeThread {
+        public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
+        public boolean running, canFocus;
+        public double since, lastActive;
+        public final long[] tokens = new long[3];
+        public final double[] cost = new double[3];
+    }
+    // A project on the card: its folder (the key claude.collapse names), name, threads in the period by id, whether
+    // it's folded into its critter, and its usage.
+    public static final class ClaudeGroup {
+        public String key = "", project = "";
+        public boolean collapsed;
+        public long tokens;
+        public double cost;
+        public final List<String> threads = new ArrayList<String>();
+    }
     public static final class ClaudeWindow { public double pct; public double resetsAt; public String name = ""; }
     public static final class ClaudeProject { public String project = ""; public long tokens; public double cost; }
     public static final class Claude {
         public boolean connected, sample, logsFailed, logsRead, noPlan;
         // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed or expired.
         public String plan = "signedOut";
+        // How often the PC's card reads again (Settings → Claude), and the period the PC's card shows.
+        public int every = 2;
+        public String period = "Today";
         public final List<ClaudeSession> sessions = new ArrayList<ClaudeSession>();
+        public final List<ClaudeThread> threads = new ArrayList<ClaudeThread>();
+        @SuppressWarnings("unchecked")
+        public final List<ClaudeGroup>[] groups = new List[] { new ArrayList<ClaudeGroup>(), new ArrayList<ClaudeGroup>(), new ArrayList<ClaudeGroup>() };
+        public ClaudeThread thread(String id) { for (ClaudeThread t : threads) if (t.id.equals(id)) return t; return null; }
         public ClaudeWindow fiveHour, week;
         // Narrower weekly windows ("Opus week", "Sonnet week", a model's own), for the Large panel.
         public final List<ClaudeWindow> extra = new ArrayList<ClaudeWindow>();
@@ -422,6 +447,28 @@ public final class PcState {
         Claude claude = new Claude();
         claude.connected = flag(c, "connected"); claude.sample = flag(c, "sample"); claude.logsFailed = flag(c, "logsFailed"); claude.logsRead = flag(c, "logsRead"); claude.noPlan = flag(c, "noPlan");
         if (!text(c, "plan").isEmpty()) claude.plan = text(c, "plan");
+        if (Json.value(c, "every") instanceof Number) claude.every = Math.max(1, (int) Json.number(c, "every"));
+        if (!text(c, "period").isEmpty()) claude.period = text(c, "period");
+        for (Object item : Json.array(c, "threads")) {
+            Map<String, Object> t = Json.obj(item);
+            ClaudeThread thread = new ClaudeThread();
+            thread.id = text(t, "id"); thread.project = text(t, "project"); thread.title = text(t, "title"); thread.state = text(t, "state"); thread.running = flag(t, "running");
+            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus");
+            thread.since = Json.number(t, "since"); thread.lastActive = Json.number(t, "lastActive");
+            Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
+            for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }
+            if (thread.state.isEmpty()) thread.state = "ready";
+            if (!thread.id.isEmpty()) claude.threads.add(thread);
+        }
+        Map<String, Object> groups = Json.obj(Json.value(c, "groups"));
+        for (int i = 0; i < 3; i++)
+            for (Object item : Json.array(groups, PERIODS[i])) {
+                Map<String, Object> g = Json.obj(item);
+                ClaudeGroup group = new ClaudeGroup(); group.key = text(g, "key"); group.project = text(g, "project"); group.collapsed = flag(g, "collapsed");
+                group.tokens = (long) Json.number(g, "tokens"); group.cost = Json.number(g, "cost");
+                for (Object id : Json.array(g, "threads")) if (id instanceof String && claude.thread((String) id) != null) group.threads.add((String) id);
+                if (!group.key.isEmpty()) claude.groups[i].add(group);
+            }
         for (Object item : Json.array(c, "sessions")) {
             Map<String, Object> s = Json.obj(item);
             ClaudeSession session = new ClaudeSession();

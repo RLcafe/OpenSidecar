@@ -12,6 +12,14 @@ using System.Web;
 
 namespace WidgetScreen
 {
+    // An answer from Anthropic that wasn't a success, with its status: 429 and 5xx mean "not now" (ClaudeIntervals.Backoff).
+    public sealed class ClaudeHttpException : IOException
+    {
+        public readonly int Status;
+        public ClaudeHttpException(int status, string message) : base(message) { Status = status; }
+        public bool Throttled { get { return Status == 429 || Status >= 500; } }
+    }
+
     // The widget's own Claude sign-in, kept DPAPI-encrypted in claude-session.dat next to settings.xml.
     public sealed class ClaudeSignIn
     {
@@ -265,7 +273,7 @@ namespace WidgetScreen
                     {
                         if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
                         if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) { MarkExpired(); return null; }
-                        if (!response.IsSuccessStatusCode) throw new IOException("api.anthropic.com answered " + (int)response.StatusCode + ".");
+                        if (!response.IsSuccessStatusCode) throw new ClaudeHttpException((int)response.StatusCode, "api.anthropic.com answered " + (int)response.StatusCode + ".");
                         var limits = ClaudeBridge.ParseUsageResponse(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
                         if (limits == null) throw new IOException("The plan usage answer couldn't be read.");
                         return limits;

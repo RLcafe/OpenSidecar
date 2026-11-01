@@ -17,6 +17,14 @@ internal static class ClaudeTests
     {
         for (var e = element; e != null && e != root; e = System.Windows.Media.VisualTreeHelper.GetParent(e) ?? LogicalTreeHelper.GetParent(e))
             if (e is UIElement && ((UIElement)e).Visibility != Visibility.Visible) return false;
+        // Inner lists may scroll: what a ScrollViewer has scrolled out of (or only half into) its viewport isn't shown.
+        for (var e = System.Windows.Media.VisualTreeHelper.GetParent(element); e != null && e != root; e = System.Windows.Media.VisualTreeHelper.GetParent(e))
+        {
+            var scroller = e as System.Windows.Controls.ScrollViewer; var item = element as FrameworkElement;
+            if (scroller == null || item == null || item.ActualHeight <= 0) continue;
+            var box = item.TransformToAncestor(scroller).TransformBounds(new Rect(0, 0, item.ActualWidth, item.ActualHeight));
+            if (box.Top < -0.5 || box.Bottom > scroller.ActualHeight + 0.5) return false;
+        }
         return true;
     }
     private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
@@ -234,10 +242,12 @@ internal static class ClaudeTests
 
         check("Claude picks small, medium and large designs", () => {
             Assert(CardSizing.Claude(260, 180) == CardSizing.Design.Small && CardSizing.Claude(359, 400) == CardSizing.Design.Small && CardSizing.Claude(600, 279) == CardSizing.Design.Small && CardSizing.Claude(472, 310) == CardSizing.Design.Medium && CardSizing.Claude(639, 576) == CardSizing.Design.Medium && CardSizing.Claude(640, 420) == CardSizing.Design.Large, "Claude designs picked at the wrong sizes.");
-            Assert(CardSizing.ClaudeLineup(424) == 4 && CardSizing.ClaudeLineup(200) == 1 && CardSizing.ClaudeLineup(1400) == 5 && CardSizing.ClaudeStrip(1) == 84 && CardSizing.ClaudeStrip(1.4) == 94 && CardSizing.ClaudeRowHeight(1) == 64 && CardSizing.ClaudeRowHeight(1.4) == 70 && CardSizing.ClaudeRows(472, 1) == 6 && CardSizing.ClaudePanel(592) == 240, "Claude sizes wrong.");
-            // The same numbers as the phone's CardSizing (AndroidTests: "Claude plan sign-in states…").
-            Assert(CardSizing.ClaudeMediumBeside(424) && !CardSizing.ClaudeMediumBeside(399) && CardSizing.ClaudeMediumColumn(424) == 195 && CardSizing.ClaudeMediumColumn(1000) == 300 && CardSizing.ClaudeMediumProjects(130, 1, true, true) == 2 && CardSizing.ClaudeMediumProjects(130, 1, false, true) == 0
-                && !CardSizing.ClaudeSmallPercent(132, 1.4) && CardSizing.ClaudeSmallPercent(132, 1) && CardSizing.ClaudeExtras(592, 1) >= 1 && CardSizing.ClaudeProjects(400, 1, 2) < CardSizing.ClaudeProjects(400, 1), "Claude project rows and captions sized wrongly.");
+            Assert(CardSizing.ClaudeStrip(1) == 84 && CardSizing.ClaudeStrip(1.4) == 94 && CardSizing.ClaudeColumns(1808, 3) == 3 && CardSizing.ClaudeColumns(592, 5) == 2 && CardSizing.ClaudeColumns(200, 2) == 1 && CardSizing.ClaudeColumns(900, 0) == 0
+                && CardSizing.ClaudeBabyCell(1) == 84 && CardSizing.ClaudeBabyCell(1.4) == 90 && CardSizing.ClaudeBabiesPerRow(400, 1) == 4 && CritterPose.Baby(100) == 40 && CritterPose.Baby(40) == 24, "Claude sizes wrong.");
+            // The same numbers as the phone's CardSizing (AndroidTests: "Claude project critters…").
+            Assert(CardSizing.ClaudeMediumColumns(424, 5) == 3 && CardSizing.ClaudeMediumColumns(1000, 3) == 3 && CardSizing.ClaudeMediumBabies(130, 1) && !CardSizing.ClaudeMediumBabies(70, 1)
+                && CardSizing.ClaudeMediumBabyCount(140, 30, 5) == 3 && CardSizing.ClaudeMediumBabyCount(60, 30, 5) == 0 && CardSizing.ClaudeMediumBabyCount(140, 30, 2) == 2
+                && !CardSizing.ClaudeSmallPercent(132, 1.4) && CardSizing.ClaudeSmallPercent(132, 1), "Claude project critters and captions sized wrongly.");
             Assert(!WidgetLayout.Default(new AppSettings()).First(p => p.Id == "Claude").Visible && WidgetLayout.Minimum("Claude") == new Size(260, 180) && WidgetLayout.Title("Claude") == "Claude Code", "Claude isn't a hidden widget with its minimum.");
             Assert(!new AppSettings().ClaudeChime && new AppSettings().ClaudeShowNewProjects && new AppSettings().ClaudeProjects == null, "Claude settings defaults wrong.");
         });

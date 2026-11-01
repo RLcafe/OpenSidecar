@@ -1,15 +1,22 @@
 package com.alialyami.widgetscreen.widgets;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.view.Gravity;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.ClaudeText;
+import com.alialyami.widgetscreen.core.Critter;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
@@ -17,30 +24,38 @@ import com.alialyami.widgetscreen.views.CritterView;
 import com.alialyami.widgetscreen.views.ProgressLine;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 // Claude Code on the PC, in the same three designs as the Windows ClaudeCard (CardSizing.claude;
-// docs/design/claude-watcher.md): Small is the loudest critter with its project and state over the 5-hour meter;
-// Medium a lineup of critters with usage by project beside or under it, over the two plan meters; Large a row per
-// session beside a panel with the meters, a period switch and usage by project. Usage shows tokens and what they
-// would cost at API prices. The PC leaves out the projects unticked in its Settings → Claude. When a session needs you the card's border turns Amber. Tapping a session brings its window forward on the
-// PC. The period switch is the phone's own.
+// docs/design/claude-watcher.md): Small is the loudest running session's critter with its project and state over the
+// 5-hour meter. Medium and Large show each project as a big critter with its threads as baby critters: Medium a row of
+// projects with up to three babies each over the plan meters, Large a column per project (its babies in a grid that
+// scrolls when there are many) under a strip with the meters and the period switch. Tapping a project critter folds
+// its babies into it (they're eaten) or lets them out (they pop back out), shared with the PC through claude.collapse;
+// Quiet mode skips the motion. Tapping a running baby brings its window forward on the PC. The period switch is the
+// phone's own and starts at the PC's.
 public final class ClaudeWidget extends Widget {
     private static final String[] PERIOD_DESCRIPTIONS = { "the 5-hour window", "today", "the week" };
-    private int design, period;
+    private static final long MOTION = 350;
+    private int design, period = -1;
     private String builtFor = "";
     private FrameLayout card;
-    private TextView heading, flag, more, source, smallPercent;
+    private TextView heading, flag, more, smallPercent;
     private ProgressLine smallMeter;
     private final List<TextView> extras = new ArrayList<TextView>();
     private Meter five, week;
-    private boolean phase, quiet;
+    private boolean phase, quiet, animating;
+    private String spitKey;
+    // Folds the phone asked for, until the PC's answer says the same.
+    private final Map<String, Boolean> pending = new HashMap<String, Boolean>();
     private final List<Part> parts = new ArrayList<Part>();
-    private final List<ProjectRow> projects = new ArrayList<ProjectRow>();
+    private final List<Head> heads = new ArrayList<Head>();
 
-    private static final class Part { CritterView critter; TextView title, state, detail, tokens, cost; String id; }
+    private static final class Part { CritterView critter; TextView title, state, tokens; View cell; String id; }
+    private static final class Head { String key; CritterView critter; TextView name, detail; final List<Part> babies = new ArrayList<Part>(); }
     private static final class Meter { TextView percent, reset; CritterView.Segments bar; }
-    private static final class ProjectRow { TextView name, tokens; ProgressLine share; }
 
     public ClaudeWidget(Dashboard dash) { super("Claude", dash); }
 
@@ -48,23 +63,38 @@ public final class ClaudeWidget extends Widget {
 
     private PcState.Claude claude() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.claude; }
     private static double now() { return System.currentTimeMillis() / 1000.0; }
+    private boolean folded(PcState.ClaudeGroup group) { Boolean asked = pending.get(group.key); return asked != null ? asked : group.collapsed; }
+    private List<PcState.ClaudeGroup> groups(PcState.Claude c) { return c.groups[period]; }
 
-    // What decides the design's parts: which sessions, and which areas have something to show.
+    // What decides the design's parts: which sessions, which projects and threads, and which areas have something.
     private String shape(PcState.Claude c) {
         if (c == null) return "-";
         StringBuilder ids = new StringBuilder();
         for (PcState.ClaudeSession s : c.sessions) ids.append(s.id).append(':').append(s.canFocus).append(',');
-        return c.connected + "|" + c.sample + "|" + ids + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + c.logsFailed + "|" + c.usage[period].size() + "|" + period;
+        StringBuilder projects = new StringBuilder();
+        for (PcState.ClaudeGroup g : groups(c)) {
+            projects.append(g.key).append(folded(g) ? "!" : "").append(':');
+            for (String id : g.threads) { PcState.ClaudeThread t = c.thread(id); projects.append(id).append(t != null && t.canFocus ? "*" : "").append(','); }
+            projects.append(';');
+        }
+        return c.connected + "|" + c.sample + "|" + ids + "|" + projects + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + c.logsFailed + "|" + period;
     }
 
     @Override protected View create() {
         PcState.Claude c = claude();
+        if (period < 0 && c != null) period = ClaudeText.period(c.period);
+        if (period < 0) period = 1;
+        if (c != null) for (PcState.ClaudeGroup g : groups(c)) { Boolean asked = pending.get(g.key); if (asked != null && asked == g.collapsed) pending.remove(g.key); }
         builtFor = shape(c);
-        parts.clear(); projects.clear(); extras.clear(); heading = flag = more = source = smallPercent = null; smallMeter = null; five = week = null;
+        parts.clear(); heads.clear(); extras.clear(); heading = flag = more = smallPercent = null; smallMeter = null; five = week = null;
         design = CardSizing.claude(width, height);
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48);
         View content = c == null ? ui.caption("Waiting for the PC…") : design == CardSizing.SMALL ? small(c, bodyWidth, bodyHeight) : design == CardSizing.MEDIUM ? medium(c, bodyWidth, bodyHeight) : large(c, bodyWidth, bodyHeight);
         card = ui.card(content, 24);
+        if (spitKey != null) {
+            final String key = spitKey; spitKey = null;
+            card.post(new Runnable() { @Override public void run() { for (Head head : heads) if (head.key.equals(key)) spit(head); } });
+        }
         return card;
     }
 
@@ -75,13 +105,22 @@ public final class ClaudeWidget extends Widget {
         return view;
     }
     // A tappable session: its whole area brings the session's window forward on the PC, when one is known.
-    private View tappable(View child, PcState.ClaudeSession session) {
-        if (session == null || !session.canFocus) return child;
-        final String id = session.id;
+    private View tappable(View child, final String id, boolean canFocus, String shown) {
+        if (id == null || !canFocus) return child;
         child.setClickable(true);
         child.setBackground(ui.pressable(0x00000000, 0, 0, 12));
-        child.setContentDescription(session.shown() + ". Tap to show its window on the PC.");
+        child.setContentDescription(shown + ". Tap to show its window on the PC.");
         child.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "claude.focus", "id", id)); } }));
+        return child;
+    }
+    // A project critter: a tap folds its babies in or lets them out.
+    private View folding(View child, final PcState.ClaudeGroup group) {
+        child.setClickable(true);
+        child.setBackground(ui.pressable(0x00000000, 0, 0, 12));
+        child.setMinimumHeight(ui.px(48)); child.setMinimumWidth(ui.px(48));
+        child.setContentDescription(group.project + ", " + ClaudeText.threads(group.threads.size()) + (folded(group) ? ", folded. Tap to show them." : ". Tap to fold them in."));
+        final String key = group.key;
+        child.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { toggle(key); } }));
         return child;
     }
     private View headingRow() {
@@ -103,7 +142,7 @@ public final class ClaudeWidget extends Widget {
         PcState.ClaudeSession first = c.sessions.isEmpty() ? null : c.sessions.get(0);
         Part part = new Part(); part.id = first == null ? null : first.id; part.critter = critter(); parts.add(part);
         FrameLayout holder = new FrameLayout(ui.context); holder.addView(part.critter, new FrameLayout.LayoutParams(ui.px(size), ui.px(size)));
-        row.addView(tappable(holder, first), ui.ll(Ui.WRAP, Ui.WRAP));
+        row.addView(first == null ? holder : tappable(holder, first.id, first.canFocus, first.shown()), ui.ll(Ui.WRAP, Ui.WRAP));
         LinearLayout side = ui.column(); side.setGravity(Gravity.CENTER_VERTICAL);
         if (first == null) side.addView(wrapped(c.connected ? ClaudeText.NO_SESSIONS : ClaudeText.NOT_CONNECTED, width < 300 ? 13 : ui.small(), room - (c.sample ? 22 : 0)), ui.ll(Ui.MATCH, Ui.WRAP));
         else {
@@ -127,159 +166,133 @@ public final class ClaudeWidget extends Widget {
         return column;
     }
 
-    // Medium: the heading, a lineup of critters with usage by project beside it on a wide card (under it on a tall
-    // narrow one), and the two plan meters in a strip: the plan and the projects are what this card is for.
+    // Medium: the heading, a row of project critters with up to three babies each, and the plan meters in a strip.
     private View medium(PcState.Claude c, double width, double height) {
         double stripHeight = CardSizing.claudeStrip(ui.textScale) + 12, room = height - 36 - stripHeight;
         LinearLayout column = ui.column();
         column.addView(headingRow(), ui.ll(Ui.MATCH, ui.px(28)));
-        List<PcState.ClaudeProject> usage = c.usage[period];
-        boolean beside = CardSizing.claudeMediumBeside(width);
-        int projectRows = c.logsFailed ? 0 : CardSizing.claudeMediumProjects(room, ui.textScale, beside, !c.sessions.isEmpty());
-        String label = "BY PROJECT · " + ClaudeText.PERIOD_NAMES[period].toUpperCase(java.util.Locale.ROOT);
-        if (projectRows > 0 && beside) {
-            double side = CardSizing.claudeMediumColumn(width);
-            LinearLayout body = ui.row(); body.setGravity(Gravity.CENTER_VERTICAL);
-            body.addView(lineup(c, width - side - 16, room), ui.ll(0, Ui.WRAP, 1));
-            body.addView(projectRows(c, projectRows, usage, label), ui.margins(ui.ll(ui.px(side), Ui.WRAP), 16, 0, 0, 0));
-            column.addView(body, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
-        } else {
-            double rowHeight = projectRows > 0 ? room - 26 - projectRows * CardSizing.claudeProjectRow(ui.textScale) : room;
-            column.addView(lineup(c, width, rowHeight), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
-            if (projectRows > 0) column.addView(projectRows(c, projectRows, usage, label), ui.ll(Ui.MATCH, Ui.WRAP));
+        List<PcState.ClaudeGroup> groups = groups(c);
+        if (groups.isEmpty()) column.addView(empty(c, Math.min(96, Math.max(40, room - 8)), room), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
+        else {
+            int columns = CardSizing.claudeMediumColumns(width, groups.size());
+            boolean overflow = groups.size() > columns && columns > 1;
+            int shown = overflow ? columns - 1 : Math.min(columns, groups.size());
+            double columnWidth = width / columns;
+            boolean babies = CardSizing.claudeMediumBabies(room, ui.textScale);
+            double parent = CardSizing.claudeMediumParent(room, columnWidth, ui.textScale, babies), baby = Math.max(16, Math.round(parent * 0.4));
+            LinearLayout row = ui.row(); row.setGravity(Gravity.CENTER_VERTICAL);
+            for (int i = 0; i < shown; i++) {
+                PcState.ClaudeGroup group = groups.get(i);
+                Head head = new Head(); head.key = group.key; head.critter = critter(); heads.add(head);
+                LinearLayout stack = ui.column(); stack.setGravity(Gravity.CENTER_HORIZONTAL);
+                FrameLayout holder = new FrameLayout(ui.context); holder.addView(head.critter, ui.frame(ui.px(parent), ui.px(parent), Gravity.CENTER));
+                stack.addView(folding(holder, group), ui.ll(Ui.WRAP, Ui.WRAP));
+                head.name = ui.text("", ui.small(), ui.theme.text); head.name.setGravity(Gravity.CENTER); Ui.wrap(head.name, 1); head.name.setMaxWidth(ui.px(Math.max(40, columnWidth - 8)));
+                stack.addView(head.name, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));
+                if (babies && !folded(group) && !group.threads.isEmpty()) {
+                    int count = CardSizing.claudeMediumBabyCount(columnWidth - 8, baby, group.threads.size());
+                    LinearLayout line = ui.row(); line.setGravity(Gravity.CENTER);
+                    for (int j = 0; j < count; j++) line.addView(baby(c, head, c.thread(group.threads.get(j)), baby, 0, false), ui.ll(Ui.WRAP, Ui.WRAP));
+                    if (count < group.threads.size()) line.addView(ui.caption("+" + (group.threads.size() - count)), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 4, 0, 0, 0));
+                    stack.addView(line, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
+                }
+                row.addView(stack, ui.ll(0, Ui.WRAP, 1));
+            }
+            if (overflow) row.addView(moreProjects(groups.subList(shown, groups.size()), c, false), ui.ll(0, Ui.WRAP, 1));
+            column.addView(row, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
         }
         FrameLayout tile = new FrameLayout(ui.context);
         tile.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
         tile.setPadding(ui.px(14), ui.px(10), ui.px(14), ui.px(10));
-        tile.addView(meters(c, false), new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
+        tile.addView(meters(c), new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
         column.addView(tile, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
         return column;
     }
 
-    // The Medium lineup: a critter per session with its project (and state, when there's room), or a dozing one.
-    private View lineup(PcState.Claude c, double width, double rowHeight) {
-        if (c.sessions.isEmpty()) return empty(c, Math.min(96, Math.max(40, rowHeight - 8)), rowHeight);
-        int columns = CardSizing.claudeLineup(width), count = c.sessions.size(), slots = Math.min(count, columns);
-        int shown = count <= columns ? count : columns - 1;
-        double columnWidth = width / slots;
-        boolean state = CardSizing.claudeLineupState(rowHeight, ui.textScale);
-        double size = CardSizing.claudeLineupCritter(rowHeight, columnWidth, ui.textScale, state);
-        LinearLayout lineup = ui.row(); lineup.setGravity(Gravity.CENTER_VERTICAL);
-        for (int i = 0; i < shown; i++) {
-            PcState.ClaudeSession session = c.sessions.get(i);
-            Part part = new Part(); part.id = session.id; part.critter = critter(); parts.add(part);
-            LinearLayout stack = ui.column(); stack.setGravity(Gravity.CENTER_HORIZONTAL);
-            stack.addView(part.critter, ui.ll(ui.px(size), ui.px(size)));
-            part.title = ui.text("", ui.small(), ui.theme.text); part.title.setGravity(Gravity.CENTER); part.title.setMaxWidth(ui.px(Math.max(40, columnWidth - 8)));
-            stack.addView(part.title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));
-            if (state) { part.state = ui.caption(""); part.state.setGravity(Gravity.CENTER); part.state.setMaxWidth(ui.px(Math.max(40, columnWidth - 8))); stack.addView(part.state, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 2, 0, 0)); }
-            lineup.addView(tappable(stack, session), ui.ll(0, Ui.WRAP, 1));
+    // A thread's baby critter: Large gives it a cell with its title and tokens, Medium the critter alone. A running
+    // baby's tap brings its window forward on the PC.
+    private View baby(PcState.Claude c, Head head, PcState.ClaudeThread thread, double size, double cellWidth, boolean labelled) {
+        Part part = new Part(); part.id = thread == null ? null : thread.id; part.critter = critter();
+        LinearLayout stack = ui.column(); stack.setGravity(Gravity.CENTER_HORIZONTAL);
+        stack.addView(part.critter, ui.margins(ui.ll(ui.px(size), ui.px(size)), labelled ? 0 : 2, 0, labelled ? 0 : 2, 0));
+        if (labelled) {
+            part.title = ui.text("", ui.small(), ui.theme.text); part.title.setGravity(Gravity.CENTER); Ui.wrap(part.title, 2); part.title.setMaxWidth(ui.px(Math.max(30, cellWidth - 6)));
+            stack.addView(part.title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 4, 0, 0));
+            part.tokens = ui.caption(""); part.tokens.setGravity(Gravity.CENTER); Ui.wrap(part.tokens, 1); part.tokens.setMaxWidth(ui.px(Math.max(30, cellWidth - 6)));
+            stack.addView(part.tokens, ui.ll(Ui.WRAP, Ui.WRAP));
         }
-        if (shown < count) {
-            LinearLayout others = ui.column(); others.setGravity(Gravity.CENTER);
-            more = Ui.tabular(ui.text("", 28, ui.theme.muted)); more.setTypeface(Ui.LIGHT);
-            others.addView(more, ui.ll(Ui.WRAP, Ui.WRAP)); others.addView(ui.caption("more"), ui.ll(Ui.WRAP, Ui.WRAP));
-            lineup.addView(others, ui.ll(0, Ui.WRAP, 1));
-        }
-        return lineup;
+        String shown = thread == null ? "" : ClaudeText.threadTitle(thread, now(), dash.use24());
+        part.cell = thread == null ? stack : tappable(stack, thread.id, thread.running && thread.canFocus, shown);
+        if (part.cell == stack) stack.setContentDescription(shown);
+        head.babies.add(part);
+        return part.cell;
     }
 
-    // Usage by project: name, then tokens and the cost at API prices at the right, over a thin share bar.
-    private View projectRows(PcState.Claude c, int rows, List<PcState.ClaudeProject> usage, String label) {
-        LinearLayout panel = ui.column();
-        panel.addView(ui.label(label), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 6));
-        if (usage.isEmpty()) { panel.addView(ui.caption(c.logsRead ? "No usage in this period." : "Reading Claude Code's logs…"), ui.ll(Ui.MATCH, Ui.WRAP)); return panel; }
-        for (int i = 0; i < Math.min(rows, usage.size()); i++) {
-            ProjectRow row = new ProjectRow();
-            LinearLayout top = ui.row();
-            row.name = ui.text("", ui.small(), ui.theme.text); Ui.wrap(row.name, 1); top.addView(row.name, ui.ll(0, Ui.WRAP, 1));
-            row.tokens = ui.smallText(""); top.addView(row.tokens, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
-            panel.addView(top, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, i == 0 ? 0 : 6, 0, 0));
-            row.share = new ProgressLine(ui.context, ui.theme.accent, ui.theme.track);
-            panel.addView(row.share, ui.margins(ui.ll(Ui.MATCH, ui.px(4)), 0, 3, 0, 0));
-            projects.add(row);
-        }
-        return panel;
+    // The projects past the last column: how many, and the first few names.
+    private View moreProjects(List<PcState.ClaudeGroup> rest, PcState.Claude c, boolean names) {
+        LinearLayout others = ui.column(); others.setGravity(names ? Gravity.CENTER_HORIZONTAL | Gravity.TOP : Gravity.CENTER);
+        boolean needs = false; for (PcState.ClaudeGroup g : rest) needs |= ClaudeText.groupNeeds(c, g);
+        more = Ui.tabular(ui.text("+" + rest.size(), 28, needs ? Theme.WARNING : ui.theme.muted)); more.setTypeface(Ui.LIGHT);
+        others.addView(more, ui.ll(Ui.WRAP, Ui.WRAP));
+        others.addView(ui.caption(rest.size() == 1 ? "more project" : "more projects"), ui.ll(Ui.WRAP, Ui.WRAP));
+        if (names) for (int i = 0; i < Math.min(4, rest.size()); i++) { TextView name = ui.caption(rest.get(i).project); Ui.wrap(name, 1); others.addView(name, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 4, 0, 0)); }
+        return others;
     }
 
-    // A dozing critter and what to do next, for no sessions or no connection.
+    // A dozing critter and what to do next, for no threads or no connection.
     private View empty(PcState.Claude c, double size, double room) {
         LinearLayout row = ui.row();
         Part part = new Part(); part.critter = critter(); parts.add(part);
         row.addView(part.critter, ui.ll(ui.px(size), ui.px(size)));
-        row.addView(wrapped(c.connected ? ClaudeText.NO_SESSIONS : ClaudeText.NOT_CONNECTED, ui.small(), room), ui.margins(ui.ll(0, Ui.WRAP, 1), 16, 0, 0, 0));
+        String words = !c.connected && c.threads.isEmpty() ? ClaudeText.NOT_CONNECTED : ClaudeText.noThreads(period);
+        row.addView(wrapped(words, ui.small(), room), ui.margins(ui.ll(0, Ui.WRAP, 1), 16, 0, 0, 0));
         return row;
     }
 
-    // The two plan meters: side by side in the Medium strip, stacked and bigger in the Large panel.
-    private View meters(PcState.Claude c, boolean stacked) {
-        if (!c.limitsKnown()) return wrapped(ClaudeText.limitsMissing(c), ui.small(), stacked ? 80 : CardSizing.claudeStrip(ui.textScale) - 20);
+    // The two plan meters side by side, or what they need.
+    private View meters(PcState.Claude c) {
+        if (!c.limitsKnown()) return wrapped(ClaudeText.limitsMissing(c), ui.small(), CardSizing.claudeStrip(ui.textScale) - 20);
         five = new Meter(); week = new Meter();
-        View a = meter(five, "5-HOUR", stacked), b = meter(week, "WEEK", stacked);
-        LinearLayout box = stacked ? ui.column() : ui.row();
-        if (stacked) { box.addView(a, ui.ll(Ui.MATCH, Ui.WRAP)); box.addView(b, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 14, 0, 0)); }
-        else { box.setGravity(Gravity.TOP); box.addView(a, ui.ll(0, Ui.WRAP, 1)); box.addView(b, ui.margins(ui.ll(0, Ui.WRAP, 1), 16, 0, 0, 0)); }
+        View a = meter(five, "5-HOUR"), b = meter(week, "WEEK");
+        LinearLayout box = ui.row(); box.setGravity(Gravity.TOP);
+        box.addView(a, ui.ll(0, Ui.WRAP, 1)); box.addView(b, ui.margins(ui.ll(0, Ui.WRAP, 1), 16, 0, 0, 0));
         return box;
     }
-    private View meter(Meter meter, String label, boolean big) {
+    private View meter(Meter meter, String label) {
         LinearLayout stack = ui.column();
         FrameLayout top = new FrameLayout(ui.context);
         top.addView(ui.label(label), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-        meter.percent = big ? Ui.tabular(ui.text("—", 30, ui.theme.text)) : ui.body("—");
-        if (big) meter.percent.setTypeface(Ui.LIGHT);
+        meter.percent = ui.body("—");
         top.addView(meter.percent, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.BOTTOM));
         stack.addView(top, ui.ll(Ui.MATCH, Ui.WRAP));
         meter.bar = new CritterView.Segments(ui.context, ui.theme.accent, ui.theme.track, ui.fpx(4));
-        stack.addView(meter.bar, ui.margins(ui.ll(Ui.MATCH, ui.px(big ? 14 : 10)), 0, 6, 0, 0));
+        stack.addView(meter.bar, ui.margins(ui.ll(Ui.MATCH, ui.px(10)), 0, 6, 0, 0));
         meter.reset = ui.caption(""); stack.addView(meter.reset, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 4, 0, 0));
         return stack;
     }
 
-    // Large: a row per session at the left, and a panel with the meters, the period switch and usage by project.
+    // Large: the meter strip (with the narrower weekly windows when there's room, and the period switch), then a
+    // column per project: its big critter, name and usage, and its threads as babies in a grid that scrolls.
     private View large(PcState.Claude c, double width, double height) {
         LinearLayout column = ui.column();
         column.addView(headingRow(), ui.ll(Ui.MATCH, ui.px(28)));
-        double panelWidth = CardSizing.claudePanel(width), leftWidth = width - panelWidth - 16, bodyHeight = height - 40;
-        LinearLayout body = ui.row(); body.setGravity(Gravity.TOP);
-        if (c.sessions.isEmpty()) body.addView(empty(c, Math.min(96, leftWidth * 0.3), bodyHeight), ui.ll(0, Ui.WRAP, 1));
-        else {
-            double rowHeight = CardSizing.claudeRowHeight(ui.textScale);
-            int capacity = CardSizing.claudeRows(bodyHeight, ui.textScale), count = c.sessions.size();
-            int shown = count <= capacity ? count : Math.max(1, capacity - 1);
+        double stripHeight = CardSizing.claudeStrip(ui.textScale) + 20, area = height - 28 - 12 - stripHeight - 12;
+        LinearLayout strip = ui.row(); strip.setGravity(Gravity.CENTER_VERTICAL);
+        strip.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
+        strip.setPadding(ui.px(14), ui.px(10), ui.px(14), ui.px(10));
+        strip.addView(meters(c), ui.ll(0, Ui.WRAP, 1));
+        int extraRows = c.limitsKnown() && width >= 1000 ? Math.min(3, c.extra.size()) : 0;
+        if (extraRows > 0) {
             LinearLayout list = ui.column();
-            for (int i = 0; i < shown; i++) {
-                PcState.ClaudeSession session = c.sessions.get(i);
-                Part part = new Part(); part.id = session.id; part.critter = critter(); parts.add(part);
-                LinearLayout row = ui.row();
-                row.addView(part.critter, ui.margins(ui.ll(ui.px(56), ui.px(56)), 0, 0, 12, 0));
-                LinearLayout text = ui.column();
-                part.title = ui.body(""); text.addView(part.title, ui.ll(Ui.MATCH, Ui.WRAP));
-                LinearLayout line = ui.row();
-                part.state = ui.smallText(""); line.addView(part.state, ui.ll(Ui.WRAP, Ui.WRAP));
-                part.detail = ui.caption(""); line.addView(part.detail, ui.margins(ui.ll(0, Ui.WRAP, 1), 10, 0, 0, 0));
-                text.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 3, 0, 0));
-                row.addView(text, ui.ll(0, Ui.WRAP, 1));
-                LinearLayout numbers = ui.column(); numbers.setGravity(Gravity.END);
-                part.tokens = Ui.tabular(ui.text("", 22, ui.theme.text)); part.tokens.setTypeface(Ui.LIGHT); numbers.addView(part.tokens, ui.ll(Ui.WRAP, Ui.WRAP));
-                part.cost = ui.caption(""); numbers.addView(part.cost, ui.ll(Ui.WRAP, Ui.WRAP));
-                row.addView(numbers, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 12, 0, 0, 0));
-                list.addView(tappable(row, session), ui.margins(ui.ll(Ui.MATCH, ui.px(rowHeight)), 0, i == 0 ? 0 : 8, 0, 0));
+            for (int i = 0; i < extraRows; i++) {
+                FrameLayout line = new FrameLayout(ui.context);
+                TextView name = ui.caption(c.extra.get(i).name.toUpperCase(java.util.Locale.ROOT)); Ui.wrap(name, 1);
+                line.addView(name, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
+                TextView pct = ui.caption(""); line.addView(pct, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
+                extras.add(pct);
+                list.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, i == 0 ? 0 : 2, 0, 0));
             }
-            if (shown < count) { more = ui.caption(""); list.addView(more, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0)); }
-            body.addView(list, ui.ll(0, Ui.WRAP, 1));
-        }
-        LinearLayout panel = ui.column();
-        panel.setBackground(ui.shape(ui.theme.raised, 0, 0, 16));
-        panel.setPadding(ui.px(16), ui.px(16), ui.px(16), ui.px(16));
-        panel.addView(meters(c, true), ui.ll(Ui.MATCH, Ui.WRAP));
-        // Narrower weekly windows (Opus, Sonnet, a model's own) as one line each, when the panel has room.
-        int extraRows = c.limitsKnown() ? Math.min(c.extra.size(), CardSizing.claudeExtras(bodyHeight - 32, ui.textScale)) : 0;
-        for (int i = 0; i < extraRows; i++) {
-            FrameLayout line = new FrameLayout(ui.context);
-            line.addView(ui.caption(c.extra.get(i).name.toUpperCase(java.util.Locale.ROOT)), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
-            TextView pct = ui.smallText(""); line.addView(pct, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
-            extras.add(pct);
-            panel.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, i == 0 ? 10 : 4, 0, 0));
+            strip.addView(list, ui.margins(ui.ll(ui.px(170), Ui.WRAP), 16, 0, 0, 0));
         }
         LinearLayout periods = ui.row();
         for (int i = 0; i < 3; i++) {
@@ -288,17 +301,131 @@ public final class ClaudeWidget extends Widget {
             button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.fpx(ui.small()));
             button.setPadding(ui.px(4), ui.px(4), ui.px(4), ui.px(4));
             ui.select(button, i == period);
-            button.setContentDescription("Usage for " + PERIOD_DESCRIPTIONS[i] + (i == period ? ", selected" : ""));
-            periods.addView(button, ui.margins(ui.ll(0, ui.px(48), 1), i == 0 ? 0 : 3, 0, i == 2 ? 0 : 3, 0));
+            button.setContentDescription("Threads and usage for " + PERIOD_DESCRIPTIONS[i] + (i == period ? ", selected" : ""));
+            periods.addView(button, ui.margins(ui.ll(ui.px(64), ui.px(52)), i == 0 ? 0 : 6, 0, 0, 0));
         }
-        panel.addView(periods, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 14, 0, 0));
-        int rows = CardSizing.claudeProjects(bodyHeight - 32, ui.textScale, extraRows);
-        if (c.logsFailed) panel.addView(wrapped(ClaudeText.NO_LOGS, ui.small(), 60), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 16, 0, 0));
-        else if (rows > 0) panel.addView(projectRows(c, rows, c.usage[period], "BY PROJECT"), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
-        source = ui.caption(""); panel.addView(source, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
-        body.addView(panel, ui.margins(ui.ll(ui.px(panelWidth), Ui.MATCH), 16, 0, 0, 0));
+        strip.addView(periods, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 16, 0, 0, 0));
+        column.addView(strip, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 12, 0, 0));
+        List<PcState.ClaudeGroup> groups = groups(c);
+        if (groups.isEmpty()) { column.addView(empty(c, Math.min(96, Math.max(40, area * 0.5)), area), ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 12, 0, 0)); return column; }
+        int columns = CardSizing.claudeColumns(width, groups.size());
+        boolean overflow = groups.size() > columns && columns > 1;
+        int shown = overflow ? columns - 1 : Math.min(columns, groups.size());
+        double columnWidth = (width - 16 * (columns - 1)) / columns;
+        LinearLayout body = ui.row(); body.setGravity(Gravity.TOP);
+        for (int i = 0; i < shown; i++) body.addView(projectColumn(c, groups.get(i), columnWidth, area), ui.margins(ui.ll(0, Ui.MATCH, 1), i == 0 ? 0 : 16, 0, 0, 0));
+        if (overflow) body.addView(moreProjects(groups.subList(shown, groups.size()), c, true), ui.margins(ui.ll(0, Ui.MATCH, 1), 16, 0, 0, 0));
         column.addView(body, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 12, 0, 0));
         return column;
+    }
+
+    // One project's column: the big critter (a tap folds the babies in or out), its name and usage, then its
+    // babies, a row per few, scrolling inside the column when they don't all fit.
+    private View projectColumn(PcState.Claude c, PcState.ClaudeGroup group, double width, double area) {
+        double parent = CardSizing.claudeParent(width, area, ui.textScale), baby = Critter.baby(parent);
+        LinearLayout column = ui.column(); column.setGravity(Gravity.CENTER_HORIZONTAL);
+        Head head = new Head(); head.key = group.key; head.critter = critter(); heads.add(head);
+        FrameLayout holder = new FrameLayout(ui.context); holder.addView(head.critter, ui.frame(ui.px(parent), ui.px(parent), Gravity.CENTER));
+        column.addView(folding(holder, group), ui.ll(Ui.WRAP, Ui.WRAP));
+        head.name = ui.body(""); head.name.setGravity(Gravity.CENTER); Ui.wrap(head.name, 1); head.name.setMaxWidth(ui.px(width));
+        column.addView(head.name, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));
+        head.detail = ui.caption(""); head.detail.setGravity(Gravity.CENTER); Ui.wrap(head.detail, 1); head.detail.setMaxWidth(ui.px(width));
+        column.addView(head.detail, ui.ll(Ui.WRAP, Ui.WRAP));
+        if (!folded(group) && !group.threads.isEmpty()) {
+            int perRow = Math.min(group.threads.size(), CardSizing.claudeBabiesPerRow(width, ui.textScale));
+            int rows = (group.threads.size() + perRow - 1) / perRow;
+            double cellWidth = width / CardSizing.claudeBabiesPerRow(width, ui.textScale), cellHeight = CardSizing.claudeBabyHeight(baby, ui.textScale);
+            LinearLayout grid = ui.column(); grid.setGravity(Gravity.CENTER_HORIZONTAL);
+            for (int r = 0; r < rows; r++) {
+                LinearLayout line = new LinearLayout(ui.context); line.setOrientation(LinearLayout.HORIZONTAL); line.setGravity(Gravity.TOP);
+                for (int k = 0; k < perRow && r * perRow + k < group.threads.size(); k++)
+                    line.addView(baby(c, head, c.thread(group.threads.get(r * perRow + k)), baby, cellWidth, true), ui.ll(ui.px(cellWidth), ui.px(cellHeight)));
+                grid.addView(line, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, r == 0 ? 0 : 6, 0, 0));
+            }
+            double room = area - parent - CardSizing.claudeHeadText(ui.textScale) - 10;
+            if (rows * (cellHeight + 6) - 6 > room) {
+                // More babies than fit: the column's grid scrolls (inner lists may scroll; the dashboard never does).
+                ScrollView scroll = new ScrollView(ui.context); scroll.setVerticalScrollBarEnabled(false); scroll.setNestedScrollingEnabled(true);
+                scroll.addView(grid, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
+                column.addView(scroll, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 10, 0, 0));
+            } else column.addView(grid, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
+        }
+        return column;
+    }
+
+    // ----- Folding: eating and spitting (~350 ms, instant in Quiet mode) -----
+
+    private void toggle(String key) {
+        PcState.Claude c = claude();
+        if (animating || c == null) return;
+        PcState.ClaudeGroup group = null; for (PcState.ClaudeGroup g : groups(c)) if (g.key.equals(key)) group = g;
+        if (group == null) return;
+        final boolean fold = !folded(group);
+        Head head = null; for (Head h : heads) if (h.key.equals(key)) head = h;
+        final String folder = key;
+        Runnable apply = new Runnable() { @Override public void run() {
+            pending.put(folder, fold);
+            dash.commandQuietly(Json.map("action", "claude.collapse", "project", folder, "collapsed", fold));
+            dash.rebuildWidget(id);
+        } };
+        if (fold && head != null && !head.babies.isEmpty() && !quiet) { eat(head, apply); return; }
+        if (!fold && !quiet) spitKey = key;
+        apply.run();
+    }
+
+    // Where a baby must move to sit in its parent's mouth, in its own pixels.
+    private static float[] toMouth(Head head, View baby) {
+        int[] a = new int[2], b = new int[2];
+        head.critter.getLocationInWindow(a); baby.getLocationInWindow(b);
+        return new float[] { a[0] + head.critter.mouthX() - (b[0] + baby.getWidth() / 2f), a[1] + head.critter.mouthY() - (b[1] + baby.getHeight() / 2f) };
+    }
+    // The mouth opens wide, holds, then closes: a gulp when eating, a puff when spitting.
+    private static float mouth(float t, boolean eat) {
+        float open = eat ? 120f / MOTION : 60f / MOTION, close = eat ? 270f / MOTION : 220f / MOTION;
+        return t < open ? t / open : t < close ? 1 : Math.max(0, 1 - (t - close) / (1 - close));
+    }
+
+    private void eat(final Head head, final Runnable done) {
+        animating = true;
+        final List<float[]> targets = new ArrayList<float[]>();
+        for (Part baby : head.babies) { baby.cell.setPivotX(baby.cell.getWidth() / 2f); baby.cell.setPivotY(baby.cell.getHeight() / 2f); targets.add(toMouth(head, baby.cell)); }
+        final AccelerateInterpolator ease = new AccelerateInterpolator(1.5f);
+        ValueAnimator motion = ValueAnimator.ofFloat(0, 1).setDuration(MOTION);
+        motion.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() { @Override public void onAnimationUpdate(ValueAnimator animator) {
+            float t = (float) animator.getAnimatedValue(), e = ease.getInterpolation(t);
+            for (int i = 0; i < head.babies.size(); i++) {
+                View cell = head.babies.get(i).cell;
+                cell.setScaleX(1 - 0.9f * e); cell.setScaleY(1 - 0.9f * e);
+                cell.setTranslationX(targets.get(i)[0] * e); cell.setTranslationY(targets.get(i)[1] * e);
+                cell.setAlpha(t < 0.7f ? 1 : Math.max(0, 1 - (t - 0.7f) / 0.3f));
+            }
+            head.critter.setMouth(mouth(t, true));
+        } });
+        motion.addListener(new AnimatorListenerAdapter() { @Override public void onAnimationEnd(Animator animator) { animating = false; head.critter.setMouth(0); done.run(); } });
+        motion.start();
+    }
+
+    private void spit(final Head head) {
+        if (head.babies.isEmpty() || head.critter.getWidth() == 0) return;
+        final List<float[]> starts = new ArrayList<float[]>();
+        for (Part baby : head.babies) { baby.cell.setPivotX(baby.cell.getWidth() / 2f); baby.cell.setPivotY(baby.cell.getHeight() / 2f); starts.add(toMouth(head, baby.cell)); }
+        final OvershootInterpolator ease = new OvershootInterpolator(1.4f);
+        ValueAnimator motion = ValueAnimator.ofFloat(0, 1).setDuration(MOTION);
+        motion.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() { @Override public void onAnimationUpdate(ValueAnimator animator) {
+            float t = (float) animator.getAnimatedValue(), e = ease.getInterpolation(t);
+            for (int i = 0; i < head.babies.size(); i++) {
+                View cell = head.babies.get(i).cell;
+                cell.setScaleX(0.1f + 0.9f * e); cell.setScaleY(0.1f + 0.9f * e);
+                cell.setTranslationX(starts.get(i)[0] * (1 - e)); cell.setTranslationY(starts.get(i)[1] * (1 - e));
+                cell.setAlpha(Math.min(1, t / 0.25f));
+            }
+            head.critter.setMouth(mouth(t, false));
+        } });
+        motion.addListener(new AnimatorListenerAdapter() { @Override public void onAnimationEnd(Animator animator) {
+            head.critter.setMouth(0);
+            for (Part baby : head.babies) { baby.cell.setScaleX(1); baby.cell.setScaleY(1); baby.cell.setTranslationX(0); baby.cell.setTranslationY(0); baby.cell.setAlpha(1); }
+        } });
+        motion.start();
     }
 
     // The heartbeat: critters' pupils and hops, and the "2 min" counts.
@@ -306,48 +433,52 @@ public final class ClaudeWidget extends Widget {
         if (!built()) return;
         phase = ticks % 2 == 0 && !quietMode; quiet = quietMode;
         for (Part part : parts) part.critter.setPhase(phase, quiet);
+        for (Head head : heads) { head.critter.setPhase(phase, quiet); for (Part baby : head.babies) baby.critter.setPhase(phase, quiet); }
         render();
     }
 
-    // Fills the current design from the PC's last answer; new sessions or areas rebuild the card.
+    // Fills the current design from the PC's last answer; new sessions, projects or areas rebuild the card.
     @Override public void render() {
-        if (!built()) return;
+        if (!built() || animating) return;
         PcState.Claude c = claude();
         if (!shape(c).equals(builtFor)) { dash.rebuildWidget(id); return; }
         if (c == null) return;
         double now = now();
-        boolean use24 = dash.use24(), needs = c.needsYou() > 0;
+        boolean use24 = dash.use24(), needs = c.needsYou() > 0, counted = c.logsRead && !c.logsFailed;
         // The one state allowed to shout: an Amber border around the whole card.
         card.setBackground(ui.shape(ui.theme.surface, needs ? Theme.WARNING : ui.theme.controlBorder, needs ? 2 : 1, ui.radius));
         if (heading != null) { heading.setText(ClaudeText.heading(c)); heading.setTextColor(needs ? Theme.WARNING : ui.theme.muted); }
-        if (flag != null) flag.setText(ClaudeText.flag(c, now, use24, design == CardSizing.MEDIUM));
-        int named = 0;
+        if (flag != null) flag.setText(ClaudeText.flag(c, now, use24, true));
         for (Part part : parts) {
             PcState.ClaudeSession session = null;
             if (part.id != null) for (PcState.ClaudeSession s : c.sessions) if (s.id.equals(part.id)) session = s;
             if (session == null) { part.critter.set("ready", c.connected ? "dozing" : ""); continue; }
-            named++;
             part.critter.set(session.state, session.project);
-            boolean asks = "needs".equals(session.state);
-            if (part.title != null) part.title.setText(design == CardSizing.LARGE ? session.shown() : session.project);
-            if (part.state != null) {
-                part.state.setText(design == CardSizing.MEDIUM ? ClaudeText.state(session.state) : ClaudeText.stateWords(session.state, session.since, now, design == CardSizing.LARGE));
-                part.state.setTextColor(asks ? Theme.WARNING : ui.theme.muted);
-            }
-            if (part.detail != null) {
-                String detail = session.project + (session.model.isEmpty() || session.model.equals(session.project) ? "" : " · " + session.model) + (session.where.isEmpty() ? "" : " · " + session.where);
-                part.detail.setText(asks && !session.message.trim().isEmpty() ? ClaudeText.ask(session.message) : detail);
-                part.detail.setTextColor(asks ? Theme.WARNING : ui.theme.muted);
-            }
-            boolean counted = c.logsRead && !c.logsFailed;
-            if (part.tokens != null) part.tokens.setText(counted ? ClaudeText.tokens(session.tokens[period]) : "—");
-            if (part.cost != null) part.cost.setText(counted ? ClaudeText.money(session.cost[period]) : "");
+            if (part.title != null) part.title.setText(session.project);
+            if (part.state != null) { part.state.setText(ClaudeText.stateWords(session.state, session.since, now, false)); part.state.setTextColor("needs".equals(session.state) ? Theme.WARNING : ui.theme.muted); }
         }
-        if (more != null) {
-            int hidden = c.sessions.size() - named;
+        if (more != null && design == CardSizing.SMALL) {
             boolean hiddenNeeds = false;
-            for (int i = named; i < c.sessions.size(); i++) if ("needs".equals(c.sessions.get(i).state)) hiddenNeeds = true;
-            more.setText(design == CardSizing.MEDIUM ? "+" + hidden : "+" + hidden + " more" + (hiddenNeeds ? " · one needs you" : ""));
+            for (int i = 1; i < c.sessions.size(); i++) if ("needs".equals(c.sessions.get(i).state)) hiddenNeeds = true;
+            more.setText("+" + (c.sessions.size() - 1) + " more" + (hiddenNeeds ? " · one needs you" : ""));
+        }
+        for (Head head : heads) {
+            PcState.ClaudeGroup group = null; for (PcState.ClaudeGroup g : groups(c)) if (g.key.equals(head.key)) group = g;
+            if (group == null) continue;
+            String state = ClaudeText.groupState(c, group);
+            head.critter.set(state, group.project); head.critter.setCollapsed(folded(group), group.threads.size());
+            if (head.name != null) { head.name.setText(group.project); head.name.setTextColor("needs".equals(state) ? Theme.WARNING : ui.theme.text); }
+            if (head.detail != null) head.detail.setText(ClaudeText.groupDetail(group, counted));
+            for (Part baby : head.babies) {
+                PcState.ClaudeThread thread = baby.id == null ? null : c.thread(baby.id);
+                if (thread == null) continue;
+                baby.critter.set(thread.running ? thread.state : "ready", group.project);
+                // An ended thread sleeps, dimmed.
+                baby.critter.setAlpha(thread.running ? 1f : 0.5f);
+                boolean asks = thread.running && "needs".equals(thread.state);
+                if (baby.title != null) { baby.title.setText(ClaudeText.threadTitle(thread, now, use24)); baby.title.setTextColor(asks ? Theme.WARNING : thread.running ? ui.theme.text : ui.theme.muted); }
+                if (baby.tokens != null) baby.tokens.setText(asks ? ClaudeText.stateWords(thread.state, thread.since, now, false) : counted ? ClaudeText.tokens(thread.tokens[period]) + " tokens" : "—");
+            }
         }
         if (smallMeter != null) {
             double pct = ClaudeText.percent(c.fiveHour, now);
@@ -363,13 +494,6 @@ public final class ClaudeWidget extends Widget {
         }
         renderMeter(five, c.fiveHour, now, use24);
         renderMeter(week, c.week, now, use24);
-        List<PcState.ClaudeProject> usage = c.usage[period];
-        long biggest = 1; for (PcState.ClaudeProject p : usage) biggest = Math.max(biggest, p.tokens);
-        for (int i = 0; i < projects.size() && i < usage.size(); i++) {
-            projects.get(i).name.setText(usage.get(i).project); projects.get(i).tokens.setText(ClaudeText.usage(usage.get(i).tokens, usage.get(i).cost));
-            projects.get(i).share.setValue((double) usage.get(i).tokens / biggest);
-        }
-        if (source != null) source.setText(ClaudeText.source(c, use24));
     }
 
     private void renderMeter(Meter meter, PcState.ClaudeWindow window, double now, boolean use24) {

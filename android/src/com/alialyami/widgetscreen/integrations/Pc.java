@@ -95,6 +95,8 @@ public final class Pc {
             @Override public void ok(PcState next) {
                 polling = false;
                 if (version != generation) return;
+                // A reading without the claude section (it follows its own, slower interval) keeps the last one.
+                if (next.claude == null && state != null && !parts.contains("claude")) next.claude = state.claude;
                 state = next; stateAt = SystemClock.elapsedRealtime(); problem = null; unpaired = false; failures = 0; retryAt = 0;
                 changed.run();
             }

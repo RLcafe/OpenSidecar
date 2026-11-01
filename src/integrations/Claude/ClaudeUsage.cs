@@ -96,6 +96,7 @@ namespace WidgetScreen
         private readonly Dictionary<string, ClaudeUsageEntry> replies = new Dictionary<string, ClaudeUsageEntry>();
         private readonly Dictionary<string, string> folders = new Dictionary<string, string>();
         private readonly Dictionary<string, DateTime> lastSeen = new Dictionary<string, DateTime>();
+        private readonly Dictionary<string, string> titles = new Dictionary<string, string>();
         private List<ClaudeUsageEntry> entries = new List<ClaudeUsageEntry>();
         private readonly object gate = new object();
         public bool Failed { get; private set; }
@@ -108,6 +109,8 @@ namespace WidgetScreen
         public Dictionary<string, string> Folders { get { lock (gate) return new Dictionary<string, string>(folders); } }
         // When each log last changed, by session: the project list's "last used" for projects no session runs in now.
         public Dictionary<string, DateTime> LastSeen { get { lock (gate) return new Dictionary<string, DateTime>(lastSeen); } }
+        // A title the user gave a session in Claude Code (its custom-title lines), by session.
+        public Dictionary<string, string> Titles { get { lock (gate) return new Dictionary<string, string>(titles); } }
 
         public void Scan(DateTime now)
         {
@@ -121,7 +124,7 @@ namespace WidgetScreen
                     {
                         if (file.LastWriteTimeUtc < oldest) continue;
                         string session = Path.GetFileNameWithoutExtension(file.Name);
-                        DateTime seen; if (!lastSeen.TryGetValue(session, out seen) || seen < file.LastWriteTimeUtc) lastSeen[session] = file.LastWriteTimeUtc;
+                        DateTime seen; if (!Helper(file) && (!lastSeen.TryGetValue(session, out seen) || seen < file.LastWriteTimeUtc)) lastSeen[session] = file.LastWriteTimeUtc;
                         long offset; offsets.TryGetValue(file.FullName, out offset);
                         if (file.Length < offset) offset = 0;
                         if (file.Length == offset) continue;
@@ -160,6 +163,13 @@ namespace WidgetScreen
             foreach (var key in replies.Where(p => p.Value.At < oldest).Select(p => p.Key).ToList()) replies.Remove(key);
         }
 
+        // A helper's log (a subagent's, under <session>\subagents\) is part of its session, not a thread of its own; its
+        // usage lines carry the session's id, so they still count.
+        private static bool Helper(FileInfo file)
+        {
+            return file.Name.StartsWith("agent-", StringComparison.OrdinalIgnoreCase) || String.Equals(file.Directory.Name, "subagents", StringComparison.OrdinalIgnoreCase);
+        }
+
         // Reads whole lines from offset on; a line still being written waits for the next scan.
         private long ReadFrom(string path, long offset, DateTime oldest)
         {
@@ -172,7 +182,7 @@ namespace WidgetScreen
                 if (end < 0) return offset;
                 string text = Encoding.UTF8.GetString(buffer, 0, end + 1);
                 string session = Path.GetFileNameWithoutExtension(path);
-                foreach (var entry in Parse(text, replies, session, folders)) if (entry.At >= oldest) entries.Add(entry);
+                foreach (var entry in Parse(text, replies, session, folders, titles)) if (entry.At >= oldest) entries.Add(entry);
                 return offset + end + 1;
             }
         }
@@ -180,9 +190,10 @@ namespace WidgetScreen
         // The usage in a piece of a log; replies holds the replies already counted (from either source). A session's
         // project is the folder it started in: its cwd moves when its shell changes folders, which isn't another
         // project (folders remembers it).
-        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null)
+        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null, Dictionary<string, string> titles = null)
         {
             if (folders == null) folders = new Dictionary<string, string>();
+            if (titles == null) titles = new Dictionary<string, string>();
             var result = new List<ClaudeUsageEntry>();
             foreach (string raw in text.Split('\n'))
             {
@@ -191,10 +202,13 @@ namespace WidgetScreen
                 // any line's cwd tells which folder its session started in.
                 if (line.Length == 0) continue;
                 bool usageLine = line.IndexOf("\"usage\"", StringComparison.Ordinal) >= 0 && line.IndexOf("\"assistant\"", StringComparison.Ordinal) >= 0;
-                if (!usageLine && line.IndexOf("\"cwd\"", StringComparison.Ordinal) < 0) continue;
+                bool titleLine = !usageLine && line.IndexOf("\"custom-title\"", StringComparison.Ordinal) >= 0;
+                if (!usageLine && !titleLine && line.IndexOf("\"cwd\"", StringComparison.Ordinal) < 0) continue;
                 object parsed; if (!ClaudeJson.TryParse(line, out parsed)) continue;
                 var o = ClaudeJson.Obj(parsed);
                 string id = ClaudeJson.Str(o, "sessionId") ?? session ?? "", folder;
+                // The title the user typed for the session (the latest one wins); never the prompts themselves.
+                if (titleLine && ClaudeJson.Str(o, "type") == "custom-title") { string title = (ClaudeJson.Str(o, "customTitle") ?? "").Trim(); if (title.Length > 0) titles[id] = title; continue; }
                 if (!folders.TryGetValue(id, out folder) && !String.IsNullOrEmpty(ClaudeJson.Str(o, "cwd"))) { folder = ClaudeJson.Str(o, "cwd"); folders[id] = folder; }
                 if (!usageLine || ClaudeJson.Str(o, "type") != "assistant") continue;
                 var message = ClaudeJson.Obj(o, "message"); var usage = ClaudeJson.Obj(message, "usage");

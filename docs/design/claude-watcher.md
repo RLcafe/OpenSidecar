@@ -1,6 +1,20 @@
 # Claude Code watcher (1 Nov 2026)
 
-The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md) and, since the fix that made it work with the Claude app's Code tab, [decision 015](../decisions/015-claude-sign-in-and-telemetry.md).
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
+
+## Projects and their threads (decision 016)
+
+Ali asked (1 Nov 2026) for the projects with their threads under them, then for each project to be a big critter with its threads as baby critters that it eats and spits out. This section supersedes the Medium and Large layouts described further down (the lineup, the session rows and the usage panel). Small is unchanged.
+
+- **Threads** are every Claude Code session of the last week, running or ended: running sessions as before, plus the Claude app's thread records (its sidebar titles) and Claude Code's logs. A thread sits under the folder it started in, with worktrees under the folder they were made from. The period switch (5 h / Today / Week, kept in settings.xml, default Today) shows the threads active in it, and running ones always.
+- **A project's big critter** has its body and colour from the project's name, as before. Its face is its most urgent running thread's: Needs you is Amber with arms up and a hop. With nothing running it sleeps. Under it are its name and "3 threads · 1.8M · ≈ $2.01".
+- **Baby critters** are 40% of their project's critter (at least 24 units on Large, 16 on Medium) in the same body and colour. Each has its own face; an ended thread sleeps at half opacity. On Large each baby shows its title (up to two lines, ellipsis) and its tokens for the period, or "Needs you · 2 min". The tooltip holds the full title, the state or "Ended · last active", usage, model and where it runs. Tapping a running baby brings its window forward.
+- **Folding:** tap a project's critter. Its babies shrink and slide into its opened mouth, and the mouth closes with a gulp (350 ms). Folded, it has puffed cheeks, a belly and a count bubble on its body's top right. Tap again and the mouth opens and the babies pop back out with a small overshoot. Quiet mode skips the motion. The fold is kept per project in settings.xml and shared with the phone (`claude.collapse`). A folded project still turns Amber, and keeps its bubble ring Amber, when a thread inside needs you.
+- **Large** (≥ 640 × 420): the heading, a strip with the two plan meters, up to three narrower weekly windows (from 1000 units wide) and the 5 h / Today / Week switch, then a column per project at least 216 wide (`CardSizing.ClaudeColumns`). The rest are counted in a last "+N more projects" column with the first four names. Babies sit in a grid of `ClaudeBabiesPerRow` cells, centred when there are only a few, and the grid scrolls inside its column when it doesn't fit.
+- **Medium:** the heading, a row of project critters (one per 136 units, at most six, the last becoming "+N more projects") with up to three babies each and "+N", over the meter strip. Babies show only when the card leaves room for a 40-unit parent above them (`ClaudeMediumBabies`).
+- **Empty:** "No Claude Code threads today." (or "in the last 5 hours." or "this week."), with the dozing critter.
+- **Settings → Claude → Refresh:** "Update the card every [−][2][+] seconds" (minimum 1) and "Check plan limits every [−][300][+] seconds" (minimum 10, with the note "Anthropic may slow down very frequent checks." below 60). A refused check (429, 5xx) doubles the wait up to 15 minutes, and the card shows "Plan limits as of hh:mm". Quiet mode doesn't stretch either. The project list says how many threads each project had this week.
+- **Phone:** the same designs, critters and motion. Its card asks for the `claude` section every "update the card" seconds (at least 2), and the rest of the dashboard keeps its own pace.
 
 ## Since the fix (decision 015)
 
