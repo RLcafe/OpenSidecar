@@ -28,6 +28,7 @@ namespace WidgetScreen
         private readonly string projects;
         private readonly Dictionary<string, long> offsets = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> seen = new HashSet<string>();
+        private readonly Dictionary<string, string> folders = new Dictionary<string, string>();
         private List<ClaudeUsageEntry> entries = new List<ClaudeUsageEntry>();
         private readonly object gate = new object();
         public bool Failed { get; private set; }
@@ -73,14 +74,16 @@ namespace WidgetScreen
                 if (end < 0) return offset;
                 string text = Encoding.UTF8.GetString(buffer, 0, end + 1);
                 string session = Path.GetFileNameWithoutExtension(path);
-                foreach (var entry in Parse(text, seen, session)) if (entry.At >= oldest) entries.Add(entry);
+                foreach (var entry in Parse(text, seen, session, folders)) if (entry.At >= oldest) entries.Add(entry);
                 return offset + end + 1;
             }
         }
 
-        // The usage in a piece of a log; seen holds the replies already counted.
-        public static List<ClaudeUsageEntry> Parse(string text, HashSet<string> seen, string session)
+        // The usage in a piece of a log; seen holds the replies already counted. A session's project is the folder it
+        // started in: its cwd moves when its shell changes folders, which isn't another project (folders remembers it).
+        public static List<ClaudeUsageEntry> Parse(string text, HashSet<string> seen, string session, Dictionary<string, string> folders = null)
         {
+            if (folders == null) folders = new Dictionary<string, string>();
             var result = new List<ClaudeUsageEntry>();
             foreach (string raw in text.Split('\n'))
             {
@@ -98,7 +101,9 @@ namespace WidgetScreen
                 if (tokens <= 0) continue;
                 var at = ClaudeBridge.ParseTime(ClaudeJson.Str(o, "timestamp"));
                 if (!at.HasValue) continue;
-                result.Add(new ClaudeUsageEntry { At = at.Value, Session = ClaudeJson.Str(o, "sessionId") ?? session ?? "", Project = ClaudeBridge.ProjectName(ClaudeJson.Str(o, "cwd")), Tokens = tokens });
+                string id = ClaudeJson.Str(o, "sessionId") ?? session ?? "", folder;
+                if (!folders.TryGetValue(id, out folder)) { folder = ClaudeJson.Str(o, "cwd") ?? ""; folders[id] = folder; }
+                result.Add(new ClaudeUsageEntry { At = at.Value, Session = id, Project = ClaudeBridge.ProjectName(folder), Tokens = tokens });
             }
             return result;
         }

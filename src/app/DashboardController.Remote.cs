@@ -290,6 +290,7 @@ namespace WidgetScreen
         private async Task<Dictionary<string, object>> RemoteState(string[] parts)
         {
             var state = D("name", Environment.MachineName, "version", Version, "quiet", settings.QuietMode, "use24", settings.Use24HourClock, "layoutVersion", RemoteLayoutVersion());
+            RemoteClaudeAlert(state);
             if (parts.Contains("layout")) state["layout"] = RemoteLayout();
             if (parts.Contains("focus"))
             {

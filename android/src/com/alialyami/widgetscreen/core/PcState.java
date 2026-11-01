@@ -87,6 +87,29 @@ public final class PcState {
         public final List<Todo> items = new ArrayList<Todo>();
     }
 
+    // Claude Code on the PC (docs/design/claude-watcher.md): its sessions, the plan's limits and usage by project.
+    // Periods are 0 five hours, 1 today, 2 the week. Times are Unix seconds.
+    public static final class ClaudeSession {
+        public String id = "", project = "", title = "", state = "ready", message = "", model = "";
+        public double since;
+        public boolean canFocus;
+        public final long[] tokens = new long[3];
+        public String shown() { return title == null || title.trim().isEmpty() ? project : title; }
+    }
+    public static final class ClaudeWindow { public double pct; public double resetsAt; }
+    public static final class ClaudeProject { public String project = ""; public long tokens; }
+    public static final class Claude {
+        public boolean connected, sample, logsFailed, logsRead, noPlan;
+        public final List<ClaudeSession> sessions = new ArrayList<ClaudeSession>();
+        public ClaudeWindow fiveHour, week;
+        public double updatedAt;
+        public String source = "";
+        @SuppressWarnings("unchecked")
+        public final List<ClaudeProject>[] usage = new List[] { new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>() };
+        public boolean limitsKnown() { return fiveHour != null || week != null; }
+        public int needsYou() { int n = 0; for (ClaudeSession s : sessions) if ("needs".equals(s.state)) n++; return n; }
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -119,6 +142,10 @@ public final class PcState {
 
     public String name = "", version = "", layoutVersion = "";
     public boolean quiet, use24;
+    // Sessions that need you while the Claude card is on some page, and the first such page (-1: on none), so the
+    // header's pill can light up from another page without asking for the whole claude section.
+    public int claudeNeeds, claudePage = -1;
+    public Claude claude;
     public Layout layout;
     public Focus focus;
     public Media media;
@@ -141,6 +168,8 @@ public final class PcState {
         PcState state = new PcState();
         state.name = text(root, "name"); state.version = text(root, "version");
         state.quiet = flag(root, "quiet"); state.use24 = flag(root, "use24"); state.layoutVersion = text(root, "layoutVersion");
+        state.claudeNeeds = (int) Json.number(root, "claudeNeeds"); state.claudePage = Json.has(root, "claudePage") ? (int) Json.number(root, "claudePage") : -1;
+        if (Json.has(root, "claude")) state.claude = parseClaude(Json.obj(Json.value(root, "claude")));
         if (Json.has(root, "layout")) state.layout = parseLayout(Json.obj(Json.value(root, "layout")));
         if (Json.has(root, "focus")) {
             Map<String, Object> f = Json.obj(Json.value(root, "focus"));
@@ -258,6 +287,40 @@ public final class PcState {
         }
         if (Json.has(root, "notes")) state.notes = parseNotes(Json.obj(Json.value(root, "notes")));
         return state;
+    }
+
+    private static final String[] PERIODS = { "fiveHour", "today", "week" };
+
+    public static Claude parseClaude(Map<String, Object> c) {
+        Claude claude = new Claude();
+        claude.connected = flag(c, "connected"); claude.sample = flag(c, "sample"); claude.logsFailed = flag(c, "logsFailed"); claude.logsRead = flag(c, "logsRead"); claude.noPlan = flag(c, "noPlan");
+        for (Object item : Json.array(c, "sessions")) {
+            Map<String, Object> s = Json.obj(item);
+            ClaudeSession session = new ClaudeSession();
+            session.id = text(s, "id"); session.project = text(s, "project"); session.title = text(s, "title"); session.state = text(s, "state");
+            session.message = text(s, "message"); session.model = text(s, "model"); session.since = Json.number(s, "since"); session.canFocus = flag(s, "canFocus");
+            Map<String, Object> tokens = Json.obj(Json.value(s, "tokens"));
+            for (int i = 0; i < 3; i++) session.tokens[i] = (long) Json.number(tokens, PERIODS[i]);
+            if (!session.id.isEmpty()) claude.sessions.add(session);
+        }
+        Map<String, Object> limits = Json.obj(Json.value(c, "limits"));
+        claude.fiveHour = window(Json.value(limits, "fiveHour")); claude.week = window(Json.value(limits, "week"));
+        claude.updatedAt = Json.number(limits, "updatedAt"); claude.source = text(limits, "source");
+        Map<String, Object> usage = Json.obj(Json.value(c, "usage"));
+        for (int i = 0; i < 3; i++)
+            for (Object item : Json.array(usage, PERIODS[i])) {
+                Map<String, Object> u = Json.obj(item);
+                ClaudeProject project = new ClaudeProject(); project.project = text(u, "project"); project.tokens = (long) Json.number(u, "tokens");
+                if (!project.project.isEmpty()) claude.usage[i].add(project);
+            }
+        return claude;
+    }
+    private static ClaudeWindow window(Object value) {
+        if (!(value instanceof Map)) return null;
+        Map<String, Object> w = Json.obj(value);
+        if (!(Json.value(w, "pct") instanceof Number)) return null;
+        ClaudeWindow window = new ClaudeWindow(); window.pct = Json.number(w, "pct"); window.resetsAt = Json.number(w, "resetsAt");
+        return window;
     }
 
     public static WidgetLayout.Placement[] placements(List<Object> items) {

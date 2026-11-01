@@ -1,0 +1,139 @@
+# Claude Code watcher (1 Nov 2026)
+
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md).
+
+## As built
+
+Where the build differs from the brief, or fills in what it left open:
+
+- **The plan check runs every 5 minutes while the app runs** with the Claude card on any page, whether or not a session is open or Claude Code is running (Ali's change, 1 Nov 2026, replacing "only when the status-line numbers are older than 5 minutes" and the 15-minute Quiet-mode pace). Settings → Claude → *Check my plan's limits online every 5 minutes* turns it off. After any problem (no `.credentials.json`, an expired token, a 401, no network, an answer it can't read) it stays quiet for an hour. The token is read from the file for each request and dropped; it is never stored, logged, refreshed or sent anywhere but `api.anthropic.com`, and the phone gets only percentages and times.
+- **Small is under 360 wide or 280 tall** (the brief suggested 240): below 280 the lineup's critters, names and the meter strip don't all fit at 140% text.
+- **Entries are found again by the exe's name** (`ClaudeHook.exe` in the command), not the full `WidgetScreen/claude/` path, so isolated settings folders (checks, `--settings`) work the same.
+- **The Notification hook only matches `permission_prompt|elicitation_dialog`.** `idle_prompt` needs no hook (it stays Done), so it isn't registered.
+- **A session's project is the folder it started in.** Claude Code's log lines carry the shell's current folder, which moves when a session changes into a subfolder; counting by that split one project into many (36 "projects" from 19 sessions on Ali's PC), so each session keeps its first folder.
+- **The Medium lineup says the state alone** ("Needs you"); Small and Large say how long ("Needs you · 2 min"). The hook's permission message is shortened: "Claude needs your permission to use Bash" reads "Wants to use Bash".
+- **The phone's pill** comes from two small fields in every `/state` answer, `claudeNeeds` and `claudePage`, because the phone only knows the page it shows; the full `claude` section is sent only while the card is on the phone's page. The phone's not-connected line points to "Settings → Claude on the PC".
+- **Settings → Claude** connects and disconnects right away (like Spotify), each through the confirm sheet, which now sits above Settings. The two checkboxes are saved with Save changes.
+- **Updating Widget Screen refreshes the bridge**: at start, a connected app copies its own `ClaudeHook.exe` over the one in `%LOCALAPPDATA%\WidgetScreen\claude` when they differ (skipped while Claude Code is running it). Uninstalling Widget Screen doesn't disconnect Claude Code; disconnect first, or Claude Code reports a missing hook.
+- **Renders and checks use a labelled fixture** (`--render-claude-sample`, `--render-claude-needs`; "SAMPLE" in the card's heading). `tests\size-design-renders.ps1` renders `claude-small`, `claude-medium`, `claude-large`, `claude-needs`, `claude-needs-large` and `claude-pill`.
+
+Not verified: real hooks firing in Claude Code (Ali presses Connect himself), bringing a real terminal forward, the plan check against the live endpoint (there was no `.credentials.json` in the Claude folder on this PC when it was built, so the check stays quiet until there is one), and the phone card on a device.
+
+## The brief
+
+User request (Ali, 1 Nov 2026): a widget for **Claude only** that shows the Claude Code sessions running on this PC, **lights up when one is waiting on him** (via Claude Code hooks), tracks **usage per project and per session**, and shows the **plan's usage limits from his normal Claude subscription, not the API**. Design with the Impeccable skill (authorized by Ali for this widget): **fun and wacky, but inside the app's palettes and accents**. Both apps (Windows widget + Android remote card), per CLAUDE.md.
+
+Shaped with Impeccable (`shape`). The app's visual world is established (spec §3.3–3.5, `docs/design/widget-size-views.md`), so this card inherits it: Surface card, Raised tiles, Segoe UI with Light numerals, MDL2 glyphs, drawn paths for anything pictorial, no images, no emoji, no new fonts. The wackiness lives in one place: the critters.
+
+### 1. Where the data comes from (all local, nothing leaves the PC)
+
+### Plan limits: Claude Code's status line (official, no API, no token)
+Claude Code passes JSON on stdin to the configured `statusLine` command. For claude.ai Pro/Max subscribers it includes:
+```json
+"rate_limits": {
+  "five_hour": { "used_percentage": 23.5, "resets_at": 1738425600 },
+  "seven_day": { "used_percentage": 41.2, "resets_at": 1738857600 }
+}
+```
+`resets_at` is Unix epoch seconds per the docs (code.claude.com/docs/en/statusline); one GitHub issue shows an ISO string, so **parse both**. The field appears only after the session's first API response, either window may be absent, and windows drop once `resets_at` passes. Same payload carries `session_id`, `session_name` (AI title or /rename), `cwd`, `workspace.project_dir`, `transcript_path`, `model.display_name`, `context_window.used_percentage`, `cost.total_cost_usd`, `version`.
+This is the primary source.
+
+### Plan limits refresher: the usage endpoint (Ali approved, 1 Nov 2026: "API can be used but not to consume credits but to integrate Claude and fetch data")
+While the card is visible and the status-line numbers are older than 5 minutes (e.g. no session open), fetch `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer <accessToken>` and `anthropic-beta: oauth-2025-04-20`, using the access token from `%USERPROFILE%\.claude\.credentials.json` (`claudeAiOauth.accessToken`, check `expiresAt` ms first). Response (undocumented, parse defensively): `five_hour` / `seven_day` / `seven_day_opus` (may be null) each `{ utilization: 0–100, resets_at: ISO-8601 }`. It costs no credits.
+Rules: read-only, at most every 5 min (15 in Quiet mode), only while the card is shown; send the token **only** to `api.anthropic.com` over HTTPS (use `PreferIPv4Handler`); never log, store, copy or send it to the phone; **never refresh the token** (that would rotate Claude Code's own sign-in); on 401/expired/missing file/any error, stop quietly and keep the status-line numbers. Settings → Claude checkbox "Check plan limits online when no session is open" (on). The phone receives only the percentages and reset times. Show which source and age in the Large design ("as of 10:42").
+
+### Session states: Claude Code hooks
+Hook input (stdin JSON) always has `session_id`, `transcript_path`, `cwd`, `hook_event_name`. Register these, all `"type":"command"`, `"async": true` except none need to block:
+
+| Event | Matcher | Card state |
+| --- | --- | --- |
+| `SessionStart` | (all) | **Ready** (idle, sleepy) |
+| `UserPromptSubmit` | — | **Working** |
+| `PostToolUse` | (all) | **Working** (clears Needs you after a permission was granted) |
+| `Notification` | `permission_prompt\|elicitation_dialog` | **Needs you** (keep the `message` text, e.g. "Claude needs your permission to use Bash") |
+| `Notification` | `idle_prompt` | stays **Done** (no escalation) |
+| `Stop` | — | **Done** (finished, your move) |
+| `SessionEnd` | (all) | remove |
+
+Sessions killed without `SessionEnd` (terminal closed) must not linger: the hook records the Claude Code process id (walk up from the hook process's parent to the first `claude`/`node` process) and the app drops a session whose process is gone, or after 12 h with no event.
+
+### The bridge: `ClaudeHook.exe`
+- A tiny separate console exe (built by `build.ps1` with `csc.exe` like the installer; no packages) with two modes: `ClaudeHook.exe hook` and `ClaudeHook.exe statusline`.
+- On **Connect** the app copies it to a stable path, `%LOCALAPPDATA%\WidgetScreen\claude\ClaudeHook.exe`, so release folders can change without breaking Claude Code's settings. Use forward slashes in the command (Git Bash eats backslashes; see the docs' Windows section).
+- `hook` mode reads stdin and writes `%LOCALAPPDATA%\WidgetScreen\claude\sessions\<session_id>.json` atomically (state, since, project dir, title, message, pid, last event time). One file per session, so concurrent hooks never fight. Never blocks, always exits 0, swallows every error (a broken widget must never break Claude Code).
+- `statusline` mode writes `limits.json` (both windows + `updatedAt`) and merges `session_name`, model and context % into the session file, then **prints a status line**. If Ali already had a `statusLine`, Connect saves the old command and `statusline` mode runs it with the same stdin and prints its output unchanged. With none, print a short line: `5h 23% · week 41% · ctx 8%` (omit what's missing). Keep it under ~100 ms; .NET Framework console startup is fine.
+- The app never needs to be running for the bridge to work; it reads the folder when it starts.
+
+### Usage per project and per session: the session logs
+`%USERPROFILE%\.claude\projects\<encoded-cwd>\<session-id>.jsonl` (honour `CLAUDE_CONFIG_DIR`). Assistant lines carry `message.usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), `message.model`, `message.id`, `requestId`, `timestamp`, `cwd`, `sessionId`. **Dedupe by `message.id` + `requestId`** (streamed messages repeat their usage on several lines). Project name = last folder of `cwd` (not the encoded folder name). Tokens shown = all four counts added (the usual way usage tools count). Read incrementally: remember each file's length and only read appended bytes; skip files whose mtime is older than the longest period shown. Never load whole multi-MB files every tick. Periods: **5 h** and **Week** use the plan windows (`resets_at` − 5 h / − 7 d) when known, otherwise rolling; **Today** is local midnight.
+
+### 2. The concept: critters
+
+Each running session is a **critter**: a small drawn blob with two eyes and a mouth, drawn as paths (`CardGraphics` on Windows, a View in `views/` on Android). Faces read from across the desk faster than words, and they shrink to one critter on a small card.
+
+- **Body**: a rounded blob in one of three shapes (bean, tall pill, squat round) and one of three accents (Lime, Glacier, Lavender), both picked by a stable hash of the project folder, so each project always looks like the same critter. **Amber is reserved for Needs you.** Eyes white (Text) with Page-coloured pupils; mouth a Page-coloured stroke. A 1-unit ControlBorder outline keeps it crisp on Slate/Warm.
+- **Expressions** (the whole joke lives here):
+  - **Working**: pupils look down and to the side, a three-dot "thinking" trail beside the head. Pupils hop to the other side on alternate 1 s heartbeat ticks (no new timer). Quiet mode: still.
+  - **Needs you**: body turns **Amber**, eyes wide (bigger whites, small pupils), two little arms raised (short rounded strokes), an "!" drawn above. It hops 4 units up/down on alternate heartbeat ticks. Quiet mode: arms up, no hop.
+  - **Done**: happy closed eyes (two upward arcs), small smile. Body in its accent.
+  - **Ready** (started, nothing asked yet): half-closed eyes (flat lines), body in Raised with accent outline, a small drawn "z".
+- Session order: Needs you first (longest waiting first), then Working, Done, Ready.
+
+### "Lights up"
+- When any session is **Needs you**, the card's border becomes Amber 2 px and the heading reads e.g. "api-server needs you". This is the one state allowed to shout.
+- If the Claude card is hidden on another page, a small Amber pill appears in the header beside the page switcher: a mini critter + "Claude needs you". Tapping it switches to that page. Nothing appears when the card is not shown on any page.
+- Optional chime when a session starts needing you (Settings → Claude, off by default; silent in Quiet mode; reuse the Focus chime mechanism).
+- Phone: the same Amber border and header pill on its dashboard; one haptic tick (`Ui.haptic`) when a session newly needs you while the app is open. No Android notifications (the phone only polls while open).
+
+### 3. Three designs (`CardSizing.Claude`, same numbers on the phone)
+
+Thresholds follow the pattern of Stats/Weather; tune by render. Suggested: **Small** under 360 wide or under 240 tall; **Large** from 640 × 420; Medium between. Preferred size ~ 472 × 310; minimum ~ 260 × 180.
+
+- **Small, the loudest critter.** One big critter (the most urgent session) at the left; at the right the project name (Title size, one line, ellipsis) and the state in words: "Needs you · 2 min", "Working", "Done". Under it "+3 more" if there are more sessions. A 6-unit 5-hour meter along the bottom edge (accent; Amber from 80%). No heading.
+- **Medium, the lineup.** Heading "Claude Code" with a count at the right ("3 running"). A row of up to five critters (about 64–96 units tall), each with its project name under it (13–15, ellipsis) and its state word; Needs you ones first. Below, a Raised strip with the two plan meters side by side: "5-hour 23%  resets 3:40 pm" and "Week 41%  resets Thu". Meters are 10-segment chunky bars (4-unit gaps, radius 3) in the accent, Amber from 80%, full Amber and "Limit reached · back 3:40 pm" at 100.
+- **Large, the burrow.** Left two thirds: one row per session (64-unit rows): mini critter, title (`session_name`, else project), project and model in Muted, state word with how long ("Needs you · 2 min"), and that session's tokens for the chosen period at the right in Light numerals. If a session needs you, its row shows the hook's message in a second line ("Wants to run Bash"). Right third, a Raised panel: the two plan meters stacked (bigger), then a **period switch** (5 h / Today / Week, three 48-unit segments, same look as the Focus presets' selected state) and **usage by project**: up to six rows of project name + tokens + a thin share bar (accent), the rest as "Other". Tokens formatted 12.4k / 1.2M / 3.4B.
+
+Every design: text never leaves the card at 140% text and with long project names (same bounds check as the other cards).
+
+### Taps
+- Tapping a session (critter or row) brings its **terminal or editor window** to the front on the PC, when one could be found (the hook records the first ancestor process with a main window, e.g. WindowsTerminal.exe, Code.exe, powershell's console). Best effort; if none is known, the tap does nothing and the row shows no affordance. This is the one place the dashboard is allowed to activate another window, because the user asked for it. On the phone, tapping does the same thing on the PC (through the link).
+- The period switch and nothing else are the other controls. No buttons to stop or answer Claude from the dashboard (out of scope).
+
+### 4. Honest states (copy)
+
+| State | Card shows |
+| --- | --- |
+| Not connected (bridge not set up) | A Ready critter and "Connect Claude Code in Settings → Claude." |
+| Connected, no sessions | A dozing critter and "No Claude Code sessions running." |
+| Plan meters unknown | Meters area: "Plan limits show after Claude Code's next reply." (API-key users and logged-out users never get them; say "Plan limits need a Claude Pro or Max login." once a session has run with no `rate_limits`.) |
+| Meters stale (> 15 min old) | Keep the numbers, add "as of 10:42" in Muted. |
+| Logs folder missing / unreadable | Usage area: "Can't read Claude Code's logs." Sessions still work. |
+| Fixture (renders/tests) | Labelled "Sample" in the heading, like other fixtures. |
+
+### 5. Settings → Claude (new tab, after Discord)
+
+- Status line: "Connected" / "Not connected", and which Claude folder (default `%USERPROFILE%\.claude`, or `CLAUDE_CONFIG_DIR`).
+- **Connect Claude Code** (accent button). Confirm with `ConfirmSheet`: "This adds Widget Screen's hooks and status line to your Claude Code settings (settings.json). A backup is saved next to it. Your current status line keeps showing." Then: back up `settings.json` to `settings.json.widgetscreen-backup`, add the hooks (append to existing arrays, never replace another hook), set `statusLine` (saving the old one in `%LOCALAPPDATA%\WidgetScreen\claude\previous-statusline.json`), write atomically, keep unknown keys and formatting as far as practical. Mark our entries so they can be found again (the command path contains `WidgetScreen/claude/ClaudeHook.exe`).
+- **Disconnect**: removes exactly our entries and restores the previous status line. Also ConfirmSheet.
+- Checkbox: "Chime when a session needs me" (off by default).
+- If settings.json is invalid JSON, refuse to touch it and say so.
+- Unit-test the merge/unmerge on sample settings files (existing hooks, existing statusLine, none, invalid) in an isolated temp folder. **Never** modify Ali's real `~/.claude/settings.json` from automated checks or during development; only the app's Connect button does that, when he presses it.
+
+### 6. Phone link
+
+- `/state` gains a `claude` section only when the card is visible on the phone: `connected`, `sessions` [{id, project, title, state, since (epoch s), message, model, tokens (for each period), canFocus}], `limits` {fiveHour {pct, resetsAt}, week {pct, resetsAt}, updatedAt}, `usage` {fiveHour/today/week: [{project, tokens}]}.
+- New action to focus a session's window (`claude/focus` with the session id), following the existing action pattern and pairing checks. Nothing else; don't widen the link.
+- Phone card: the same three designs and critters drawn in `views/` (shared shape/expression logic in `core/`, no `android.*` imports, with JVM checks), the period switch is local to the phone.
+
+### 7. Resource budget
+
+- Session files: check the folder's newest mtime on the 1 s heartbeat (cheap); re-read only changed files.
+- Logs: incremental read every 10 s while the card is visible (30 s in Quiet mode); nothing while hidden.
+- Critter motion uses the existing heartbeat; Quiet mode stops it.
+
+### 8. Anti-goals
+- No requests that use credits (no Messages API calls). The only internet request is the read-only usage check above.
+- No ChatGPT/other assistants.
+- No Anthropic logo; the critters are our own.
+- No answering or stopping Claude from the dashboard.
+- Don't change how other cards look.

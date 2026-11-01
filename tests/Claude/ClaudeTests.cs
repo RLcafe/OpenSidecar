@@ -172,14 +172,15 @@ internal static class ClaudeTests
                 Line("m1", "r1", "2026-11-01T11:00:01Z", "C:\\Code\\api-server", "s1", 10, 20, 30, 40),
                 Line("m2", "r2", "2026-11-01T06:00:00Z", "C:\\Code\\api-server", "s1", 1000, 0, 0, 0),
                 Line("m3", "r3", "2026-10-28T12:00:00Z", "D:/work/widget-screen/", "s2", 0, 500, 0, 0),
+                Line("m4", "r4", "2026-10-28T12:05:00Z", "D:/work/widget-screen/android", "s2", 0, 1, 0, 0),
                 "not json at all",
                 "" });
             var entries = ClaudeUsage.Parse(text, seen, "file");
-            Assert(entries.Count == 3 && entries[0].Tokens == 100 && entries[0].Project == "api-server" && entries[2].Project == "widget-screen" && entries[2].Session == "s2", "Usage lines parsed wrongly.");
+            Assert(entries.Count == 4 && entries[0].Tokens == 100 && entries[0].Project == "api-server" && entries[2].Project == "widget-screen" && entries[2].Session == "s2" && entries[3].Project == "widget-screen", "Usage lines parsed wrongly, or a folder change became another project.");
             Assert(ClaudeUsage.Parse(Line("m1", "r1", "2026-11-01T11:00:00Z", "C:/x", "s1", 1, 1, 1, 1), seen, "file").Count == 0, "A repeated reply counted twice across reads.");
             var limits = new ClaudeLimits { FiveHour = new ClaudeLimitWindow { Percent = 10, ResetsAt = Now.AddHours(1) } };
             Assert(ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now) == Now.AddHours(-4) && ClaudeUsage.Start(ClaudePeriod.FiveHour, null, Now) == Now.AddHours(-5) && ClaudeUsage.Start(ClaudePeriod.Week, null, Now) == Now.AddDays(-7), "Period starts wrong.");
-            Assert(ClaudeUsage.Total(entries, ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now)) == 100 && ClaudeUsage.Total(entries, Now.AddDays(-7)) == 1600 && ClaudeUsage.Total(entries, Now.AddDays(-7), "s1") == 1100, "Totals wrong.");
+            Assert(ClaudeUsage.Total(entries, ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now)) == 100 && ClaudeUsage.Total(entries, Now.AddDays(-7)) == 1601 && ClaudeUsage.Total(entries, Now.AddDays(-7), "s1") == 1100, "Totals wrong.");
             var top = ClaudeUsage.ByProject(entries, Now.AddDays(-7), 6);
             Assert(top.Count == 2 && top[0].Key == "api-server" && top[0].Value == 1100, "By-project totals wrong.");
             var many = Enumerable.Range(0, 9).Select(i => new ClaudeUsageEntry { At = Now, Project = "p" + i, Tokens = 100 - i }).ToList();

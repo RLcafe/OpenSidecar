@@ -23,7 +23,7 @@ namespace WidgetScreen
         private DateTime lastClaudeScan = DateTime.MinValue;
         private bool claudeSample, claudeOnlineBusy, claudeDirty = true;
         private readonly HashSet<string> claudeNeeding = new HashSet<string>();
-        private string claudePagesKey; private bool claudeOnPages;
+        private string claudePagesKey; private int claudeFirstPage = -1;
         // The card and service, for the checks (tests/Claude/ClaudeTests.cs).
         public ClaudeCard ClaudeCardView { get { return claudeCard; } }
         public ClaudeService Claude { get { return claude; } }
@@ -57,15 +57,18 @@ namespace WidgetScreen
 
         // Whether the Claude card is shown on any page, for the pill and the phone. Worked out again only after a save
         // or when the screen changes.
-        private bool ClaudeOnAnyPage
+        private bool ClaudeOnAnyPage { get { return ClaudePage >= 0; } }
+        // The first page that shows the Claude card, or -1.
+        private int ClaudePage
         {
             get
             {
                 string key = settingsVersion + "|" + Editor.CanvasSize + "|" + WidgetLayout.PageCount(settings);
-                if (key == claudePagesKey) return claudeOnPages;
-                claudePagesKey = key;
-                claudeOnPages = Enumerable.Range(0, WidgetLayout.PageCount(settings)).Any(i => WidgetLayout.ForCanvas(settings, i, Editor.CanvasSize).Any(p => p.Id == "Claude" && p.Visible));
-                return claudeOnPages;
+                if (key == claudePagesKey) return claudeFirstPage;
+                claudePagesKey = key; claudeFirstPage = -1;
+                for (int i = 0; i < WidgetLayout.PageCount(settings) && claudeFirstPage < 0; i++)
+                    if (WidgetLayout.ForCanvas(settings, i, Editor.CanvasSize).Any(p => p.Id == "Claude" && p.Visible)) claudeFirstPage = i;
+                return claudeFirstPage;
             }
         }
 
@@ -131,8 +134,8 @@ namespace WidgetScreen
 
         private void ShowClaudePage()
         {
-            for (int i = 0; i < WidgetLayout.PageCount(settings); i++)
-                if (WidgetLayout.ForCanvas(settings, i, Editor.CanvasSize).Any(p => p.Id == "Claude" && p.Visible)) { ShowPage(i); UpdateClaudePill(); return; }
+            if (ClaudePage >= 0) ShowPage(ClaudePage);
+            UpdateClaudePill();
         }
 
         // Brings a session's terminal or editor forward (the one place the dashboard activates another window, because
@@ -179,6 +182,20 @@ namespace WidgetScreen
         }
 
         // ----- The phone link -----
+
+        // In every /state: how many sessions need you while the card is on some page, and that page, so the phone's
+        // header pill can light up from another page.
+        private void RemoteClaudeAlert(Dictionary<string, object> state)
+        {
+            int page = ClaudePage;
+            if (page >= 0 && !claudeSample)
+            {
+                bool changed = claude.ReadSessions(DateTime.UtcNow, false);
+                if (changed || claudeDirty || claudeView == null) RefreshClaudeView();
+            }
+            state["claudeNeeds"] = page < 0 || claudeView == null ? 0 : claudeView.NeedsYou;
+            state["claudePage"] = page;
+        }
 
         // The phone's claude section: sessions, plan limits and usage. Never the sign-in token.
         private Dictionary<string, object> RemoteClaude()

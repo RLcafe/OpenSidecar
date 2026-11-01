@@ -25,6 +25,8 @@ import com.alialyami.widgetscreen.views.CheckBox;
 import com.alialyami.widgetscreen.views.GlyphView;
 import com.alialyami.widgetscreen.views.ScaledHost;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
+import com.alialyami.widgetscreen.views.CritterView;
+import com.alialyami.widgetscreen.widgets.ClaudeWidget;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.MediaWidget;
 import com.alialyami.widgetscreen.widgets.NotesWidget;
@@ -100,6 +102,7 @@ public final class Dashboard {
         widgets.put("Clocks", new ClocksWidget(this));
         widgets.put("Prayer", new PrayerWidget(this));
         widgets.put("Notes", new NotesWidget(this));
+        widgets.put("Claude", new ClaudeWidget(this));
         editor.apply(settings);
         editor.setListener(new LayoutEditor.Listener() { @Override public void changed(boolean structure) { editorChanged(structure); } });
         if (warning[0] != null) say(warning[0], true);
@@ -173,6 +176,7 @@ public final class Dashboard {
         if (pc.state != null && pc.problem == null && settings.use24 != pc.state.use24) { settings.use24 = pc.state.use24; persist(); }
         updateClock(); updateQuiet();
         if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
+        updateClaudePill();
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.stateChanged(); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -241,6 +245,7 @@ public final class Dashboard {
         if (ticks >= statusClearsAt && !editor.editing()) { setStatus(""); statusClearsAt = Integer.MAX_VALUE; }
         // The PC is asked every 2 s, or every 5 s in its Quiet mode, like the Windows refresh cadence.
         if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll(false);
+        if (claudePill != null && claudePill.getVisibility() == View.VISIBLE) updateClaudePill();
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.tick(ticks, quiet()); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -419,7 +424,41 @@ public final class Dashboard {
         row.addView(label, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 14, 0, 14, 0));
         nextPage = ui.iconButton("chevron-right", "Next page", 22, true, new View.OnClickListener() { @Override public void onClick(View v) { showPage(settings.page + 1); } });
         row.addView(nextPage, ui.ll(ui.px(48), ui.px(48)));
+        LinearLayout pill = ui.row();
+        pill.setBackground(ui.pressable(ui.theme.raised, Theme.WARNING, 2, 12));
+        pill.setPadding(ui.px(10), ui.px(4), ui.px(16), ui.px(4));
+        pill.setMinimumHeight(ui.px(48));
+        claudePillCritter = new CritterView(activity, ui.theme);
+        claudePillCritter.set("needs", "pill");
+        pill.addView(claudePillCritter, ui.ll(ui.px(32), ui.px(32)));
+        TextView words = ui.text("Claude needs you", ui.small(), Theme.WARNING);
+        words.setTypeface(Ui.MEDIUM);
+        pill.addView(words, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
+        pill.setClickable(true);
+        pill.setContentDescription("Claude needs you. Show the Claude page.");
+        pill.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { if (pc.state != null && pc.state.claudePage >= 0) showPage(pc.state.claudePage); } }));
+        pill.setVisibility(View.GONE);
+        claudePill = pill;
+        row.addView(pill, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 20, 0, 0, 0));
         return row;
+    }
+
+    // The header pill (as on the PC): a Claude Code session needs you while the Claude card is on another page. A
+    // session that newly needs you taps the phone once while the app is open.
+    private View claudePill;
+    private CritterView claudePillCritter;
+    private int claudeNeeds = -1;
+    private void updateClaudePill() {
+        PcState state = pc.state;
+        int needs = state != null && pc.online() ? state.claudeNeeds : 0;
+        if (claudeNeeds >= 0 && needs > claudeNeeds && root != null) {
+            try { root.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK); } catch (Exception ignored) { }
+        }
+        claudeNeeds = needs;
+        if (claudePill == null) return;
+        boolean show = needs > 0 && state.claudePage >= 0 && !editor.isVisible("Claude") && !editor.editing();
+        claudePill.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (claudePillCritter != null) claudePillCritter.setPhase(ticks % 2 == 0 && !quiet(), quiet());
     }
 
     private void updatePages() {
@@ -431,6 +470,7 @@ public final class Dashboard {
         Ui.enable(previousPage, settings.page > 0);
         Ui.enable(nextPage, settings.page < count - 1);
         updateHint();
+        updateClaudePill();
     }
 
     // The page shown is the PC's: switching here switches the PC, and the PC's layout for that page follows.
@@ -531,6 +571,7 @@ public final class Dashboard {
             case "Clocks": return 280;
             case "Prayer": return 300;
             case "Notes": return 420;
+            case "Claude": return 330;
             default: return 640;
         }
     }

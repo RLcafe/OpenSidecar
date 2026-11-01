@@ -194,7 +194,7 @@ namespace WidgetScreen
         public static int ClaudeRows(double height, double textScale) { return Math.Max(1, (int)Math.Floor((height + 8) / (ClaudeRowHeight(textScale) + 8))); }
         // The Large usage panel's width, and how many project rows fit under its meters and period switch.
         public static double ClaudePanel(double bodyWidth) { return Clamp(Math.Round(bodyWidth * 0.38), 240, 380); }
-        public static double ClaudeMeterBlock(double textScale) { return Math.Ceiling(Math.Max(20 * textScale, 32) + 41); }
+        public static double ClaudeMeterBlock(double textScale) { return Math.Ceiling(Math.Max(20 * textScale, 34) + 42); }
         public static double ClaudeProjectRow(double textScale) { return Math.Ceiling(16 + 20 * textScale); }
         public static int ClaudeProjects(double panelHeight, double textScale)
         {
