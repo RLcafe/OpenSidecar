@@ -1,45 +1,48 @@
 # Branches
 
-Every branch that hasn't been merged into `main` is listed here: its purpose, where it's checked out, where its test build lives, and anything to watch for when merging it. Released versions are in [CHANGELOG.md](CHANGELOG.md).
+Every change reaches `main` through a **pull request on GitHub** (Ali, 1 Nov 2026), so parallel work never collides on `main`. Released versions are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Active branches
 
-| Branch | Purpose | Based on | Status | Checkout | Test build |
-| --- | --- | --- | --- | --- | --- |
-| `feature/sticker-defaults` | Sticker Sheet phase 2 (paused; checkpoint 00463a5 doesn't build yet) | b3c6e0c | In progress | `.worktrees\sticker-defaults` | `.worktrees\sticker-defaults\artifacts\app\WidgetScreen.exe` |
-| `fix/claude-review` | Claude watcher review fixes 1–11, both apps (decision 022), for v0.35.2 | f07ef68 | In progress (waiting for CI) | `.worktrees\claude-review` | `.worktrees\claude-review\artifacts\app\WidgetScreen.exe` |
-
-Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
+The open pull requests are the list of active branches: [github.com/RLcafe/OpenSidecar/pulls](https://github.com/RLcafe/OpenSidecar/pulls). Each PR's description says what it's for, its status (**Draft** while in progress, **Ready for review** when built and waiting for Ali), its checkout (`.worktrees\<name>`) and anything to watch for when merging. Its CI run holds the test build (exe, setup and APK). A pushed branch with no PR yet is unfinished work that isn't ready to show.
 
 ## Closed without merging
 
-None yet.
+None yet. When Ali drops a branch, close its PR without merging and add a line here naming the branch and why.
 
 ## Where branches live
 
 - Every new branch gets a worktree **inside this folder**, at `.worktrees\<name>`. The folder is git-ignored. Never create folders next to `Widget screen` in `C:\Users\PCD\Documents\AI Apps\Claud`.
 - Name branches `feature/<name>` for new behavior and `fix/<name>` for bug fixes. `<name>` is a few lowercase words joined by hyphens, and the worktree folder uses the same `<name>`.
-- Start from the latest `main`:
+- Start from the latest `main` on GitHub:
 
   ```powershell
-  git worktree add ".worktrees\<name>" -b feature/<name> main
+  git fetch origin
+  git worktree add ".worktrees\<name>" -b feature/<name> origin/main
   ```
 
 - Build and test inside the worktree. The scripts resolve paths from their own folder, so the builds land in `.worktrees\<name>\artifacts\app\WidgetScreen.exe` and `.worktrees\<name>\artifacts\android\WidgetScreen.apk` and never lock the main app. `build.ps1` only compiles `src\` and `tests\`, so the worktrees under `.worktrees\` never leak into the main build.
-- Push the new branch to GitHub with `git push -u origin <branch>`, and push again after each commit worth keeping. Every push runs CI (see [GitHub and CI](#github-and-ci)).
-- Add a row to the table above when the branch is created, and keep its status and test build path current.
+- Push the branch with `git push -u origin <branch>`, then open a **draft pull request** to `main` (GitHub's "Compare & pull request"). Push again after each commit worth keeping; every push runs CI on the PR (see [GitHub and CI](#github-and-ci)).
 - A branch build uses your real preferences unless you start it with `--settings <path>`.
 
-## After a merge
+## Merging a pull request
 
-1. From the main folder, on `main`: `git merge --no-ff <branch>`.
-2. Check that the branch's latest CI run on GitHub is green, then push `main` (`git push origin main`) and wait for its CI run (`build.ps1 -Test`, `package.ps1 -Test` and `build-android.ps1 -Test`) to pass before tagging.
-3. Pick the new version (see [Versions](#versions)), move the branch's changes into a new section of [CHANGELOG.md](CHANGELOG.md), and remove its row here. Commit that, then tag it: `git tag -a vX.Y.Z -m "<one-line summary>"`, and push both: `git push origin main vX.Y.Z`. Pushing the tag publishes the GitHub Release by itself (see [Releases](#releases)); check that the Release run on the Actions tab finished green and the release has its three files.
-4. Remove the worktree with `git worktree remove ".worktrees\<name>"`. Its `artifacts\` goes with it. If git refuses because of untracked files, look at them first, then use `--force` only if nothing in them is worth keeping.
-5. Delete any build of the branch made from the main folder, such as `artifacts\<name>`.
-6. Delete the branch with `git branch -d <branch>`, and on GitHub with `git push origin --delete <branch>`. Lowercase `-d` refuses to delete unmerged work, which is the point. Use `-D` only for a branch the user has dropped.
-7. Run `git worktree prune` to clear stale worktree records.
-8. Make the PC's own release copy with `scripts\release.ps1 -UpdateShortcut` (see [Releases](#releases)).
+1. **Never commit or push to `main` directly.** Everything goes through a PR.
+2. Keep the branch current: when `main` has moved, merge it into the branch (`git fetch origin` then `git merge origin/main`), fix any conflicts there, and push. Conflicts are always solved on the branch, never on `main`.
+3. As the PR's last commit, pick the version (see [Versions](#versions)) and move the branch's changes into a new `## vX.Y.Z` section at the top of [CHANGELOG.md](CHANGELOG.md). If another PR takes that version first, merge `main` again and take the next one.
+4. Mark the PR **Ready for review**. Merge it on GitHub with **Create a merge commit** (not squash or rebase, so history keeps each branch) only when its CI run is green, it has no conflicts, and Ali has approved it where it changes what he sees.
+5. Tag the merge commit and push the tag, which publishes the GitHub Release (see [Releases](#releases)):
+
+   ```powershell
+   git checkout main
+   git pull origin main
+   git tag -a vX.Y.Z -m "<one-line summary>"
+   git push origin vX.Y.Z
+   ```
+
+   Check that the Release run on the Actions tab finished green and the release has its three files.
+6. Clean up: `git worktree remove ".worktrees\<name>"` (if git refuses because of untracked files, look at them first, and use `--force` only if nothing in them is worth keeping), delete any `artifacts\<name>` build, `git branch -d <branch>`, `git worktree prune`, and delete the branch on GitHub (the PR's **Delete branch** button). Lowercase `-d` refuses to delete unmerged work, which is the point. Use `-D` only for a branch Ali has dropped.
+7. Make the PC's own release copy with `scripts\release.ps1 -UpdateShortcut` (see [Releases](#releases)).
 
 ## GitHub and CI
 
@@ -48,7 +51,7 @@ The repository lives at [RLcafe/OpenSidecar](https://github.com/RLcafe/OpenSidec
 - `.github/workflows/ci.yml` runs on every push to any branch and on pull requests: it fetches the pinned sensor files, then runs `build.ps1 -Test`, `package.ps1 -Test` and `build-android.ps1 -Test` on a GitHub Windows runner in one job (the Android checks read the phone-link sample the Windows checks save). The exe, setup exe and APK are kept with the run for 14 days.
 - `.github/workflows/release.yml` runs when a `vX.Y.Z` tag is pushed. It checks the tag is on `main`, builds it, runs the same checks with the sensor files required, and publishes a GitHub Release named `Widget Screen vX.Y.Z` with the tag's CHANGELOG section as its notes. Actions → Release → Run workflow publishes (or refreshes) a tag pushed earlier.
 - Pushes that only change Markdown files, `docs\` or `design specfication\` don't start a run.
-- Tests run on GitHub (Ali, 1 Nov 2026): push and read the branch's CI run. A branch is ready to merge, and `main` ready to tag, only when its latest run is green. Local runs are still fine for quick feedback and renders, and CI doesn't replace trying the app on the PC.
+- Tests run on GitHub (Ali, 1 Nov 2026): push and read the PR's CI run. A PR is ready to merge only when its latest run is green. Local runs are still fine for quick feedback and renders, and CI doesn't replace trying the app on the PC.
 - The runner has no touchscreen, audio devices, GPU sensors or Claude Code, so those integrations still need checking on the PC. CI's APK is signed with the runner's own debug key and won't install over a PC-built one. Releases use the PC's debug key when the `ANDROID_DEBUG_KEYSTORE_BASE64` repository secret holds it (`%USERPROFILE%\.android\debug.keystore` in base64); otherwise the release notes say to uninstall first.
 - Release folders (`releases\`) and every build output stay out of git (`.gitignore`). Built files reach GitHub only as GitHub Release files and CI artifacts.
 
@@ -81,4 +84,4 @@ Versions follow [Semantic Versioning](https://semver.org/) as annotated tags `vM
 - **MINOR** for a new widget, a new feature, or a visible change in how something works (for example, the mixer output picker or the header clock). While MAJOR is `0`, a removed widget is a MINOR bump too.
 - **PATCH** for bug fixes, touch and visual polish, and performance work that doesn't change behavior.
 - **Every merge into `main` gets its own version, tag and GitHub Release** (Ali, 1 Nov 2026). A merge that only touches docs, tests, scripts or CI is a **PATCH**. If two branches are merged together, one tag covers both, and the highest bump wins.
-- **Unreleased** in the changelog is only for commits made straight on `main` between merges (for example, a typo fix in a doc); they ship with the next tag.
+- **Unreleased** in the changelog stays empty: every change arrives through a PR, and each PR writes its own version section.

@@ -1,8 +1,12 @@
 # Changelog
 
-Released versions of Widget Screen, newest first. Each version is an annotated `vX.Y.Z` tag on `main`. Branches that haven't been merged yet are in [BRANCHES.md](BRANCHES.md), along with the version bump rules.
+Released versions of Widget Screen, newest first. Each version is an annotated `vX.Y.Z` tag on `main`. Work that hasn't been merged yet is in the [open pull requests](https://github.com/RLcafe/OpenSidecar/pulls); the process and version rules are in [BRANCHES.md](BRANCHES.md).
 
 ## Unreleased
+
+Nothing yet.
+
+## v0.35.3 (1 Nov 2026)
 
 Claude watcher review fixes (Ali's review, 1 Nov 2026; Windows and the phone; decision 022):
 
@@ -19,6 +23,14 @@ Claude watcher review fixes (Ali's review, 1 Nov 2026; Windows and the phone; de
   - the telemetry receiver only accepts JSON;
   - a gone process's window is forgotten;
   - Connect keeps dated backups of Claude Code's settings.json.
+
+## v0.35.2 (1 Nov 2026)
+
+Releases publish again, and every change goes through a pull request.
+
+- **Fixed: GitHub Releases weren't published.** The release workflow's last step stopped on gh's "release not found" message, which Windows PowerShell treats as an error, so v0.35.1 built and passed its checks but got no release. The step now checks gh's exit codes itself.
+- **CI:** the workflows use checkout, setup-java and upload-artifact v5, which GitHub runs on Node 24, so the deprecation warnings are gone.
+- **Every change goes through a pull request** (Ali's request): CLAUDE.md and BRANCHES.md now say to open a draft PR for every branch, keep it current with `main`, and merge on GitHub with a merge commit once CI is green, then tag. The open PRs replace the branch table in BRANCHES.md.
 
 ## v0.35.1 (1 Nov 2026)
 
