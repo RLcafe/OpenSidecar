@@ -36,11 +36,11 @@ jobs:
         shell: powershell
     steps:
       # Full history and tags: the builds take their version from the newest vX.Y.Z tag (git describe).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -64,7 +64,7 @@ jobs:
       # over a phone build made on the PC; uninstall that first.
       - name: Upload test builds
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: widget-screen-${{ github.sha }}
           retention-days: 14
