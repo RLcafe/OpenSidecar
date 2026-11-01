@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.38.0 (1 Nov 2026)
+
+Sticker Sheet, phase 5: the Soundboard (Ali's approved redesign; Windows and the phone; decision 021). Ali skipped phase 4 and the rest of phase 5, so the redesign ends here.
+
+- **Sampler pads:** sounds are pads edged in the Soundboard's colour. Medium pads are numbered; large pads add a play mark and where the sound comes from.
+- **A tapped pad lights up** for a moment (not in Quiet mode).
+- **The voice channel you're in** shows as a sticker in the heading, with "Not in voice", "Unavailable" (Discord can't be reached) and "Not set up".
+- Discord not set up, Discord not running and no sounds yet each say why in a dashed box.
+- **The phone shows the same.** The phone link adds `failed` to the Discord section.
+- No new polling, timers that repeat, network requests or effects.
+
 ## v0.37.0 (1 Nov 2026)
 
 Sticker Sheet, phase 3: the readings (Ali's approved redesign; Windows and the phone; decision 021).
