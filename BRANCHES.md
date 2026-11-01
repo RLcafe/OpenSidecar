@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `feature/claude-watcher-v2` | Claude watcher v2, the "pit garage" redesign (docs/design/claude-watcher-v2.html): plan gauges with pace, pit stop strip, garage ledger, 5-hour lanes, code-drawn pixel cars and garages with roll in/out, on both apps | `7602493` | In progress | `.worktrees\claude-watcher-v2` | `.worktrees\claude-watcher-v2\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-watcher-v2\artifacts\android\WidgetScreen.apk` |
+None right now. `feature/claude-watcher-v2` was merged as v0.32.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

@@ -4,6 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.32.0 (1 Nov 2026)
+
 Claude Watcher v2, the pit wall (Ali's approved design; Windows and the phone; decision 017):
 
 - **Projects are pit garages and threads are race cars,** drawn in code as pixel art (no images). A car's class follows the model the thread used most: a grand tourer for Opus, a sports car for Sonnet, a hot hatch for Haiku. Its colour is the project's. No faces: a car shows what its thread is doing.
