@@ -35,7 +35,8 @@ namespace WidgetScreen
 
         public static bool Known(string ink) { return ink != null && Names.Contains(ink); }
 
-        // Every widget but Claude Code wears a label strip (the Claude card keeps its own design).
+        // Which widgets' inks Edit layout can change. Claude Code wears its label strip in its own Coral (review fix 9) but
+        // keeps the rest of its own design, so its ink isn't picked.
         public static bool InScope(string id) { return id != "Claude" && WidgetLayout.Ids.Contains(id); }
 
         // The widget's own ink. Weather, World clocks and Smart home will take theirs from live data later and use
@@ -46,7 +47,7 @@ namespace WidgetScreen
             {
                 case "Mixer": case "Games": return "Lime";
                 case "Soundboard": case "Storage": return "Lavender";
-                case "Focus": case "Calendar": return "Coral";
+                case "Focus": case "Calendar": case "Claude": return "Coral";
                 case "Spotify": case "Prayer": return "Mint";
                 case "Media": case "Macros": return "Rose";
                 case "System": case "Notes": return "Lemon";

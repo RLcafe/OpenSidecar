@@ -70,6 +70,37 @@ internal static class ClaudeSourcesTests
 
     public static void Run(string directory, Action<string, Action> check)
     {
+        check("Claude tool calls and lines changed come from the logs, each once, and telemetry's asked count is marked partial", () => {
+            // Review fix 2: one reply split over two lines (each with a tool call, same request), a repeat of the
+            // second line, an edit result (+3 −1), a new file (4 lines) and a read result (no lines).
+            string config = Fresh(directory, "config-logtools"), session = "lt1", cwd = "C:\\\\Code\\\\tools";
+            Func<string, string, string> call = (request, tool) => "{\"type\":\"assistant\",\"sessionId\":\"" + session + "\",\"cwd\":\"" + cwd + "\",\"timestamp\":\"" + Now.AddMinutes(-5).ToString("o") + "\",\"requestId\":\"" + request + "\",\"message\":{\"id\":\"m-" + request + "\",\"model\":\"claude-opus-5-5\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" + tool + "\",\"name\":\"Edit\",\"input\":{}}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5}}}";
+            Func<string, string, string> result = (tool, body) => "{\"type\":\"user\",\"sessionId\":\"" + session + "\",\"cwd\":\"" + cwd + "\",\"timestamp\":\"" + Now.AddMinutes(-4).ToString("o") + "\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"" + tool + "\",\"content\":\"ok\"}]},\"toolUseResult\":" + body + "}";
+            string log = call("req1", "tu1") + "\n" + call("req1", "tu2") + "\n" + call("req1", "tu2") + "\n"
+                + result("tu1", "{\"filePath\":\"x\",\"structuredPatch\":[{\"oldStart\":1,\"oldLines\":2,\"newStart\":1,\"newLines\":4,\"lines\":[\" a\",\"-b\",\"+c\",\"+d\",\"+e\"]}]}") + "\n"
+                + result("tu2", "{\"type\":\"create\",\"filePath\":\"y\",\"content\":\"1\\n2\\n3\\n4\\n\",\"structuredPatch\":[]}") + "\n"
+                + result("tu3", "{\"type\":\"text\",\"file\":{}}") + "\n";
+            string folder = Path.Combine(config, "projects", "C--Code-tools"); Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, session + ".jsonl"), log);
+            using (var service = new ClaudeService(Fresh(directory, "bridge-logtools"), config, appThreads: new ClaudeAppThreads(() => new string[0])))
+            {
+                service.Usage.Scan(Now);
+                Assert(service.Usage.Tools.Count == 2 && service.Usage.Lines.Sum(l => l.Added) == 7 && service.Usage.Lines.Sum(l => l.Removed) == 1 && service.Usage.Entries.Count == 1,
+                    "Log tool calls or lines counted wrongly: " + service.Usage.Tools.Count + " calls, +" + service.Usage.Lines.Sum(l => l.Added) + " −" + service.Usage.Lines.Sum(l => l.Removed));
+                service.Usage.Scan(Now);
+                Assert(service.Usage.Tools.Count == 2, "A second read counted the tool calls again.");
+                var view = service.View(Now, service.Usage.Entries);
+                var f = view.Facts;
+                Assert(f.Tools == 2 && f.Added == 7 && f.Removed == 1 && f.LinesThreads == 1 && !f.Telemetry && !f.AskedPartial && ClaudeText.ToolsKey(f) == "TOOLS", "Facts from the logs wrong: " + f.Tools + " " + f.Added);
+                var t = view.Threads.First(x => x.Id == session);
+                Assert(t.LinesFor(ClaudePeriod.Today)[0] == 7 && t.LinesFor(ClaudePeriod.Today)[1] == 1, "The thread's lines don't come from its log.");
+                // Telemetry saw one decision for two calls: "asked" is partial, and says so.
+                service.Receive(ClaudeOtlp.ParseLogs("{\"resourceLogs\":[{\"scopeLogs\":[{\"logRecords\":[{\"timeUnixNano\":\"" + Nanos(Now.AddMinutes(-5)) + "\",\"attributes\":[{\"key\":\"event.name\",\"value\":{\"stringValue\":\"tool_decision\"}},{\"key\":\"session.id\",\"value\":{\"stringValue\":\"" + session + "\"}},{\"key\":\"decision\",\"value\":{\"stringValue\":\"accept\"}},{\"key\":\"source\",\"value\":{\"stringValue\":\"user_temporary\"}}]}]}]}]}"));
+                f = service.View(Now, service.Usage.Entries).Facts;
+                Assert(f.Telemetry && f.Asked == 1 && f.AskedPartial && ClaudeText.ToolsKey(f) == "TOOLS · 1 ASKED · PARTIAL" && ClaudeText.ToolsTip(f).Contains("partial"), "A partial asked count isn't marked: " + ClaudeText.ToolsKey(f));
+            }
+        });
+
         check("Claude pit wall telemetry: tool decisions, lines in both temporalities, cache counts and the facts", () => {
             Func<string, string, string, string> record = (name, session, extra) => "{\"timeUnixNano\":\"" + Nanos(Now.AddMinutes(-1)) + "\",\"attributes\":[{\"key\":\"event.name\",\"value\":{\"stringValue\":\"" + name + "\"}},{\"key\":\"session.id\",\"value\":{\"stringValue\":\"" + session + "\"}}" + extra + "]}";
             Func<string, string, string> attr = (key, value) => ",{\"key\":\"" + key + "\",\"value\":{\"stringValue\":\"" + value + "\"}}";
@@ -100,9 +131,10 @@ internal static class ClaudeSourcesTests
                 service.Receive(ClaudeOtlp.ParseLogs(LogsFixture("p1", "req_p", Now.AddMinutes(-1))));
                 var view = service.View(Now, service.Usage.Entries);
                 var thread = view.Threads.FirstOrDefault(t => t.Id == "p1");
-                Assert(thread != null && thread.LinesFor(ClaudePeriod.Today)[0] == 55 && thread.LinesFor(ClaudePeriod.Today)[1] == 10 && thread.MixFor(ClaudePeriod.Today)[0] == 1 && thread.Car == PitCar.GrandTourer, "The thread's lines, mix or car are wrong.");
+                // Since review fix 2 lines and tool calls come from the logs (none here); telemetry only says who asked.
+                Assert(thread != null && thread.LinesFor(ClaudePeriod.Today)[0] == 0 && thread.MixFor(ClaudePeriod.Today)[0] == 1 && thread.Car == PitCar.GrandTourer, "The thread's lines, mix or car are wrong.");
                 var f = view.Facts;
-                Assert(f.Telemetry && f.Tools == 1 && f.Asked == 2 && f.Denied == 1 && f.Added == 55 && f.Removed == 10 && f.LinesThreads == 1 && f.Prompt == 6300 && f.CacheRead == 5000 && Math.Abs(f.CacheHit - 5000.0 / 6300) < 1e-9, "Today's facts wrong.");
+                Assert(f.Telemetry && f.Tools == 0 && f.Asked == 2 && f.Denied == 1 && !f.AskedPartial && f.Added == 0 && f.Prompt == 6300 && f.CacheRead == 5000 && Math.Abs(f.CacheHit - 5000.0 / 6300) < 1e-9, "Today's facts wrong.");
                 Assert(view.Burn.Length == 60 && view.Burn.Sum() == 1500 && view.Rate == 750 && view.Scale == ClaudePace.MinScale && view.Lanes.Count == 1 && view.Lanes[0].Bins.Sum() == 1500, "Burn or lanes wrong.");
             }
         });

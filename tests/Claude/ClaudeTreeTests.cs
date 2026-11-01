@@ -325,9 +325,13 @@ internal static class ClaudeTreeTests
             Assert(hide.ClaudeShowArchived && hide.ClaudeHideIdle, "The hide choices weren't saved.");
             // Live state wins over Resolved: a resolved thread that works, needs you or compacts shows that; once
             // its turn ends it's Resolved again. A summary of an older reply doesn't count.
-            Func<ClaudeState, bool, bool, PitState> live = (st, running, compacting) => ClaudePace.State(new ClaudeSession { State = st, Running = running, Resolved = true, Compacting = compacting, Since = Now }, Now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
-            Assert(live(ClaudeState.Working, true, false) == PitState.Work && live(ClaudeState.NeedsYou, true, false) == PitState.Need && live(ClaudeState.Done, true, true) == PitState.Pit
-                && live(ClaudeState.Done, true, false) == PitState.Resolved && live(ClaudeState.Ready, false, false) == PitState.Resolved && ClaudePace.Hidden(PitState.Resolved, false, false), "Live state doesn't win over Resolved.");
+            Func<ClaudeState, bool, bool, double, PitState> live = (st, running, compacting, minutes) => ClaudePace.State(new ClaudeSession { State = st, Running = running, Resolved = true, Compacting = compacting, Since = Now.AddMinutes(-minutes) }, Now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
+            Assert(live(ClaudeState.Working, true, false, 0) == PitState.Work && live(ClaudeState.NeedsYou, true, false, 0) == PitState.Need && live(ClaudeState.Done, true, true, 0) == PitState.Pit
+                && live(ClaudeState.Ready, false, false, 0) == PitState.Resolved && ClaudePace.Hidden(PitState.Resolved, false, false), "Live state doesn't win over Resolved.");
+            // Review fix 1: a running thread whose turn just ended "completed" is Your turn, not hidden; only after 30
+            // idle minutes does it count as resolved.
+            Assert(live(ClaudeState.Done, true, false, 1) == PitState.Done && live(ClaudeState.Done, true, false, 29) == PitState.Done && live(ClaudeState.Done, true, false, 31) == PitState.Resolved
+                && live(ClaudeState.Ready, true, false, 5) == PitState.Idle && live(ClaudeState.Ready, true, false, 31) == PitState.Resolved, "A fresh Your turn is hidden as Resolved.");
             Func<string, string, string, bool> completed = (status, about, last) => ClaudeAppThreads.Parse("{\"cliSessionId\":\"x\",\"postTurnSummary\":{\"status_category\":\"" + status + "\",\"summarizes_uuid\":\"" + about + "\"},\"lastAssistantUuid\":\"" + last + "\"}").Completed;
             Assert(completed("completed", "a", "a") && !completed("completed", "a", "b") && !completed("blocked", "a", "a") && !completed("review_ready", "a", "a") && !ClaudeAppThreads.Parse("{\"cliSessionId\":\"x\"}").Completed, "The app's summary is read wrongly.");
             Assert(ClaudePace.Hidden(PitState.Archived, false, false) && !ClaudePace.Hidden(PitState.Archived, true, false) && !ClaudePace.Hidden(PitState.Idle, false, false)

@@ -92,14 +92,19 @@ namespace WidgetScreen
                 parts.Add(Threads(count) + (period == ClaudePeriod.FiveHour ? " in 5 h" : period == ClaudePeriod.Today ? " today" : " this week"));
             }
             if (parts.Count == 0) parts.Add(view.Sessions.Count == 0 ? "Nothing running" : "All quiet");
+            // Medium and Small keep the two most urgent parts, so the line fits beside the flag (review fix 3).
+            if (!threads && parts.Count > 2) parts = parts.Take(2).ToList();
             return String.Join(" · ", parts);
         }
         // The flag at the heading's right: "SAMPLE", and "AS OF 10:42" when the meters are old or the last check failed.
-        public static string Flag(ClaudeView view, DateTime now, bool use24)
+        // Large always says how fresh the plan numbers are: "LIVE · AS OF 2:40 PM" (the spec's freshness stamp, review
+        // fix 10).
+        public static string Flag(ClaudeView view, DateTime now, bool use24, bool fresh = false)
         {
             var parts = new List<string>();
             if (view.Sample) parts.Add("SAMPLE");
             if (Old(view, now)) parts.Add("AS OF " + Clock(view.Limits.UpdatedAt, use24).ToUpperInvariant());
+            else if (fresh && view.Limits != null && view.Limits.Known) parts.Add("LIVE · AS OF " + Clock(view.Limits.UpdatedAt, use24).ToUpperInvariant());
             return String.Join(" · ", parts);
         }
         // The meters show numbers that may have moved since: older than 15 minutes, or the last check didn't go through.
@@ -132,6 +137,15 @@ namespace WidgetScreen
         public const string RepliesTip = "Claude's replies in this period, one per request to Claude.";
         public static string Replies(int count) { return count == 1 ? "1 reply" : count + " replies"; }
         public const string ApiValueTip = "What the same use would cost on Anthropic's API at list prices, cache reads included. It isn't what your Claude plan charges: the plan meters show your plan's use.";
+        // The tools fact (review fix 2): tool calls from the logs; "asked" from telemetry, marked partial when telemetry
+        // saw fewer tool calls than the logs.
+        public static string ToolsKey(ClaudeFacts f) { return !f.Telemetry ? "TOOLS" : "TOOLS · " + f.Asked + " ASKED" + (f.AskedPartial ? " · PARTIAL" : ""); }
+        public static string ToolsTip(ClaudeFacts f)
+        {
+            string calls = "Tool calls today, from Claude Code's logs.";
+            if (!f.Telemetry) return calls + " Which ones asked you comes from Claude Code's telemetry (Settings → Claude → Update connection).";
+            return calls + " " + f.Asked + " asked you and " + f.Denied + " were denied" + (f.AskedPartial ? ", from the sessions that sent telemetry (not every session does, so this is partial)." : ".");
+        }
         public const string TokensTip = "Fresh input, cache writes and output. Cache reads aren't counted here (see Cache hits).";
         public static string PeriodName(ClaudePeriod period) { return period == ClaudePeriod.FiveHour ? "5 h" : period == ClaudePeriod.Today ? "Today" : "Week"; }
         // "Plan limits as of 10:42" when a check failed, and the sign-in's end when it has.
@@ -149,15 +163,16 @@ namespace WidgetScreen
         public static string Wait(TimeSpan time) { return time < TimeSpan.FromMinutes(1) ? (int)Math.Ceiling(time.TotalSeconds) + " s" : Duration(time); }
         public static string Threads(int count) { return count == 1 ? "1 thread" : count + " threads"; }
         public static string Cars(int count) { return count == 1 ? "1 car" : count + " cars"; }
-        // Under a project's name: "3 threads · 2 running · Claude app".
-        public static string GroupDetail(ClaudeProjectGroup group)
+        // Under a project's name: "3 threads · 2 running · Claude app". Compact (Medium) leaves out where it runs, so
+        // "+N hidden" still fits (review fix 3).
+        public static string GroupDetail(ClaudeProjectGroup group, bool compact = false)
         {
             // A project with no thread in the period: when it was last used.
             if (group.Threads.Count == 0) return (group.Hidden > 0 ? group.Hidden + " hidden · " : "") + (group.Seen > DateTime.MinValue ? "Quiet · last used " + Day(group.Seen) : "Quiet");
             var parts = new List<string> { Threads(group.Threads.Count) };
             if (group.Running > 0) parts.Add(group.Running + " running");
             var where = group.Threads.Where(t => t.Running && t.Where.Length > 0).Select(t => t.Where).Distinct().ToList();
-            if (where.Count == 1) parts.Add(where[0] == "Desktop" ? "Claude app" : where[0]);
+            if (where.Count == 1) { if (!compact) parts.Add(where[0] == "Desktop" ? "Claude app" : where[0]); }
             else if (group.Asleep) parts.Add("ended " + Duration(DateTime.UtcNow - group.LastActive) + " ago");
             if (group.Hidden > 0) parts.Add("+" + group.Hidden + " hidden");
             return String.Join(" · ", parts);
@@ -300,6 +315,8 @@ namespace WidgetScreen
         }
 
         public CardSizing.Design Current { get { return design; } }
+        // The heading's label strip (none on Small, which has no heading).
+        public LabelStrip Strip { get; private set; }
         public ClaudeView View { get { return view; } }
         public ClaudePeriod Period { get { return period; } }
         public bool Animating { get { return rolling != null; } }
@@ -390,7 +407,7 @@ namespace WidgetScreen
         private void Build()
         {
             EndRoll(false);
-            host.Children.Clear(); names.Clear(); cars.Clear(); garages.Clear(); fills.Clear(); clock.Clear(); askStrip = null; ledgerScroll = null;
+            host.Children.Clear(); names.Clear(); cars.Clear(); garages.Clear(); fills.Clear(); clock.Clear(); askStrip = null; ledgerScroll = null; Strip = null;
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48);
             design = CardSizing.Claude(bounds.Width, bounds.Height);
             FrameworkElement content;
@@ -398,7 +415,8 @@ namespace WidgetScreen
             else content = design == CardSizing.Design.Small ? BuildSmall(width, height) : design == CardSizing.Design.Medium ? BuildMedium(width, height) : BuildLarge(width, height);
             host.Children.Add(names.Add(content, "ClaudeView"));
             layer = new Canvas { IsHitTestVisible = false, ClipToBounds = false };
-            host.Children.Add(layer);
+            // Under the card's content, so cars rolling past a row go under its chip and words (review fix 8).
+            host.Children.Insert(0, layer);
         }
 
         // ----- Parts -----
@@ -456,7 +474,9 @@ namespace WidgetScreen
             if (large) { var periods = Periods(); DockPanel.SetDock(periods, Dock.Right); row.Children.Add(periods); }
             var flag = names.Add(Caption(""), "ClaudeFlag"); flag.VerticalAlignment = VerticalAlignment.Center; flag.Margin = new Thickness(12, 0, 12, 0);
             DockPanel.SetDock(flag, Dock.Right); row.Children.Add(flag);
-            var title = names.Add(Label(large && width >= 900 ? "CLAUDE CODE · PIT WALL" : "CLAUDE CODE"), "ClaudeHeading"); title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(0, 0, 14, 0);
+            // The Sticker Sheet label strip, like every other card since v0.35.0 (review fix 9).
+            Strip = LabelStrip.Create("Claude"); Strip.Fit(bounds.Width, textScale);
+            var title = names.Add(Strip.Host, "ClaudeHeading"); title.Margin = new Thickness(0, 0, 14, 0);
             DockPanel.SetDock(title, Dock.Left); row.Children.Add(title);
             var live = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
             var dot = (Ellipse)Dot(false); DockPanel.SetDock(dot, Dock.Left); live.Children.Add(dot);
@@ -467,7 +487,7 @@ namespace WidgetScreen
                 dot.SetResourceReference(Shape.FillProperty, needs ? "Warning" : view.Working > 0 ? "Accent" : "Muted");
                 summary.Text = ClaudeText.Summary(view, period, large);
                 summary.SetResourceReference(TextBlock.ForegroundProperty, needs ? "Warning" : "Text");
-                flag.Text = ClaudeText.Flag(view, now, use24);
+                flag.Text = ClaudeText.Flag(view, now, use24, large);
             });
             return row;
         }
@@ -657,7 +677,7 @@ namespace WidgetScreen
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(72) + 10) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(80) + 10) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeCache(width, textScale) ? Scaled(80) + 10 : 0) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(64) + 10) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeModels(width, textScale) ? Scaled(150) + 10 : 0) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeLines(width, textScale) ? Scaled(84) + 10 : 0) });
@@ -669,7 +689,7 @@ namespace WidgetScreen
             var table = Rows(new GridLength(24), Star);
             var head = LedgerRow(width, 24);
             var labels = new[] { "", "Project · thread", "Tokens", "Cache reads", showApi ? "API value" : "Replies", "Models", "Lines" };
-            var tips = new[] { "", "", ClaudeText.TokensTip, ClaudeText.CacheTip, showApi ? ClaudeText.ApiValueTip : ClaudeText.RepliesTip, "The model each thread used; a mix shows its top two with their share of the tokens", "Lines added and removed (from Claude Code's telemetry)" };
+            var tips = new[] { "", "", ClaudeText.TokensTip, ClaudeText.CacheTip, showApi ? ClaudeText.ApiValueTip : ClaudeText.RepliesTip, "The model each thread used; a mix shows its top two with their share of the tokens", "Lines added and removed, from Claude Code's logs" };
             for (int i = 1; i < labels.Length; i++)
             {
                 if (head.ColumnDefinitions[i].Width.Value == 0 && !head.ColumnDefinitions[i].Width.IsStar) continue;
@@ -682,9 +702,15 @@ namespace WidgetScreen
             var list = new StackPanel();
             if (groups.Count == 0) list.Children.Add(Empty(width));
             for (int i = 0; i < groups.Count; i++) AddGarageRows(list, groups[i], i, width);
-            var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, PanningMode = PanningMode.VerticalOnly };
+            var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, PanningMode = PanningMode.VerticalOnly, VerticalAlignment = VerticalAlignment.Top };
             ledgerScroll = scroll;
             table.Children.Add(At(names.Add(scroll, "ClaudeLedger"), 1));
+            // Whole rows only: no row is cut through its text at the bottom (review fix 7).
+            table.SizeChanged += (sender, e) => {
+                var heights = list.Children.OfType<FrameworkElement>().Select(r => r.ActualHeight + r.Margin.Top + r.Margin.Bottom).ToList();
+                double fit = CardSizing.ClaudeWholeRows(heights, table.ActualHeight - 24);
+                if (Math.Abs(scroll.Height - fit) > 0.5 || Double.IsNaN(scroll.Height)) scroll.Height = fit;
+            };
             return table;
         }
         private FrameworkElement Empty(double width)
@@ -721,7 +747,7 @@ namespace WidgetScreen
             name.Children.Add(share);
             row.Children.Add(At(name, 0, 1));
             var tokens = Right(Text("", Scaled(17), "Text")); tokens.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(tokens, 0, 2));
-            var cached = Right(Text("", Scaled(15), "Muted")); cached.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(cached, 0, 3));
+            var cached = Right(Text("", Scaled(15), "Muted")); cached.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeCache(width, textScale)) row.Children.Add(At(cached, 0, 3));
             var dollars = Right(Text("", Scaled(15), "Muted")); dollars.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(dollars, 0, 4));
             var mix = Trimmed(Text("", 12, "Muted")); mix.VerticalAlignment = VerticalAlignment.Center; mix.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeModels(width, textScale)) row.Children.Add(At(mix, 0, 5));
             var lines = Right(Text("", 12, "Muted")); lines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width, textScale)) row.Children.Add(At(lines, 0, 6));
@@ -750,11 +776,11 @@ namespace WidgetScreen
                 var what = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
                 var chip = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
                 var chipText = Text("", 11, "Text"); chip.Child = chipText; DockPanel.SetDock(chip, Dock.Left); what.Children.Add(chip);
-                var where = Text("", 12, "Muted"); where.Margin = new Thickness(8, 0, 0, 0); where.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(where, Dock.Right); what.Children.Add(where);
+                var where = Text("", 12, "Muted"); where.Margin = new Thickness(8, 0, 0, 0); where.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(where, Dock.Right); if (CardSizing.ClaudeWhere(width, textScale)) what.Children.Add(where);
                 var name2 = names.Add(Trimmed(Text("", Scaled(14), "Text")), "ClaudeThreadTitle" + index + "_" + j); name2.VerticalAlignment = VerticalAlignment.Center; what.Children.Add(name2);
                 trow.Children.Add(At(what, 0, 1));
                 var ttokens = Right(Text("", Scaled(14), "Text")); ttokens.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(ttokens, 0, 2));
-                var tcached = Right(Text("", Scaled(14), "Muted")); tcached.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tcached, 0, 3));
+                var tcached = Right(Text("", Scaled(14), "Muted")); tcached.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeCache(width, textScale)) trow.Children.Add(At(tcached, 0, 3));
                 var tdollars = Right(Text("", Scaled(14), "Muted")); tdollars.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tdollars, 0, 4));
                 var tmix = Trimmed(Text("", 12, "Muted")); tmix.VerticalAlignment = VerticalAlignment.Center; tmix.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeModels(width, textScale)) trow.Children.Add(At(tmix, 0, 5));
                 var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width, textScale)) trow.Children.Add(At(tlines, 0, 6));
@@ -869,10 +895,10 @@ namespace WidgetScreen
                 values[0].Text = Counted ? ClaudeUsage.Format(f.Tokens) : "—"; keys[0].Text = !Counted ? "TODAY" : showApi ? "TODAY · $" + ClaudeText.Dollars(f.Cost) + " API VALUE" : "TODAY · " + f.Replies + " REPLIES";
                 values[1].Text = ClaudeText.Percent(f.CacheHit); keys[1].Text = "CACHE HITS";
                 values[1].ToolTip = ClaudeUsage.Format(f.CacheRead) + " tokens read from the cache today (not counted in the token totals)";
-                values[2].Text = f.Telemetry ? f.Tools.ToString(CultureInfo.InvariantCulture) : "—"; keys[2].Text = f.Telemetry ? "TOOLS · " + f.Asked + " ASKED" : "TOOLS · NEEDS TELEMETRY";
-                values[2].ToolTip = f.Telemetry ? f.Denied + " denied · " + f.Asked + " asked you" : "Tool calls come from Claude Code's telemetry (Settings → Claude → Update connection).";
+                values[2].Text = Counted ? f.Tools.ToString(CultureInfo.InvariantCulture) : "—"; keys[2].Text = ClaudeText.ToolsKey(f);
+                values[2].ToolTip = ClaudeText.ToolsTip(f);
                 values[3].Inlines.Clear();
-                if (f.Telemetry && (f.Added > 0 || f.Removed > 0)) { values[3].Inlines.Add(new Run(ClaudeText.Added(f.Added)) { Foreground = Solid(PitArt.Lime) }); keys[3].Text = ClaudeText.Removed(f.Removed) + " · " + ClaudeText.Threads(f.LinesThreads).ToUpperInvariant(); }
+                if (f.Added > 0 || f.Removed > 0) { values[3].Inlines.Add(new Run(ClaudeText.Added(f.Added)) { Foreground = Solid(PitArt.Lime) }); keys[3].Text = ClaudeText.Removed(f.Removed) + " · " + ClaudeText.Threads(f.LinesThreads).ToUpperInvariant(); }
                 else { values[3].Inlines.Add(new Run("—")); keys[3].Text = "LINES"; }
             });
             return names.Add(side, "ClaudeSide");
@@ -883,7 +909,7 @@ namespace WidgetScreen
         // The two plan meters with pace, then the top garages with their cars inline (a waiting thread's first).
         private FrameworkElement BuildMedium(double width, double height)
         {
-            double head = Math.Max(24, Math.Ceiling(15 * textScale * 1.34));
+            double head = Math.Max(Stickers.StripHeight, Math.Ceiling(15 * textScale * 1.34));
             var root = Rows(new GridLength(head), new GridLength(10), Auto, Star);
             root.Children.Add(Header(width, false));
             var tiles = Columns(Star, new GridLength(10), Star); tiles.Height = CardSizing.ClaudeMiniHeight;
@@ -946,9 +972,10 @@ namespace WidgetScreen
                     if (g == null) return;
                     var asking = g.Threads.FirstOrDefault(t => t.Running && t.State == ClaudeState.NeedsYou);
                     name.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Text");
-                    sub.Text = asking != null ? "Needs you · " + ClaudeText.ThreadTitle(asking, now, use24) : folded ? ClaudeText.Cars(g.Threads.Count) + " in the garage" : ClaudeText.GroupDetail(g);
+                    sub.Text = asking != null ? "Needs you · " + ClaudeText.ThreadTitle(asking, now, use24) : folded ? ClaudeText.Cars(g.Threads.Count) + " in the garage" : ClaudeText.GroupDetail(g, true);
                     sub.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Muted");
-                    tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : ClaudeText.Replies(g.Replies);
+                    tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : g.Replies.ToString(CultureInfo.InvariantCulture);
+                    dollars.ToolTip = showApi ? ClaudeText.ApiValueTip : ClaudeText.Replies(g.Replies);
                     RenderGarage(garage, g);
                 });
             }
@@ -1117,7 +1144,8 @@ namespace WidgetScreen
             public Point Bay; public double GarageSize; public Point GarageAt;
             public readonly List<RollCar> Cars = new List<RollCar>();
         }
-        private sealed class RollCar { public CarPart Part; public PitSprite Moving; public Point Target, Apron; public double Width; public PitCar Car; }
+        // Ended (and archived or resolved) cars keep their cover and stay dimmed while they roll (review fix 8).
+        private sealed class RollCar { public CarPart Part; public PitSprite Moving; public Point Target, Apron; public double Width; public PitCar Car; public bool Ended; }
 
         // Where a piece sits on the overlay: its top left in the card body's coordinates.
         private Point On(FrameworkElement element) { return element.TranslatePoint(new Point(0, 0), host); }
@@ -1144,7 +1172,7 @@ namespace WidgetScreen
                 var at = On(c.Sprite);
                 var target = new Point(at.X + c.Sprite.ActualWidth / 2, at.Y + c.Sprite.ActualHeight);
                 ClaudeSession t = view.Threads.FirstOrDefault(x => x.Id == c.Id);
-                var car = new RollCar { Part = c, Target = target, Apron = new Point(target.X + c.Sprite.ActualWidth * 1.4, target.Y), Width = c.Sprite.ActualWidth, Car = t == null ? PitCar.Sports : t.Car };
+                var car = new RollCar { Part = c, Target = target, Apron = new Point(target.X + c.Sprite.ActualWidth * 1.4, target.Y), Width = c.Sprite.ActualWidth, Car = t == null ? PitCar.Sports : t.Car, Ended = t == null || !t.Running };
                 car.Moving = Piece(new Point(0, 0), car.Width, car.Width * 60 / 140, 3);
                 car.Moving.Visibility = Visibility.Hidden;
                 roll.Cars.Add(car);
@@ -1224,8 +1252,15 @@ namespace WidgetScreen
             if (pose == "front" || pose == "rear" || pose == "brake")
             {
                 double full = car.Width * 0.55;
-                bitmap = Overlay(pose + "|" + color, pose == "front" ? PitArt.Front(color, true) : PitArt.Rear(color, pose == "brake"), full, 80, 56);
+                bitmap = Overlay(pose + "|" + color + "|" + car.Ended, pose == "front" ? PitArt.Front(color, !car.Ended) : PitArt.Rear(color, pose == "brake" && !car.Ended), full, 80, 56);
                 height = width * 56 / 80;
+            }
+            else if (car.Ended)
+            {
+                // Seen from the side, an ended car is its covered still frame.
+                string coverKey; var covered = PitSprite.CarFrames(color, PitState.End, new PitArt.CarLook { Car = car.Car }, car.Width, out coverKey);
+                bitmap = covered[PitSprite.StillFrame(PitState.End)];
+                height = width * 60 / 140; over = PitSprite.CarOverflow; wheel = 0;
             }
             else
             {
@@ -1239,7 +1274,8 @@ namespace WidgetScreen
             car.Moving.Width = shown; car.Moving.Height = height;
             Canvas.SetLeft(car.Moving, x - shown / 2); Canvas.SetTop(car.Moving, bottom - height);
             Panel.SetZIndex(car.Moving, z);
-            car.Moving.Show(pose + "|" + look + "|" + wheel + "|" + Math.Round(width), new[] { bitmap }, over, 0, false);
+            car.Moving.Opacity = car.Ended ? 0.6 : 1;
+            car.Moving.Show(pose + "|" + look + "|" + wheel + "|" + Math.Round(width) + "|" + car.Ended, new[] { bitmap }, over, 0, false);
         }
         private void EndRoll(bool finished)
         {

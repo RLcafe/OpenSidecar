@@ -27,6 +27,7 @@ public final class Inks {
         if (id == null) return "Glacier";
         switch (id) {
             case "Mixer": case "Games": return "Lime";
+            case "Claude": return "Coral";
             case "Soundboard": case "Storage": return "Lavender";
             case "Focus": case "Calendar": return "Coral";
             case "Spotify": case "Prayer": return "Mint";
