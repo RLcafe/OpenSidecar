@@ -89,6 +89,7 @@ namespace WidgetScreen
             InitializeNotes();
             InitializeClaude();
             InitializeClipboard();
+            InitializeMacros();
             Editor.Changed += UpdateEditor;
             // Account state belongs to the settings directory, never to a build/output folder.
             spotifyService = new SpotifyService(SettingsStore.SpotifyPath(settingsPath));
@@ -344,7 +345,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock); ApplyClipboard(); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock); ApplyClipboard(); BuildMacros(); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -557,24 +558,29 @@ namespace WidgetScreen
                 if (shortcut.Action == "Hotkey") { await deckHotkeys.SendAsync(shortcut.Target); if (!disposed) Notify("Sent " + shortcut.Target + " to your previous app."); }
                 else if (shortcut.Action == "Control")
                 {
-                    switch (shortcut.Target)
-                    {
-                        case "play": MediaCommand("toggle"); break;
-                        case "previous": MediaCommand("previous"); break;
-                        case "next": MediaCommand("next"); break;
-                        case "mute": AudioAction(a => a.ToggleMute()); break;
-                        case "microphone": AudioAction(a => a.ToggleMicrophone()); break;
-                        case "volume-up": AudioAction(a => a.StepVolume(.05)); break;
-                        case "volume-down": AudioAction(a => a.StepVolume(-.05)); break;
-                        case "focus": focus.Toggle(); UpdateFocus(); break;
-                        case "quiet": settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist(); break;
-                        case "sound": Launch("ms-settings:sound", "Windows sound settings"); break;
-                    }
+                    RunControl(shortcut.Target);
                 }
                 else { DeckActions.Open(shortcut); Notify("Opened " + shortcut.Label); }
                 return null;
             }
             catch (Exception e) { if (!disposed) Notify(shortcut.Label + ": " + e.Message); return shortcut.Label + ": " + e.Message; }
+        }
+        // A dashboard or media control, from a Quick Launch button or a macro step.
+        private void RunControl(string target)
+        {
+            switch (target)
+            {
+                case "play": MediaCommand("toggle"); break;
+                case "previous": MediaCommand("previous"); break;
+                case "next": MediaCommand("next"); break;
+                case "mute": AudioAction(a => a.ToggleMute()); break;
+                case "microphone": AudioAction(a => a.ToggleMicrophone()); break;
+                case "volume-up": AudioAction(a => a.StepVolume(.05)); break;
+                case "volume-down": AudioAction(a => a.StepVolume(-.05)); break;
+                case "focus": focus.Toggle(); UpdateFocus(); break;
+                case "quiet": settings.QuietMode = !settings.QuietMode; ApplySettings(); Persist(); break;
+                case "sound": Launch("ms-settings:sound", "Windows sound settings"); break;
+            }
         }
         private void Launch(string target, string label) { try { Launcher.Open(target); Notify("Opened " + label + "."); } catch (Exception e) { Notify("Couldn't open " + label + ": " + e.Message); } }
 
@@ -974,7 +980,7 @@ namespace WidgetScreen
             ShowCityResults(pendingLocation == null ? null : new List<WeatherLocation> { pendingLocation });
             Control<ComboBox>("CityResults").SelectedItem = pendingLocation; Control<TextBox>("CitySearch").Text = "";
             var units = Control<ComboBox>("WeatherUnitsChoice"); units.ItemsSource = new[] { "Celsius and km/h", "Fahrenheit and mph" }; units.SelectedIndex = WeatherImperial ? 1 : 0;
-            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings();
+            OpenClockSettings(); OpenPrayerSettings(); OpenClipboardSettings(); macroEditor.Begin(settings.Macros);
             Text("SettingsStatus", ""); UpdateRemoteSettings(); UpdateClaudeSettings();
             deckEditor.Begin(settings.Shortcuts); Control<Grid>("DashboardContent").IsEnabled = false; Control<Grid>("SettingsOverlay").Visibility = Visibility.Visible;
             Control<TabControl>("SettingsTabs").SelectedIndex = 0;
@@ -989,6 +995,8 @@ namespace WidgetScreen
             if (spotifyId.Length > 0 && !SpotifyService.ValidClientId(spotifyId)) { Text("SettingsStatus", "Spotify: the Client ID must be 32 letters and numbers. Fix it, or clear the field to keep the saved one."); return; }
             List<Shortcut> shortcuts;
             if (!deckEditor.TryGet(out shortcuts)) return;
+            List<Macro> macros;
+            if (!macroEditor.TryGet(out macros)) return;
             string discordError = discordAccount.SaveDraft();
             if (discordError != null) { Text("SettingsStatus", discordError); return; }
             var monitor = Control<ComboBox>("MonitorChoice").SelectedItem as MonitorOption;
@@ -1006,7 +1014,7 @@ namespace WidgetScreen
             candidate.FocusChime = Control<CheckBox>("FocusChimeChoice").IsChecked == true;
             candidate.StorageLowPercent = (int)Math.Round(Control<Slider>("StorageLowChoice").Value);
             candidate.WorldClocks = ClockChoices();
-            SavePrayerChoices(candidate); SaveClipboardChoices(candidate);
+            SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray();
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true; candidate.ClaudeOnlineLimits = Control<CheckBox>("ClaudeOnlineChoice").IsChecked == true;
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;

@@ -116,6 +116,13 @@ public final class PcState {
         public final List<Clip> items = new ArrayList<Clip>();
     }
 
+    // The PC's macros (docs/design/macros.md): each button and its steps in words, and the one running now (-1 for none).
+    public static final class MacroItem { public String label = "", glyph = "app", color = ""; public boolean confirm; public final List<String> steps = new ArrayList<String>(); }
+    public static final class Macros {
+        public int running = -1, step;
+        public final List<MacroItem> items = new ArrayList<MacroItem>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -166,6 +173,7 @@ public final class PcState {
     public Prayer prayer;
     public Notes notes;
     public Clipboard clipboard;
+    public Macros macros;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -304,6 +312,19 @@ public final class PcState {
                 if (!clip.id.isEmpty()) clipboard.items.add(clip);
             }
             state.clipboard = clipboard;
+        }
+        if (Json.has(root, "macros")) {
+            Map<String, Object> m = Json.obj(Json.value(root, "macros"));
+            Macros macros = new Macros();
+            macros.running = Json.has(m, "running") ? (int) Json.number(m, "running") : -1; macros.step = (int) Json.number(m, "step");
+            for (Object item : Json.array(m, "items")) {
+                Map<String, Object> i = Json.obj(item);
+                MacroItem macro = new MacroItem();
+                macro.label = text(i, "label"); macro.glyph = glyph(Json.field(i, "glyph")); macro.color = text(i, "color"); macro.confirm = flag(i, "confirm");
+                for (Object step : Json.array(i, "steps")) if (step instanceof String) macro.steps.add((String) step);
+                macros.items.add(macro);
+            }
+            state.macros = macros;
         }
         return state;
     }

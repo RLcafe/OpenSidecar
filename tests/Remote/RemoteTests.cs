@@ -92,7 +92,7 @@ internal static class RemoteTests
             string path = Path.Combine(directory, "remote-settings.xml");
             string store = RemotePairing.StorePath(path); if (File.Exists(store)) File.Delete(store);
             if (File.Exists(NotesStore.PathFor(path))) File.Delete(NotesStore.PathFor(path));
-            SettingsStore.Save(path, new AppSettings { PrayerLocation = "Riyadh", PrayerLatitude = 24.7136, PrayerLongitude = 46.6753, PrayerMethod = "Makkah", RemoteEnabled = true, HideToTrayWithPhone = true, WorldClocks = new[] { new WorldClock { Zone = "Tokyo Standard Time", Label = "Tokyo" }, new WorldClock { Zone = "UTC", Label = "" } } });
+            SettingsStore.Save(path, new AppSettings { Macros = new[] { new Macro { Label = "Quiet twice", Steps = new[] { new MacroStep { Kind = "Control", Target = "quiet" }, new MacroStep { Kind = "Delay", DelayMs = 100 }, new MacroStep { Kind = "Control", Target = "quiet" } } }, new Macro { Label = "Asks", Confirm = true, Steps = new[] { new MacroStep { Kind = "Delay", DelayMs = 100 } } } }, PrayerLocation = "Riyadh", PrayerLatitude = 24.7136, PrayerLongitude = 46.6753, PrayerMethod = "Makkah", RemoteEnabled = true, HideToTrayWithPhone = true, WorldClocks = new[] { new WorldClock { Zone = "Tokyo Standard Time", Label = "Tokyo" }, new WorldClock { Zone = "UTC", Label = "" } } });
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
                 var window = (System.Windows.Window)System.Windows.Markup.XamlReader.Load(stream);
@@ -169,12 +169,20 @@ internal static class RemoteTests
                     Assert(post("/command", "{\"action\":\"notes.toggle\",\"id\":\"" + milk + "\"}", token).Item1 == 200 && controller.Notes.Data.Items[0].Done, "Ticking from the phone failed.");
                     Assert(post("/command", "{\"action\":\"notes.toggle\",\"id\":\"nope\"}", token).Item1 == 409 && post("/command", "{\"action\":\"notes.add\",\"text\":\"  \"}", token).Item1 == 400, "Bad notes requests weren't refused.");
                     Assert(post("/command", "{\"action\":\"notes.delete\",\"id\":\"" + milk + "\"}", token).Item1 == 200 && controller.Notes.Data.Items.Count == 1, "Deleting from the phone failed.");
+                    string ignoredMacro;
+                    var macroState = (Dictionary<string, object>)Json(get("/state?parts=macros", token).Item2)["macros"];
+                    var macroItems = (object[])macroState["items"];
+                    Assert(macroItems.Length == 2 && (string)((Dictionary<string, object>)macroItems[0])["label"] == "Quiet twice" && ((object[])((Dictionary<string, object>)macroItems[0])["steps"]).Length == 3 && (bool)((Dictionary<string, object>)macroItems[1])["confirm"] && Convert.ToInt32(macroState["running"]) == -1, "Macros state wrong.");
+                    bool quietBefore = SettingsStore.Load(path, out ignoredMacro).QuietMode;
+                    Assert(post("/command", "{\"action\":\"macro.run\",\"index\":0,\"label\":\"Quiet twice\"}", token).Item1 == 200 && SettingsStore.Load(path, out ignoredMacro).QuietMode == quietBefore, "Running a macro from the phone failed.");
+                    Assert(post("/command", "{\"action\":\"macro.run\",\"index\":1,\"label\":\"Asks\"}", token).Item1 == 409 && post("/command", "{\"action\":\"macro.run\",\"index\":1,\"label\":\"Asks\",\"confirmed\":true}", token).Item1 == 200, "A macro that asks first ran unconfirmed, or not at all.");
+                    Assert(post("/command", "{\"action\":\"macro.run\",\"index\":0,\"label\":\"Renamed\"}", token).Item1 == 409, "A changed macro ran.");
                     controller.Clipboard.Offer("TEST FIXTURE: copied text");
                     var clipState = (Dictionary<string, object>)Json(get("/state?parts=clipboard", token).Item2)["clipboard"];
                     Assert(((object[])clipState["items"]).Length == 1 && (string)((Dictionary<string, object>)((object[])clipState["items"])[0])["text"] == "TEST FIXTURE: copied text" && !(bool)clipState["paused"], "Clipboard state wrong.");
                     Assert(post("/command", "{\"action\":\"clipboard.pause\",\"paused\":true}", token).Item1 == 200 && controller.Clipboard.Paused && post("/command", "{\"action\":\"clipboard.pause\",\"paused\":false}", token).Item1 == 200 && !controller.Clipboard.Paused, "Pausing from the phone failed.");
                     Assert(post("/command", "{\"action\":\"clipboard.paste\",\"id\":\"missing\"}", token).Item1 == 409, "Pasting a missing text wasn't refused.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros", token).Item2);
                     Assert(post("/command", "{\"action\":\"clipboard.clear\"}", token).Item1 == 200 && controller.Clipboard.History.Items.Count == 0, "Clearing from the phone failed.");
                     int art = get("/art", token).Item1;
                     Assert(art == 200 || art == 404, "Artwork request failed.");
@@ -228,7 +236,7 @@ internal static class RemoteTests
                     controller.Editor.Cancel();
                     Assert(post("/command", "{\"action\":\"page.rename\",\"index\":1,\"name\":\"  Play  \"}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 1).Name == "Play", "Renaming from the phone failed.");
                     Assert(post("/command", "{\"action\":\"page.move\",\"index\":1,\"to\":0}", token).Item1 == 200 && WidgetLayout.Page(SettingsStore.Load(path, out ignored), 0).Name == "Play" && WidgetLayout.CurrentPage(SettingsStore.Load(path, out ignored)) == 1, "Moving a page didn't keep the page shown.");
-                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,layout", token).Item2);
+                    File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude,clipboard,macros,layout", token).Item2);
                     Assert(post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 200 && post("/command", "{\"action\":\"page.delete\",\"index\":0}", token).Item1 == 409 && WidgetLayout.PageCount(SettingsStore.Load(path, out ignored)) == 1, "Deleting pages from the phone failed, or the last page was deleted.");
                     Assert(post("/command", "{\"action\":\"launch-missiles\"}", token).Item1 == 400, "Unknown command accepted.");
                     Assert(post("/spotify", "{\"op\":\"current\"}", token).Item1 == 409, "Spotify proxy answered without a connection.");

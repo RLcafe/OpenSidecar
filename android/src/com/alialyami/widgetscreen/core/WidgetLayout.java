@@ -14,7 +14,7 @@ public final class WidgetLayout {
     // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
     private static final double MINIMUM_SHRINK = 0.78;
     // The same widgets as the Windows dashboard, which the phone mirrors.
-    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard" };
+    public static final String[] IDS = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage", "Clocks", "Prayer", "Notes", "Claude", "Clipboard", "Macros" };
 
     public static final class Box {
         public final double x, y, width, height;
@@ -57,6 +57,7 @@ public final class WidgetLayout {
             case "Notes": return "Notes and to-do";
             case "Claude": return "Claude Code";
             case "Clipboard": return "Clipboard history";
+            case "Macros": return "Macros";
             default: return id;
         }
     }
@@ -78,6 +79,7 @@ public final class WidgetLayout {
             case "Notes": return new double[] { 260, 200 };
             case "Claude": return new double[] { 260, 180 };
             case "Clipboard": return new double[] { 240, 200 };
+            case "Macros": return new double[] { 288, 204 };
             default: return new double[] { 232, 152 };
         }
     }
@@ -98,7 +100,7 @@ public final class WidgetLayout {
         return new double[] { Math.min(canvasWidth, Math.round(m[0] * k[0])), Math.min(canvasHeight, Math.round(m[1] * k[1])) };
     }
 
-    public static boolean keepsSix(String id) { return id.equals("Shortcuts") || id.equals("Soundboard"); }
+    public static boolean keepsSix(String id) { return id.equals("Shortcuts") || id.equals("Soundboard") || id.equals("Macros"); }
 
     // Layouts are kept per canvas size, rounded down to the 8-unit snap grid.
     public static double key(double size) { return Math.max(8, Math.floor(size / 8) * 8); }
@@ -122,7 +124,8 @@ public final class WidgetLayout {
             new Placement("Prayer", 1384, 326, 472, 250, false),
             new Placement("Notes", 1384, 0, 472, 310, false),
             new Placement("Claude", 1384, 0, 472, 310, false),
-            new Placement("Clipboard", 1384, 0, 472, 310, false)
+            new Placement("Clipboard", 1384, 0, 472, 310, false),
+            new Placement("Macros", 336, 326, 472, 250, false)
         };
     }
 
@@ -244,7 +247,7 @@ public final class WidgetLayout {
             case "Focus": return new double[] { 320, 400 };
             case "Mixer": return new double[] { 456, 576 };
             case "Spotify": return new double[] { 560, 576 };
-            case "Shortcuts": case "Weather": case "Soundboard": case "Storage": case "Clocks": case "Prayer": return new double[] { 472, 250 };
+            case "Shortcuts": case "Macros": case "Weather": case "Soundboard": case "Storage": case "Clocks": case "Prayer": return new double[] { 472, 250 };
             default: return new double[] { 472, 310 };
         }
     }
