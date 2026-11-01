@@ -6,6 +6,18 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.31.0 (1 Nov 2026)
+
+System stats upgrade with hardware sensors (user request; Windows, with the phone showing the same):
+
+- **More readings:** CPU temperature, GPU temperature, video memory (VRAM) and the frame rate of the game in front, beside CPU, GPU, RAM, network and uptime. GPU temperature and VRAM come from Windows itself and need nothing extra. Every reading this PC can't give says why (for example "Needs admin: full-sensors mode" or "Needs the PawnIO driver") instead of showing a number.
+- **Graph styles for each reading:** Auto, Line, Bars, Sparkline, Ring or Gauge, in the new Settings → Stats tab, with a checkbox per reading. Temperatures follow Settings → Weather's units and show °C or °F. The designs fit all nine readings, and a small card counts the ones it can't show.
+- **LibreHardwareMonitor 0.9.6** for CPU temperatures: pinned by SHA-256, checked before it loads, with its MPL-2.0 licence and a third-party notice. Setup has a new **Install hardware sensors (LibreHardwareMonitor)** checkbox (on by default) that says what the extra packages are; untick it and the app runs without them. The PawnIO driver it needs for CPU temperatures isn't included: Settings says whether it's installed and links to pawnio.eu.
+- **Full-sensors mode** (Settings → Stats): one Windows prompt registers a task that starts Widget Screen with administrator rights, for CPU temperatures and frame counting. Apps started from Quick Launch, macros and Games still start without administrator rights. Turning it off, or uninstalling, removes the task.
+- **Frame rates** from RivaTuner Statistics Server when it runs (any game), or by counting DirectX frames where Windows allows it (administrators and Performance Log Users).
+
+See `docs/decisions/016-hardware-sensors.md` and `docs/design/system-sensors.md`.
+
 ## v0.30.0 (1 Nov 2026)
 
 Projects with their threads on the Claude Code card, and refresh times you choose (Ali's request; Windows and the phone; decision 016).
