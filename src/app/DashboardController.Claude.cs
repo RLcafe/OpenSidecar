@@ -210,7 +210,7 @@ namespace WidgetScreen
         {
             claude.CheckConnected();
             bool update = claude.Connector.NeedsUpdate();
-            Text("ClaudeConnectionStatus", !claude.Connected ? "Not connected" : update ? "Connected by an earlier Widget Screen. Update the connection to add telemetry and the permission hook." : "Connected. Every Claude Code session on this PC shows on the card.");
+            Text("ClaudeConnectionStatus", !claude.Connected ? "Not connected" : update ? "Connected by an earlier Widget Screen. Update the connection to add the latest hooks (permission dialogs, compaction) and telemetry." : "Connected. Every Claude Code session on this PC shows on the card.");
             Text("ClaudeFolderText", "Claude Code folder: " + claude.ConfigFolder);
             var connect = Control<Button>("ClaudeConnectButton");
             connect.Content = update ? "Update connection" : "Connect Claude Code";
