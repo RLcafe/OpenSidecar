@@ -64,6 +64,62 @@ internal static class ClaudeTreeTests
             Assert(ClaudeService.ProjectOf("C:\\Code\\alpha\\.claude\\worktrees\\zen") == "C:\\Code\\alpha" && ClaudeService.ProjectOf("C:\\Code\\alpha\\.worktrees\\feat\\") == "C:\\Code\\alpha" && ClaudeService.ProjectOf("C:\\Code\\alpha\\") == "C:\\Code\\alpha", "Worktrees aren't counted under their project.");
         });
 
+        check("Claude names threads: placeholders count as none, then the first request, never Remote Control", () => {
+            // Made-up titles and requests; nothing here comes from a real log.
+            foreach (var generic in new[] { "", "  ", "Remote Control", "Remote Control session", "Remote Control session (from a project)", "remote  control session", "New session", "New chat", "Untitled", "Untitled thread", "Claude Code", "Desktop" })
+                Assert(ClaudeTitles.Placeholder(generic), "A placeholder counts as a title: \"" + generic + "\"");
+            foreach (var real in new[] { "Fix the login timeout", "Remote control the TV", "New export button", "Untitled draft cleanup" })
+                Assert(!ClaudeTitles.Placeholder(real), "A real title counts as a placeholder: " + real);
+            Assert(ClaudeTitles.Pick(null, "", "Remote Control session (from a project)", "Add the export button", "later") == "Add the export button" && ClaudeTitles.Pick("New session") == "", "Pick doesn't skip placeholders.");
+            string wake = "<system-reminder>Background notes the session gets.</system-reminder>\n<wake reason=\"mention\"><project id=\"p1\" type=\"project\"><thread ts=\"t1\"><message trigger=\"true\" from=\"human\" id=\"m1\">Add a dark mode toggle to Settings &amp; keep it\nThen tell me how it went</message></thread></project></wake>";
+            Assert(ClaudeTitles.FromPrompt(wake) == "Add a dark mode toggle to Settings & keep it", "A Remote Control request's name is wrong: " + ClaudeTitles.FromPrompt(wake));
+            Assert(ClaudeTitles.FromPrompt("<relay from=\"coordinator\"><note>\n  Build the export button for reports.\n  More detail follows.\n</note></relay>") == "Build the export button for reports.", "A brief's name is wrong.");
+            Assert(ClaudeTitles.FromPrompt("<system-reminder>notes</system-reminder>Rename the backup job") == "Rename the backup job", "Claude Code's notes leak into the name.");
+            Assert(ClaudeTitles.FromPrompt("This session is being continued from a previous conversation that ran out of context.") == "" && ClaudeTitles.FromPrompt("Caveat: messages below were generated locally") == "" && ClaudeTitles.FromPrompt("") == "", "A summary or note became a name.");
+            string longer = ClaudeTitles.FromPrompt("Please go through every widget on the dashboard and make sure the touch targets are big enough for fingers");
+            Assert(longer.EndsWith("…") && longer.Length <= ClaudeTitles.Longest + 1 && longer.StartsWith("Please go through every widget"), "A long request isn't shortened at a word: " + longer);
+            Assert(ClaudeTitles.IdLabel("1b21871a-de34-4a96") == "Thread 1b2187" && ClaudeTitles.IdLabel("") == "Thread", "The id label is wrong.");
+            // The log keeps a session's first real request: not a helper's, a meta note, a tool result or a summary.
+            var prompts = new Dictionary<string, string>();
+            ClaudeUsage.Parse("{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"isSidechain\":true,\"message\":{\"role\":\"user\",\"content\":\"Helper task text\"}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"Meta note\"}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s2\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":\"<relay from=\\\"coordinator\\\"><note>Tidy the release notes</note></relay>\"}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"isCompactSummary\":true,\"message\":{\"role\":\"user\",\"content\":\"Summary of the earlier part\"}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"x\",\"content\":\"ok\"}]}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Sort the shopping list by aisle\"}]}}\n"
+                + "{\"type\":\"user\",\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"message\":{\"role\":\"user\",\"content\":\"A later request\"}}\n", new Dictionary<string, ClaudeUsageEntry>(), "s1", null, null, prompts);
+            Assert(prompts.Count == 2 && prompts["s1"] == "Sort the shopping list by aisle" && prompts["s2"] == "Tidy the release notes", "The first request wasn't kept: " + String.Join("|", prompts.Values));
+
+            // A Remote Control thread the Claude app calls "Remote Control session (from a project)": named by its first
+            // request, with Remote Control as where it ran; a better title from the app later wins.
+            string config = Fresh(directory, "config-names"), app = Fresh(directory, "app-names");
+            string record = Path.Combine(app, "org", "account", "local_s-rc.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(record));
+            Func<string, string> recordText = title => "{\"cliSessionId\":\"s-rc\",\"originCwd\":\"C:\\\\Code\\\\alpha\",\"createdAt\":" + ClaudeBridge.Epoch(Now.AddHours(-2)) + ",\"lastActivityAt\":" + ClaudeBridge.Epoch(Now.AddHours(-1))
+                + ",\"isArchived\":false,\"title\":\"" + title + "\",\"titleSource\":\"auto\",\"remoteControlSpawn\":{\"folder\":\"C:\\\\Code\\\\alpha\",\"rcChild\":true}}";
+            File.WriteAllText(record, recordText("Remote Control session (from a project)"));
+            string log = Path.Combine(config, "projects", "C--Code-alpha", "s-rc.jsonl");
+            Directory.CreateDirectory(Path.GetDirectoryName(log));
+            File.WriteAllText(log, "{\"type\":\"user\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"sessionId\":\"s-rc\",\"timestamp\":\"" + Iso(Now.AddHours(-2)) + "\",\"message\":{\"role\":\"user\",\"content\":\"" + Json(wake).Replace("\n", "\\n") + "\"}}\n"
+                + "{\"type\":\"assistant\",\"cwd\":\"C:\\\\Code\\\\alpha\",\"sessionId\":\"s-rc\",\"requestId\":\"req-rc\",\"timestamp\":\"" + Iso(Now.AddHours(-1)) + "\",\"message\":{\"id\":\"m-rc\",\"model\":\"claude-opus-5-5\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50}}}\n");
+            File.SetLastWriteTimeUtc(log, Now.AddHours(-1));
+            // Another thread with nothing to go on gets the id label.
+            Record(app, "s-bare", "C:\\Code\\alpha", "New session", Now.AddHours(-3));
+            var service = new ClaudeService(Fresh(directory, "bridge-names"), config, appThreads: new ClaudeAppThreads(() => new[] { app }));
+            service.Usage.Scan(Now);
+            service.ReadSessions(Now, false);
+            var view = service.View(Now, service.Usage.Entries);
+            var rc = view.Threads.FirstOrDefault(t => t.Id == "s-rc"); var bare = view.Threads.FirstOrDefault(t => t.Id == "s-bare");
+            Assert(rc != null && rc.Title == "Add a dark mode toggle to Settings & keep it" && rc.Where == "Remote Control" && ClaudeText.ThreadTitle(rc, Now, true) == rc.Title
+                && ClaudeText.Where(rc, Now) == "Remote Control · ended 1 h ago", "The Remote Control thread is named wrongly: \"" + (rc == null ? "missing" : rc.Title + "\" at " + rc.Where));
+            Assert(bare != null && bare.Title == "" && ClaudeText.ThreadTitle(bare, Now, true) == "Thread sbare" && bare.Where == "Desktop", "A thread with nothing to go on isn't labelled by its id: " + (bare == null ? "missing" : bare.Title));
+            File.WriteAllText(record, recordText("Export button for reports"));
+            File.SetLastWriteTimeUtc(record, Now);
+            service.ReadSessions(Now, false);
+            Assert(service.View(Now, service.Usage.Entries).Threads.First(t => t.Id == "s-rc").Title == "Export button for reports", "A better title appearing later doesn't replace the request.");
+            service.Dispose();
+        });
+
         check("Claude groups threads under the folder they started in, by period", () => {
             string config = Fresh(directory, "config-group"), app = Fresh(directory, "app-group");
             // A running Code-tab thread whose shell moved into a worktree; the app knows where it started.
@@ -101,7 +157,7 @@ internal static class ClaudeTreeTests
             // Unticked projects leave the card's threads too.
             var filtered = service.View(Now, service.Usage.Entries, folder => folder != "C:\\Code\\beta");
             Assert(filtered.Groups(ClaudePeriod.Week).Count == 1, "An unticked project still shows its threads.");
-            Assert(ClaudeText.ThreadTitle(new ClaudeSession { LastActive = Now }, Now, true).StartsWith("Untitled · ") && ClaudeText.GroupDetail(five[0]).StartsWith("2 threads") && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0]));
+            Assert(ClaudeText.ThreadTitle(new ClaudeSession { Id = "abc123def", LastActive = Now }, Now, true) == "Thread abc123" && ClaudeText.GroupDetail(five[0]).StartsWith("2 threads") && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0]));
             service.Dispose();
         });
 

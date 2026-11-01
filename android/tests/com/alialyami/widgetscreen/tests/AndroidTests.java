@@ -516,6 +516,16 @@ public final class AndroidTests {
             ok(PitArt.state("pit") == PitArt.PIT && PitArt.state("nonsense") == PitArt.IDLE && PitArt.car("gt") == PitArt.GT && PitArt.car("hatch") == PitArt.HATCH && PitArt.car("") == PitArt.SPORT && PitArt.pixelSize(150) == 3 && PitArt.pixelSize(48) == 2, "names");
             ok(PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 0).size() > PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 1).size() && PitArt.front(PitArt.LIME, true).size() > PitArt.front(PitArt.LIME, false).size(), "the beacon blinks, the headlights light");
         } });
+        check("Claude thread names skip placeholders like the PC's, and say where they ran", new Action() { public void run() {
+            for (String generic : new String[] { "", "Remote Control", "Remote Control session (from a project)", "New session", "Untitled", "Claude Code" }) ok(ClaudeText.placeholder(generic), "a placeholder counts as a title: " + generic);
+            ok(!ClaudeText.placeholder("Remote control the TV") && !ClaudeText.placeholder("Add the export button"), "a real title counts as a placeholder");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"threads\":["
+                + "{\"id\":\"1b21871a-de34\",\"project\":\"alpha\",\"title\":\"Remote Control session (from a project)\",\"running\":false,\"where\":\"Remote Control\",\"lastActive\":1700000000},"
+                + "{\"id\":\"t2\",\"project\":\"alpha\",\"title\":\"Add a dark mode toggle\",\"running\":true,\"where\":\"Remote Control\",\"since\":1699999640}]}}")));
+            PcState.ClaudeThread placeholder = state.claude.thread("1b21871a-de34"), named = state.claude.thread("t2");
+            ok(ClaudeText.threadTitle(placeholder, 1700003600, true).equals("Thread 1b2187") && ClaudeText.threadTitle(named, 1700000000, true).equals("Add a dark mode toggle"), "thread names");
+            ok(ClaudeText.where(placeholder, 1700003600).equals("Remote Control · ended 1 h ago") && ClaudeText.where(named, 1700000000).equals("Remote Control · 6 min"), "where a thread ran");
+        } });
         check("Claude pace, laps and the rev counter work out like the PC's", new Action() { public void run() {
             double now = 1700000000;
             PcState.ClaudeWindow five = new PcState.ClaudeWindow(); five.pct = 62; five.resetsAt = now + 100 * 60;
@@ -579,7 +589,7 @@ public final class AndroidTests {
             PcState.ClaudeGroup g = c.groups[2].get(0);
             ok(g.key.equals("C:\\Code\\alpha") && g.collapsed && g.threads.size() == 2 && c.groups[0].isEmpty(), "a group keeps only known threads");
             ok(ClaudeText.groupState(c, g).equals("working") && !ClaudeText.groupNeeds(c, g) && ClaudeText.groupDetail(c, g, 1700000000).equals("2 threads · 1 running") && ClaudeText.threads(1).equals("1 thread"), "project words");
-            ok(ClaudeText.threadTitle(c.thread("t1"), 1700000000, true).equals("Fix it") && ClaudeText.threadTitle(c.thread("t2"), 1700000000, true).startsWith("Untitled · ") && ClaudeText.noThreads(0).equals("No Claude Code threads in the last 5 hours."), "thread words");
+            ok(ClaudeText.threadTitle(c.thread("t1"), 1700000000, true).equals("Fix it") && ClaudeText.threadTitle(c.thread("t2"), 1700000000, true).equals("Thread t2") && ClaudeText.noThreads(0).equals("No Claude Code threads in the last 5 hours."), "thread words");
             c.thread("t1").running = false; ok(ClaudeText.groupState(c, g).equals("ready"), "a project with nothing running sleeps");
             ok(ClaudeText.groupDetail(c, g, 1700000000 + 3600).equals("2 threads · ended 1 h ago") && ClaudeText.cars(2).equals("2 cars"), "an ended project's words");
         } });

@@ -155,15 +155,17 @@ namespace WidgetScreen
         {
             return at.ToLocalTime().Date == now.ToLocalTime().Date ? Clock(at, use24) : at.ToLocalTime().ToString("ddd", CultureInfo.InvariantCulture);
         }
-        // A thread's title: the one the Claude app (or the user) gave it; never its prompts.
+        // A thread's name (decision 018): the one ClaudeService picked (a rename, a generated title or the first line
+        // of its first request; never a placeholder), else a label from its id.
         public static string ThreadTitle(ClaudeSession thread, DateTime now, bool use24)
         {
-            return !String.IsNullOrWhiteSpace(thread.Title) ? thread.Title.Trim() : "Untitled · " + Ago(thread.LastActive, now, use24);
+            return !ClaudeTitles.Placeholder(thread.Title) ? thread.Title.Trim() : ClaudeTitles.IdLabel(thread.Id);
         }
-        // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").
+        // Where a thread runs and for how long in its state ("Remote Control · 6 min"), or when it ended ("Remote
+        // Control · ended 1 h ago").
         public static string Where(ClaudeSession thread, DateTime now)
         {
-            if (!thread.Running) return "ended " + Duration(now - thread.LastActive) + " ago";
+            if (!thread.Running) return (thread.Where.Length > 0 ? thread.Where + " · " : "") + "ended " + Duration(now - thread.LastActive) + " ago";
             string age = Duration(now - thread.Since);
             return thread.Where.Length > 0 ? thread.Where + " · " + age : age;
         }

@@ -11,6 +11,8 @@ namespace WidgetScreen
     public sealed class ClaudeAppThread
     {
         public string Session = "", Folder = "", Title = "";
+        // Started from the Claude app's Remote Control (a phone or claude.ai driving this PC): shown as where it runs.
+        public bool Remote;
         public bool Archived;
         public DateTime Created, LastActive;
     }
@@ -91,6 +93,7 @@ namespace WidgetScreen
             if (String.IsNullOrEmpty(folder)) folder = ClaudeJson.Str(o, "cwd") ?? "";
             double created = ClaudeJson.Num(o, "createdAt"), active = ClaudeJson.Num(o, "lastActivityAt");
             var thread = new ClaudeAppThread { Session = session, Folder = folder, Title = (ClaudeJson.Str(o, "title") ?? "").Trim(), Archived = ClaudeJson.Bool(o, "isArchived") };
+            thread.Remote = ClaudeJson.Obj(o, "remoteControlSpawn") != null || thread.Title.StartsWith("Remote Control", StringComparison.OrdinalIgnoreCase);
             thread.Created = Double.IsNaN(created) ? DateTime.MinValue : ClaudeBridge.FromEpoch(created);
             thread.LastActive = Double.IsNaN(active) ? thread.Created : ClaudeBridge.FromEpoch(active);
             return thread;

@@ -472,6 +472,8 @@ namespace WidgetScreen
 
             var sessions = new Dictionary<string, ClaudeSession>();
             var stateAt = new Dictionary<string, DateTime>();
+            // A name the user gave a running session in Claude Code (its rename).
+            var named = new Dictionary<string, string>();
             foreach (var file in Sessions)
             {
                 sessions[file.Id] = new ClaudeSession { Id = file.Id, State = file.State, Since = ClaudeBridge.FromEpoch(file.Since), Project = file.Project,
@@ -487,7 +489,7 @@ namespace WidgetScreen
                 if (!hooked) { s = new ClaudeSession { Id = entry.Session, State = ClaudeState.Ready, Since = entry.Started, Project = entry.Folder }; sessions[entry.Session] = s; stateAt[entry.Session] = DateTime.MinValue; }
                 if (s.Project.Length == 0) s.Project = entry.Folder;
                 if (s.Pid == 0) s.Pid = entry.Pid;
-                if (s.Title.Length == 0 && entry.NamedByUser) s.Title = entry.Name;
+                if (entry.NamedByUser && !String.IsNullOrWhiteSpace(entry.Name)) named[entry.Session] = entry.Name;
                 s.Where = ClaudeRegistry.Where(entry.Entrypoint);
                 if (s.Window == 0 && s.WindowPid == 0 && entry.Pid > 0)
                 {
@@ -531,7 +533,7 @@ namespace WidgetScreen
             foreach (var s in sessions.Values) s.Running = true;
             // The ended threads of the last week: the Claude app's list (archived ones stay hidden, as in its sidebar)
             // and the logs, which know every way Claude Code runs.
-            var lastSeen = Usage.LastSeen; var titles = Usage.Titles;
+            var lastSeen = Usage.LastSeen; var titles = Usage.Titles; var prompts = Usage.Prompts;
             var app = new Dictionary<string, ClaudeAppThread>();
             foreach (var t in AppThreads.Threads) { ClaudeAppThread known; if (!app.TryGetValue(t.Session, out known) || known.LastActive < t.LastActive) app[t.Session] = t; }
             DateTime oldest = starts[ClaudePeriod.Week];
@@ -555,9 +557,15 @@ namespace WidgetScreen
                 if (shown != null && !shown(s.Project)) continue;
                 s.ProjectName = ClaudeBridge.ProjectName(s.Project);
                 ClaudeAppThread a; app.TryGetValue(s.Id, out a);
-                // The title: one the user typed (Claude Code's list or its log), else the one the Claude app shows.
-                string typed; if (s.Title.Length == 0 && titles.TryGetValue(s.Id, out typed)) s.Title = typed;
-                if (s.Title.Length == 0 && a != null) s.Title = a.Title;
+                // The name (decision 018): one the user typed (a rename in Claude Code's list or its log), else one
+                // generated (Claude Code's status line, the Claude app's), else the first line of the first request.
+                // Placeholders such as "Remote Control session (from a project)" count as none; the card falls back
+                // to a label from the id.
+                string rename, typed, asked; named.TryGetValue(s.Id, out rename); titles.TryGetValue(s.Id, out typed); prompts.TryGetValue(s.Id, out asked);
+                s.Title = ClaudeTitles.Pick(rename, typed, s.Title, a == null ? null : a.Title, asked);
+                // Where it runs, beside the name: a Remote Control thread says so, running or ended.
+                if (a != null && a.Remote) s.Where = "Remote Control";
+                else if (!s.Running && s.Where.Length == 0 && a != null) s.Where = "Desktop";
                 DateTime seen; lastSeen.TryGetValue(s.Id, out seen);
                 foreach (var at in new[] { s.Since, seen, a == null ? DateTime.MinValue : a.LastActive }) if (at > s.LastActive) s.LastActive = at;
                 s.CanFocus = s.Running && (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;

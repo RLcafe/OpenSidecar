@@ -4,7 +4,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Claude thread names (Ali's report; Windows and the phone; decision 018):
+
+- **Threads have real names again.** The Claude app calls every thread started through Remote Control "Remote Control session (from a project)", and the card showed that. Placeholders like that (and "New session", "Untitled") no longer count as a name.
+- **The name, in order:** a name you gave the thread, a title the Claude app or Claude Code made for it, then the first line of the thread's first request (up to 60 characters). A short label from its id ("Thread 1b2187") is the last resort.
+- **Remote Control is where a thread runs, not its name.** It shows beside the name ("Remote Control · 6 min", "Remote Control · ended 1 h ago").
+- **A better title takes over** as soon as one appears. The phone shows the same names.
 
 ## v0.32.0 (1 Nov 2026)
 

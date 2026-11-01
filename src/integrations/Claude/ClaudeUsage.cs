@@ -100,6 +100,7 @@ namespace WidgetScreen
         private readonly Dictionary<string, string> folders = new Dictionary<string, string>();
         private readonly Dictionary<string, DateTime> lastSeen = new Dictionary<string, DateTime>();
         private readonly Dictionary<string, string> titles = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> prompts = new Dictionary<string, string>();
         private List<ClaudeUsageEntry> entries = new List<ClaudeUsageEntry>();
         private readonly object gate = new object();
         public bool Failed { get; private set; }
@@ -114,6 +115,8 @@ namespace WidgetScreen
         public Dictionary<string, DateTime> LastSeen { get { lock (gate) return new Dictionary<string, DateTime>(lastSeen); } }
         // A title the user gave a session in Claude Code (its custom-title lines), by session.
         public Dictionary<string, string> Titles { get { lock (gate) return new Dictionary<string, string>(titles); } }
+        // The first line of each session's first request (ClaudeTitles.FromPrompt), for a thread with no real title.
+        public Dictionary<string, string> Prompts { get { lock (gate) return new Dictionary<string, string>(prompts); } }
 
         public void Scan(DateTime now)
         {
@@ -186,7 +189,7 @@ namespace WidgetScreen
                 if (end < 0) return offset;
                 string text = Encoding.UTF8.GetString(buffer, 0, end + 1);
                 string session = Path.GetFileNameWithoutExtension(path);
-                foreach (var entry in Parse(text, replies, session, folders, titles)) if (entry.At >= oldest) entries.Add(entry);
+                foreach (var entry in Parse(text, replies, session, folders, titles, prompts)) if (entry.At >= oldest) entries.Add(entry);
                 return offset + end + 1;
             }
         }
@@ -194,10 +197,11 @@ namespace WidgetScreen
         // The usage in a piece of a log; replies holds the replies already counted (from either source). A session's
         // project is the folder it started in: its cwd moves when its shell changes folders, which isn't another
         // project (folders remembers it).
-        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null, Dictionary<string, string> titles = null)
+        public static List<ClaudeUsageEntry> Parse(string text, Dictionary<string, ClaudeUsageEntry> replies, string session, Dictionary<string, string> folders = null, Dictionary<string, string> titles = null, Dictionary<string, string> prompts = null)
         {
             if (folders == null) folders = new Dictionary<string, string>();
             if (titles == null) titles = new Dictionary<string, string>();
+            if (prompts == null) prompts = new Dictionary<string, string>();
             var result = new List<ClaudeUsageEntry>();
             foreach (string raw in text.Split('\n'))
             {
@@ -214,6 +218,18 @@ namespace WidgetScreen
                 // The title the user typed for the session (the latest one wins); never the prompts themselves.
                 if (titleLine && ClaudeJson.Str(o, "type") == "custom-title") { string title = (ClaudeJson.Str(o, "customTitle") ?? "").Trim(); if (title.Length > 0) titles[id] = title; continue; }
                 if (!folders.TryGetValue(id, out folder) && !String.IsNullOrEmpty(ClaudeJson.Str(o, "cwd"))) { folder = ClaudeJson.Str(o, "cwd"); folders[id] = folder; }
+                // The first request a person made in the session (not a helper's, a note Claude Code added or a
+                // compacted thread's summary): its first line names a thread that has no real title. A Remote Control
+                // brief can arrive as a note (its <relay><note> envelope), so a note carrying one counts.
+                if (!usageLine && !prompts.ContainsKey(id) && ClaudeJson.Str(o, "type") == "user" && !ClaudeJson.Bool(o, "isSidechain") && !ClaudeJson.Bool(o, "isCompactSummary"))
+                {
+                    string words = Words(ClaudeJson.Obj(o, "message"));
+                    if (!ClaudeJson.Bool(o, "isMeta") || ClaudeTitles.Envelope(words))
+                    {
+                        string asked = ClaudeTitles.FromPrompt(words);
+                        if (asked.Length > 0) prompts[id] = asked;
+                    }
+                }
                 if (!usageLine || ClaudeJson.Str(o, "type") != "assistant") continue;
                 var message = ClaudeJson.Obj(o, "message"); var usage = ClaudeJson.Obj(message, "usage");
                 if (usage == null) continue;
@@ -233,6 +249,15 @@ namespace WidgetScreen
                 result.Add(entry);
             }
             return result;
+        }
+        // A message's text: its content when that is a string, else its text blocks (tool results have none).
+        private static string Words(JsonObject message)
+        {
+            if (message == null) return "";
+            var text = message.Get("content") as string;
+            if (text != null) return text;
+            var blocks = ClaudeJson.List(message, "content");
+            return blocks == null ? "" : String.Join("\n", blocks.OfType<JsonObject>().Where(b => ClaudeJson.Str(b, "type") == "text").Select(b => ClaudeJson.Str(b, "text") ?? ""));
         }
         private static long Count(JsonObject usage, string key) { double v = ClaudeJson.Num(usage, key); return Double.IsNaN(v) || v < 0 ? 0 : (long)v; }
 
