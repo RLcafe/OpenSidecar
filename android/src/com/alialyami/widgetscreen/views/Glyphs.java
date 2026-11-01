@@ -135,6 +135,10 @@ public final class Glyphs {
             case "star": poly(s, true, 12, 3, 14.6f, 8.9f, 21, 9.4f, 16.1f, 13.6f, 17.6f, 19.9f, 12, 16.5f, 6.4f, 19.9f, 7.9f, 13.6f, 3, 9.4f, 9.4f, 8.9f); break;
             case "camera": poly(s, true, 3, 8, 7.5f, 8, 9.5f, 5, 14.5f, 5, 16.5f, 8, 21, 8, 21, 19, 3, 19); circle(s, 12, 13.2f, 3.4f); break;
             case "game": round(s, 2.5f, 7, 21.5f, 17.5f, 5); line(s, 7.5f, 10, 7.5f, 14.5f); line(s, 5.25f, 12.25f, 9.75f, 12.25f); circle(f, 15.5f, 11, 1.1f); circle(f, 17.8f, 13.5f, 1.1f); break;
+            // Smart home: a bulb, power and a thermometer.
+            case "bulb": s.addArc(new RectF(6, 3, 18, 15), 135, 270); line(s, 7.76f, 13.24f, 9.5f, 17); line(s, 16.24f, 13.24f, 14.5f, 17); line(s, 9.5f, 17.5f, 14.5f, 17.5f); line(s, 10, 20.5f, 14, 20.5f); break;
+            case "power": s.addArc(new RectF(5, 5, 19, 19), -60, 300); line(s, 12, 3, 12, 11); break;
+            case "thermometer": round(s, 10, 3, 14, 15.5f, 2); circle(s, 12, 18, 3); circle(f, 12, 18, 1.5f); line(s, 12, 8, 12, 16); break;
             case "calendar": round(s, 4, 5, 20, 20, 2); line(s, 4, 9.5f, 20, 9.5f); line(s, 8.5f, 3, 8.5f, 6.5f); line(s, 15.5f, 3, 15.5f, 6.5f); break;
             case "playlist": line(s, 4, 6, 15, 6); line(s, 4, 11, 15, 11); line(s, 4, 16, 10, 16); circle(f, 16, 17.5f, 2.5f); line(s, 18.5f, 17.5f, 18.5f, 9); break;
             case "album": circle(s, 12, 12, 9); circle(f, 12, 12, 2.2f); break;

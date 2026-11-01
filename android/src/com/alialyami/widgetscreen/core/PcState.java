@@ -140,6 +140,22 @@ public final class PcState {
         public final List<Game> items = new ArrayList<Game>();
     }
 
+    // Smart home (docs/design/smart-home.md): the Home Assistant devices chosen on the PC. The phone never gets Home
+    // Assistant's address or token; it asks the PC to make changes.
+    public static final class HomeDevice {
+        public String id = "", name = "", domain = "", state = "";
+        public boolean available, on, dimmable;
+        public Integer brightness;
+        public Double current, target;
+        public double min = 7, max = 35, step = 0.5;
+    }
+    public static final class Home {
+        public boolean connected, read;
+        public int chosen;
+        public String problem = "";
+        public final List<HomeDevice> devices = new ArrayList<HomeDevice>();
+    }
+
     public static final class SpotifyFlags { public boolean connected, canControl, canReadRecent; }
 
     public static final class Sound { public String id, guild, name; public boolean isDefault; }
@@ -193,6 +209,7 @@ public final class PcState {
     public Macros macros;
     public Calendar calendar;
     public Games games;
+    public Home home;
 
     private static boolean flag(Map<String, Object> map, String key) { return Boolean.TRUE.equals(Json.value(map, key)); }
     private static String text(Map<String, Object> map, String key) { String value = Json.field(map, key); return value == null ? "" : value; }
@@ -372,6 +389,23 @@ public final class PcState {
                 if (!game.id.isEmpty() && !game.name.isEmpty()) games.items.add(game);
             }
             state.games = games;
+        }
+        if (Json.has(root, "home")) {
+            Map<String, Object> h = Json.obj(Json.value(root, "home"));
+            Home home = new Home();
+            home.connected = flag(h, "connected"); home.read = flag(h, "read"); home.chosen = (int) Json.number(h, "chosen"); home.problem = text(h, "problem");
+            for (Object item : Json.array(h, "entities")) {
+                Map<String, Object> m = Json.obj(item);
+                HomeDevice device = new HomeDevice();
+                device.id = text(m, "id"); device.name = text(m, "name"); device.domain = text(m, "domain"); device.state = text(m, "state");
+                device.available = flag(m, "available"); device.on = flag(m, "on"); device.dimmable = flag(m, "dimmable");
+                Double brightness = maybe(m, "brightness"); device.brightness = brightness == null ? null : (int) Math.round(brightness);
+                device.current = maybe(m, "current"); device.target = maybe(m, "target");
+                Double min = maybe(m, "min"), max = maybe(m, "max"), step = maybe(m, "step");
+                if (min != null) device.min = min; if (max != null) device.max = max; if (step != null && step > 0) device.step = step;
+                if (!device.id.isEmpty()) { if (device.name.isEmpty()) device.name = device.id; home.devices.add(device); }
+            }
+            state.home = home;
         }
         return state;
     }

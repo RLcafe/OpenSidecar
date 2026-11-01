@@ -357,6 +357,7 @@ namespace WidgetScreen
             if (parts.Contains("macros")) state["macros"] = RemoteMacros();
             if (parts.Contains("calendar")) state["calendar"] = RemoteCalendar();
             if (parts.Contains("games")) state["games"] = RemoteGames();
+            if (parts.Contains("home")) state["home"] = RemoteHome();
             return state;
         }
 
@@ -441,6 +442,7 @@ namespace WidgetScreen
                 case "clipboard.paste": case "clipboard.pause": case "clipboard.clear":
                     return await RemoteClipboardCommand(action, body);
                 case "macro.run": return await RemoteMacroCommand(body);
+                case "home.toggle": case "home.brightness": case "home.temperature": return await RemoteHomeCommand(action, body);
                 case "games.launch": case "games.refresh": return RemoteGameCommand(action, body);
                 case "calendar.refresh": lastCalendarAttempt = DateTime.MinValue; RefreshCalendar(); return Done(null);
                 case "prayer.stop": StopPrayerAlert(); return Done(null);

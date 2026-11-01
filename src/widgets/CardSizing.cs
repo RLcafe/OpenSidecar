@@ -214,6 +214,25 @@ namespace WidgetScreen
         public const double CalendarRow = 30;
         public static double CalendarNextHeight(double textScale) { return Math.Ceiling(27 + 72 * textScale); }
         public static double CalendarTimeColumn(bool use24) { return use24 ? 96 : 128; }
+        // Smart home (docs/design/smart-home.md): a scrolling list of 56-unit rows under 340 wide or 220 tall, tiles at
+        // the reference size, and tiles with dimmer sliders from 560 x 360. A tile is at least 180 wide and HomeCell tall
+        // (its name and state, or a thermostat's - and + stacked beside it); controls go under it from HomeTile. With
+        // more devices than fit, a 56-wide pager column takes the right edge. Few devices make the tiles grow.
+        public static Design Home(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 560 && height >= 360 ? Design.Large : Design.Medium; }
+        public static double HomeContent(double textScale) { return Math.Ceiling(24 + 44 * textScale); }
+        public static double HomeCell(double textScale) { return Math.Max(108, HomeContent(textScale)); }
+        public static double HomeTile(double textScale) { return HomeContent(textScale) + 56; }
+        public const double HomePager = 56;
+        // { columns, rows, paged (1 or 0) } for the tiles' area.
+        public static int[] HomeGrid(double width, double height, double textScale, int count)
+        {
+            count = Math.Max(1, count);
+            int rows = (int)Clamp(Math.Floor(height / HomeCell(textScale)), 1, 4), columns = (int)Clamp(Math.Floor(width / 180), 1, 5);
+            bool paged = columns * rows < count;
+            if (paged) columns = (int)Clamp(Math.Floor((width - HomePager) / 180), 1, 5);
+            else { columns = Math.Min(columns, count); rows = Math.Min(rows, (count + columns - 1) / columns); }
+            return new[] { columns, rows, paged ? 1 : 0 };
+        }
         private static double Clamp(double value, double min, double max) { return Double.IsNaN(value) ? min : Math.Max(min, Math.Min(max, value)); }
     }
 }
