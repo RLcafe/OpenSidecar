@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.25.0 (1 Nov 2026)
+
+A Macros widget (user request; Windows and the phone):
+
+- **Stream Deck–style buttons that run several steps in a row.** Each macro is a chain of up to 12 steps: a keyboard shortcut, opening an app, file, folder or website, a dashboard or media control (mute, microphone, Focus, Quiet mode, volume, play/pause…), a wait, or a script (.ps1, .bat, .cmd or .vbs). Six buttons a page, like Quick Launch, growing with the card. Turn it on in Edit layout; it starts hidden.
+- **A new Macros tab in Settings, after Quick Launch**, to make and edit them: name, icon and colour, then the steps in words, each one movable and changeable, with a step editor that says what's wrong before a step is added.
+- **Nothing consequential runs by surprise.** A macro with a script, a step that a Quick Launch button would confirm (arguments, Delete, Alt+F4), or "Ask before running" turned on asks first, listing every step. One macro runs at a time, its button shows it's running, and a step that fails stops the rest and says which step it was.
+- **On the phone**, the same buttons run the macros on the PC, asking first with the same list when needed. Macros are made on the PC.
+- Not yet tried: real hotkey, launch and script steps (the checks only use waits and Quiet mode), and the phone card on a device.
+
 ## v0.24.0 (1 Nov 2026)
 
 A Clipboard history widget (user request; Windows, with the phone as a remote):
