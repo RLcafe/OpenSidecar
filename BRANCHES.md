@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `fix/claude-live-fixes` | Claude watcher fixes from the live app: motion in Quiet mode, Your turn/Idle states, plan limits list and no 5-hour window, tokens without cache reads (own column), API value hidden, rolling periods, quiet garages, thread lanes, dust; both apps | `38f520f` | In progress | `.worktrees\claude-live-fixes` | `.worktrees\claude-live-fixes\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-live-fixes\artifacts\android\WidgetScreen.apk` |
+None right now. `fix/claude-live-fixes` was merged as v0.33.0.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 

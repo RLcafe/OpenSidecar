@@ -4,6 +4,10 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.33.0 (1 Nov 2026)
+
 Claude watcher fixes from the live app (Ali's report; Windows and the phone; decision 019):
 
 - **The cars move again.** Quiet mode was holding them still. Now they keep driving, revving and rolling into their garages in Quiet mode too. Settings → Claude → **Keep the cars still in Quiet mode** brings back the old way. They still stop whenever the card is hidden or the window is minimised.
