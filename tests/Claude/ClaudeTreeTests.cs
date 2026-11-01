@@ -143,8 +143,16 @@ internal static class ClaudeTreeTests
             service.ReadSessions(Now, true);
             var view = service.View(Now, service.Usage.Entries);
             Assert(view.Sessions.Count == 1 && view.Sessions[0].Id == "s-run" && view.Sessions[0].State == ClaudeState.Working, "The running thread isn't the one session.");
-            Assert(!view.Threads.Any(t => t.Id == "s-arch" || t.Id == "s-old"), "Archived or old threads show.");
+            Assert(!view.Threads.Any(t => t.Id == "s-old"), "Old threads show.");
+            var archived = view.Threads.FirstOrDefault(t => t.Id == "s-arch");
+            Assert(archived != null && archived.Archived && archived.Pit == PitState.Archived && ClaudeText.Chip(archived.Pit) == "Archived", "An archived thread isn't marked Archived.");
             var five = view.Groups(ClaudePeriod.FiveHour);
+            // Archived threads are hidden by default but counted (decision 020); shown, they park last.
+            Assert(five[0].Hidden == 1 && ClaudeText.GroupDetail(five[0]).EndsWith(" · +1 hidden"), "The hidden archived thread isn't counted: " + ClaudeText.GroupDetail(five[0]));
+            view.ShowArchived = true;
+            var shownFive = view.Groups(ClaudePeriod.FiveHour);
+            Assert(shownFive[0].Hidden == 0 && shownFive[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-arch" }), "Shown archived threads don't park last: " + String.Join(",", shownFive[0].Threads.Select(t => t.Id)));
+            view.ShowArchived = false;
             // beta has no thread in the last five hours: it still gets a quiet garage after the busy ones (decision 019).
             Assert(five.Count == 2 && five[1].Folder == "C:\\Code\\beta" && five[1].Threads.Count == 0 && ClaudeText.GroupDetail(five[1]).StartsWith("Quiet · last used ")
                 && five[0].Folder == "C:\\Code\\alpha" && five[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log" }), "5 h groups wrong: " + String.Join(";", five.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
@@ -155,7 +163,7 @@ internal static class ClaudeTreeTests
             var expected = new[] { "s-run", "s-log", "s-wt" }.Where(id => id == "s-run" || view.Threads.First(t => t.Id == id).LastActive >= today).ToList();
             Assert(view.Groups(ClaudePeriod.Today)[0].Threads.Select(t => t.Id).SequenceEqual(expected), "Today's threads are filtered wrongly.");
             var projects = service.Projects(Now, null);
-            Assert(projects.Any(p => p.Folder == "C:\\Code\\alpha" && p.Threads == 3) && projects.Any(p => p.Folder == "C:\\Code\\beta" && p.Threads == 1) && !projects.Any(p => p.Folder.Contains("worktrees")), "Settings → Claude counts threads wrongly: " + String.Join(";", projects.Select(p => p.Folder + "=" + p.Threads)));
+            Assert(projects.Any(p => p.Folder == "C:\\Code\\alpha" && p.Threads == 4) && projects.Any(p => p.Folder == "C:\\Code\\beta" && p.Threads == 1) && !projects.Any(p => p.Folder.Contains("worktrees")), "Settings → Claude counts threads wrongly: " + String.Join(";", projects.Select(p => p.Folder + "=" + p.Threads)));
             // Unticked projects leave the card's threads too.
             var filtered = service.View(Now, service.Usage.Entries, folder => folder != "C:\\Code\\beta");
             Assert(filtered.Groups(ClaudePeriod.Week).Count == 1, "An unticked project still shows its threads.");
@@ -302,6 +310,21 @@ internal static class ClaudeTreeTests
             Assert(!new AppSettings().ClaudeStillInQuiet, "The cars stand still in Quiet mode by default.");
             SettingsStore.Save(path, new AppSettings { ClaudeStillInQuiet = true });
             Assert(SettingsStore.Load(path, out warning).ClaudeStillInQuiet, "Keep the cars still in Quiet mode wasn't saved.");
+
+            // Hide archived threads is on and Hide idle threads off by default; both are saved (decision 020).
+            Assert(!new AppSettings().ClaudeShowArchived && !new AppSettings().ClaudeHideIdle, "The hide choices' defaults are wrong.");
+            string hidePath = Path.Combine(Fresh(directory, "hide"), "settings.xml");
+            SettingsStore.Save(hidePath, new AppSettings { ClaudeShowArchived = true, ClaudeHideIdle = true });
+            var hide = SettingsStore.Load(hidePath, out warning);
+            Assert(hide.ClaudeShowArchived && hide.ClaudeHideIdle, "The hide choices weren't saved.");
+            Assert(ClaudePace.Hidden(PitState.Archived, false, false) && !ClaudePace.Hidden(PitState.Archived, true, false) && !ClaudePace.Hidden(PitState.Idle, false, false)
+                && ClaudePace.Hidden(PitState.Idle, true, true) && !ClaudePace.Hidden(PitState.End, false, true) && !ClaudePace.Hidden(PitState.Done, false, true), "The wrong states are hidden.");
+            Assert(ClaudeText.GroupDetail(new ClaudeProjectGroup { Hidden = 2, Seen = DateTime.UtcNow.AddHours(-1) }).StartsWith("2 hidden · Quiet · last used "), "A project whose threads are all hidden doesn't say so.");
+            var fixture = ClaudeView.Fixture(Now, false);
+            var sampleGroup = fixture.Groups(ClaudePeriod.Week).First(g => g.Name == "widget-screen");
+            Assert(sampleGroup.Hidden == 1 && sampleGroup.Tokens == fixture.Threads.Where(t => t.ProjectName == "widget-screen").Sum(t => t.TokensFor(ClaudePeriod.Week)), "Hidden threads leave the project's totals.");
+            fixture.HideIdle = true;
+            Assert(fixture.Groups(ClaudePeriod.Week).SelectMany(g => g.Threads).All(t => t.Pit != PitState.Idle && t.Pit != PitState.Archived), "Hide idle threads leaves idle ones.");
 
             // The art tells Needs you, Your turn and Idle apart even in a still frame.
             string k; var turn = PitSprite.CarFrames(PitArt.Lime, PitState.Done, new PitArt.CarLook(), 150, out k);

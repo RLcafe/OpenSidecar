@@ -101,7 +101,8 @@ public final class ClaudeText {
     // Under a project's name: "3 threads · 2 running · Claude app", or when its threads ended.
     public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now) {
         // A project with no thread in the period: when it was last used.
-        if (group.threads.isEmpty()) return group.lastActive > 0 ? "Quiet · last used " + Instant.ofEpochMilli((long) (group.lastActive * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MMM d", Locale.US)) : "Quiet";
+        // Threads Settings → Claude hides on the PC (archived, or idle when asked) are counted (decision 020).
+        if (group.threads.isEmpty()) return (group.hidden > 0 ? group.hidden + " hidden · " : "") + (group.lastActive > 0 ? "Quiet · last used " + Instant.ofEpochMilli((long) (group.lastActive * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MMM d", Locale.US)) : "Quiet");
         List<String> parts = new ArrayList<String>(); parts.add(threads(group.threads.size()));
         int running = 0; String where = null; boolean mixed = false; double last = 0;
         for (String id : group.threads) {
@@ -114,6 +115,7 @@ public final class ClaudeText {
         if (running > 0) parts.add(running + " running");
         if (where != null && !mixed) parts.add("Desktop".equals(where) ? "Claude app" : where);
         else if (running == 0 && last > 0) parts.add("ended " + duration(now - last) + " ago");
+        if (group.hidden > 0) parts.add("+" + group.hidden + " hidden");
         return join(parts);
     }
     // "3:40 pm" today, otherwise the day ("Thu").
@@ -185,7 +187,7 @@ public final class ClaudeText {
     public static String chip(String pit) {
         switch (pit == null ? "" : pit) {
             case "need": return "Needs you"; case "work": return "Working"; case "rev": return "Tool run"; case "pit": return "Compacting";
-            case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; default: return "Idle";
+            case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; case "archived": return "Archived"; default: return "Idle";
         }
     }
     // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").

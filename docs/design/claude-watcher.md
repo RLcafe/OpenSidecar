@@ -2,6 +2,19 @@
 
 The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
 
+## Archived and hidden threads (decision 020)
+
+- **Idle:** open, your turn for 30 minutes or more. The engine is off, the car is dimmed and the chip is grey.
+- **Ended:** the car is under its cover.
+- **Archived:** the thread was archived in the Claude app (`isArchived`, the only such flag on the PC; there is no "resolved" one). The car is under its cover, dimmed the most, with an "Archived" chip, and it parks last in its project.
+
+Settings → Claude has two choices:
+
+- **Hide archived threads** (on by default).
+- **Hide idle threads** (off by default).
+
+They apply to the Large ledger, the Medium rows, the phone and the heading's thread count. Hidden threads still count in their project's tokens, cache reads, replies, models and lines, and the project line ends "+N hidden". See [decision 020](../decisions/020-claude-archived-and-hidden.md).
+
 ## Fixes from the live app (decision 019)
 
 From Ali's first look at v0.32.1, both apps:

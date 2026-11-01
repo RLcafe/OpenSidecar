@@ -24,6 +24,8 @@ namespace WidgetScreen
         // The v2 card (decision 017): its car and what the car does, its tokens a minute right now, its model mix
         // (Opus, Sonnet, Haiku shares) and lines added and removed per period.
         public bool Compacting;
+        // Archived in the Claude app (its isArchived flag).
+        public bool Archived;
         public PitState Pit = PitState.Idle;
         public PitCar Car = PitCar.Sports;
         public double Rate;
@@ -73,6 +75,8 @@ namespace WidgetScreen
         public List<KeyValuePair<string, double>> Models = new List<KeyValuePair<string, double>>();
         public long Added, Removed, CacheReads;
         public int Replies;
+        // Threads Settings → Claude hides (archived, or idle when asked); they still count in the totals above.
+        public int Hidden;
         public bool Collapsed;
         public int Running { get { return Threads.Count(t => t.Running); } }
         public bool NeedsYou { get { return Threads.Any(t => t.Running && t.State == ClaudeState.NeedsYou); } }
@@ -111,6 +115,9 @@ namespace WidgetScreen
         public DateTime MadeAt = DateTime.UtcNow;
         public int NeedsYou { get { return Sessions.Count(s => s.State == ClaudeState.NeedsYou); } }
         public int Working { get { return Sessions.Count(s => s.State == ClaudeState.Working); } }
+        // Settings → Claude: show archived threads (off by default) and hide idle ones (off by default; decision 020).
+        public bool ShowArchived, HideIdle;
+        public bool Shows(ClaudeSession t) { return !ClaudePace.Hidden(t.Pit, ShowArchived, HideIdle); }
 
         // The projects with a thread active in the period (or running), a project that needs you first, then ones with
         // something running, then the most recently active.
@@ -121,7 +128,8 @@ namespace WidgetScreen
                 .GroupBy(t => t.Project, StringComparer.OrdinalIgnoreCase)
                 .Select(g => new ClaudeProjectGroup {
                     Folder = g.Key, Name = g.First().ProjectName, Collapsed = Collapsed.Contains(g.Key),
-                    Threads = g.OrderBy(t => t.Running ? Rank(t.State) : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
+                    Threads = g.Where(Shows).OrderBy(t => t.Running ? Rank(t.State) : t.Pit == PitState.Archived ? 5 : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
+                    Hidden = g.Count(t => !Shows(t)), Seen = g.Max(t => t.LastActive),
                     Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)), Mix = GroupMix(g, period), Models = GroupModels(g, period),
                     Added = g.Sum(t => t.LinesFor(period)[0]), Removed = g.Sum(t => t.LinesFor(period)[1]), Replies = g.Sum(t => t.RepliesFor(period)), CacheReads = g.Sum(t => t.CacheReadsFor(period)) })
                 .OrderBy(g => g.NeedsYou ? 0 : g.Running > 0 ? 1 : 2).ThenByDescending(g => g.LastActive).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList()
@@ -181,6 +189,7 @@ namespace WidgetScreen
                 make("sample-3", "photo-manager", "Face grouping", ClaudeState.Done, 6, "Sonnet 5.5", 96400),
                 make("sample-11", "photo-manager", "Thumbnail cache", null, 260, "Sonnet 5.5", 58000) };
             if (needsYou) threads[0].Message = "Claude needs your permission to use Bash";
+            threads[7].Archived = true;
             // The pit wall's sample readings: each thread's mix, lines and live burn, and what its car does.
             var mixes = new Dictionary<string, double[]> { { "Opus 5.5", new[] { 1.0, 0, 0 } }, { "Sonnet 5.5", new[] { 0, 1.0, 0 } } };
             var lines = new Dictionary<string, long[]> { { "sample-1", new long[] { 412, 96 } }, { "sample-2", new long[] { 880, 120 } }, { "sample-7", new long[] { 590, 180 } }, { "sample-8", new long[] { 38, 0 } }, { "sample-3", new long[] { 120, 34 } }, { "sample-5", new long[] { 50, 30 } } };
@@ -561,8 +570,8 @@ namespace WidgetScreen
             }
 
             foreach (var s in sessions.Values) s.Running = true;
-            // The ended threads of the last week: the Claude app's list (archived ones stay hidden, as in its sidebar)
-            // and the logs, which know every way Claude Code runs.
+            // The ended threads of the last week: the Claude app's list (archived ones marked, decision 020) and the
+            // logs, which know every way Claude Code runs.
             var lastSeen = Usage.LastSeen; var titles = Usage.Titles; var prompts = Usage.Prompts;
             var app = new Dictionary<string, ClaudeAppThread>();
             foreach (var t in AppThreads.Threads) { ClaudeAppThread known; if (!app.TryGetValue(t.Session, out known) || known.LastActive < t.LastActive) app[t.Session] = t; }
@@ -571,11 +580,11 @@ namespace WidgetScreen
             {
                 if (sessions.ContainsKey(id)) continue;
                 ClaudeAppThread a; app.TryGetValue(id, out a);
-                if (a != null && a.Archived) continue;
                 DateTime seen; lastSeen.TryGetValue(id, out seen);
                 DateTime last = a != null && a.LastActive > seen ? a.LastActive : seen;
                 if (last < oldest) continue;
-                sessions[id] = new ClaudeSession { Id = id, State = ClaudeState.Ready, Since = last, LastActive = last };
+                // Archived threads are kept, marked, and hidden by the card unless Settings → Claude shows them.
+                sessions[id] = new ClaudeSession { Id = id, State = ClaudeState.Ready, Since = last, LastActive = last, Archived = a != null && a.Archived };
             }
             var perSession = usage == null ? new Dictionary<string, List<ClaudeUsageEntry>>() : usage.GroupBy(u => u.Session).ToDictionary(g => g.Key, g => g.ToList());
 
@@ -617,7 +626,7 @@ namespace WidgetScreen
                 KeyValuePair<string, DateTime> was;
                 if (!view.Known.TryGetValue(key, out was) || was.Value < at) view.Known[key] = new KeyValuePair<string, DateTime>(ClaudeBridge.ProjectName(key), at);
             };
-            foreach (var t in app.Values) if (!t.Archived) remember(t.Folder, t.LastActive);
+            foreach (var t in app.Values) remember(t.Folder, t.LastActive);
             foreach (var pair in lastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) remember(folder, pair.Value); }
             foreach (var t in list) remember(t.Project, t.LastActive);
             view.Sessions = ClaudeView.Order(list.Where(s => s.Running));
@@ -717,7 +726,7 @@ namespace WidgetScreen
             foreach (var e in Registry.Entries) seen(startedIn(e.Session, e.Folder), e.StatusChanged);
             foreach (var s in Sessions) seen(startedIn(s.Id, s.Project), ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since)));
             foreach (var a in act.Values) { string folder; seen(folders.TryGetValue(a.Session, out folder) ? folder : a.Repository, a.At); }
-            foreach (var t in AppThreads.Threads) if (!t.Archived) seen(startedIn(t.Session, t.Folder), t.LastActive);
+            foreach (var t in AppThreads.Threads) seen(startedIn(t.Session, t.Folder), t.LastActive);
             // Each project's threads this week, as the card counts them.
             Action<string, string, DateTime> thread = (id, folder, at) => {
                 string key = ProjectOf(folder); if (key.Length == 0 || at < week || !found.ContainsKey(key)) return;
@@ -725,7 +734,7 @@ namespace WidgetScreen
                 ids.Add(id);
             };
             foreach (var pair in Usage.LastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) thread(pair.Key, folder, pair.Value); }
-            foreach (var t in AppThreads.Threads) if (!t.Archived) thread(t.Session, startedIn(t.Session, t.Folder), t.LastActive);
+            foreach (var t in AppThreads.Threads) thread(t.Session, startedIn(t.Session, t.Folder), t.LastActive);
             foreach (var e in Registry.Entries) thread(e.Session, startedIn(e.Session, e.Folder), now);
             foreach (var s in Sessions) thread(s.Id, startedIn(s.Id, s.Project), now);
             foreach (var info in found.Values) { HashSet<string> ids; info.Threads = threads.TryGetValue(info.Folder, out ids) ? ids.Count : 0; info.Shown = shown == null || shown(info.Folder); }

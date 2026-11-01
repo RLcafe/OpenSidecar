@@ -9,7 +9,8 @@ namespace WidgetScreen
     // the brakes), Need (a question or permission waiting on you: hazards and a beacon), Pit (compacting: up on the
     // jack), Stuck (rate-limited or an API error: wheelspin), Done ("your turn": Claude finished and waits for your next
     // message, brake lights on) and End (under a cover).
-    public enum PitState { Idle, Work, Rev, Need, Pit, Stuck, Done, End }
+    // Archived (decision 020): a thread archived in the Claude app, parked under its cover and dimmed the most.
+    public enum PitState { Idle, Work, Rev, Need, Pit, Stuck, Done, End, Archived }
 
     // The car classes, by the model a thread mostly used: a grand tourer for Opus (and bigger), a sports car for
     // Sonnet, a hot hatch for Haiku.
@@ -139,7 +140,7 @@ namespace WidgetScreen
         // spins after an API error (until a later request goes through).
         public static PitState State(ClaudeSession thread, DateTime now, DateTime decision, DateTime result, DateTime error, DateTime request)
         {
-            if (!thread.Running) return PitState.End;
+            if (!thread.Running) return thread.Archived ? PitState.Archived : PitState.End;
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;
@@ -152,6 +153,8 @@ namespace WidgetScreen
             return PitState.Work;
         }
         public static string StateName(PitState state) { return state.ToString().ToLowerInvariant(); }
+        // Whether Settings → Claude hides a thread in this state (its tokens still count in its project's totals).
+        public static bool Hidden(PitState state, bool showArchived, bool hideIdle) { return (state == PitState.Archived && !showArchived) || (state == PitState.Idle && hideIdle); }
         public static PitState ParseState(string name) { PitState state; return Enum.TryParse(name ?? "", true, out state) ? state : PitState.Idle; }
         public static string CarName(PitCar car) { return car == PitCar.GrandTourer ? "gt" : car == PitCar.Hatch ? "hatch" : "sport"; }
 

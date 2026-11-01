@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+Archived and idle Claude threads (Ali's request; Windows and the phone; decision 020):
+
+- **Archived threads stand apart.** A thread you archived in the Claude app now shows as **Archived**: its car is under its cover, dimmed more than an ended one, and it sits last in its project. Before, archived threads were left out completely.
+- **Settings → Claude → Hide archived threads** (on by default) and **Hide idle threads** (off by default). They apply to the PC's card, the phone and the heading's thread count. Hidden threads still count in their project's tokens, replies and lines, and the project says "+2 hidden".
+- The PC has no "resolved" flag; the Claude app's archive is the only one. Ended threads stay Ended.
 
 ## v0.33.2 (1 Nov 2026)
 
