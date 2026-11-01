@@ -6,7 +6,7 @@ Every branch that hasn't been merged into `main` is listed here: its purpose, wh
 
 | Branch | Purpose | Based on | Status | Checkout | Test build |
 | --- | --- | --- | --- | --- | --- |
-| `fix/claude-thread-names` | Claude watcher: real thread names instead of "Remote Control session (from a project)"; placeholders count as no title, then the first request; Remote Control shown as where it runs, on both apps | `76f9c6d` | In progress | `.worktrees\claude-thread-names` | `.worktrees\claude-thread-names\artifacts\app\WidgetScreen.exe`, `.worktrees\claude-thread-names\artifacts\android\WidgetScreen.apk` |
+None right now. `fix/claude-thread-names` was merged as v0.32.1.
 
 Statuses: **In progress**, **Ready for review** (built and waiting for the user to try it), **Merged** (remove the row once it's in the changelog), **Dropped** (move it to "Closed without merging").
 
