@@ -104,6 +104,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # gh writes "release not found" to stderr; with the runner's default Stop, Windows PowerShell would turn that into
+          # a terminating error, so this step checks exit codes itself.
+          $ErrorActionPreference = 'Continue'
           $files = @(Get-ChildItem 'artifacts\release' -File | Select-Object -ExpandProperty FullName)
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {

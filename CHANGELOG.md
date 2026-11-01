@@ -4,7 +4,7 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Nothing yet.
+- **Fixed: GitHub Releases weren't published.** The release workflow's last step stopped on gh's "release not found" message, which Windows PowerShell treats as an error, so v0.35.1 built and passed its checks but got no release. The step now checks gh's exit codes itself.
 
 ## v0.35.1 (1 Nov 2026)
 
