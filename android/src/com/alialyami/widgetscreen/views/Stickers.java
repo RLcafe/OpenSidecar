@@ -105,6 +105,28 @@ public final class Stickers {
         return body;
     }
 
+    // A Soundboard sampler pad (phase 5), as on the PC: a rubber pad edged in the ink on a 3-unit solid lift, tinted 10%
+    // with the ink; it fills with the ink while pressed and while activated (the 150 ms flash after a tap).
+    public static android.graphics.drawable.Drawable pad(Ui ui, int ink) {
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[] { android.R.attr.state_pressed }, padLayers(ui, ink, true));
+        states.addState(new int[] { android.R.attr.state_activated }, padLayers(ui, ink, true));
+        states.addState(new int[0], padLayers(ui, ink, false));
+        return states;
+    }
+    private static android.graphics.drawable.Drawable padLayers(Ui ui, int ink, boolean lit) {
+        GradientDrawable lift = ui.shape(ui.theme.page, 0, 0, 14);
+        GradientDrawable face = ui.shape(lit ? ink : Theme.blend(ui.theme.raised, ink, 0.1), ink, 2, 14);
+        android.graphics.drawable.LayerDrawable drawable = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[] { lift, face });
+        drawable.setLayerInset(0, 0, ui.px(3), 0, 0);
+        drawable.setLayerInset(1, 0, lit ? ui.px(2) : 0, 0, lit ? ui.px(1) : ui.px(3));
+        return drawable;
+    }
+    // Text on a pad: the card's text colour, dark text while the pad is lit.
+    public static android.content.res.ColorStateList padText(Ui ui) {
+        return new android.content.res.ColorStateList(new int[][] { { android.R.attr.state_pressed }, { android.R.attr.state_activated }, { } }, new int[] { Theme.INK_TEXT, Theme.INK_TEXT, ui.theme.text });
+    }
+
     // Offline or stale: the last values stay, at 60%.
     public static void stale(View values, boolean stale) { values.setAlpha(stale ? 0.6f : 1f); }
 

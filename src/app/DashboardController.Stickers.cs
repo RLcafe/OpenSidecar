@@ -24,7 +24,7 @@ namespace WidgetScreen
         private static readonly string[][] StatusCaptions = {
             new[] { "Focus", "FocusState", "" }, new[] { "Media", "MediaSource", "" }, new[] { "Mixer", "MicState", "" }, new[] { "Mixer", "AudioStatus", "warns" }, new[] { "System", "SystemPeak", "" }, new[] { "System", "SystemUptime", "" }, new[] { "System", "SystemStatus", "warns" },
             new[] { "Storage", "StorageStatus", "warns" }, new[] { "Prayer", "PrayerStatus", "" }, new[] { "Notes", "NotesStatus", "" }, new[] { "Clipboard", "ClipStatus", "" },
-            new[] { "Calendar", "CalendarStatus", "warns" }, new[] { "Home", "HomeStatus", "warns" }, new[] { "Clocks", "ClocksStatus", "" } };
+            new[] { "Calendar", "CalendarStatus", "warns" }, new[] { "Home", "HomeStatus", "warns" }, new[] { "Clocks", "ClocksStatus", "" }, new[] { "Soundboard", "SoundboardChannel", "" } };
 
         private readonly Dictionary<string, LabelStrip> strips = new Dictionary<string, LabelStrip>();
         private readonly List<StatusSticker> statusStickers = new List<StatusSticker>();

@@ -28,6 +28,10 @@ $pages = [ordered]@{
     'read-small' = @{ Weather = @(0, 0, 320, 200); System = @(336, 0, 300, 200); Storage = @(652, 0, 300, 180); Clocks = @(968, 0, 300, 180); Prayer = @(1284, 0, 300, 180) }
     'read-medium' = @{ Weather = @(0, 0, 472, 250); System = @(488, 0, 456, 280); Storage = @(960, 0, 456, 250); Clocks = @(0, 296, 472, 250); Prayer = @(488, 296, 456, 280); }
     'read-large' = @{ Weather = @(0, 0, 560, 576); System = @(576, 0, 640, 576); Storage = @(1232, 0, 624, 360) }
+    # Phase 5, the Soundboard at Small, Medium and Large, with Quick Launch beside it for comparison.
+    'board' = @{ Soundboard = @(0, 0, 300, 240); Shortcuts = @(316, 0, 388, 300) }
+    'board-medium' = @{ Soundboard = @(0, 0, 472, 300) }
+    'board-large' = @{ Soundboard = @(0, 0, 900, 500) }
     'read-large2' = @{ Clocks = @(0, 0, 720, 400); Prayer = @(736, 0, 560, 420); Weather = @(1312, 0, 544, 340) }
 }
 # Today's focus sessions for the pips and chips: two sessions, 50 minutes.
@@ -56,6 +60,13 @@ $scenes['midnight-read-large-weather-offline'] = @{ Page = 'read-large'; Theme =
 $scenes['midnight-read-medium-weather-unreachable'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-weather-unreachable') }
 $scenes['midnight-read-medium-no-city'] = @{ Page = 'read-medium'; Theme = 'Midnight'; Extra = ''; Places = '' }
 $scenes['midnight-read-large2-no-city'] = @{ Page = 'read-large2'; Theme = 'Midnight'; Extra = ''; Places = '' }
+# Phase 5: the Soundboard's labelled sample sounds (--render-soundboard-sample) at each size in each palette and at
+# 140%, a connected Discord with no sounds (--render-soundboard-empty), and Discord not set up (no flag).
+foreach ($theme in 'Midnight', 'Slate', 'Warm') { foreach ($page in 'board', 'board-medium', 'board-large') { $scenes["$($theme.ToLower())-$page"] = @{ Page = $page; Theme = $theme; Extra = ''; Args = @('--render-soundboard-sample') } } }
+foreach ($page in 'board', 'board-medium', 'board-large') { $scenes["midnight-$page-140"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<TextScale>1.4</TextScale>'; Args = @('--render-soundboard-sample') } }
+$scenes['midnight-board-medium-empty'] = @{ Page = 'board-medium'; Theme = 'Midnight'; Extra = ''; Args = @('--render-soundboard-empty') }
+$scenes['midnight-board-medium-not-set-up'] = @{ Page = 'board-medium'; Theme = 'Midnight'; Extra = '' }
+$scenes['midnight-board-not-set-up'] = @{ Page = 'board'; Theme = 'Midnight'; Extra = '' }
 # A low-space threshold of 20% so this PC's fullest drives show the caution-tape state.
 foreach ($page in 'read-small', 'read-medium', 'read-large') { $scenes["midnight-$page-low-space"] = @{ Page = $page; Theme = 'Midnight'; Extra = '<StorageLowPercent>20</StorageLowPercent>' } }
 $scenes['midnight-five-large-nothing-playing'] = @{ Page = 'five-large'; Theme = 'Midnight'; Extra = $sessions; Args = @('--render-no-media') }

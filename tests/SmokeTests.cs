@@ -83,6 +83,7 @@ internal static class SmokeTests
         StickerTests.Run(directory, Check);
         DefaultFiveTests.Run(directory, Check);
         ReadingsTests.Run(directory, Check);
+        SoundboardPadTests.Run(directory, Check);
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {

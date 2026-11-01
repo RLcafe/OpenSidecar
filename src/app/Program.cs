@@ -47,6 +47,8 @@ namespace WidgetScreen
                 {
                     running = controller;
                     // A labelled fixture for the Claude card ("Sample" in its heading) instead of this PC's sessions.
+                    // The Soundboard's labelled sample sounds (or none), as if Discord were connected; they never play.
+                    if (renderPath != null && (args.Contains("--render-soundboard-sample") || args.Contains("--render-soundboard-empty"))) controller.UseSoundboardSample(args.Contains("--render-soundboard-empty"));
                     if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
             // Renders Now Playing's empty state (an empty sleeve) whatever plays on this PC; it shows an absence, not a reading.
             if (renderPath != null && args.Contains("--render-no-media")) controller.IgnoreMedia = true;

@@ -888,6 +888,9 @@ namespace WidgetScreen
 
         // Render mode's --render-no-media: the card shows nothing playing (Program.Main).
         public bool IgnoreMedia { get; set; }
+        // Render mode's --render-soundboard-sample and --render-soundboard-empty (Program.Main).
+        public void UseSoundboardSample(bool empty) { soundboard.UseSample(empty); }
+        public SoundboardWidget Soundboard { get { return soundboard; } }
         private async void RefreshMedia(bool fresh = false)
         {
             if (disposed || !Editor.IsVisible("Media")) return;
