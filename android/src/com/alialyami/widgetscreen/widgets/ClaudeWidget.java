@@ -105,9 +105,10 @@ public final class ClaudeWidget extends Widget {
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48);
         View content = c == null ? ui.caption("Waiting for the PC…") : design == CardSizing.SMALL ? small(c, bodyWidth, bodyHeight) : design == CardSizing.MEDIUM ? medium(c, bodyWidth, bodyHeight) : large(c, bodyWidth, bodyHeight);
         FrameLayout body = new FrameLayout(ui.context);
-        body.addView(content, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        // The roll's overlay sits under the content, so rolling cars go under a row's chip and words (review fix 8).
         layer = new RollView(ui.context);
         body.addView(layer, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+        body.addView(content, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         card = ui.card(body, 24);
         if (rollOut != null) {
             final String key = rollOut; rollOut = null;
@@ -198,7 +199,8 @@ public final class ClaudeWidget extends Widget {
     // The heading row: the title, the live summary, the flag and (Large) the period switch.
     private View header(final boolean large, double bodyWidth) {
         LinearLayout row = ui.row();
-        row.addView(ui.label(large && bodyWidth >= 900 ? "CLAUDE CODE · PIT WALL" : "CLAUDE CODE"), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 14, 0));
+        // The Sticker Sheet label strip, like every other card (review fix 9).
+        row.addView(strip(), ui.margins(ui.ll(Ui.WRAP, ui.px(28)), 0, 0, 14, 0));
         final View dot = new View(ui.context);
         row.addView(dot, ui.margins(ui.ll(ui.px(8), ui.px(8)), 0, 0, 6, 0));
         final TextView summary = trimmed(ui.text("", scaled(14), ui.theme.text));
@@ -220,7 +222,7 @@ public final class ClaudeWidget extends Widget {
             boolean needs = c.needsYou() > 0;
             dot.setBackground(ui.shape(needs ? Theme.WARNING : c.working() > 0 ? ui.theme.accent : ui.theme.muted, 0, 0, 4));
             summary.setText(ClaudeText.summary(c, period, large)); summary.setTextColor(needs ? Theme.WARNING : ui.theme.text);
-            flag.setText(ClaudeText.flag(c, now, dash.use24()));
+            flag.setText(ClaudeText.flag(c, now, dash.use24(), large));
         } });
         return row;
     }
@@ -378,7 +380,7 @@ public final class ClaudeWidget extends Widget {
         head.addView(new View(ui.context), ui.ll(ui.px(52), 1));
         head.addView(upper("Project · thread", 12), ui.ll(0, Ui.WRAP, 1));
         cell(head, upper("Tokens", 12), scaled(72), Gravity.END);
-        cell(head, upper("Cache reads", 12), scaled(80), Gravity.END);
+        if (CardSizing.claudeCache(width, ui.textScale)) cell(head, upper("Cache reads", 12), scaled(80), Gravity.END);
         cell(head, upper(c.apiValue ? "API value" : "Replies", 12), scaled(64), Gravity.END);
         if (CardSizing.claudeModels(width, ui.textScale)) cell(head, upper("Models", 12), scaled(150), Gravity.START);
         if (CardSizing.claudeLines(width, ui.textScale)) cell(head, upper("Lines", 12), scaled(84), Gravity.END);
@@ -388,10 +390,21 @@ public final class ClaudeWidget extends Widget {
         List<PcState.ClaudeGroup> groups = groups(c);
         if (groups.isEmpty()) list.addView(empty(c));
         for (int i = 0; i < groups.size(); i++) addGarageRows(c, list, groups.get(i), i, width);
-        ScrollView scroll = new ScrollView(ui.context); scroll.setVerticalScrollBarEnabled(false); scroll.setNestedScrollingEnabled(true);
+        final ScrollView scroll = new ScrollView(ui.context); scroll.setVerticalScrollBarEnabled(false); scroll.setNestedScrollingEnabled(true);
         scroll.addView(list, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP));
         ledgerScroll = scroll;
-        table.addView(scroll, ui.ll(Ui.MATCH, 0, 1));
+        // Whole rows only: no row is cut through its text at the bottom (review fix 7).
+        final FrameLayout holder = new FrameLayout(ui.context);
+        holder.addView(scroll, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH, Gravity.TOP));
+        final LinearLayout rows = list;
+        holder.addOnLayoutChangeListener(new View.OnLayoutChangeListener() { @Override public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+            double[] heights = new double[rows.getChildCount()];
+            for (int i = 0; i < heights.length; i++) heights[i] = rows.getChildAt(i).getHeight();
+            final int fit = (int) Math.round(CardSizing.claudeWholeRows(heights, holder.getHeight()));
+            final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) scroll.getLayoutParams();
+            if (params.height != fit && fit > 0) holder.post(new Runnable() { @Override public void run() { params.height = fit; scroll.setLayoutParams(params); } });
+        } });
+        table.addView(holder, ui.ll(Ui.MATCH, 0, 1));
         return table;
     }
     private View empty(PcState.Claude c) {
@@ -420,7 +433,7 @@ public final class ClaudeWidget extends Widget {
         name.addView(share, ui.margins(ui.ll(Ui.MATCH, ui.px(4)), 0, 4, 0, 0));
         row.addView(name, ui.margins(ui.ll(0, Ui.MATCH, 1), 4, 0, 0, 0));
         final TextView tokens = ui.text("", scaled(17), ui.theme.text); cell(row, tokens, scaled(72), Gravity.END);
-        final TextView cached = ui.text("", scaled(15), ui.theme.muted); cell(row, cached, scaled(80), Gravity.END);
+        final TextView cached = ui.text("", scaled(15), ui.theme.muted); if (CardSizing.claudeCache(width, ui.textScale)) cell(row, cached, scaled(80), Gravity.END);
         final TextView dollars = ui.text("", scaled(15), ui.theme.muted); cell(row, dollars, scaled(64), Gravity.END);
         final TextView mix = trimmed(ui.text("", 12, ui.theme.muted)); if (CardSizing.claudeModels(width, ui.textScale)) cell(row, mix, scaled(150), Gravity.START);
         final TextView changed = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width, ui.textScale)) cell(row, changed, scaled(84), Gravity.END);
@@ -455,10 +468,10 @@ public final class ClaudeWidget extends Widget {
             final TextView chip = ui.text("", 11, ui.theme.text); chip.setPadding(ui.px(6), ui.px(1), ui.px(6), ui.px(1)); chip.setSingleLine(true);
             what.addView(chip, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 0));
             final TextView name2 = trimmed(ui.text("", scaled(14), ui.theme.text)); what.addView(name2, ui.ll(0, Ui.WRAP, 1));
-            final TextView where = ui.text("", 12, ui.theme.muted); where.setSingleLine(true); what.addView(where, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
+            final TextView where = ui.text("", 12, ui.theme.muted); where.setSingleLine(true); if (CardSizing.claudeWhere(width, ui.textScale)) what.addView(where, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
             trow.addView(what, ui.margins(ui.ll(0, Ui.MATCH, 1), 4, 0, 0, 0));
             final TextView ttokens = ui.text("", scaled(14), ui.theme.text); cell(trow, ttokens, scaled(72), Gravity.END);
-            final TextView tcached = ui.text("", scaled(14), ui.theme.muted); cell(trow, tcached, scaled(80), Gravity.END);
+            final TextView tcached = ui.text("", scaled(14), ui.theme.muted); if (CardSizing.claudeCache(width, ui.textScale)) cell(trow, tcached, scaled(80), Gravity.END);
             final TextView tdollars = ui.text("", scaled(14), ui.theme.muted); cell(trow, tdollars, scaled(64), Gravity.END);
             final TextView tmix = trimmed(ui.text("", 12, ui.theme.muted)); if (CardSizing.claudeModels(width, ui.textScale)) cell(trow, tmix, scaled(150), Gravity.START);
             final TextView tlines = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width, ui.textScale)) cell(trow, tlines, scaled(84), Gravity.END);
@@ -530,8 +543,8 @@ public final class ClaudeWidget extends Widget {
             PcState.ClaudeFacts f = c.facts;
             values[0].setText(counted(c) ? ClaudeText.tokens(f.tokens) : "—"); keys[0].setText(!counted(c) ? "TODAY" : c.apiValue ? "TODAY · $" + ClaudeText.dollars(f.cost) + " API VALUE" : "TODAY · " + f.replies + " REPLIES");
             values[1].setText(ClaudeText.share(f.cacheHit())); keys[1].setText("CACHE HITS");
-            values[2].setText(f.telemetry ? String.valueOf(f.tools) : "—"); keys[2].setText(f.telemetry ? "TOOLS · " + f.asked + " ASKED" : "TOOLS · NEEDS TELEMETRY");
-            if (f.telemetry && (f.added > 0 || f.removed > 0)) {
+            values[2].setText(counted(c) ? String.valueOf(f.tools) : "—"); keys[2].setText(ClaudeText.toolsKey(f));
+            if (f.added > 0 || f.removed > 0) {
                 SpannableStringBuilder added = new SpannableStringBuilder(ClaudeText.added(f.added)); added.setSpan(new ForegroundColorSpan(PitArt.LIME), 0, added.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 values[3].setText(added); keys[3].setText(ClaudeText.removed(f.removed) + " · " + ClaudeText.threads(f.linesThreads).toUpperCase(Locale.ROOT));
             } else { values[3].setText("—"); keys[3].setText("LINES"); }
@@ -588,9 +601,9 @@ public final class ClaudeWidget extends Widget {
                 PcState.ClaudeGroup g = group(c, key); if (g == null) return;
                 PcState.ClaudeThread asking = null; for (String id : g.threads) { PcState.ClaudeThread t = c.thread(id); if (t != null && t.running && "needs".equals(t.state)) { asking = t; break; } }
                 name.setTextColor(asking != null ? Theme.WARNING : ui.theme.text);
-                sub.setText(asking != null ? "Needs you · " + ClaudeText.threadTitle(asking, now, dash.use24()) : isFolded ? ClaudeText.cars(g.threads.size()) + " in the garage" : ClaudeText.groupDetail(c, g, now));
+                sub.setText(asking != null ? "Needs you · " + ClaudeText.threadTitle(asking, now, dash.use24()) : isFolded ? ClaudeText.cars(g.threads.size()) + " in the garage" : ClaudeText.groupDetail(c, g, now, true));
                 sub.setTextColor(asking != null ? Theme.WARNING : ui.theme.muted);
-                tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : ClaudeText.replies(g.replies));
+                tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : String.valueOf(g.replies));
                 renderGarage(c, garage, g);
             } });
         }
@@ -811,7 +824,8 @@ public final class ClaudeWidget extends Widget {
         float bayX, bayY, garageX, garageY, garageSize;
         final List<RollCar> cars = new ArrayList<RollCar>();
     }
-    private static final class RollCar { CarPart part; float targetX, targetY, apronX, width; int car; float x, bottom, drawWidth, squash; String pose = ""; int z; int wheel; boolean shown; }
+    // Ended (and archived or resolved) cars keep their cover and stay dimmed while they roll (review fix 8).
+    private static final class RollCar { CarPart part; float targetX, targetY, apronX, width; int car; float x, bottom, drawWidth, squash; String pose = ""; int z; int wheel; boolean shown, ended; }
 
     // Where a view sits on the overlay, in pixels.
     private float[] on(View view) {
@@ -840,6 +854,7 @@ public final class ClaudeWidget extends Widget {
             car.targetX = at[0] + car.width / 2; car.targetY = at[1] + part.sprite.getHeight() * 5 / 6f; car.apronX = car.targetX + car.width * 1.4f;
             PcState.ClaudeThread t = c == null || part.id == null ? null : c.thread(part.id);
             car.car = t == null ? PitArt.SPORT : PitArt.car(t.car);
+            car.ended = t == null || !t.running;
             roll.cars.add(car);
             if (outward) part.sprite.setVisibility(View.INVISIBLE);
         }
@@ -919,16 +934,17 @@ public final class ClaudeWidget extends Widget {
                 for (RollCar car : r.cars) {
                     if (!car.shown || (pass == 0) != (car.z == 1)) continue;
                     Bitmap bitmap; float h;
+                    pixels.setAlpha(car.ended ? 153 : 255);
                     if (car.pose.equals("front") || car.pose.equals("rear") || car.pose.equals("brake")) {
-                        bitmap = overlay(car.pose + "|" + r.color, car.pose.equals("front") ? PitArt.front(r.color, true) : PitArt.rear(r.color, car.pose.equals("brake")), car.width * 0.55f, 80, 56);
+                        bitmap = overlay(car.pose + "|" + r.color + "|" + car.ended, car.pose.equals("front") ? PitArt.front(r.color, !car.ended) : PitArt.rear(r.color, car.pose.equals("brake") && !car.ended), car.width * 0.55f, 80, 56);
                         h = car.drawWidth * 56 / 80;
                         float w = car.drawWidth * car.squash;
                         blit(canvas, bitmap, car.x - w / 2, car.bottom - h, w, h);
                     } else {
                         boolean reverse = car.pose.equals("reverse") || car.pose.equals("turnback"), moving = car.pose.equals("side") || car.pose.equals("reverse");
                         PitArt.Look look = new PitArt.Look(); look.car = car.car; look.lights = !reverse; look.reverse = reverse;
-                        Bitmap[] frames = PitSprite.carFrames(r.color, moving ? PitArt.WORK : PitArt.IDLE, look, car.width / ui.unit);
-                        bitmap = frames[moving ? car.wheel : 0];
+                        Bitmap[] frames = car.ended ? PitSprite.carFrames(r.color, PitArt.END, new PitArt.Look(car.car, false, false, false), car.width / ui.unit) : PitSprite.carFrames(r.color, moving ? PitArt.WORK : PitArt.IDLE, look, car.width / ui.unit);
+                        bitmap = car.ended ? frames[PitArt.still(PitArt.END)] : frames[moving ? car.wheel : 0];
                         h = (float) (car.drawWidth * 60 / 140 * 1.5);
                         float w = car.drawWidth * car.squash;
                         // The frame's bottom quarter-height is below the car.
@@ -936,6 +952,7 @@ public final class ClaudeWidget extends Widget {
                     }
                 }
             }
+            pixels.setAlpha(255);
             canvas.restore();
         }
     }

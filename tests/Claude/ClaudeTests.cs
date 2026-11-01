@@ -233,7 +233,7 @@ internal static class ClaudeTests
             Assert(view.Sessions.Select(s => s.Id).SequenceEqual(new[] { "needs-old", "needs-new", "work", "done", "ready" }), "Order wrong: " + String.Join(",", view.Sessions.Select(s => s.Id)));
             Assert(!File.Exists(ClaudeBridge.SessionPath(bridge, "ancient")) && !File.Exists(ClaudeBridge.SessionPath(bridge, "gone")), "Forgotten or closed sessions linger.");
             Assert(!service.ReadSessions(Now, false), "Unchanged files were read again.");
-            Assert(ClaudeText.Summary(view, ClaudePeriod.Today, false) == "2 needs you · 1 your turn · 1 running" && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Your turn · 3 h", "State words wrong.");
+            Assert(ClaudeText.Summary(view, ClaudePeriod.Today, false) == "2 needs you · 1 your turn" && ClaudeText.Summary(view, ClaudePeriod.Today, true).StartsWith("2 needs you · 1 your turn · 1 running") && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Your turn · 3 h", "State words wrong.");
             Assert(ClaudeBridge.ProjectName("C:\\Code\\api-server\\") == "api-server" && ClaudeBridge.ProjectName("/home/a/b") == "b" && ClaudeBridge.ProjectName("") == "Claude Code", "Project names wrong.");
         });
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace WidgetScreen
 {
@@ -240,6 +241,29 @@ namespace WidgetScreen
         public static double ClaudeFixedColumns(double textScale) { return 52 + Math.Round(72 * textScale) + 10 + Math.Round(80 * textScale) + 10 + Math.Round(64 * textScale) + 10; }
         public static bool ClaudeModels(double tableWidth, double textScale) { return tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + 240; }
         public static bool ClaudeLines(double tableWidth, double textScale) { return ClaudeModels(tableWidth, textScale) && tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + Math.Round(84 * textScale) + 10 + 240; }
+        // A thread row's title keeps room for about 14 characters (review fix 4): first the "Desktop · 2 min" beside it
+        // steps aside (it stays in the tooltip), then the Cache reads column. ClaudeChip and ClaudeWhere are the chip's
+        // and that text's usual widths with their gaps.
+        public const double ClaudeChip = 70, ClaudeWhereWidth = 103;
+        // The ledger shows whole rows only (review fix 7): the tallest run of rows from the top that fits, and always the
+        // first one; the rest scroll.
+        public static double ClaudeWholeRows(IEnumerable<double> heights, double room)
+        {
+            double used = 0; bool first = true;
+            foreach (double h in heights)
+            {
+                if (!first && used + h > room + 0.5) break;
+                used += h; first = false;
+            }
+            return Math.Min(used, Math.Max(room, 0)) == used ? used : Math.Max(0, room);
+        }
+        public static double ClaudeTitleMin(double textScale) { return Math.Round(110 * textScale); }
+        public static double ClaudeTitleRoom(double tableWidth, double textScale)
+        {
+            return tableWidth - ClaudeFixedColumns(textScale) - (ClaudeModels(tableWidth, textScale) ? Math.Round(150 * textScale) + 10 : 0) - (ClaudeLines(tableWidth, textScale) ? Math.Round(84 * textScale) + 10 : 0);
+        }
+        public static bool ClaudeWhere(double tableWidth, double textScale) { return ClaudeTitleRoom(tableWidth, textScale) - ClaudeChip - ClaudeWhereWidth >= ClaudeTitleMin(textScale); }
+        public static bool ClaudeCache(double tableWidth, double textScale) { return ClaudeTitleRoom(tableWidth, textScale) - ClaudeChip >= ClaudeTitleMin(textScale); }
         // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
         // beside the project's name when they leave it 110 units.
         public const double ClaudeMiniHeight = 84;

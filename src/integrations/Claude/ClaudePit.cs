@@ -33,8 +33,10 @@ namespace WidgetScreen
         public double Cost;
         public int Tools, Asked, Denied, LinesThreads, Replies;
         public long Added, Removed;
-        // Whether telemetry has said anything about tools and lines (without it they read "—").
-        public bool Telemetry;
+        // Whether telemetry has said anything (it alone knows which tool calls asked you), and whether it saw fewer
+        // tool calls than the logs did today, so "asked" is a partial count (review fix 2). Tools and lines come from
+        // the logs.
+        public bool Telemetry, AskedPartial;
         public double CacheHit { get { return Prompt <= 0 ? Double.NaN : (double)CacheRead / Prompt; } }
     }
 
@@ -142,12 +144,14 @@ namespace WidgetScreen
         public static PitState State(ClaudeSession thread, DateTime now, DateTime decision, DateTime result, DateTime error, DateTime request)
         {
             if (!thread.Running) return thread.Archived ? PitState.Archived : thread.Resolved ? PitState.Resolved : PitState.End;
-            // Live state wins over Resolved: working, needing you or compacting shows as that (decision 020).
+            // Live state wins over Resolved: working, needing you, compacting or a fresh "your turn" shows as that. An
+            // open thread only counts as resolved once it has sat idle for TurnIdle (decision 020, review fix 1).
+            bool settled = now - thread.Since >= TurnIdle;
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;
-                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : thread.Resolved ? PitState.Resolved : now - thread.Since >= TurnIdle ? PitState.Idle : PitState.Done;
-                case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : thread.Resolved ? PitState.Resolved : PitState.Idle;
+                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : !settled ? PitState.Done : thread.Resolved ? PitState.Resolved : PitState.Idle;
+                case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : settled && thread.Resolved ? PitState.Resolved : PitState.Idle;
             }
             if (thread.Compacting) return PitState.Pit;
             if (error > request && now - error < ErrorShows) return PitState.Stuck;

@@ -4,7 +4,11 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 ## Unreleased
 
-Sticker Sheet, phase 2: the default five (Ali's approved redesign; Windows and the phone; decision 021). Waiting on `feature/sticker-defaults`; it gets the next MINOR tag when merged.
+Nothing yet.
+
+## v0.36.0 (1 Nov 2026)
+
+Sticker Sheet, phase 2: the default five (Ali's approved redesign; Windows and the phone; decision 021).
 
 - **Focus:**
   - Large cards show a kitchen-timer dial, with the time left as a wedge in the card's ink, minute ticks, and the end time in the middle.
@@ -26,6 +30,24 @@ Sticker Sheet, phase 2: the default five (Ali's approved redesign; Windows and t
   - On Large cards the side panel is tinted with the cover's colour.
 - **The phone shows the same.** The phone link adds `album` and `tint` to Now Playing and `caption` to Spotify items.
 - No new timers, polling, network requests or effects.
+
+## v0.35.3 (1 Nov 2026)
+
+Claude watcher review fixes (Ali's review, 1 Nov 2026; Windows and the phone; decision 022):
+
+- **Your turn stays visible.** An open thread whose latest reply the Claude app marked "completed" shows as Your turn. It only counts as resolved, and is hidden, after 30 idle minutes. Working, needs you and compacting always show. Ended "completed" threads now really do count as resolved: before, a later write to their log kept every one of them showing.
+- **Tools and lines come from Claude Code's logs**, so they're right for every session. "Asked" still comes from telemetry, and says PARTIAL when telemetry saw fewer calls.
+- **Text fits.**
+  - Medium no longer cuts off the heading, the project lines or the replies.
+  - At 140% text, Large keeps thread titles readable by dropping the where-and-age text, then Cache reads.
+- **The ledger shows whole rows**, and rolling cars keep their covers and pass under the chips.
+- **The Claude card wears the label strip** like the other cards, and Large says how fresh the plan numbers are ("LIVE · AS OF 2:40 PM").
+- **Lighter and safer:**
+  - the cars' frame timer stops when the window is minimised;
+  - the dashboard no longer waits for the first log read;
+  - the telemetry receiver only accepts JSON;
+  - a gone process's window is forgotten;
+  - Connect keeps dated backups of Claude Code's settings.json.
 
 ## v0.35.2 (1 Nov 2026)
 

@@ -44,6 +44,9 @@ namespace WidgetScreen
             pillCar = new PitSprite { Width = 40, Height = 17, VerticalAlignment = VerticalAlignment.Center };
             string pillKey; pillCar.Show("pill", PitSprite.CarFrames(PitArt.Amber, PitState.Need, new PitArt.CarLook { Car = PitCar.Sports }, 40, out pillKey), PitSprite.CarOverflow, 0, false);
             Control<Grid>("ClaudePillCar").Children.Add(pillCar);
+            // Minimising doesn't hide the card's elements, and the heartbeat skips the card while minimised, so the frame
+            // clock is told here (review fix 5).
+            window.StateChanged += (sender, e) => UpdateClaudeLive();
             Button("ClaudePill", ShowClaudePage);
             Button("ClaudeConnectButton", ConnectClaude);
             Button("ClaudeDisconnectButton", DisconnectClaude);
@@ -112,7 +115,7 @@ namespace WidgetScreen
         {
             bool shown = Editor.IsVisible("Claude") && !Editor.Editing;
             claudeCard.Tick(ClaudeStill, shown);
-            claudeCard.SetLive(shown && window.WindowState != WindowState.Minimized);
+            UpdateClaudeLive();
             if (claudeSample) return;
             // Renders never read this PC's sessions or logs, or ask for the plan's usage; they use the labelled sample.
             if (Program.Rendering) return;
@@ -137,6 +140,8 @@ namespace WidgetScreen
             }
             if (changed || claudeDirty) RefreshClaudeView();
         }
+        // The card's frame clock runs only while it's on the page, not being edited, and the window isn't minimised.
+        private void UpdateClaudeLive() { claudeCard.SetLive(Editor.IsVisible("Claude") && !Editor.Editing && window.WindowState != WindowState.Minimized); }
         // Quiet mode keeps the cars still only when Settings → Claude says so (decision 019).
         private bool ClaudeStill { get { return settings.QuietMode && settings.ClaudeStillInQuiet; } }
 
@@ -415,7 +420,7 @@ namespace WidgetScreen
                 "burn", D("rate", Math.Round(view.Rate), "scale", view.Scale, "minutes", view.Burn.Select(v => (object)Math.Round(v)).ToArray()),
                 "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "thread", l.Session.Length > 0, "color", ClaudeBridge.ProjectName(l.Folder), "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
                 "facts", D("tokens", view.Facts.Tokens, "cost", Math.Round(view.Facts.Cost, 4), "prompt", view.Facts.Prompt, "cacheRead", view.Facts.CacheRead, "tools", view.Facts.Tools, "asked", view.Facts.Asked,
-                    "denied", view.Facts.Denied, "replies", view.Facts.Replies, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry),
+                    "denied", view.Facts.Denied, "replies", view.Facts.Replies, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry, "askedPartial", view.Facts.AskedPartial),
                 "groups", D("fiveHour", groups(ClaudePeriod.FiveHour), "today", groups(ClaudePeriod.Today), "week", groups(ClaudePeriod.Week)),
                 "sessions", view.Sessions.Select(s => (object)D("id", s.Id, "project", s.ProjectName, "title", s.Title, "state", ClaudeSessionFile.StateName(s.State),
                     "since", ClaudeBridge.Epoch(s.Since) / 1000.0, "message", s.Message, "model", s.Model, "where", s.Where, "canFocus", s.CanFocus,
