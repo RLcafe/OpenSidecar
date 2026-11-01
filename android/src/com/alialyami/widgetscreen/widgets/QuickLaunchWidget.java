@@ -8,7 +8,9 @@ import android.widget.TextView;
 
 import com.alialyami.widgetscreen.Dashboard;
 import com.alialyami.widgetscreen.Ui;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.core.CardSizing;
+import com.alialyami.widgetscreen.core.Format;
 import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
@@ -112,9 +114,11 @@ public final class QuickLaunchWidget extends Widget {
         double glyph = CardSizing.deckGlyph(cellHeight, compact);
         LinearLayout button = compact ? ui.row() : ui.column();
         button.setGravity(Gravity.CENTER);
-        button.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(8));
-        // Control buttons that toggle something show whether it's on; a button's own colour tells it apart.
-        ui.select(button, shortcut.on);
+        button.setPadding(ui.px(8), ui.px(8), ui.px(8), ui.px(8 + 4));
+        // Keycaps (docs/design/sticker-sheet.md, phase 2): a skirt, a 2-unit drop when pressed and an LED for a button
+        // that's on; a button's own colour tells it apart.
+        button.setBackground(Stickers.keycap(ui, shortcut.on, dash.ink(id)));
+        button.setSelected(shortcut.on);
         button.setMinimumHeight(ui.px(48));
         int color = shortcut.color == null || shortcut.color.isEmpty() ? ui.theme.accent : Theme.accentColor(shortcut.color);
         button.addView(new GlyphView(ui.context, shortcut.glyph, color, ui.fpx(glyph)), ui.ll(ui.px(glyph + 4), ui.px(glyph + 4)));
@@ -125,7 +129,7 @@ public final class QuickLaunchWidget extends Widget {
         if (CardSizing.tile(cellWidth, cellHeight) == CardSizing.LARGE) {
             button.removeAllViews();
             button.setOrientation(LinearLayout.VERTICAL); button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            button.setPadding(ui.px(16), ui.px(12), ui.px(12), ui.px(12));
+            button.setPadding(ui.px(16), ui.px(12), ui.px(12), ui.px(12 + 4));
             double size = Math.min(40, glyph);
             button.addView(new GlyphView(ui.context, shortcut.glyph, color, ui.fpx(size)), ui.ll(ui.px(size + 4), ui.px(size + 4)));
             TextView title = ui.text(shortcut.label, 17 * ui.textScale, ui.theme.text);
@@ -133,6 +137,24 @@ public final class QuickLaunchWidget extends Widget {
             button.addView(title, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 12, 0, 0));
             TextView kind = ui.caption(shortcut.kind); kind.setMaxWidth(ui.px(cellWidth - 44));
             button.addView(kind, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 3, 0, 0));
+            // A hotkey's keys as the cap's secondary legend, at its top right (the PC sends "Hotkey  ·  Ctrl+Shift+M").
+            String keys = Format.hotkeyLegend(shortcut.kind);
+            if (keys != null) {
+                kind.setText("Hotkey");
+                FrameLayout cap = new FrameLayout(ui.context);
+                button.setBackground(null);
+                cap.setBackground(Stickers.keycap(ui, shortcut.on, dash.ink(id)));
+                cap.addView(button, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+                TextView legend = ui.text(keys, 13, ui.theme.muted); legend.setTypeface(Ui.MEDIUM); legend.setLetterSpacing(0.04f);
+                legend.setMaxWidth(ui.px(Math.max(40, cellWidth - 44 - size - 12)));
+                FrameLayout.LayoutParams at = ui.frame(Ui.WRAP, Ui.WRAP, Gravity.TOP | Gravity.END); at.setMargins(0, ui.px(12), ui.px(12), 0);
+                cap.addView(legend, at);
+                cap.setContentDescription(shortcut.label + (shortcut.on ? ", on" : ""));
+                cap.setClickable(true); Ui.enable(cap, shortcut.enabled);
+                cap.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { run(shortcut, index); } }));
+                button.setClickable(false); button.setDuplicateParentStateEnabled(true);
+                return cap;
+            }
         } else if (labelMode != CardSizing.DECK_LABEL_NONE) button.addView(name, compact ? ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0) : ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 8, 0, 0));
         button.setContentDescription(shortcut.label + (shortcut.on ? ", on" : ""));
         button.setClickable(true);

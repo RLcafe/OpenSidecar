@@ -68,6 +68,36 @@ public final class Stickers {
         return text;
     }
 
+    // A Quick Launch keycap (phase 2), as on the PC: the cap sits on a 4-unit darker skirt and drops 2 units while
+    // pressed; an LED dot in the ink lights at the top right for a button that's on. The view keeps 4 more units of
+    // bottom padding so its content stays on the cap.
+    public static android.graphics.drawable.Drawable keycap(Ui ui, boolean on, int ledColour) {
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[] { android.R.attr.state_pressed }, keycapLayers(ui, on, ledColour, true));
+        states.addState(new int[0], keycapLayers(ui, on, ledColour, false));
+        return states;
+    }
+    private static android.graphics.drawable.Drawable keycapLayers(Ui ui, boolean on, int ledColour, boolean pressed) {
+        GradientDrawable skirt = ui.shape(ui.theme.input, ui.theme.controlBorder, 1, 12);
+        GradientDrawable cap = ui.shape(on ? ui.theme.selected : ui.theme.raised, on ? ui.theme.accent : ui.theme.controlBorder, on ? 2 : 1, 12);
+        java.util.List<android.graphics.drawable.Drawable> layers = new java.util.ArrayList<android.graphics.drawable.Drawable>();
+        layers.add(skirt); layers.add(cap);
+        if (pressed) layers.add(ui.shape(0x21FFFFFF, 0, 0, 12));
+        GradientDrawable led = null;
+        if (on) { led = new GradientDrawable(); led.setShape(GradientDrawable.OVAL); led.setColor(ledColour); led.setStroke(Math.max(1, ui.px(1)), ui.theme.page); layers.add(led); }
+        android.graphics.drawable.LayerDrawable drawable = new android.graphics.drawable.LayerDrawable(layers.toArray(new android.graphics.drawable.Drawable[0]));
+        int top = pressed ? ui.px(2) : 0, bottom = pressed ? ui.px(2) : ui.px(4);
+        drawable.setLayerInset(0, 0, ui.px(4), 0, 0);
+        for (int i = 1; i < layers.size(); i++) drawable.setLayerInset(i, 0, top, 0, bottom);
+        if (led != null) {
+            int index = layers.size() - 1;
+            drawable.setLayerSize(index, ui.px(8), ui.px(8));
+            drawable.setLayerGravity(index, Gravity.TOP | Gravity.END);
+            drawable.setLayerInset(index, 0, top + ui.px(6), ui.px(6), 0);
+        }
+        return drawable;
+    }
+
     // Offline or stale: the last values stay, at 60%.
     public static void stale(View values, boolean stale) { values.setAlpha(stale ? 0.6f : 1f); }
 
@@ -185,6 +215,9 @@ public final class Stickers {
         public boolean filled() { return filled; }
         public void setFilled(boolean on) { if (on != filled) { filled = on; refresh(); } }
         public void setWarns(boolean on) { if (on != warns) { warns = on; refresh(); } }
+        // A glyph before a fact's words (the mixer's microphone in ON AIR), drawn in the words' colour; null for none.
+        private String glyphName;
+        public void setGlyph(String name) { if (name == null ? glyphName != null : !name.equals(glyphName)) { glyphName = name; refresh(); } }
         // The width the header leaves it, in design units: the words trim to it, and under 40 the sticker steps aside.
         public void setRoom(double units) { room = units; setMaxWidth(Math.max(0, ui.px(units))); refresh(); }
         public boolean roomy() { return roomy; }
@@ -201,7 +234,8 @@ public final class Stickers {
             boolean warning = state == Inks.WARNING;
             // A warning also carries its stripes and glyph.
             roomy = room >= (warning ? MIN_WARNING_ROOM : MIN_ROOM);
-            int left = warning ? ui.px(14 + 6 + 12 + 6) : ui.px(10);
+            boolean glyphShown = state == Inks.FACT && glyphName != null;
+            int left = warning ? ui.px(14 + 6 + 12 + 6) : glyphShown ? ui.px(10 + 12 + 6) : ui.px(10);
             setPadding(left, 0, ui.px(10), 0);
             int color = state == Inks.WARNING ? Theme.INK_TEXT : state == Inks.UNAVAILABLE || state == Inks.LOADING ? ui.theme.muted : state == Inks.OFFLINE ? ui.theme.text : filled ? Theme.INK_TEXT : ink;
             super.setTextColor(color);
@@ -237,6 +271,7 @@ public final class Stickers {
                 canvas.drawPath(warning, mark);
             } else if (state == Inks.FACT && filled) canvas.drawRoundRect(pill, radius, radius, solid);
             canvas.drawRoundRect(pill, radius, radius, stroke);
+            if (state == Inks.FACT && glyphName != null) Glyphs.draw(canvas, glyphName, ui.fpx(10 + 6), getHeight() / 2f, ui.fpx(13), getCurrentTextColor());
             super.onDraw(canvas);
         }
     }

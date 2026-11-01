@@ -38,5 +38,28 @@ namespace WidgetScreen
             string time = minutes >= 60 ? (minutes / 60) + " h " + (minutes % 60) + " m" : minutes + " m";
             return sessions + (sessions == 1 ? " session today  ·  " : " sessions today  ·  ") + time;
         }
+
+        // The Sticker Sheet's Focus facts (docs/design/sticker-sheet.md, phase 2); the phone's core/Format has the same.
+        // Today: the finished sessions' minutes. "0 min" before the first.
+        public static string MinutesText(int minutes)
+        {
+            minutes = Math.Max(0, minutes);
+            return minutes >= 60 ? (minutes / 60) + " h " + (minutes % 60) + " min" : minutes + " min";
+        }
+        // Next break: when a running session ends, otherwise how long the next session is.
+        public static string BreakText(bool running, TimeSpan remaining, TimeSpan duration, DateTime now, bool use24)
+        {
+            if (running && remaining > TimeSpan.Zero) return (now + remaining).ToString(use24 ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            var left = remaining > TimeSpan.Zero && remaining < duration ? remaining : duration;
+            return "In " + Math.Max(1, (int)Math.Ceiling(left.TotalMinutes)) + " min";
+        }
+        // The status sticker: Done, Focusing or Paused, otherwise today's count ("2 TODAY"), or nothing.
+        public static string StateText(bool running, bool finished, bool paused, int sessionsToday)
+        {
+            if (finished) return "DONE";
+            if (running) return "FOCUSING";
+            if (paused) return "PAUSED";
+            return sessionsToday > 0 ? sessionsToday + " TODAY" : "";
+        }
     }
 }

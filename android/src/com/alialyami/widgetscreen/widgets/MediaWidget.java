@@ -20,6 +20,8 @@ import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.integrations.Async;
 import com.alialyami.widgetscreen.integrations.Images;
 import com.alialyami.widgetscreen.views.GlyphView;
+import com.alialyami.widgetscreen.views.StickerParts;
+import com.alialyami.widgetscreen.views.Stickers;
 import com.alialyami.widgetscreen.views.TouchSlider;
 
 // Now Playing on the PC: whatever Windows says is playing, with its controls, run on the PC. The position keeps
@@ -33,6 +35,15 @@ public final class MediaWidget extends Widget {
     private String artKey = "", hintText = "", volumeSession;
     private Bitmap artwork;
     private long lastVolumeSent;
+    // Sticker Sheet phase 2 (docs/design/sticker-sheet.md): the sleeve the record peeks out of, the album line, the
+    // Length and Left chips, the empty dashed sleeve and the cover's tint on the card.
+    private FrameLayout sleeve, cover;
+    private StickerParts.DiscPeek disc;
+    private TextView album, lengthChip, leftChip;
+    private View chips;
+    private double coverSize, peek;
+    private boolean folded, large, chipsRoom, shownPlaying = true, shownArt = true;
+    private String shownTint = null;
 
     public MediaWidget(Dashboard dash) { super("Media", dash); }
 
@@ -41,7 +52,8 @@ public final class MediaWidget extends Widget {
     @Override protected View create() {
         volumePanel = null;
         // A short card is one row of cover and song over the buttons; a narrow one draws the buttons closer (as on the PC).
-        boolean folded = CardSizing.mediaShort(height), narrow = CardSizing.mediaNarrow(width);
+        folded = CardSizing.mediaShort(height); boolean narrow = CardSizing.mediaNarrow(width);
+        shownPlaying = true; shownArt = true; shownTint = null;
         LinearLayout column = ui.column();
         FrameLayout header = new FrameLayout(ui.context);
         header.addView(strip(), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -52,19 +64,25 @@ public final class MediaWidget extends Widget {
 
         // Three designs (CardSizing.media, as on the PC): SMALL is one row of cover and song over the buttons; MEDIUM puts
         // the cover beside the song over the seek row; LARGE centres a big cover over the song.
-        boolean large = CardSizing.media(width, height) == CardSizing.LARGE;
+        large = CardSizing.media(width, height) == CardSizing.LARGE;
         LinearLayout content = large ? ui.column() : ui.row();
         if (large) content.setGravity(Gravity.CENTER);
-        FrameLayout cover = new FrameLayout(ui.context);
-        // The cover grows with the card (CardSizing, as on the PC); larger text takes more of the room under it.
-        double size = large ? Math.max(120, CardSizing.mediaCover(width, height) - Math.round((ui.textScale - 1) * 80)) : CardSizing.mediaArt(width, height);
+        cover = new FrameLayout(ui.context);
+        // The cover grows with the card (CardSizing, as on the PC); larger text and the album line take more of the room under it.
+        double size = large ? Math.max(120, CardSizing.mediaCover(width, height) - Math.round((ui.textScale - 1) * 80) - 24) : CardSizing.mediaArt(width, height);
+        coverSize = size; peek = folded ? 0 : Math.round(size * 0.3);
         cover.setBackground(ui.shape(ui.theme.clockSurface, 0, 0, size < 80 ? 10 : large ? 20 : 14));
         cover.setClipToOutline(true);
         cover.addView(new GlyphView(ui.context, "music", ui.theme.accent, ui.fpx((float) Math.round(Math.min(large ? 96 : 46, size * 0.44)))), new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
         art = new ImageView(ui.context);
         art.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.addView(art, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-        content.addView(cover, large ? ui.ll(ui.px(size), ui.px(size)) : ui.margins(ui.ll(ui.px(size), ui.px(size)), 0, 0, 12, 0));
+        // The sleeve: the cover over a record that peeks out by 30% of it while something plays.
+        sleeve = new FrameLayout(ui.context);
+        disc = new StickerParts.DiscPeek(ui, dash.ink(id));
+        sleeve.addView(disc, ui.frame(ui.px(Math.round(size * 0.92)), ui.px(Math.round(size * 0.92)), Gravity.END | Gravity.CENTER_VERTICAL));
+        sleeve.addView(cover, ui.frame(ui.px(size), ui.px(size), Gravity.START | Gravity.CENTER_VERTICAL));
+        content.addView(sleeve, large ? ui.ll(ui.px(size + peek), ui.px(size)) : ui.margins(ui.ll(ui.px(size + peek), ui.px(size)), 0, 0, 12, 0));
         LinearLayout text = ui.column();
         // One line for the title, as on the PC; the whole name is in the content description.
         title = Ui.wrap(large ? ui.text("Nothing playing", 28 * ui.textScale, ui.theme.text) : ui.heading("Nothing playing"), 1);
@@ -74,6 +92,18 @@ public final class MediaWidget extends Widget {
         artist = Ui.wrap(ui.smallText(""), folded || large ? 1 : 2);
         if (large) artist.setGravity(Gravity.CENTER);
         text.addView(artist, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, folded ? 2 : large ? 6 : 8, 0, 0));
+        album = Ui.wrap(ui.smallText(""), 1);
+        if (large) album.setGravity(Gravity.CENTER);
+        if (!folded) text.addView(album, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 2, 0, 0));
+        // Length and Left need a roomy text column (as on the PC).
+        double textRoom = large ? width - 48 : width - 48 - size - peek - 20;
+        chipsRoom = !folded && textRoom >= 220 && (large ? height - 48 - size - 28 - 48 - 54 - 26 >= 150 * ui.textScale : height >= 340 + 60 * (ui.textScale - 1));
+        LinearLayout chipRow = ui.row();
+        LinearLayout length = Stickers.factChip(ui, "Length", "—"), left = Stickers.factChip(ui, "Left", "—");
+        lengthChip = (TextView) length.getChildAt(1); leftChip = (TextView) left.getChildAt(1);
+        chipRow.addView(length, ui.margins(ui.ll(0, Ui.WRAP, 1), 0, 0, 8, 0)); chipRow.addView(left, ui.ll(0, Ui.WRAP, 1));
+        chips = chipRow;
+        if (chipsRoom) text.addView(chipRow, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 10, 0, 0));
         if (large) content.addView(text, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 14, 0, 0));
         else content.addView(text, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 0));
         column.addView(content, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, folded ? 8 : 12, 0, 4));
@@ -155,7 +185,41 @@ public final class MediaWidget extends Widget {
             if (!key.isEmpty()) loadArt(key);
         }
         art.setImageBitmap(artwork);
+        album.setText(available ? m.album : ""); album.setVisibility(album.getText().length() > 0 ? View.VISIBLE : View.GONE);
+        if (available && m.durationMs > 0) { lengthChip.setText(Format.mediaTime((long) m.durationMs)); leftChip.setText(Format.mediaTime((long) Math.max(0, m.durationMs - shownPosition))); }
+        else { lengthChip.setText("—"); leftChip.setText("—"); }
+        chips.setVisibility(available ? View.VISIBLE : View.GONE);
+        showSleeve(available, artwork != null || (available && m.art), available ? m.tint : "");
         if (volumePanel != null) renderVolume();
+    }
+
+    // The sleeve, its record and the card's tint change only when playing, the cover or its colour do.
+    private void showSleeve(boolean playing, boolean hasArt, String tint) {
+        boolean playingChanged = playing != shownPlaying;
+        if (playingChanged) {
+            shownPlaying = playing;
+            disc.setVisibility(playing && peek > 0 ? View.VISIBLE : View.GONE);
+            android.view.ViewGroup.LayoutParams params = sleeve.getLayoutParams();
+            params.width = ui.px(coverSize + (playing ? peek : 0)); sleeve.setLayoutParams(params);
+        }
+        if (hasArt != shownArt || playingChanged || shownTint == null) {
+            shownArt = hasArt;
+            double radius = coverSize < 80 ? 10 : large ? 20 : 14;
+            if (hasArt) cover.setBackground(ui.shape(ui.theme.clockSurface, ui.theme.text, 2, radius));
+            else {
+                android.graphics.drawable.GradientDrawable empty = ui.shape(ui.theme.clockSurface, 0, 0, radius);
+                if (!playing) empty.setStroke(Math.max(1, ui.px(1.5)), ui.theme.muted, ui.fpx(3), ui.fpx(2));
+                cover.setBackground(empty);
+            }
+        }
+        if (!tint.equals(shownTint)) {
+            shownTint = tint;
+            int colour = Theme.parseTint(tint);
+            android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] { colour == 0 ? ui.theme.surface : Theme.blend(ui.theme.surface, colour, 0.22), ui.theme.surface });
+            card.setCornerRadius(ui.fpx(ui.radius)); card.setStroke(Math.max(1, ui.px(1)), ui.theme.controlBorder);
+            root.setBackground(card);
+        }
     }
 
     @Override public void tick(int ticks, boolean quiet) {

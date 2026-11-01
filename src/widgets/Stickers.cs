@@ -229,6 +229,9 @@ namespace WidgetScreen
         // Filled: an active state in the ink (a prayer starting now). Warns: the words are a problem (Clipboard paused).
         public bool Filled { get { return filled; } set { if (filled != value) { filled = value; Update(); } } }
         public bool Warns { get { return warns; } set { if (warns != value) { warns = value; Update(); } } }
+        // A glyph before a fact's words (the mixer's microphone in ON AIR), in the words' colour; null for none.
+        private string factGlyph;
+        public string Glyph { get { return factGlyph; } set { if (factGlyph != value) { factGlyph = value; Update(); } } }
         // The sticker around a caption, for cards that only hold the caption.
         public static StatusSticker For(TextBlock caption)
         {
@@ -298,7 +301,12 @@ namespace WidgetScreen
             Visibility = words.Length == 0 || Caption.Visibility != Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             State = Inks.StateOf(words, warns); InvalidateMeasure();
             bool warning = State == Inks.StickerState.Warning;
-            stripes.Visibility = glyph.Visibility = warning ? Visibility.Visible : Visibility.Collapsed;
+            bool factGlyphShown = State == Inks.StickerState.Fact && !String.IsNullOrEmpty(factGlyph);
+            stripes.Visibility = warning ? Visibility.Visible : Visibility.Collapsed;
+            glyph.Visibility = warning || factGlyphShown ? Visibility.Visible : Visibility.Collapsed;
+            glyph.Text = factGlyphShown ? factGlyph : "";
+            glyph.Margin = new Thickness(factGlyphShown ? 10 : 6, 0, 0, 0);
+            glyph.SetResourceReference(TextBlock.ForegroundProperty, warning || (factGlyphShown && filled) ? "InkText" : Stickers.InkKey(Id));
             outline.StrokeDashArray = State == Inks.StickerState.Unavailable ? new DoubleCollection { 3, 2 } : null;
             outline.StrokeThickness = State == Inks.StickerState.Offline ? 2 : Stickers.StickerBorder;
             outline.RenderTransform = Transform.Identity;
@@ -319,7 +327,7 @@ namespace WidgetScreen
                 default:
                     if (filled) { outline.SetResourceReference(Shape.FillProperty, Stickers.InkKey(Id)); Caption.SetResourceReference(TextBlock.ForegroundProperty, "InkText"); }
                     else { outline.Fill = null; Caption.SetResourceReference(TextBlock.ForegroundProperty, Stickers.InkKey(Id)); }
-                    outline.SetResourceReference(Shape.StrokeProperty, Stickers.InkKey(Id)); Caption.Margin = new Thickness(10, 0, 10, 0);
+                    outline.SetResourceReference(Shape.StrokeProperty, Stickers.InkKey(Id)); Caption.Margin = new Thickness(factGlyphShown ? 6 : 10, 0, 10, 0);
                     break;
             }
         }

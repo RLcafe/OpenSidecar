@@ -10,6 +10,8 @@ import java.util.List;
 public final class Spotify {
     public static final class Item {
         public String id, uri, name, subtitle, imageUrl, albumUrl;
+        // "11 songs · 2024", "Ali · 24 songs" or a song's year, from the PC (Sticker Sheet phase 2); "" without one.
+        public String caption = "";
         // Zero-based place in its album or playlist, counting items this app cannot show; -1 outside a collection.
         public int position = -1;
         public String webUrl() { return Spotify.webUrl(uri); }

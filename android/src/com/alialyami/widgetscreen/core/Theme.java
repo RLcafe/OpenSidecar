@@ -47,6 +47,18 @@ public final class Theme {
         }
     }
 
+    // A cover tint as an ARGB colour from the PC's "#RRGGBB", or 0 without one.
+    public static int parseTint(String hex) {
+        if (hex == null || hex.length() != 7 || hex.charAt(0) != '#') return 0;
+        try { return 0xFF000000 | Integer.parseInt(hex.substring(1), 16); } catch (NumberFormatException e) { return 0; }
+    }
+    // Mixes part of b into a, the PC's MediaService.Blend: a card's top takes 22% (Now Playing) or 30% (Spotify's panel).
+    public static int blend(int a, int b, double part) {
+        int r = mix((a >> 16) & 0xFF, (b >> 16) & 0xFF, part), g = mix((a >> 8) & 0xFF, (b >> 8) & 0xFF, part), bl = mix(a & 0xFF, b & 0xFF, part);
+        return 0xFF000000 | (r << 16) | (g << 8) | bl;
+    }
+    private static int mix(int a, int b, double part) { return (int) Math.round(a + (b - a) * part); }
+
     public static int accentColor(String accent) {
         return "Glacier".equals(accent) ? 0xFF8ED8F8 : "Lavender".equals(accent) ? 0xFFC5AEFF : "Amber".equals(accent) ? 0xFFF5C47D : 0xFFBAF28B;
     }

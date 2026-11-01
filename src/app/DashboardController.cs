@@ -42,7 +42,8 @@ namespace WidgetScreen
         private readonly PlaybackScrubber mediaScrubber;
         private readonly WeatherService weather = new WeatherService();
         private readonly FocusTimer focus = new FocusTimer();
-        private readonly LevelVisualizer levels = new LevelVisualizer();
+        // The output level as LED segments (docs/design/sticker-sheet.md, phase 2); the Large card's master strip has its own ladder.
+        private readonly LedMeter levels = new LedMeter { Segment = 10 };
         private readonly OutputPicker outputPicker;
         private readonly ConfirmSheet confirm;
         private List<AudioDevice> outputs = new List<AudioDevice>();
@@ -127,7 +128,7 @@ namespace WidgetScreen
             levelTimer.Tick += async (sender, e) => {
                 if (levelBusy || !Showing || disposed) return;
                 levelBusy = true;
-                try { float peak = await audio.Run(a => a.Peak()); if (!disposed) levels.Push(peak); }
+                try { float peak = await audio.Run(a => a.Peak()); if (!disposed) PushLevel(peak); }
                 catch (Exception) { }
                 finally { levelBusy = false; }
             };
@@ -316,8 +317,19 @@ namespace WidgetScreen
             Control<Border>("FocusFinished").Visibility = focus.Finished ? Visibility.Visible : Visibility.Collapsed;
             string ends = (DateTime.Now + remaining).ToString(settings.Use24HourClock ? "HH:mm" : "h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
             Text("FocusStatus", remaining == TimeSpan.Zero ? (focus.Finished ? "Done. Take a break. Tap to clear." : "Done. Take a break.") : focus.Running ? "Ends at " + ends : focus.Progress > 0 ? "Paused" : "");
-            Control<ProgressBar>("FocusProgress").Value = focus.Progress; if (focusRing != null) focusRing.Value = focus.Progress * 100;
+            Control<ProgressBar>("FocusProgress").Value = focus.Progress;
             Text("FocusSessions", FocusTimer.SessionsText(FocusSessionsToday, FocusMinutesToday));
+            // The dial, pips, chips and status sticker (docs/design/sticker-sheet.md, phase 2).
+            if (focusDial != null)
+            {
+                focusDial.Left = 1 - focus.Progress;
+                focusPips.Count = FocusSessionsToday;
+                AutomationProperties.SetName(focusPips, FocusTimer.SessionsText(FocusSessionsToday, FocusMinutesToday));
+                focusTodayChip.Text = FocusTimer.MinutesText(FocusMinutesToday);
+                focusBreakChip.Text = FocusTimer.BreakText(focus.Running, remaining, focus.Duration, DateTime.Now, settings.Use24HourClock);
+            }
+            Text("FocusState", FocusTimer.StateText(focus.Running, focus.Finished, focus.Paused, FocusSessionsToday));
+            var focusSticker = StatusSticker.For(Control<TextBlock>("FocusState")); if (focusSticker != null) focusSticker.Filled = focus.Finished || focus.Running;
             Control<Button>("FocusStart").Content = focus.Running ? "Pause" : focus.Progress > 0 && remaining > TimeSpan.Zero ? "Resume" : CardSizing.FocusShort(Editor.Bounds("Focus").Height) ? "Start" : "Start focus";
             int minutes = (int)focus.Duration.TotalMinutes;
             var length = Control<Button>("FocusLength"); length.Content = minutes + "m"; length.IsEnabled = !focus.Running;
@@ -366,9 +378,9 @@ namespace WidgetScreen
             window.Resources["BodySize"] = 18.0 * appearance.TextScale;
             window.Resources["TitleSize"] = 24.0 * appearance.TextScale;
             window.Resources["HeaderClockSize"] = 52.0 * Math.Min(1.06, appearance.TextScale);
-            levels.BarBrush = accent;
             stripScale = appearance.TextScale;
             ApplyInks(editInks ?? appearance.WidgetInks, appearance.WidgetColours, selectedAccent);
+            ApplyMediaTint(); if (spotify != null) spotify.ApplyTint();
         }
 
         private void PreviewAppearance()
@@ -453,14 +465,14 @@ namespace WidgetScreen
 
         private void UpdateLevelTimer()
         {
-            // Only a Full mixer card has room for the meter (CardSizing.Mixer), so smaller cards don't run it.
-            bool room = CardSizing.Mixer(Editor.Bounds("Mixer").Height) == CardSizing.MixerMode.Full;
+            // Medium and Large mixer cards have room for the meter (CardSizing.Mixer); the Master card doesn't run it.
+            bool room = CardSizing.Mixer(Editor.Bounds("Mixer").Height) != CardSizing.MixerMode.Master;
             bool enabled = audioAvailable && settings.ShowLevels && !settings.QuietMode && !Editor.Editing && Editor.IsVisible("Mixer") && Showing && room;
-            if (enabled) levelTimer.Start(); else { levelTimer.Stop(); levels.Clear(); }
+            if (enabled) levelTimer.Start(); else { levelTimer.Stop(); ClearLevels(); }
             // The meter's row shows while levels run, or to say they're unavailable; paused levels take no room.
             bool unavailable = settings.ShowLevels && !audioAvailable && Editor.IsVisible("Mixer") && room;
             Control<RowDefinition>("LevelRow").Height = new GridLength(enabled || unavailable ? 28 : 0);
-            ((FrameworkElement)Control<Border>("LevelHost").Parent).Visibility = room ? Visibility.Visible : Visibility.Collapsed;
+            ((FrameworkElement)Control<Border>("LevelHost").Parent).Visibility = room && !stripsShown ? Visibility.Visible : Visibility.Collapsed;
             Text("LevelStatus", unavailable ? "OUTPUT LEVEL UNAVAILABLE" : "");
         }
 
@@ -488,7 +500,8 @@ namespace WidgetScreen
             {
                 // A glyph-only button names itself in its tooltip.
                 string named = labelMode == CardSizing.DeckLabelMode.None ? shortcut.Label + Environment.NewLine : "";
-                var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = named + DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target) };
+                // Keycaps (docs/design/sticker-sheet.md, phase 2): a skirt, a 2-unit drop when pressed and an LED for on.
+                var button = new Button { Margin = new Thickness(4), Padding = new Thickness(8), ToolTip = named + DeckActions.Describe(shortcut), IsEnabled = !String.IsNullOrWhiteSpace(shortcut.Target), Style = (Style)window.Resources["Keycap"] };
                 bool compact = beside; double glyphSize = CardSizing.DeckGlyph(cellHeight, beside);
                 var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Orientation = compact ? Orientation.Horizontal : Orientation.Vertical };
                 var glyph = new TextBlock { Text = String.IsNullOrEmpty(shortcut.Glyph) ? "\uE8A7" : shortcut.Glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = glyphSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -511,8 +524,16 @@ namespace WidgetScreen
                     name.HorizontalAlignment = HorizontalAlignment.Left; name.FontWeight = FontWeights.SemiBold; name.FontSize = 17 * settings.TextScale; name.Margin = new Thickness(0, 12, 0, 0); name.MaxWidth = cellWidth - 44;
                     var kind = new TextBlock { Text = DeckActions.Kind(shortcut), FontSize = 13, Margin = new Thickness(0, 3, 0, 0), MaxWidth = cellWidth - 44, TextTrimming = TextTrimming.CharacterEllipsis };
                     kind.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); content.Children.Add(kind);
+                    // A hotkey's keys as the cap's secondary legend, at its top right.
+                    if (shortcut.Action == "Hotkey" && !String.IsNullOrWhiteSpace(shortcut.Target))
+                    {
+                        kind.Text = "Hotkey";
+                        var legend = new SpacedText { Text = shortcut.Target.Trim().ToUpperInvariant(), FontSize = 13, FontWeight = FontWeights.SemiBold, Spacing = 0.04, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, MaxWidth = Math.Max(40, cellWidth - 44 - Math.Min(40, glyphSize) - 12) };
+                        legend.SetResourceReference(SpacedText.ForegroundProperty, "Muted");
+                        var cap = new Grid(); cap.Children.Add(content); cap.Children.Add(legend); button.Content = cap;
+                    }
                 }
-                button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
+                if (button.Content == null) button.Content = content; AutomationProperties.SetName(button, shortcut.Label);
                 var action = shortcut; button.Click += (sender, e) => RunDeckAction(action); grid.Children.Add(button);
             }
             UpdateDeckStates();
@@ -647,7 +668,7 @@ namespace WidgetScreen
                 Control<Button>("MuteButton").ToolTip = snapshot.Muted ? "Unmute output" : "Mute output";
                 AutomationProperties.SetName(Control<Button>("MuteButton"), snapshot.Muted ? "Unmute output" : "Mute output");
                 ShowMicrophone(!snapshot.MicrophoneMuted.HasValue ? "No microphone" : snapshot.MicrophoneMuted.Value ? "Microphone muted" : "Microphone on", snapshot.MicrophoneMuted);
-                UpdateSessions(snapshot.Sessions);
+                UpdateSessions(snapshot.Sessions); UpdateStrips(snapshot); ShowMicState(snapshot.MicrophoneMuted);
                 Text("NoSessions", snapshot.SessionsAvailable ? "Apps show up here when they play sound." : "App volumes aren't available right now. Master volume still works.");
                 if (!snapshot.SessionsAvailable) Text("SessionCount", "UNAVAILABLE");
                 UpdateDeckStates();
@@ -665,7 +686,7 @@ namespace WidgetScreen
                 outputs = new List<AudioDevice>(); outputPicker.Close(); Control<Button>("OutputDeviceButton").IsEnabled = false;
                 Control<Slider>("MasterSlider").IsEnabled = false; Control<Button>("MuteButton").IsEnabled = false;
                 ShowMicrophone("Microphone unavailable", null);
-                UpdateSessions(new List<AudioSession>());
+                UpdateSessions(new List<AudioSession>()); UpdateStrips(null); ShowMicState(null);
                 Text("SessionCount", "—");
                 Text("NoSessions", "Reconnect your speakers or headphones, or open Windows sound settings with the gear above. Retrying automatically.");
             }
@@ -887,6 +908,10 @@ namespace WidgetScreen
                 Control<Button>("PreviousButton").IsEnabled = snapshot.Available && snapshot.CanPrevious;
                 Control<Button>("NextButton").IsEnabled = snapshot.Available && snapshot.CanNext;
                 Text("MediaHint", "");
+                Text("TrackAlbum", snapshot.Available ? snapshot.Album ?? "" : "");
+                mediaPlaying = snapshot.Available; mediaHasArt = snapshot.Artwork != null; mediaTint = snapshot.Tint;
+                if (mediaLengthChip != null) { mediaLengthChip.Text = snapshot.Duration > TimeSpan.Zero ? FormatTime(snapshot.Duration) : "—"; mediaLeftChip.Text = snapshot.Duration > TimeSpan.Zero ? FormatTime(snapshot.Duration - snapshot.Position) : "—"; }
+                ShowMediaParts();
             }
             catch (Exception)
             {
@@ -896,7 +921,7 @@ namespace WidgetScreen
                 mediaScrubber.Update(null, 0, 0, false); Control<Image>("AlbumArt").Source = null;
                 Text("MediaHint", "Retrying automatically.");
                 Control<Button>("PlayButton").IsEnabled = false; Control<Button>("PreviousButton").IsEnabled = false; Control<Button>("NextButton").IsEnabled = false;
-                Control<Button>("MediaVolumeButton").IsEnabled = false; CloseMediaVolume();
+                Control<Button>("MediaVolumeButton").IsEnabled = false; CloseMediaVolume(); Text("TrackAlbum", ""); mediaPlaying = false; mediaHasArt = false; mediaTint = null; ShowMediaParts();
             }
             finally { mediaBusy = false; }
         }

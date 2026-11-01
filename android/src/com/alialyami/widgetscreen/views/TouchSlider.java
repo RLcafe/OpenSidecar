@@ -17,7 +17,7 @@ public final class TouchSlider extends View {
     private final float hit, thumb, border, trackHeight;
     private final int accent, track, surface;
     private float min, max = 100, step, value;
-    private boolean dragging;
+    private boolean dragging, vertical;
     private Listener listener;
 
     public TouchSlider(Context context, Ui ui) {
@@ -29,6 +29,8 @@ public final class TouchSlider extends View {
 
     public TouchSlider range(float min, float max, float step) { this.min = min; this.max = Math.max(min + 0.0001f, max); this.step = step; return this; }
     public void setListener(Listener listener) { this.listener = listener; }
+    // Standing up (the mixer's channel strips, Sticker Sheet phase 2): the minimum at the bottom, the fill rising.
+    public TouchSlider vertical() { vertical = true; return this; }
     public float value() { return value; }
     public boolean dragging() { return dragging; }
 
@@ -46,13 +48,25 @@ public final class TouchSlider extends View {
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
-        setMeasuredDimension(resolveSize(Math.round(hit * 3), widthSpec), resolveSize(Math.round(hit), heightSpec));
+        if (vertical) setMeasuredDimension(resolveSize(Math.round(hit), widthSpec), resolveSize(Math.round(hit * 3), heightSpec));
+        else setMeasuredDimension(resolveSize(Math.round(hit * 3), widthSpec), resolveSize(Math.round(hit), heightSpec));
     }
 
     private float left() { return hit / 2; }
-    private float right() { return getWidth() - hit / 2; }
+    private float right() { return (vertical ? getHeight() : getWidth()) - hit / 2; }
 
     @Override protected void onDraw(Canvas canvas) {
+        if (vertical) {
+            // The track runs bottom (min) to top (max); "along" is measured from the bottom.
+            float cx = getWidth() / 2f, along = left() + (right() - left()) * (value - min) / (max - min), y = getHeight() - along;
+            paint.setColor(track);
+            canvas.drawRoundRect(cx - trackHeight / 2, getHeight() - right(), cx + trackHeight / 2, getHeight() - left(), trackHeight / 2, trackHeight / 2, paint);
+            paint.setColor(accent);
+            canvas.drawRoundRect(cx - trackHeight / 2, y, cx + trackHeight / 2, getHeight() - left(), trackHeight / 2, trackHeight / 2, paint);
+            paint.setColor(surface); canvas.drawCircle(cx, y, thumb / 2, paint);
+            paint.setColor(accent); canvas.drawCircle(cx, y, thumb / 2 - border, paint);
+            return;
+        }
         float y = getHeight() / 2f, x = left() + (right() - left()) * (value - min) / (max - min);
         paint.setColor(track);
         canvas.drawRoundRect(left(), y - trackHeight / 2, right(), y + trackHeight / 2, trackHeight / 2, trackHeight / 2, paint);
@@ -61,6 +75,9 @@ public final class TouchSlider extends View {
         paint.setColor(surface); canvas.drawCircle(x, y, thumb / 2, paint);
         paint.setColor(accent); canvas.drawCircle(x, y, thumb / 2 - border, paint);
     }
+
+    // The finger's place along the track: x across, or the distance up from the bottom when standing.
+    private float along(MotionEvent event) { return vertical ? getHeight() - event.getY() : event.getX(); }
 
     private void moveTo(float x, boolean done) {
         float span = Math.max(1, right() - left());
@@ -77,13 +94,13 @@ public final class TouchSlider extends View {
             case MotionEvent.ACTION_DOWN:
                 if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
                 dragging = true; setPressed(true);
-                moveTo(event.getX(), false);
+                moveTo(along(event), false);
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if (dragging) moveTo(event.getX(), false);
+                if (dragging) moveTo(along(event), false);
                 return true;
             case MotionEvent.ACTION_UP:
-                if (dragging) { dragging = false; setPressed(false); moveTo(event.getX(), true); }
+                if (dragging) { dragging = false; setPressed(false); moveTo(along(event), true); }
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 if (dragging) { dragging = false; setPressed(false); if (listener != null) listener.changed(this, value, true); }

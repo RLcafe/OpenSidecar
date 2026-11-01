@@ -180,6 +180,11 @@ public final class CardSizing {
     // The mixer's MASTER, COMPACT and FULL arrangements are its SMALL, MEDIUM and LARGE; a LARGE card 760 wide lists the
     // apps in two columns.
     public static int mixerDesign(double height) { int mode = mixer(height); return mode == MIXER_MASTER ? SMALL : mode == MIXER_COMPACT ? MEDIUM : LARGE; }
+    // Large mixer cards show channel strips (Sticker Sheet phase 2, as on the PC): a 112-unit master strip, then one
+    // 88-unit app strip and an 8-unit gap for each that fits in the card less its 24-unit padding.
+    public static final double MASTER_STRIP_WIDTH = 112, APP_STRIP_WIDTH = 88, STRIP_GAP = 8;
+    public static int mixerStripSlots(double cardWidth) { return Math.max(0, (int) Math.floor((cardWidth - 48 - MASTER_STRIP_WIDTH) / (APP_STRIP_WIDTH + STRIP_GAP))); }
+
     public static int mixerColumns(double width, double height) { return mixer(height) == MIXER_FULL && width >= 760 ? 2 : 1; }
     // Spotify: SMALL is the compact card under 500 tall; LARGE (the song in a side panel with a big cover) from 760 wide.
     public static int spotify(double width, double height) { return spotifyCompact(height) ? SMALL : width >= 760 ? LARGE : MEDIUM; }

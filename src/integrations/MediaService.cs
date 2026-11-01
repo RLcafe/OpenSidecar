@@ -9,7 +9,10 @@ namespace WidgetScreen
     public sealed class MediaSnapshot
     {
         public bool Available, Playing, CanPlayPause, CanPrevious, CanNext, CanSeek;
-        public string Title, Artist, Source, Key;
+        public string Title, Artist, Album, Source, Key;
+        // The cover's average colour (decoded once to a single pixel per cover), or null without a cover; the Sticker
+        // Sheet tints the card and the phone with it (docs/design/sticker-sheet.md, phase 2).
+        public System.Windows.Media.Color? Tint;
         public TimeSpan Position, Duration;
         public BitmapImage Artwork;
     }
@@ -19,19 +22,20 @@ namespace WidgetScreen
         private GlobalSystemMediaTransportControlsSession session;
         private string artworkKey = "";
         private BitmapImage artwork;
+        private System.Windows.Media.Color? artworkTint;
 
         public async Task<MediaSnapshot> ReadAsync()
         {
             if (manager == null) manager = await Await(GlobalSystemMediaTransportControlsSessionManager.RequestAsync());
             session = manager.GetCurrentSession();
-            if (session == null) { artworkKey = ""; artwork = null; return new MediaSnapshot(); }
+            if (session == null) { artworkKey = ""; artwork = null; artworkTint = null; return new MediaSnapshot(); }
             var properties = await Await(session.TryGetMediaPropertiesAsync());
             var playback = session.GetPlaybackInfo();
             var timeline = session.GetTimelineProperties();
             string key = session.SourceAppUserModelId + "|" + properties.Title + "|" + properties.Artist;
             if (key != artworkKey)
             {
-                artworkKey = key; artwork = null;
+                artworkKey = key; artwork = null; artworkTint = null;
                 if (properties.Thumbnail != null)
                 {
                     try
@@ -49,6 +53,7 @@ namespace WidgetScreen
                                         var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
                                         image.DecodePixelWidth = 320; image.StreamSource = input; image.EndInit(); image.Freeze(); artwork = image;
                                     }
+                                    artworkTint = AverageColour(bytes);
                                 }
                             }
                         }
@@ -69,10 +74,37 @@ namespace WidgetScreen
                 CanSeek = playback.Controls.IsPlaybackPositionEnabled && duration > TimeSpan.Zero, Key = key,
                 Title = String.IsNullOrWhiteSpace(properties.Title) ? "Untitled media" : properties.Title,
                 Artist = String.IsNullOrWhiteSpace(properties.Artist) ? properties.AlbumTitle : properties.Artist,
+                Album = String.IsNullOrWhiteSpace(properties.Artist) || String.IsNullOrWhiteSpace(properties.AlbumTitle) ? "" : properties.AlbumTitle, Tint = artworkTint,
                 Source = session.SourceAppUserModelId, Duration = duration,
                 Position = position < TimeSpan.Zero ? TimeSpan.Zero : (duration > TimeSpan.Zero && position > duration ? duration : position), Artwork = artwork
             };
         }
+        // The cover decoded straight to one pixel (the decoder averages as it scales), or null if it can't be read.
+        public static System.Windows.Media.Color? AverageColour(byte[] bytes)
+        {
+            try
+            {
+                using (var input = new MemoryStream(bytes))
+                {
+                    var tiny = new BitmapImage(); tiny.BeginInit(); tiny.CacheOption = BitmapCacheOption.OnLoad;
+                    tiny.DecodePixelWidth = 1; tiny.DecodePixelHeight = 1; tiny.StreamSource = input; tiny.EndInit();
+                    var pixel = new FormatConvertedBitmap(tiny, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                    var bgra = new byte[4]; pixel.CopyPixels(bgra, 4, 0);
+                    return System.Windows.Media.Color.FromRgb(bgra[2], bgra[1], bgra[0]);
+                }
+            }
+            catch (Exception) { return null; }
+        }
+        // "#7A4FB0" for the phone, or "" without a tint.
+        public static string Hex(System.Windows.Media.Color? colour) { return colour.HasValue ? "#" + colour.Value.R.ToString("X2") + colour.Value.G.ToString("X2") + colour.Value.B.ToString("X2") : ""; }
+        // The card's top colour: the Surface with 22% of the tint, so text keeps its contrast whatever the cover.
+        public static System.Windows.Media.Color Blend(System.Windows.Media.Color surface, System.Windows.Media.Color tint, double part)
+        {
+            Func<byte, byte, byte> mix = (a, b2) => (byte)Math.Round(a + (b2 - a) * part);
+            return System.Windows.Media.Color.FromRgb(mix(surface.R, tint.R), mix(surface.G, tint.G), mix(surface.B, tint.B));
+        }
+        public const double TintPart = 0.22;
+
         public async Task<bool> CommandAsync(string command)
         {
             if (session == null) return false;
