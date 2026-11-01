@@ -104,6 +104,11 @@ namespace WidgetScreen
         // Claude Code (Settings → Claude): a chime when a session starts needing you, and which projects the card shows.
         // A project with no choice follows ClaudeShowNewProjects (on by default). The plan meters always show the plan.
         public bool ClaudeChime { get; set; }
+        // Quiet mode stops other motion; the Claude cars keep moving unless this is set (Ali, 1 Nov 2026; decision 019).
+        public bool ClaudeStillInQuiet { get; set; }
+        // The ledger's "API value" (what the tokens would cost at API list prices): off by default, since a plan
+        // doesn't pay those prices and Ali can't check them; replies show instead (decision 019).
+        public bool ClaudeShowApiValue { get; set; }
         public bool ClaudeShowNewProjects { get; set; }
         [XmlArray("ClaudeProjects"), XmlArrayItem("Project")]
         public ClaudeProjectChoice[] ClaudeProjects { get; set; }

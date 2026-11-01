@@ -111,8 +111,9 @@ namespace WidgetScreen
         private void TickClaude()
         {
             bool shown = Editor.IsVisible("Claude") && !Editor.Editing;
-            claudeCard.SetLive(shown && window.WindowState != WindowState.Minimized && !settings.QuietMode);
-            if (claudeSample) { if (shown) claudeCard.Tick(settings.QuietMode); return; }
+            claudeCard.Tick(ClaudeStill, shown);
+            claudeCard.SetLive(shown && window.WindowState != WindowState.Minimized);
+            if (claudeSample) return;
             // Renders never read this PC's sessions or logs, or ask for the plan's usage; they use the labelled sample.
             if (Program.Rendering) return;
             if (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage) { if (claudeView != null && claudeView.NeedsYou > 0) { claudeView = null; UpdateClaudePill(); } return; }
@@ -135,8 +136,9 @@ namespace WidgetScreen
                 if (claude.Connected) claude.Telemetry.Start(); else claude.Telemetry.Stop();
             }
             if (changed || claudeDirty) RefreshClaudeView();
-            if (shown) claudeCard.Tick(settings.QuietMode);
         }
+        // Quiet mode keeps the cars still only when Settings → Claude says so (decision 019).
+        private bool ClaudeStill { get { return settings.QuietMode && settings.ClaudeStillInQuiet; } }
 
         // The plan check runs on its interval while the widget is signed in to Claude, in the tray too (Ali, 1 Nov 2026).
         private void TickClaudeOnline()
@@ -220,6 +222,8 @@ namespace WidgetScreen
             Text("ClaudeTelemetryText", conflicts.Count > 0 ? "Telemetry is left out: your settings.json already sets " + String.Join(", ", conflicts) + ". Remove those to let Widget Screen show live usage per session; until then usage comes from Claude Code's logs."
                 : !claude.Connected ? "" : claude.Telemetry.Problem ?? (claude.Telemetry.LastReceived > DateTime.MinValue ? "Telemetry last arrived at " + ClaudeText.Clock(claude.Telemetry.LastReceived, settings.Use24HourClock) + "." : "Telemetry arrives from Claude Code sessions started after connecting."));
             Control<CheckBox>("ClaudeChimeChoice").IsChecked = settings.ClaudeChime;
+            Control<CheckBox>("ClaudeStillChoice").IsChecked = settings.ClaudeStillInQuiet;
+            Control<CheckBox>("ClaudeApiValueChoice").IsChecked = settings.ClaudeShowApiValue;
             Control<CheckBox>("ClaudeShowNewChoice").IsChecked = settings.ClaudeShowNewProjects;
             Control<TextBox>("ClaudeCardSecondsBox").Text = settings.ClaudeCardSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Control<TextBox>("ClaudePlanSecondsBox").Text = settings.ClaudePlanSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -271,6 +275,8 @@ namespace WidgetScreen
         private void SaveClaudeChoices(AppSettings candidate)
         {
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true;
+            candidate.ClaudeStillInQuiet = Control<CheckBox>("ClaudeStillChoice").IsChecked == true;
+            candidate.ClaudeShowApiValue = Control<CheckBox>("ClaudeApiValueChoice").IsChecked == true;
             candidate.ClaudeShowNewProjects = Control<CheckBox>("ClaudeShowNewChoice").IsChecked == true;
             candidate.ClaudeCardSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudeCardSecondsBox").Text, settings.ClaudeCardSeconds, ClaudeIntervals.Card);
             candidate.ClaudePlanSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudePlanSecondsBox").Text, settings.ClaudePlanSeconds, ClaudeIntervals.Plan);
@@ -385,21 +391,21 @@ namespace WidgetScreen
             // groups babies under their project critters the same way. Titles are the Claude app's; never prompts.
             Func<ClaudePeriod, object[]> groups = period => view.Groups(period).Select(g => (object)D("key", g.Folder, "project", g.Name, "collapsed", g.Collapsed,
                 "tokens", g.Tokens, "cost", Math.Round(g.Cost, 4), "threads", g.Threads.Select(t => (object)t.Id).ToArray(),
-                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed)).ToArray();
+                "mix", Shares(g.Mix), "added", g.Added, "removed", g.Removed, "replies", g.Replies, "cache", g.CacheReads, "lastActive", ClaudeBridge.Epoch(g.LastActive == DateTime.MinValue ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) : g.LastActive) / 1000.0)).ToArray();
             // The pit wall (decision 017): each thread's car and what it does, its burn, mix and lines per period.
             Func<ClaudeSession, Func<ClaudePeriod, object>, object> per = (t, value) => D("fiveHour", value(ClaudePeriod.FiveHour), "today", value(ClaudePeriod.Today), "week", value(ClaudePeriod.Week));
             return D("connected", view.Connected, "sample", view.Sample, "logsFailed", view.LogsFailed, "logsRead", view.LogsRead, "noPlan", view.NoPlan, "plan", ClaudeText.PlanName(view.Plan),
-                "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod,
+                "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod, "still", ClaudeStill, "apiValue", settings.ClaudeShowApiValue,
                 "threads", view.Threads.Select(t => (object)D("id", t.Id, "project", t.ProjectName, "title", t.Title, "running", t.Running, "state", ClaudeSessionFile.StateName(t.Running ? t.State : ClaudeState.Ready),
                     "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus,
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),
-                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()))).ToArray(),
+                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()), "replies", per(t, p => t.RepliesFor(p)), "cache", per(t, p => t.CacheReadsFor(p)))).ToArray(),
                 "burn", D("rate", Math.Round(view.Rate), "scale", view.Scale, "minutes", view.Burn.Select(v => (object)Math.Round(v)).ToArray()),
-                "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
+                "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "thread", l.Session.Length > 0, "color", ClaudeBridge.ProjectName(l.Folder), "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
                 "facts", D("tokens", view.Facts.Tokens, "cost", Math.Round(view.Facts.Cost, 4), "prompt", view.Facts.Prompt, "cacheRead", view.Facts.CacheRead, "tools", view.Facts.Tools, "asked", view.Facts.Asked,
-                    "denied", view.Facts.Denied, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry),
+                    "denied", view.Facts.Denied, "replies", view.Facts.Replies, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry),
                 "groups", D("fiveHour", groups(ClaudePeriod.FiveHour), "today", groups(ClaudePeriod.Today), "week", groups(ClaudePeriod.Week)),
                 "sessions", view.Sessions.Select(s => (object)D("id", s.Id, "project", s.ProjectName, "title", s.Title, "state", ClaudeSessionFile.StateName(s.State),
                     "since", ClaudeBridge.Epoch(s.Since) / 1000.0, "message", s.Message, "model", s.Model, "where", s.Where, "canFocus", s.CanFocus,

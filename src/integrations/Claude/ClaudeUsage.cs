@@ -14,6 +14,8 @@ namespace WidgetScreen
     {
         public DateTime At;
         public string Session = "", Folder = "", Model = "", Request = "";
+        // The tokens the card shows: fresh input, cache writes and output (Ali, 1 Nov 2026: counting cache reads made
+        // the totals hundreds of times what the Claude app shows). Cache reads are kept in CacheRead.
         public long Tokens;
         // The input side of the reply (fresh input, cache writes and cache reads) and how much of it came from the
         // cache, for the card's cache hit rate.
@@ -147,7 +149,7 @@ namespace WidgetScreen
         // A reply from telemetry. Its cost is Claude Code's own, so it replaces a log line's estimate for the same reply.
         public void Add(ClaudeUsageEntry entry, DateTime now)
         {
-            if (entry == null || entry.Tokens <= 0) return;
+            if (entry == null || entry.Tokens + entry.CacheRead <= 0) return;
             lock (gate)
             {
                 string key = entry.Request.Length > 0 ? entry.Request : "telemetry|" + entry.Session + "|" + entry.At.Ticks + "|" + entry.Tokens;
@@ -236,8 +238,8 @@ namespace WidgetScreen
                 string request = ClaudeJson.Str(o, "requestId") ?? "", key = request.Length > 0 ? request : (ClaudeJson.Str(message, "id") ?? "");
                 if (key.Length > 0 && replies.ContainsKey(key)) continue;
                 long input = Count(usage, "input_tokens"), output = Count(usage, "output_tokens"), creation = Count(usage, "cache_creation_input_tokens"), read = Count(usage, "cache_read_input_tokens");
-                long tokens = input + output + creation + read;
-                if (tokens <= 0) continue;
+                long tokens = input + output + creation;
+                if (tokens + read <= 0) continue;
                 var at = ClaudeBridge.ParseTime(ClaudeJson.Str(o, "timestamp"));
                 if (!at.HasValue) continue;
                 // A cache write is a five-minute one unless the reply says how much was kept for an hour.
@@ -261,15 +263,12 @@ namespace WidgetScreen
         }
         private static long Count(JsonObject usage, string key) { double v = ClaudeJson.Num(usage, key); return Double.IsNaN(v) || v < 0 ? 0 : (long)v; }
 
-        // Where a period starts: the plan's own windows when Claude Code has said when they reset, otherwise the last
-        // five hours or seven days; Today is local midnight.
+        // Where a period starts: the last five hours, local midnight, or the last seven days (decision 019). The plan's
+        // own windows used to set 5 h and Week, but a week that had just reset hid almost every thread and project.
         public static DateTime Start(ClaudePeriod period, ClaudeLimits limits, DateTime now)
         {
             if (period == ClaudePeriod.Today) return DateTime.SpecifyKind(now.ToLocalTime().Date, DateTimeKind.Local).ToUniversalTime();
-            var window = limits == null ? null : period == ClaudePeriod.FiveHour ? limits.FiveHour : limits.Week;
-            var length = period == ClaudePeriod.FiveHour ? TimeSpan.FromHours(5) : TimeSpan.FromDays(7);
-            if (window != null && window.ResetsAt.HasValue && window.ResetsAt.Value > now && window.ResetsAt.Value - now <= length) return window.ResetsAt.Value - length;
-            return now - length;
+            return now - (period == ClaudePeriod.FiveHour ? TimeSpan.FromHours(5) : TimeSpan.FromDays(7));
         }
 
         public static long Total(IEnumerable<ClaudeUsageEntry> entries, DateTime from, string session = null)

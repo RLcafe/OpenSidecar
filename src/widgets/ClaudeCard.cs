@@ -19,7 +19,7 @@ namespace WidgetScreen
     {
         public static string State(ClaudeState state)
         {
-            return state == ClaudeState.NeedsYou ? "Needs you" : state == ClaudeState.Working ? "Working" : state == ClaudeState.Done ? "Done" : "Ready";
+            return state == ClaudeState.NeedsYou ? "Needs you" : state == ClaudeState.Working ? "Working" : state == ClaudeState.Done ? "Your turn" : "Ready";
         }
         // "now", "2 min", "3 h".
         public static string Duration(TimeSpan time)
@@ -83,6 +83,8 @@ namespace WidgetScreen
             if (!view.Connected && view.Threads.Count == 0) return "Not connected";
             var parts = new List<string>();
             if (view.NeedsYou > 0) parts.Add(view.NeedsYou + " needs you");
+            int turn = view.Sessions.Count(s => s.Pit == PitState.Done);
+            if (turn > 0) parts.Add(turn + " your turn");
             if (view.Working > 0) parts.Add(view.Working + " running");
             if (threads)
             {
@@ -124,6 +126,13 @@ namespace WidgetScreen
         }
         public const string SignIn = "Sign in to Claude in Settings → Claude to see plan limits.", SignInEnded = "Your Claude sign-in has ended. Sign in again in Settings → Claude.";
         public const string NotConnected = "Connect Claude Code in Settings → Claude.", NoSessions = "No Claude Code sessions running.", NoLogs = "Can't read Claude Code's logs.";
+        // The plan reports no 5-hour window (only weekly ones), as Anthropic's usage answer can.
+        public const string NoFiveHour = "No 5-hour limit on your plan right now";
+        public const string CacheTip = "Tokens Claude read back from the prompt cache. They're cheap and not counted in Tokens.";
+        public const string RepliesTip = "Claude's replies in this period, one per request to Claude.";
+        public static string Replies(int count) { return count == 1 ? "1 reply" : count + " replies"; }
+        public const string ApiValueTip = "What the same use would cost on Anthropic's API at list prices, cache reads included. It isn't what your Claude plan charges: the plan meters show your plan's use.";
+        public const string TokensTip = "Fresh input, cache writes and output. Cache reads aren't counted here (see Cache hits).";
         public static string PeriodName(ClaudePeriod period) { return period == ClaudePeriod.FiveHour ? "5 h" : period == ClaudePeriod.Today ? "Today" : "Week"; }
         // "Plan limits as of 10:42" when a check failed, and the sign-in's end when it has.
         public static string Source(ClaudeView view, bool use24)
@@ -143,6 +152,8 @@ namespace WidgetScreen
         // Under a project's name: "3 threads · 2 running · Claude app".
         public static string GroupDetail(ClaudeProjectGroup group)
         {
+            // A project with no thread in the period: when it was last used.
+            if (group.Threads.Count == 0) return group.Seen > DateTime.MinValue ? "Quiet · last used " + Day(group.Seen) : "Quiet";
             var parts = new List<string> { Threads(group.Threads.Count) };
             if (group.Running > 0) parts.Add(group.Running + " running");
             var where = group.Threads.Where(t => t.Running && t.Where.Length > 0).Select(t => t.Where).Distinct().ToList();
@@ -150,6 +161,8 @@ namespace WidgetScreen
             else if (group.Asleep) parts.Add("ended " + Duration(DateTime.UtcNow - group.LastActive) + " ago");
             return String.Join(" · ", parts);
         }
+        // "Oct 25".
+        public static string Day(DateTime at) { return at.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture); }
         // "3:40 pm" today, otherwise the day ("Thu").
         public static string Ago(DateTime at, DateTime now, bool use24)
         {
@@ -179,18 +192,18 @@ namespace WidgetScreen
                 case PitState.Rev: return "Tool run";
                 case PitState.Pit: return "Compacting";
                 case PitState.Stuck: return "Retrying";
-                case PitState.Done: return "Done";
+                case PitState.Done: return "Your turn";
                 case PitState.End: return "Ended";
-                default: return "Ready";
+                default: return "Idle";
             }
         }
         // A thread's tooltip: the full title, its state or when it was last active, its usage and its model.
-        public static string ThreadTip(ClaudeSession thread, ClaudePeriod period, DateTime now, bool use24, bool counted)
+        public static string ThreadTip(ClaudeSession thread, ClaudePeriod period, DateTime now, bool use24, bool counted, bool apiValue = false)
         {
             var lines = new List<string> { ThreadTitle(thread, now, use24) };
             lines.Add(thread.Running ? StateWords(thread.State, thread.Since, now, true) + (thread.State == ClaudeState.NeedsYou && !String.IsNullOrWhiteSpace(thread.Message) ? " · " + Ask(thread.Message) : "") : "Ended · last active " + Ago(thread.LastActive, now, use24));
             var detail = new List<string>();
-            if (counted) detail.Add(Usage(thread.TokensFor(period), thread.CostFor(period)) + " " + PeriodName(period).ToLowerInvariant());
+            if (counted) detail.Add(ClaudeUsage.Format(thread.TokensFor(period)) + " tokens · " + Replies(thread.RepliesFor(period)) + (apiValue ? " · " + ClaudeUsage.Money(thread.CostFor(period)) + " API value" : "") + " " + PeriodName(period).ToLowerInvariant());
             if (!String.IsNullOrWhiteSpace(thread.Model)) detail.Add(thread.Model);
             if (!String.IsNullOrWhiteSpace(thread.Where)) detail.Add(thread.Where);
             if (detail.Count > 0) lines.Add(String.Join(" · ", detail));
@@ -299,13 +312,23 @@ namespace WidgetScreen
             if (rolling == null && next != null) { collapsed.Clear(); collapsed.UnionWith(next.Collapsed); }
             Rebuild();
         }
-        public void Configure(bool use24Hour, ClaudePeriod chosen) { use24 = use24Hour; if (chosen != period) { period = chosen; Rebuild(); } else Render(); }
-        // The heartbeat: the "2 min" counts and Quiet mode. The cars move on the card's own frame clock.
-        public void Tick(bool quietMode)
+        public void Configure(bool use24Hour, ClaudePeriod chosen, bool apiValue = false)
         {
-            if (quietMode != quiet) { quiet = quietMode; Render(); } else Render();
+            use24 = use24Hour;
+            if (chosen != period || apiValue != showApi) { period = chosen; showApi = apiValue; built = ""; Rebuild(); } else Render();
         }
-        // Whether the card may move: shown on the page, the window not minimised, and not in Quiet mode.
+        // Settings → Claude → Show what the tokens would cost at API list prices (off by default; decision 019): the
+        // ledger's third number column shows that, or else each thread's replies.
+        private bool showApi;
+        public bool ShowsApiValue { get { return showApi; } }
+        // The heartbeat: the "2 min" counts, and whether the cars keep still (Quiet mode with Settings → Claude → Keep
+        // the cars still in Quiet mode; decision 019). The cars move on the card's own frame clock.
+        public void Tick(bool still, bool render = true)
+        {
+            quiet = still;
+            if (render) Render();
+        }
+        // Whether the card may move: shown on the page, the window not minimised, and the cars not kept still.
         public void SetLive(bool shown)
         {
             live = shown && !quiet;
@@ -527,7 +550,7 @@ namespace WidgetScreen
                 gauge.Value = pct / 100; gauge.Projection = Double.IsNaN(projection) ? Double.NaN : projection / 100; gauge.Pace = elapsed; gauge.Warn = pct >= 100; gauge.InvalidateVisual();
                 if (w == null) value.Text = "—"; else SetBig(value, pct, ClaudeText.Warns(pct) ? "Warning" : "Text");
                 pace.Text = ClaudeText.Pace(projection); pace.SetResourceReference(TextBlock.ForegroundProperty, warn ? "Warning" : "Muted");
-                reset.Text = ClaudeText.FiveHourReset(w, now, use24); reset.SetResourceReference(TextBlock.ForegroundProperty, pct >= 100 ? "Warning" : "Muted");
+                reset.Text = w == null ? ClaudeText.NoFiveHour : ClaudeText.FiveHourReset(w, now, use24); reset.SetResourceReference(TextBlock.ForegroundProperty, pct >= 100 ? "Warning" : "Muted");
             });
             return Tile(row, 12, new Thickness(12, 10, 14, 10));
         }
@@ -631,7 +654,8 @@ namespace WidgetScreen
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(72) + 10) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(52) + 10) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(80) + 10) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Scaled(64) + 10) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeModels(width) ? 74 : 0) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CardSizing.ClaudeLines(width) ? Scaled(84) + 10 : 0) });
             return row;
@@ -641,14 +665,16 @@ namespace WidgetScreen
             var groups = view.Groups(period);
             var table = Rows(new GridLength(24), Star);
             var head = LedgerRow(width, 24);
-            var labels = new[] { "", "Project · thread", "Tokens", "≈ $", "Models", "Lines" };
+            var labels = new[] { "", "Project · thread", "Tokens", "Cache reads", showApi ? "API value" : "Replies", "Models", "Lines" };
+            var tips = new[] { "", "", ClaudeText.TokensTip, ClaudeText.CacheTip, showApi ? ClaudeText.ApiValueTip : ClaudeText.RepliesTip, "Opus, Sonnet and Haiku shares of the tokens", "Lines added and removed (from Claude Code's telemetry)" };
             for (int i = 1; i < labels.Length; i++)
             {
                 if (head.ColumnDefinitions[i].Width.Value == 0 && !head.ColumnDefinitions[i].Width.IsStar) continue;
                 var label = Upper(labels[i], 12); label.VerticalAlignment = VerticalAlignment.Center; if (i >= 2) { Right(label); label.Margin = new Thickness(10, 0, 0, 0); }
+                if (tips[i].Length > 0) label.ToolTip = tips[i];
                 head.Children.Add(At(label, 0, i));
             }
-            var line = new Border { BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "ControlBorder"); Grid.SetColumnSpan(line, 6); head.Children.Add(line);
+            var line = new Border { BorderThickness = new Thickness(0, 0, 0, 1) }; line.SetResourceReference(Border.BorderBrushProperty, "ControlBorder"); Grid.SetColumnSpan(line, 7); head.Children.Add(line);
             table.Children.Add(head);
             var list = new StackPanel();
             if (groups.Count == 0) list.Children.Add(Empty(width));
@@ -673,7 +699,7 @@ namespace WidgetScreen
             bool folded = collapsed.Contains(group.Folder);
             double projectHeight = Math.Max(52, Math.Ceiling(Scaled(17) * 1.33 + 12 * 1.33 + 10)), threadHeight = Math.Max(36, Math.Ceiling(Scaled(14) * 1.33 + 10));
             var row = LedgerRow(width, projectHeight);
-            var top = new Border { BorderThickness = new Thickness(0, index == 0 ? 0 : 1, 0, 0) }; top.SetResourceReference(Border.BorderBrushProperty, "ControlBorder"); Grid.SetColumnSpan(top, 6); row.Children.Add(top);
+            var top = new Border { BorderThickness = new Thickness(0, index == 0 ? 0 : 1, 0, 0) }; top.SetResourceReference(Border.BorderBrushProperty, "ControlBorder"); Grid.SetColumnSpan(top, 7); row.Children.Add(top);
             var garage = Garage(group, 40, "ClaudeGarage" + index);
             row.Children.Add(garage.Tap);
             var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
@@ -692,9 +718,10 @@ namespace WidgetScreen
             name.Children.Add(share);
             row.Children.Add(At(name, 0, 1));
             var tokens = Right(Text("", Scaled(17), "Text")); tokens.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(tokens, 0, 2));
-            var dollars = Right(Text("", Scaled(15), "Muted")); dollars.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(dollars, 0, 3));
-            var mix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) row.Children.Add(At(mix, 0, 4));
-            var lines = Right(Text("", 12, "Muted")); lines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) row.Children.Add(At(lines, 0, 5));
+            var cached = Right(Text("", Scaled(15), "Muted")); cached.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(cached, 0, 3));
+            var dollars = Right(Text("", Scaled(15), "Muted")); dollars.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(At(dollars, 0, 4));
+            var mix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) row.Children.Add(At(mix, 0, 5));
+            var lines = Right(Text("", 12, "Muted")); lines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) row.Children.Add(At(lines, 0, 6));
             list.Children.Add(names.Add(row, "ClaudeProjectRow" + index));
             string folder = group.Folder;
             fills.Add(now => {
@@ -704,7 +731,7 @@ namespace WidgetScreen
                 if (!folded) info.Text = ClaudeText.GroupDetail(g);
                 long total = view.Groups(period).Sum(x => x.Tokens);
                 share.Value = total <= 0 ? 0 : 100.0 * g.Tokens / total;
-                tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = Counted ? ClaudeText.Dollars(g.Cost) : "";
+                tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; cached.Text = Counted ? ClaudeUsage.Format(g.CacheReads) : ""; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : g.Replies.ToString(CultureInfo.InvariantCulture);
                 mix.Shares = g.Mix; mix.ToolTip = ClaudeText.Mix(g.Mix); mix.InvalidateVisual();
                 SetLines(lines, g.Added, g.Removed);
                 RenderGarage(garage, g);
@@ -724,11 +751,12 @@ namespace WidgetScreen
                 var name2 = names.Add(Trimmed(Text("", Scaled(14), "Text")), "ClaudeThreadTitle" + index + "_" + j); name2.VerticalAlignment = VerticalAlignment.Center; what.Children.Add(name2);
                 trow.Children.Add(At(what, 0, 1));
                 var ttokens = Right(Text("", Scaled(14), "Text")); ttokens.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(ttokens, 0, 2));
-                var tdollars = Right(Text("", Scaled(14), "Muted")); tdollars.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tdollars, 0, 3));
-                var tmix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) trow.Children.Add(At(tmix, 0, 4));
-                var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) trow.Children.Add(At(tlines, 0, 5));
+                var tcached = Right(Text("", Scaled(14), "Muted")); tcached.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tcached, 0, 3));
+                var tdollars = Right(Text("", Scaled(14), "Muted")); tdollars.Margin = new Thickness(10, 0, 0, 0); trow.Children.Add(At(tdollars, 0, 4));
+                var tmix = new MixBar { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; if (CardSizing.ClaudeModels(width)) trow.Children.Add(At(tmix, 0, 5));
+                var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width)) trow.Children.Add(At(tlines, 0, 6));
                 var tap = Tappable(trow, thread);
-                tap.ToolTip = ClaudeText.ThreadTip(thread, period, DateTime.UtcNow, use24, Counted);
+                tap.ToolTip = ClaudeText.ThreadTip(thread, period, DateTime.UtcNow, use24, Counted, showApi);
                 car.Row = tap;
                 list.Children.Add(names.Add(tap, "ClaudeThreadRow" + index + "_" + j));
                 string id = thread.Id;
@@ -741,7 +769,7 @@ namespace WidgetScreen
                     name2.Text = ClaudeText.ThreadTitle(t, now, use24);
                     name2.SetResourceReference(TextBlock.ForegroundProperty, t.Pit == PitState.Need ? "Warning" : "Text");
                     where.Text = ClaudeText.Where(t, now);
-                    ttokens.Text = Counted ? ClaudeUsage.Format(t.TokensFor(period)) : "—"; tdollars.Text = Counted ? ClaudeText.Dollars(t.CostFor(period)) : "";
+                    ttokens.Text = Counted ? ClaudeUsage.Format(t.TokensFor(period)) : "—"; tcached.Text = Counted ? ClaudeUsage.Format(t.CacheReadsFor(period)) : ""; tdollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(t.CostFor(period)) : t.RepliesFor(period).ToString(CultureInfo.InvariantCulture);
                     var m = t.MixFor(period); tmix.Shares = m; tmix.ToolTip = ClaudeText.Mix(m); tmix.InvalidateVisual();
                     var l = t.LinesFor(period); SetLines(tlines, l[0], l[1]);
                 });
@@ -785,14 +813,18 @@ namespace WidgetScreen
             var bins = new List<LaneBins>();
             foreach (var lane in view.Lanes)
             {
-                var row = Columns(new GridLength(72), Star); row.Margin = new Thickness(0, 6, 0, 0);
-                row.Children.Add(Trimmed(Text(lane.Name, 12, "Muted")));
-                var b = new LaneBins { Height = 16, Margin = new Thickness(8, 0, 0, 0), Color = PitArt.Accent(lane.Name), Bins = lane.Bins };
+                bool thread = lane.Session.Length > 0;
+                var row = Columns(new GridLength(104), Star); row.Margin = new Thickness(0, thread ? 3 : 6, 0, 0);
+                var name = Trimmed(Text(thread ? "· " + lane.Name : lane.Name, thread ? 11 : 12, thread ? "Muted" : "Text"));
+                if (thread) name.Margin = new Thickness(8, 0, 0, 0);
+                name.ToolTip = lane.Name;
+                row.Children.Add(name);
+                var b = new LaneBins { Height = thread ? 10 : 16, Margin = new Thickness(8, 0, 0, 0), Color = PitArt.Accent(ClaudeBridge.ProjectName(lane.Folder)), Bins = lane.Bins };
                 bins.Add(b); row.Children.Add(At(b, 0, 1));
                 lanes.Children.Add(row);
             }
             if (view.Lanes.Count == 0) { var none = Text("Nothing in the last 5 hours.", 12, "Muted"); none.Margin = new Thickness(0, 6, 0, 0); lanes.Children.Add(none); }
-            var axis = Columns(new GridLength(72), Star); axis.Margin = new Thickness(0, 4, 0, 0);
+            var axis = Columns(new GridLength(104), Star); axis.Margin = new Thickness(0, 4, 0, 0);
             var times = new Grid { Margin = new Thickness(8, 0, 0, 0) };
             var start = Text("", 11, "Muted"); var middle = Text("", 11, "Muted"); middle.HorizontalAlignment = HorizontalAlignment.Center; var end = Text("now", 11, "Muted"); end.HorizontalAlignment = HorizontalAlignment.Right;
             times.Children.Add(start); times.Children.Add(middle); times.Children.Add(end);
@@ -815,8 +847,9 @@ namespace WidgetScreen
                 foreach (var b in bins) { b.Maximum = max; b.InvalidateVisual(); }
                 start.Text = ClaudeText.Clock(now - ClaudePace.FiveHours, use24); middle.Text = ClaudeText.Clock(now - TimeSpan.FromMinutes(150), use24);
                 var f = view.Facts;
-                values[0].Text = Counted ? ClaudeUsage.Format(f.Tokens) : "—"; keys[0].Text = Counted ? "TODAY · " + ClaudeUsage.Money(f.Cost) : "TODAY";
+                values[0].Text = Counted ? ClaudeUsage.Format(f.Tokens) : "—"; keys[0].Text = !Counted ? "TODAY" : showApi ? "TODAY · $" + ClaudeText.Dollars(f.Cost) + " API VALUE" : "TODAY · " + f.Replies + " REPLIES";
                 values[1].Text = ClaudeText.Percent(f.CacheHit); keys[1].Text = "CACHE HITS";
+                values[1].ToolTip = ClaudeUsage.Format(f.CacheRead) + " tokens read from the cache today (not counted in the token totals)";
                 values[2].Text = f.Telemetry ? f.Tools.ToString(CultureInfo.InvariantCulture) : "—"; keys[2].Text = f.Telemetry ? "TOOLS · " + f.Asked + " ASKED" : "TOOLS · NEEDS TELEMETRY";
                 values[2].ToolTip = f.Telemetry ? f.Denied + " denied · " + f.Asked + " asked you" : "Tool calls come from Claude Code's telemetry (Settings → Claude → Update connection).";
                 values[3].Inlines.Clear();
@@ -875,7 +908,7 @@ namespace WidgetScreen
                 {
                     var car = Car(group.Threads[j], group.Folder, 30, "ClaudeCar" + i + "_" + j, true);
                     car.Sprite.Margin = new Thickness(0, 0, 2, 0);
-                    var tap = Tappable(car.Sprite, group.Threads[j]); tap.ToolTip = ClaudeText.ThreadTip(group.Threads[j], period, DateTime.UtcNow, use24, Counted);
+                    var tap = Tappable(car.Sprite, group.Threads[j]); tap.ToolTip = ClaudeText.ThreadTip(group.Threads[j], period, DateTime.UtcNow, use24, Counted, showApi);
                     car.Row = tap; inline.Children.Add(tap); garage.Cars.Add(car);
                 }
                 if (!folded && shown < group.Threads.Count) { var more = Caption("+" + (group.Threads.Count - shown)); more.VerticalAlignment = VerticalAlignment.Center; more.Margin = new Thickness(2, 0, 0, 0); inline.Children.Add(more); }
@@ -896,7 +929,7 @@ namespace WidgetScreen
                     name.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Text");
                     sub.Text = asking != null ? "Needs you · " + ClaudeText.ThreadTitle(asking, now, use24) : folded ? ClaudeText.Cars(g.Threads.Count) + " in the garage" : ClaudeText.GroupDetail(g);
                     sub.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Muted");
-                    tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = Counted ? "$" + ClaudeText.Dollars(g.Cost) : "";
+                    tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : ClaudeText.Replies(g.Replies);
                     RenderGarage(garage, g);
                 });
             }
@@ -922,7 +955,7 @@ namespace WidgetScreen
                 var w = fiveHour ? view.Limits.FiveHour : view.Limits.Week;
                 double pct = ClaudeText.Percent(w, now), elapsed = ClaudePace.Elapsed(w, fiveHour ? ClaudePace.FiveHours : ClaudePace.Week, now), projection = ClaudePace.Projection(pct, elapsed);
                 if (w == null) value.Text = "—"; else SetBig(value, pct, ClaudeText.Warns(pct) ? "Warning" : "Text");
-                reset.Text = w == null || !w.ResetsAt.HasValue ? "" : !w.Current(now) ? "reset" : pct >= 100 ? "back " + ClaudeText.When(w.ResetsAt.Value, now, use24) : ClaudeText.When(w.ResetsAt.Value, now, use24);
+                reset.Text = w == null ? (fiveHour ? "none now" : "") : !w.ResetsAt.HasValue ? "" : !w.Current(now) ? "reset" : pct >= 100 ? "back " + ClaudeText.When(w.ResetsAt.Value, now, use24) : ClaudeText.When(w.ResetsAt.Value, now, use24);
                 reset.SetResourceReference(TextBlock.ForegroundProperty, pct >= 100 ? "Warning" : "Muted");
                 pace.Text = Double.IsNaN(projection) ? "" : "pace " + Math.Round(projection) + "%"; pace.SetResourceReference(TextBlock.ForegroundProperty, ClaudePace.Warns(projection) ? "Warning" : "Muted");
                 bar.Value = pct / 100; bar.Projection = Double.IsNaN(projection) ? Double.NaN : projection / 100; bar.Pace = elapsed; bar.Warn = ClaudePace.Warns(projection) || ClaudeText.Warns(pct); bar.InvalidateVisual();
@@ -976,14 +1009,15 @@ namespace WidgetScreen
                 var bottom = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
                 var line = new DockPanel();
                 var right = Text("", 12, "Muted"); right.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(right, Dock.Right); line.Children.Add(right);
-                var label = Upper("5-hour", 12); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 8, 0); DockPanel.SetDock(label, Dock.Left); line.Children.Add(label);
+                var label = Upper(view.Limits.FiveHour == null ? "Week" : "5-hour", 12); label.VerticalAlignment = VerticalAlignment.Center; label.Margin = new Thickness(0, 0, 8, 0); DockPanel.SetDock(label, Dock.Left); line.Children.Add(label);
                 var value = Reading("—", 28); value.SetResourceReference(TextBlock.ForegroundProperty, "Text"); line.Children.Add(value);
                 bottom.Children.Add(line);
                 var bar = names.Add(new PaceBar { Height = 8, Margin = new Thickness(0, 4, 0, 0) }, "ClaudeSmallMeter"); bottom.Children.Add(bar);
                 names.Add(value, "ClaudeSmallPercent"); names.Add(right, "ClaudeSmallPace");
                 fills.Add(now => {
-                    var w = view.Limits.FiveHour;
-                    double pct = ClaudeText.Percent(w, now), elapsed = ClaudePace.Elapsed(w, ClaudePace.FiveHours, now), projection = ClaudePace.Projection(pct, elapsed);
+                    bool weekly = view.Limits.FiveHour == null;
+                    var w = weekly ? view.Limits.Week : view.Limits.FiveHour;
+                    double pct = ClaudeText.Percent(w, now), elapsed = ClaudePace.Elapsed(w, weekly ? ClaudePace.Week : ClaudePace.FiveHours, now), projection = ClaudePace.Projection(pct, elapsed);
                     value.Text = w == null ? "—" : Math.Round(pct) + "%"; value.SetResourceReference(TextBlock.ForegroundProperty, ClaudeText.Warns(pct) ? "Warning" : "Text");
                     var parts = new List<string>();
                     if (!Double.IsNaN(projection)) parts.Add("pace " + Math.Round(projection) + "%");
@@ -1014,7 +1048,8 @@ namespace WidgetScreen
             else { card.ClearValue(Border.BorderBrushProperty); card.ClearValue(Border.BorderThicknessProperty); }
             foreach (var fill in fills) fill(now);
             var threads = view.Threads.ToDictionary(t => t.Id);
-            double fiveHour = view.Limits == null ? 0 : ClaudeText.Percent(view.Limits.FiveHour, now);
+            // The fuel lamp follows the plan's tightest window: the 5-hour one, or the week when the plan has none.
+            double fiveHour = view.Limits == null ? 0 : ClaudeText.Percent(view.Limits.FiveHour ?? view.Limits.Week, now);
             foreach (var part in cars)
             {
                 ClaudeSession t = null; if (part.Id != null) threads.TryGetValue(part.Id, out t);
@@ -1031,13 +1066,14 @@ namespace WidgetScreen
             var look = new PitArt.CarLook { Car = t == null ? PitCar.Sports : t.Car, Fuel = fuel, Hot = state == PitState.Work && ClaudePace.Hot(share), Fast = ClaudePace.Heavy(share) };
             string key; var frames = PitSprite.CarFrames(color, state, look, part.Width, out key);
             PitState before = state; bool known = part.Id != null && seen.TryGetValue(part.Id, out before);
-            bool restart = known && before != state && (state == PitState.Done || state == PitState.End) && !quiet && live;
+            bool restart = known && before != state && PitSprite.PlaysOnce(state) && !quiet && live;
             if (part.Id != null) seen[part.Id] = state;
             part.Sprite.Fps = quiet ? 0 : PitSprite.CarFps(state, share, fuel);
-            part.Sprite.Once = state == PitState.Done || state == PitState.End;
+            part.Sprite.Once = PitSprite.PlaysOnce(state);
             part.Sprite.Show(key, frames, PitSprite.CarOverflow, PitSprite.StillFrame(state), restart);
             if (quiet || !live) part.Sprite.Hold();
-            part.Sprite.Opacity = part.Dim && state == PitState.End ? 0.6 : 1;
+            // Idle has its engine off, dimmed; an ended car is dimmed where its row isn't.
+            part.Sprite.Opacity = state == PitState.Idle ? 0.7 : part.Dim && state == PitState.End ? 0.6 : 1;
         }
         private void RenderGarage(GaragePart part, ClaudeProjectGroup group)
         {

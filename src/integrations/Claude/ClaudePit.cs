@@ -4,9 +4,11 @@ using System.Linq;
 
 namespace WidgetScreen
 {
-    // What a thread's car does on the v2 card (docs/design/claude-watcher-v2.html, decision 017): Idle (ready, nothing
-    // asked yet), Work (wheels turning), Rev (a long tool run: holding on the brakes), Need (hazards), Pit (compacting:
-    // up on the jack), Stuck (rate-limited or an API error: wheelspin), Done (brake lights) and End (under a cover).
+    // What a thread's car does on the v2 card (docs/design/claude-watcher-v2.html, decisions 017 and 019): Idle (engine
+    // off: nothing asked yet, or your turn for over 30 minutes), Work (wheels turning), Rev (a long tool run: holding on
+    // the brakes), Need (a question or permission waiting on you: hazards and a beacon), Pit (compacting: up on the
+    // jack), Stuck (rate-limited or an API error: wheelspin), Done ("your turn": Claude finished and waits for your next
+    // message, brake lights on) and End (under a cover).
     public enum PitState { Idle, Work, Rev, Need, Pit, Stuck, Done, End }
 
     // The car classes, by the model a thread mostly used: a grand tourer for Opus (and bigger), a sports car for
@@ -16,7 +18,8 @@ namespace WidgetScreen
     // One project's lane on the 5-hour timeline: tokens in each 10-minute bin, oldest first.
     public sealed class ClaudeLane
     {
-        public string Folder = "", Name = "";
+        // A project's lane, or one of its threads' (Session set, Name its title) under it.
+        public string Folder = "", Name = "", Session = "";
         public double[] Bins = new double[ClaudePace.LaneBins];
     }
 
@@ -26,7 +29,7 @@ namespace WidgetScreen
     {
         public long Tokens, Prompt, CacheRead;
         public double Cost;
-        public int Tools, Asked, Denied, LinesThreads;
+        public int Tools, Asked, Denied, LinesThreads, Replies;
         public long Added, Removed;
         // Whether telemetry has said anything about tools and lines (without it they read "—").
         public bool Telemetry;
@@ -48,6 +51,9 @@ namespace WidgetScreen
         public static readonly TimeSpan LongTool = TimeSpan.FromSeconds(15), ErrorShows = TimeSpan.FromSeconds(60);
         // A compaction no hook ended within this long is over.
         public static readonly TimeSpan CompactForgotten = TimeSpan.FromMinutes(10);
+        // Your turn for this long is just idle (decision 019).
+        public static readonly TimeSpan TurnIdle = TimeSpan.FromMinutes(30);
+        public const int MostLanes = 6;
 
         // How much of a window has passed (0–1): the pace tick on the 5-hour gauge and the week's laps. NaN when the
         // window's reset time isn't known.
@@ -119,7 +125,7 @@ namespace WidgetScreen
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;
-                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : PitState.Done;
+                case ClaudeState.Done: return thread.Compacting ? PitState.Pit : now - thread.Since >= TurnIdle ? PitState.Idle : PitState.Done;
                 case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : PitState.Idle;
             }
             if (thread.Compacting) return PitState.Pit;

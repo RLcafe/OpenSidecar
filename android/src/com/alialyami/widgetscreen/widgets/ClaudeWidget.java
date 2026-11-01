@@ -90,7 +90,7 @@ public final class ClaudeWidget extends Widget {
             projects.append(';');
         }
         StringBuilder lanes = new StringBuilder(); for (PcState.ClaudeLane l : c.lanes) lanes.append(l.key).append(',');
-        return c.connected + "|" + c.sample + "|" + ids + "|" + projects + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + c.logsFailed + "|" + period + "|" + lanes + "|" + c.facts.telemetry;
+        return c.connected + "|" + c.sample + "|" + ids + "|" + projects + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + c.logsFailed + "|" + period + "|" + lanes + "|" + c.facts.telemetry + c.apiValue;
     }
 
     @Override protected View create() {
@@ -260,7 +260,7 @@ public final class ClaudeWidget extends Widget {
             gauge.value = pct / 100; gauge.projection = Double.isNaN(projection) ? Double.NaN : projection / 100; gauge.pace = elapsed; gauge.warn = pct >= 100; gauge.invalidate();
             if (w == null) value.setText("—"); else value.setText(big(pct, ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.text, 40));
             pace.setText(ClaudePit.pace(projection)); pace.setTextColor(ClaudePit.warns(projection) || ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.muted);
-            reset.setText(ClaudeText.fiveHourReset(w, now, dash.use24())); reset.setTextColor(pct >= 100 ? Theme.WARNING : ui.theme.muted);
+            reset.setText(w == null ? ClaudeText.NO_FIVE_HOUR : ClaudeText.fiveHourReset(w, now, dash.use24())); reset.setTextColor(pct >= 100 ? Theme.WARNING : ui.theme.muted);
         } });
         return tile(row, 12, 10);
     }
@@ -365,7 +365,8 @@ public final class ClaudeWidget extends Widget {
         head.addView(new View(ui.context), ui.ll(ui.px(52), 1));
         head.addView(upper("Project · thread", 12), ui.ll(0, Ui.WRAP, 1));
         cell(head, upper("Tokens", 12), scaled(72), Gravity.END);
-        cell(head, upper("≈ $", 12), scaled(52), Gravity.END);
+        cell(head, upper("Cache reads", 12), scaled(80), Gravity.END);
+        cell(head, upper(c.apiValue ? "API value" : "Replies", 12), scaled(64), Gravity.END);
         if (CardSizing.claudeModels(width)) cell(head, upper("Models", 12), 64, Gravity.START);
         if (CardSizing.claudeLines(width)) cell(head, upper("Lines", 12), scaled(84), Gravity.END);
         table.addView(head, ui.ll(Ui.MATCH, ui.px(24)));
@@ -406,7 +407,8 @@ public final class ClaudeWidget extends Widget {
         name.addView(share, ui.margins(ui.ll(Ui.MATCH, ui.px(4)), 0, 4, 0, 0));
         row.addView(name, ui.margins(ui.ll(0, Ui.MATCH, 1), 4, 0, 0, 0));
         final TextView tokens = ui.text("", scaled(17), ui.theme.text); cell(row, tokens, scaled(72), Gravity.END);
-        final TextView dollars = ui.text("", scaled(15), ui.theme.muted); cell(row, dollars, scaled(52), Gravity.END);
+        final TextView cached = ui.text("", scaled(15), ui.theme.muted); cell(row, cached, scaled(80), Gravity.END);
+        final TextView dollars = ui.text("", scaled(15), ui.theme.muted); cell(row, dollars, scaled(64), Gravity.END);
         final PitViews.Mix mix = new PitViews.Mix(ui.context, ui.theme, ui.unit); if (CardSizing.claudeModels(width)) cell(row, mix, 64, Gravity.START);
         final TextView changed = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width)) cell(row, changed, scaled(84), Gravity.END);
         list.addView(row);
@@ -420,7 +422,8 @@ public final class ClaudeWidget extends Widget {
             View parent = (View) shareFill.getParent();
             int full = parent == null ? 0 : parent.getWidth();
             ViewGroup.LayoutParams params = shareFill.getLayoutParams(); params.width = total <= 0 || full <= 0 ? 0 : (int) Math.round(full * (double) g.tokens / total); shareFill.setLayoutParams(params);
-            tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(counted(c) ? ClaudeText.dollars(g.cost) : "");
+            tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); cached.setText(counted(c) ? ClaudeText.tokens(g.cache) : "");
+            dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : String.valueOf(g.replies));
             mix.shares = g.mix; mix.setContentDescription(ClaudeText.mix(g.mix)); mix.invalidate();
             changed.setText(lines(g.added, g.removed));
             renderGarage(c, garage, g);
@@ -442,7 +445,8 @@ public final class ClaudeWidget extends Widget {
             final TextView where = ui.text("", 12, ui.theme.muted); where.setSingleLine(true); what.addView(where, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
             trow.addView(what, ui.margins(ui.ll(0, Ui.MATCH, 1), 4, 0, 0, 0));
             final TextView ttokens = ui.text("", scaled(14), ui.theme.text); cell(trow, ttokens, scaled(72), Gravity.END);
-            final TextView tdollars = ui.text("", scaled(14), ui.theme.muted); cell(trow, tdollars, scaled(52), Gravity.END);
+            final TextView tcached = ui.text("", scaled(14), ui.theme.muted); cell(trow, tcached, scaled(80), Gravity.END);
+            final TextView tdollars = ui.text("", scaled(14), ui.theme.muted); cell(trow, tdollars, scaled(64), Gravity.END);
             final PitViews.Mix tmix = new PitViews.Mix(ui.context, ui.theme, ui.unit); if (CardSizing.claudeModels(width)) cell(trow, tmix, 64, Gravity.START);
             final TextView tlines = ui.text("", 12, ui.theme.muted); if (CardSizing.claudeLines(width)) cell(trow, tlines, scaled(84), Gravity.END);
             final View tap = tappable(trow, thread);
@@ -455,7 +459,8 @@ public final class ClaudeWidget extends Widget {
                 chip(chip, t.pit);
                 name2.setText(ClaudeText.threadTitle(t, now, dash.use24())); name2.setTextColor("need".equals(t.pit) ? Theme.WARNING : ui.theme.text);
                 where.setText(ClaudeText.where(t, now));
-                ttokens.setText(counted(c) ? ClaudeText.tokens(t.tokens[period]) : "—"); tdollars.setText(counted(c) ? ClaudeText.dollars(t.cost[period]) : "");
+                ttokens.setText(counted(c) ? ClaudeText.tokens(t.tokens[period]) : "—"); tcached.setText(counted(c) ? ClaudeText.tokens(t.cache[period]) : "");
+                tdollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(t.cost[period]) : String.valueOf(t.replies[period]));
                 tmix.shares = t.mix[period]; tmix.invalidate();
                 tlines.setText(lines(t.lines[period][0], t.lines[period][1]));
             } });
@@ -478,16 +483,17 @@ public final class ClaudeWidget extends Widget {
         final List<PitViews.Lane> bins = new ArrayList<PitViews.Lane>();
         for (PcState.ClaudeLane lane : c.lanes) {
             LinearLayout row = ui.row();
-            row.addView(trimmed(ui.text(lane.project, 12, ui.theme.muted)), ui.ll(ui.px(72), Ui.WRAP));
-            PitViews.Lane b = new PitViews.Lane(ui.context, ui.theme, ui.unit); b.color = PitArt.accent(lane.project); b.bins = lane.bins; bins.add(b);
-            row.addView(b, ui.margins(ui.ll(0, ui.px(16), 1), 8, 0, 0, 0));
-            lanes.addView(row, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
+            TextView name = trimmed(ui.text(lane.thread ? "· " + lane.project : lane.project, lane.thread ? 11 : 12, lane.thread ? ui.theme.muted : ui.theme.text));
+            row.addView(name, ui.margins(ui.ll(ui.px(lane.thread ? 96 : 104), Ui.WRAP), lane.thread ? 8 : 0, 0, 0, 0));
+            PitViews.Lane b = new PitViews.Lane(ui.context, ui.theme, ui.unit); b.color = PitArt.accent(lane.color); b.bins = lane.bins; bins.add(b);
+            row.addView(b, ui.margins(ui.ll(0, ui.px(lane.thread ? 10 : 16), 1), 8, 0, 0, 0));
+            lanes.addView(row, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, lane.thread ? 3 : 6, 0, 0));
         }
         if (c.lanes.isEmpty()) lanes.addView(ui.text("Nothing in the last 5 hours.", 12, ui.theme.muted), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 6, 0, 0));
         FrameLayout axis = new FrameLayout(ui.context);
         final TextView start = ui.text("", 11, ui.theme.muted), middle = ui.text("", 11, ui.theme.muted);
         axis.addView(start, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.START)); axis.addView(middle, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER_HORIZONTAL)); axis.addView(ui.text("now", 11, ui.theme.muted), ui.frame(Ui.WRAP, Ui.WRAP, Gravity.END));
-        lanes.addView(axis, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 80, 4, 0, 0));
+        lanes.addView(axis, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 112, 4, 0, 0));
         side.addView(tile(lanes, 12, 10), ui.ll(Ui.MATCH, Ui.WRAP));
         LinearLayout facts = ui.column();
         final TextView[] values = new TextView[4], keys = new TextView[4];
@@ -508,7 +514,7 @@ public final class ClaudeWidget extends Widget {
             for (PitViews.Lane b : bins) { b.maximum = max; b.invalidate(); }
             start.setText(ClaudeText.clock(now - ClaudePit.FIVE_HOURS, dash.use24())); middle.setText(ClaudeText.clock(now - 150 * 60, dash.use24()));
             PcState.ClaudeFacts f = c.facts;
-            values[0].setText(counted(c) ? ClaudeText.tokens(f.tokens) : "—"); keys[0].setText(counted(c) ? "TODAY · " + ClaudeText.money(f.cost) : "TODAY");
+            values[0].setText(counted(c) ? ClaudeText.tokens(f.tokens) : "—"); keys[0].setText(!counted(c) ? "TODAY" : c.apiValue ? "TODAY · $" + ClaudeText.dollars(f.cost) + " API VALUE" : "TODAY · " + f.replies + " REPLIES");
             values[1].setText(ClaudeText.share(f.cacheHit())); keys[1].setText("CACHE HITS");
             values[2].setText(f.telemetry ? String.valueOf(f.tools) : "—"); keys[2].setText(f.telemetry ? "TOOLS · " + f.asked + " ASKED" : "TOOLS · NEEDS TELEMETRY");
             if (f.telemetry && (f.added > 0 || f.removed > 0)) {
@@ -570,7 +576,7 @@ public final class ClaudeWidget extends Widget {
                 name.setTextColor(asking != null ? Theme.WARNING : ui.theme.text);
                 sub.setText(asking != null ? "Needs you · " + ClaudeText.threadTitle(asking, now, dash.use24()) : isFolded ? ClaudeText.cars(g.threads.size()) + " in the garage" : ClaudeText.groupDetail(c, g, now));
                 sub.setTextColor(asking != null ? Theme.WARNING : ui.theme.muted);
-                tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(counted(c) ? "$" + ClaudeText.dollars(g.cost) : "");
+                tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : ClaudeText.replies(g.replies));
                 renderGarage(c, garage, g);
             } });
         }
@@ -598,7 +604,7 @@ public final class ClaudeWidget extends Widget {
             PcState.ClaudeWindow w = fiveHour ? c.fiveHour : c.week;
             double pct = ClaudeText.percent(w, now), elapsed = ClaudePit.elapsed(w, fiveHour ? ClaudePit.FIVE_HOURS : ClaudePit.WEEK, now), projection = ClaudePit.projection(pct, elapsed);
             if (w == null) value.setText("—"); else value.setText(big(pct, ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.text, 28));
-            reset.setText(w == null || w.resetsAt <= 0 ? "" : !ClaudeText.current(w, now) ? "reset" : pct >= 100 ? "back " + ClaudeText.when(w.resetsAt, now, dash.use24()) : ClaudeText.when(w.resetsAt, now, dash.use24()));
+            reset.setText(w == null ? (fiveHour ? "none now" : "") : w.resetsAt <= 0 ? "" : !ClaudeText.current(w, now) ? "reset" : pct >= 100 ? "back " + ClaudeText.when(w.resetsAt, now, dash.use24()) : ClaudeText.when(w.resetsAt, now, dash.use24()));
             reset.setTextColor(pct >= 100 ? Theme.WARNING : ui.theme.muted);
             pace.setText(Double.isNaN(projection) ? "" : "pace " + Math.round(projection) + "%"); pace.setTextColor(ClaudePit.warns(projection) ? Theme.WARNING : ui.theme.muted);
             bar.value = pct / 100; bar.projection = Double.isNaN(projection) ? Double.NaN : projection / 100; bar.pace = elapsed; bar.warn = ClaudePit.warns(projection) || ClaudeText.warns(pct); bar.invalidate();
@@ -647,15 +653,16 @@ public final class ClaudeWidget extends Widget {
         column.addView(top, ui.ll(Ui.MATCH, 0, 1));
         if (meter && caption) {
             LinearLayout line = ui.row(); line.setGravity(Gravity.BOTTOM);
-            line.addView(upper("5-hour", 12), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 4));
+            line.addView(upper(c.fiveHour == null ? "Week" : "5-hour", 12), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 0, 0, 8, 4));
             final TextView value = reading("—", 28); line.addView(value, ui.ll(Ui.WRAP, Ui.WRAP));
             final TextView right = trimmed(ui.text("", 12, ui.theme.muted)); right.setGravity(Gravity.END); line.addView(right, ui.margins(ui.ll(0, Ui.WRAP, 1), 8, 0, 0, 4));
             column.addView(line, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 6, 0, 0));
             final PitViews.PaceBar bar = new PitViews.PaceBar(ui.context, ui.theme, ui.unit);
             column.addView(bar, ui.ll(Ui.MATCH, ui.px(14)));
             fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
-                PcState.ClaudeWindow w = c.fiveHour;
-                double pct = ClaudeText.percent(w, now), elapsed = ClaudePit.elapsed(w, ClaudePit.FIVE_HOURS, now), projection = ClaudePit.projection(pct, elapsed);
+                boolean weekly = c.fiveHour == null;
+                PcState.ClaudeWindow w = weekly ? c.week : c.fiveHour;
+                double pct = ClaudeText.percent(w, now), elapsed = ClaudePit.elapsed(w, weekly ? ClaudePit.WEEK : ClaudePit.FIVE_HOURS, now), projection = ClaudePit.projection(pct, elapsed);
                 value.setText(w == null ? "—" : Math.round(pct) + "%"); value.setTextColor(ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.text);
                 List<String> parts = new ArrayList<String>();
                 if (!Double.isNaN(projection)) parts.add("pace " + Math.round(projection) + "%");
@@ -675,7 +682,8 @@ public final class ClaudeWidget extends Widget {
 
     @Override public void tick(int ticks, boolean quietMode) {
         if (!built()) return;
-        quiet = quietMode;
+        PcState.Claude c = claude();
+        quiet = c != null ? c.still : quietMode;
         render();
     }
 
@@ -690,7 +698,8 @@ public final class ClaudeWidget extends Widget {
         // The one state allowed to shout: an Amber border around the whole card.
         card.setBackground(ui.shape(ui.theme.surface, needs ? Theme.WARNING : ui.theme.controlBorder, needs ? 2 : 1, ui.radius));
         for (Fill fill : fills) fill.run(c, now);
-        double five = ClaudeText.percent(c.fiveHour, now);
+        // The fuel lamp follows the plan's tightest window: the 5-hour one, or the week when the plan has none.
+        double five = ClaudeText.percent(c.fiveHour != null ? c.fiveHour : c.week, now);
         for (CarPart part : cars) renderCar(c, part, part.id == null ? null : c.thread(part.id), five);
         updateClock();
     }
@@ -709,7 +718,8 @@ public final class ClaudeWidget extends Widget {
         part.sprite.once = PitArt.once(state);
         part.sprite.show(key, frames, PitArt.still(state), restart);
         if (!live) part.sprite.hold();
-        part.sprite.setAlpha(part.dim && state == PitArt.END ? 0.6f : 1f);
+        // Idle has its engine off, dimmed; an ended car is dimmed where its row isn't.
+        part.sprite.setAlpha(state == PitArt.IDLE ? 0.7f : part.dim && state == PitArt.END ? 0.6f : 1f);
     }
     private void renderGarage(PcState.Claude c, GaragePart part, PcState.ClaudeGroup group) {
         boolean closed = folded(group);

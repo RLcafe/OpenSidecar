@@ -236,8 +236,8 @@ public final class CardSizing {
     public static final double CLAUDE_PLAN_HEIGHT = 124, CLAUDE_SIDE_WIDTH = 300;
     public static boolean claudeRevs(double bodyWidth) { return bodyWidth >= 860; }
     public static boolean claudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-    public static boolean claudeModels(double tableWidth) { return tableWidth >= 560; }
-    public static boolean claudeLines(double tableWidth) { return tableWidth >= 660; }
+    public static boolean claudeModels(double tableWidth) { return tableWidth >= 640; }
+    public static boolean claudeLines(double tableWidth) { return tableWidth >= 740; }
     public static final double CLAUDE_MINI_HEIGHT = 84;
     public static double claudeMediumRow(double textScale) { return Math.max(44, Math.ceil(Math.round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
     public static int claudeInlineCars(double nameRoom, int threads) {

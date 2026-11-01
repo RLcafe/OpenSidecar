@@ -145,7 +145,9 @@ internal static class ClaudeTreeTests
             Assert(view.Sessions.Count == 1 && view.Sessions[0].Id == "s-run" && view.Sessions[0].State == ClaudeState.Working, "The running thread isn't the one session.");
             Assert(!view.Threads.Any(t => t.Id == "s-arch" || t.Id == "s-old"), "Archived or old threads show.");
             var five = view.Groups(ClaudePeriod.FiveHour);
-            Assert(five.Count == 1 && five[0].Folder == "C:\\Code\\alpha" && five[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log" }), "5 h groups wrong: " + String.Join(";", five.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
+            // beta has no thread in the last five hours: it still gets a quiet garage after the busy ones (decision 019).
+            Assert(five.Count == 2 && five[1].Folder == "C:\\Code\\beta" && five[1].Threads.Count == 0 && ClaudeText.GroupDetail(five[1]).StartsWith("Quiet · last used ")
+                && five[0].Folder == "C:\\Code\\alpha" && five[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log" }), "5 h groups wrong: " + String.Join(";", five.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
             Assert(five[0].Threads[0].Title == "Running thread" && five[0].Threads[1].Title == "Typed title" && five[0].Tokens == 150 && five[0].Running == 1 && five[0].State == ClaudeState.Working, "Titles, tokens or the project's face are wrong.");
             var week = view.Groups(ClaudePeriod.Week);
             Assert(week.Count == 2 && week[0].Folder == "C:\\Code\\alpha" && week[1].Folder == "C:\\Code\\beta" && week[1].Asleep && week[0].Threads.Select(t => t.Id).SequenceEqual(new[] { "s-run", "s-log", "s-wt" }), "Week groups wrong: " + String.Join(";", week.Select(g => g.Folder + ":" + String.Join(",", g.Threads.Select(t => t.Id)))));
@@ -265,13 +267,64 @@ internal static class ClaudeTreeTests
             }
         });
 
+        check("Claude reads the plan's limits list, splits lanes by thread, and keeps moving in Quiet mode unless asked", () => {
+            // A made-up usage answer shaped like Anthropic's: no five_hour window, the week, and a model's own weekly window
+            // only in the newer limits list.
+            string answer = "{\"five_hour\":null,\"seven_day\":{\"utilization\":16.0,\"resets_at\":\"2026-11-08T01:00:00+00:00\"},\"seven_day_opus\":null,"
+                + "\"limits\":[{\"kind\":\"weekly_all\",\"group\":\"weekly\",\"percent\":16,\"resets_at\":\"2026-11-08T01:00:00+00:00\",\"scope\":null},"
+                + "{\"kind\":\"weekly_scoped\",\"group\":\"weekly\",\"percent\":2,\"resets_at\":\"2026-11-08T01:00:00+00:00\",\"scope\":{\"model\":{\"id\":null,\"display_name\":\"Fable\"}}}]}";
+            var limits = ClaudeBridge.ParseUsageResponse(answer, Now);
+            Assert(limits != null && limits.FiveHour == null && limits.Week.Percent == 16 && limits.Extra.Count == 1 && limits.Extra[0].Key == "Fable week" && limits.Extra[0].Value.Percent == 2
+                && ClaudeText.Extras(limits, Now) == "Fable only 2%", "The limits list wasn't read: " + (limits == null ? "null" : limits.Extra.Count.ToString()));
+            var onlyList = ClaudeBridge.ParseUsageResponse("{\"limits\":[{\"kind\":\"five_hour\",\"percent\":40,\"resets_at\":\"2026-11-01T14:00:00Z\"},{\"kind\":\"weekly_all\",\"percent\":10}]}", Now);
+            Assert(onlyList != null && onlyList.FiveHour.Percent == 40 && onlyList.Week.Percent == 10, "A window only in the limits list was missed.");
+
+            // Lanes: every project used in the last five hours, and the busiest threads of a project with more than one.
+            string config = Fresh(directory, "config-lanes");
+            Func<string, string, string, int, string> reply = (session, folder, request, output) => "{\"type\":\"assistant\",\"cwd\":\"" + Json(folder) + "\",\"sessionId\":\"" + session + "\",\"requestId\":\"" + request + "\",\"timestamp\":\"" + Iso(Now.AddMinutes(-20)) + "\",\"message\":{\"id\":\"" + request + "\",\"model\":\"claude-opus-5-5\",\"usage\":{\"input_tokens\":10,\"output_tokens\":" + output + ",\"cache_read_input_tokens\":99999}}}\n";
+            foreach (var t in new[] { new[] { "a1", "C:\\Code\\alpha", "900" }, new[] { "a2", "C:\\Code\\alpha", "500" }, new[] { "b1", "C:\\Code\\beta", "100" } })
+            {
+                string log = Path.Combine(config, "projects", "C--Code-" + t[0], t[0] + ".jsonl");
+                Directory.CreateDirectory(Path.GetDirectoryName(log));
+                File.WriteAllText(log, reply(t[0], t[1], "r-" + t[0], Int32.Parse(t[2])));
+                File.SetLastWriteTimeUtc(log, Now.AddMinutes(-20));
+            }
+            var service = new ClaudeService(Fresh(directory, "bridge-lanes"), config, appThreads: new ClaudeAppThreads(() => new string[0]));
+            service.Usage.Scan(Now);
+            var view = service.View(Now, service.Usage.Entries);
+            Assert(view.Lanes.Count == 4 && view.Lanes[0].Name == "alpha" && view.Lanes[0].Session == "" && view.Lanes[1].Session == "a1" && view.Lanes[2].Session == "a2" && view.Lanes[3].Name == "beta"
+                && view.Lanes[0].Bins.Sum() == 1420, "Lanes wrong: " + String.Join(", ", view.Lanes.Select(l => l.Name + "/" + l.Session + "=" + l.Bins.Sum())));
+            Assert(view.Facts.Tokens == 1530 && view.Facts.CacheRead == 299997, "Cache reads were counted as tokens.");
+            service.Dispose();
+
+            // Quiet mode keeps the cars still only when Settings → Claude says so; it's off by default and saved.
+            string path = Path.Combine(Fresh(directory, "still"), "settings.xml"), warning;
+            Assert(!new AppSettings().ClaudeStillInQuiet, "The cars stand still in Quiet mode by default.");
+            SettingsStore.Save(path, new AppSettings { ClaudeStillInQuiet = true });
+            Assert(SettingsStore.Load(path, out warning).ClaudeStillInQuiet, "Keep the cars still in Quiet mode wasn't saved.");
+
+            // The art tells Needs you, Your turn and Idle apart even in a still frame.
+            string k; var turn = PitSprite.CarFrames(PitArt.Lime, PitState.Done, new PitArt.CarLook(), 150, out k);
+            var idle = PitSprite.CarFrames(PitArt.Lime, PitState.Idle, new PitArt.CarLook(), 150, out k);
+            var need = PitSprite.CarFrames(PitArt.Lime, PitState.Need, new PitArt.CarLook(), 150, out k);
+            Func<System.Windows.Media.Imaging.BitmapSource, int> amber = b => { var px = new byte[b.PixelWidth * b.PixelHeight * 4]; b.CopyPixels(px, b.PixelWidth * 4, 0); int n = 0; for (int i = 0; i < px.Length; i += 4) if (px[i + 3] == 255 && px[i + 2] > 200 && px[i + 1] > 150 && px[i + 1] < 220 && px[i] < 150) n++; return n; };
+            Func<System.Windows.Media.Imaging.BitmapSource, int> red = b => { var px = new byte[b.PixelWidth * b.PixelHeight * 4]; b.CopyPixels(px, b.PixelWidth * 4, 0); int n = 0; for (int i = 0; i < px.Length; i += 4) if (px[i + 3] == 255 && px[i + 2] > 200 && px[i + 1] < 170 && px[i] < 170) n++; return n; };
+            Assert(red(turn[PitSprite.StillFrame(PitState.Done)]) > red(idle[0]) + 3, "Your turn's brake lights don't show in its still frame.");
+            Assert(amber(need[0]) > 10 && amber(need[5]) > 3 && amber(idle[0]) == 0, "Needs you's beacon doesn't show, or Idle shows amber.");
+        });
+
         check("Claude cars follow their threads: class by model, behaviour by state and telemetry", () => {
             var now = Now;
-            Func<ClaudeState, bool, ClaudeSession> thread = (state, running) => new ClaudeSession { State = state, Running = running };
+            Func<ClaudeState, bool, ClaudeSession> thread = (state, running) => new ClaudeSession { State = state, Running = running, Since = now };
             Assert(ClaudePace.State(thread(ClaudeState.Working, false), now, now, now, now, now) == PitState.End
                 && ClaudePace.State(thread(ClaudeState.NeedsYou, true), now, now, now, now, now) == PitState.Need
                 && ClaudePace.State(thread(ClaudeState.Done, true), now, now, now, now, now) == PitState.Done
                 && ClaudePace.State(thread(ClaudeState.Ready, true), now, now, now, now, now) == PitState.Idle, "Car states from thread states wrong.");
+            // Your turn for 30 minutes is just idle (decision 019).
+            var waiting = thread(ClaudeState.Done, true); waiting.Since = now.AddMinutes(-29);
+            var stale = thread(ClaudeState.Done, true); stale.Since = now.AddMinutes(-30);
+            Assert(ClaudePace.State(waiting, now, now, now, now, now) == PitState.Done && ClaudePace.State(stale, now, now, now, now, now) == PitState.Idle
+                && ClaudeText.Chip(PitState.Done) == "Your turn" && ClaudeText.Chip(PitState.Idle) == "Idle" && ClaudeText.Chip(PitState.Need) == "Needs you", "Your turn and Idle aren't told apart.");
             var compacting = thread(ClaudeState.Working, true); compacting.Compacting = true;
             Assert(ClaudePace.State(compacting, now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue) == PitState.Pit, "Compacting isn't on the jack.");
             var working = thread(ClaudeState.Working, true);

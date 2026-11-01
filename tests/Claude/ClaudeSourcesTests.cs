@@ -103,7 +103,7 @@ internal static class ClaudeSourcesTests
                 Assert(thread != null && thread.LinesFor(ClaudePeriod.Today)[0] == 55 && thread.LinesFor(ClaudePeriod.Today)[1] == 10 && thread.MixFor(ClaudePeriod.Today)[0] == 1 && thread.Car == PitCar.GrandTourer, "The thread's lines, mix or car are wrong.");
                 var f = view.Facts;
                 Assert(f.Telemetry && f.Tools == 1 && f.Asked == 2 && f.Denied == 1 && f.Added == 55 && f.Removed == 10 && f.LinesThreads == 1 && f.Prompt == 6300 && f.CacheRead == 5000 && Math.Abs(f.CacheHit - 5000.0 / 6300) < 1e-9, "Today's facts wrong.");
-                Assert(view.Burn.Length == 60 && view.Burn.Sum() == 6500 && view.Rate == 3250 && view.Scale == ClaudePace.MinScale && view.Lanes.Count == 1 && view.Lanes[0].Bins.Sum() == 6500, "Burn or lanes wrong.");
+                Assert(view.Burn.Length == 60 && view.Burn.Sum() == 1500 && view.Rate == 750 && view.Scale == ClaudePace.MinScale && view.Lanes.Count == 1 && view.Lanes[0].Bins.Sum() == 1500, "Burn or lanes wrong.");
             }
         });
 
@@ -133,7 +133,7 @@ internal static class ClaudeSourcesTests
             var events = ClaudeOtlp.ParseLogs(LogsFixture("s-otel", "req_1", Now));
             Assert(events.Count == 2 && events[0].Name == "user_prompt" && events[0].Session == "s-otel" && events[0].At == Now.AddSeconds(-5) && events[0].Usage == null && events[0].Service == "claude-code" && events[0].Repository == "widget-screen", "The prompt event parsed wrongly.");
             var usage = events[1].Usage;
-            Assert(events[1].Name == "api_request" && usage != null && usage.Tokens == 6500 && Math.Abs(usage.Cost - 0.0123) < 1e-9 && usage.Request == "req_1" && usage.Model == "claude-opus-5-5" && usage.FromTelemetry && usage.At == Now, "The api_request event's usage parsed wrongly.");
+            Assert(events[1].Name == "api_request" && usage != null && usage.Tokens == 1500 && usage.CacheRead == 5000 && Math.Abs(usage.Cost - 0.0123) < 1e-9 && usage.Request == "req_1" && usage.Model == "claude-opus-5-5" && usage.FromTelemetry && usage.At == Now, "The api_request event's usage parsed wrongly.");
             var metrics = ClaudeOtlp.ParseMetrics(MetricsFixture("s-otel", Now));
             Assert(metrics.Count == 1 && metrics[0].Name == "active" && metrics[0].Session == "s-otel" && metrics[0].At == Now, "Metrics didn't mark the session active once, at its newest point.");
             Assert(ClaudeOtlp.ParseLogs("not json").Count == 0 && ClaudeOtlp.ParseLogs("{\"resourceLogs\":[{\"scopeLogs\":[{\"logRecords\":[{\"body\":{\"stringValue\":\"claude_code.api_request\"}}]}]}]}").Count == 0 && ClaudeOtlp.ParseMetrics("[]").Count == 0, "Broken or session-less telemetry was used.");
@@ -190,7 +190,7 @@ internal static class ClaudeSourcesTests
             File.WriteAllText(Path.Combine(folder, "s1.jsonl"), LogLine("req_a", Now.AddMinutes(-10), "C:\\Code\\api", "s1", 1000) + "\n" + LogLine("req_b", Now.AddMinutes(-5), "C:\\Code\\api", "s1", 1000) + "\n");
             usage.Scan(Now);
             var entries = usage.Entries;
-            Assert(entries.Count == 2 && entries.Sum(e => e.Tokens) == 13000, "A reply was counted twice or lost: " + entries.Count);
+            Assert(entries.Count == 2 && entries.Sum(e => e.Tokens) == 3000, "A reply was counted twice or lost: " + entries.Count);
             Assert(Math.Abs(entries.Single(e => e.Request == "req_a").Cost - 0.0123) < 1e-9 && entries.Single(e => e.Request == "req_b").Cost > 0, "Telemetry's cost wasn't kept, or the log's estimate is missing.");
             // The log first, then telemetry for the same reply: telemetry's cost replaces the estimate.
             foreach (var e in ClaudeOtlp.ParseLogs(LogsFixture("s1", "req_b", Now.AddMinutes(-5)))) if (e.Usage != null) usage.Add(e.Usage, Now);
@@ -255,9 +255,9 @@ internal static class ClaudeSourcesTests
             service.ReadSessions(now, false);
             var view = service.View(now, service.Usage.Entries);
             var t1 = view.Sessions.Single(s => s.Id == "t1");
-            Assert(t1.State == ClaudeState.Working && t1.TokensFor(ClaudePeriod.Week) == 6500 && Math.Abs(t1.CostFor(ClaudePeriod.Week) - 0.0123) < 1e-9 && t1.Model == "Opus 5.5", "Telemetry after an idle entry didn't make the session work, or its usage is missing.");
+            Assert(t1.State == ClaudeState.Working && t1.TokensFor(ClaudePeriod.Week) == 1500 && Math.Abs(t1.CostFor(ClaudePeriod.Week) - 0.0123) < 1e-9 && t1.Model == "Opus 5.5", "Telemetry after an idle entry didn't make the session work, or its usage is missing.");
             var week = view.UsageFor(ClaudePeriod.Week);
-            Assert(week.Any(p => p.Name == "widget-screen" && p.Folder == "C:\\Code\\widget-screen" && p.Tokens == 6500), "Telemetry usage wasn't put under the session's folder.");
+            Assert(week.Any(p => p.Name == "widget-screen" && p.Folder == "C:\\Code\\widget-screen" && p.Tokens == 1500), "Telemetry usage wasn't put under the session's folder.");
             Assert(week.Any(p => p.Folder == "widget-screen"), "A session with no folder didn't fall back to its repository name.");
         });
 

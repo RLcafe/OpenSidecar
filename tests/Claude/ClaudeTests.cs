@@ -193,13 +193,13 @@ internal static class ClaudeTests
                 "not json at all",
                 "" });
             var entries = ClaudeUsage.Parse(text, seen, "file");
-            Assert(entries.Count == 4 && entries[0].Tokens == 100 && ClaudeBridge.ProjectName(entries[0].Folder) == "api-server" && ClaudeBridge.ProjectName(entries[2].Folder) == "widget-screen" && entries[2].Session == "s2" && ClaudeBridge.ProjectName(entries[3].Folder) == "widget-screen", "Usage lines parsed wrongly, or a folder change became another project.");
+            Assert(entries.Count == 4 && entries[0].Tokens == 60 && entries[0].CacheRead == 40 && entries[0].Prompt == 80 && ClaudeBridge.ProjectName(entries[0].Folder) == "api-server" && ClaudeBridge.ProjectName(entries[2].Folder) == "widget-screen" && entries[2].Session == "s2" && ClaudeBridge.ProjectName(entries[3].Folder) == "widget-screen", "Usage lines parsed wrongly, or a folder change became another project.");
             Assert(ClaudeUsage.Parse(Line("m1", "r1", "2026-11-01T11:00:00Z", "C:/x", "s1", 1, 1, 1, 1), seen, "file").Count == 0, "A repeated reply counted twice across reads.");
             var limits = new ClaudeLimits { FiveHour = new ClaudeLimitWindow { Percent = 10, ResetsAt = Now.AddHours(1) } };
-            Assert(ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now) == Now.AddHours(-4) && ClaudeUsage.Start(ClaudePeriod.FiveHour, null, Now) == Now.AddHours(-5) && ClaudeUsage.Start(ClaudePeriod.Week, null, Now) == Now.AddDays(-7), "Period starts wrong.");
-            Assert(ClaudeUsage.Total(entries, ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now)) == 100 && ClaudeUsage.Total(entries, Now.AddDays(-7)) == 1601 && ClaudeUsage.Total(entries, Now.AddDays(-7), "s1") == 1100, "Totals wrong.");
+            Assert(ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now) == Now.AddHours(-5) && ClaudeUsage.Start(ClaudePeriod.FiveHour, null, Now) == Now.AddHours(-5) && ClaudeUsage.Start(ClaudePeriod.Week, null, Now) == Now.AddDays(-7), "Period starts wrong.");
+            Assert(ClaudeUsage.Total(entries, ClaudeUsage.Start(ClaudePeriod.FiveHour, limits, Now)) == 60 && ClaudeUsage.Total(entries, Now.AddDays(-7)) == 1561 && ClaudeUsage.Total(entries, Now.AddDays(-7), "s1") == 1060, "Totals wrong.");
             var top = ClaudeUsage.ByProject(entries, Now.AddDays(-7), 6);
-            Assert(top.Count == 2 && top[0].Name == "api-server" && top[0].Tokens == 1100 && top[0].Folder == "C:\\Code\\api-server" && top[1].Folder == "D:\\work\\widget-screen", "By-project totals wrong.");
+            Assert(top.Count == 2 && top[0].Name == "api-server" && top[0].Tokens == 1060 && top[0].Folder == "C:\\Code\\api-server" && top[1].Folder == "D:\\work\\widget-screen", "By-project totals wrong.");
             var many = Enumerable.Range(0, 9).Select(i => new ClaudeUsageEntry { At = Now, Folder = "C:\\p" + i, Tokens = 100 - i, Cost = 1 }).ToList();
             var six = ClaudeUsage.ByProject(many, Now.AddHours(-1), 6);
             Assert(six.Count == 6 && six[5].Name == "Other" && six[5].Tokens == 95 + 94 + 93 + 92 && six[5].Cost == 4, "The rest isn't added up as Other.");
@@ -215,7 +215,7 @@ internal static class ClaudeTests
             Assert(usage.Entries.Count == 1 && !usage.Failed, "The first scan read a partial line.");
             File.WriteAllText(log, Line("a", "1", "2026-11-01T11:00:00Z", "C:\\Code\\api-server", "s1", 1, 1, 1, 1) + "\n" + Line("b", "2", "2026-11-01T11:01:00Z", "C:\\Code\\api-server", "s1", 2, 2, 2, 2) + "\n");
             usage.Scan(DateTime.UtcNow);
-            Assert(usage.Entries.Count == 2 && usage.Entries.Sum(e => e.Tokens) == 12, "The finished line wasn't read once.");
+            Assert(usage.Entries.Count == 2 && usage.Entries.Sum(e => e.Tokens) == 9, "The finished line wasn't read once.");
             var none = new ClaudeUsage(Fresh(directory, "config-empty")); none.Scan(DateTime.UtcNow);
             Assert(none.Failed && none.Scanned, "A missing logs folder isn't reported.");
         });
@@ -233,7 +233,7 @@ internal static class ClaudeTests
             Assert(view.Sessions.Select(s => s.Id).SequenceEqual(new[] { "needs-old", "needs-new", "work", "done", "ready" }), "Order wrong: " + String.Join(",", view.Sessions.Select(s => s.Id)));
             Assert(!File.Exists(ClaudeBridge.SessionPath(bridge, "ancient")) && !File.Exists(ClaudeBridge.SessionPath(bridge, "gone")), "Forgotten or closed sessions linger.");
             Assert(!service.ReadSessions(Now, false), "Unchanged files were read again.");
-            Assert(ClaudeText.Summary(view, ClaudePeriod.Today, false) == "2 needs you · 1 running" && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Done · 3 h", "State words wrong.");
+            Assert(ClaudeText.Summary(view, ClaudePeriod.Today, false) == "2 needs you · 1 your turn · 1 running" && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Your turn · 3 h", "State words wrong.");
             Assert(ClaudeBridge.ProjectName("C:\\Code\\api-server\\") == "api-server" && ClaudeBridge.ProjectName("/home/a/b") == "b" && ClaudeBridge.ProjectName("") == "Claude Code", "Project names wrong.");
         });
 
@@ -261,7 +261,7 @@ internal static class ClaudeTests
             string k3; var garages = PitSprite.GarageFrames(PitArt.Lime, PitState.Need, true, 4, 40, out k3);
             Assert(garages.Length == 2 && !Same(garages[0], garages[1]), "The garage's beacon doesn't blink while folded.");
             Assert(PitSprite.CarFps(PitState.Work, 0, false) == 4 && PitSprite.CarFps(PitState.Work, 1, false) == 24 && PitSprite.CarFps(PitState.Idle, 0, false) == 0 && PitSprite.CarFps(PitState.Idle, 0, true) == 6
-                && PitSprite.StillFrame(PitState.Done) == 7 && PitSprite.StillFrame(PitState.End) == 7 && PitSprite.StillFrame(PitState.Need) == 0, "Frame rates or still frames wrong.");
+                && PitSprite.StillFrame(PitState.Done) == 0 && PitSprite.StillFrame(PitState.End) == 7 && PitSprite.StillFrame(PitState.Need) == 0 && PitSprite.PlaysOnce(PitState.End) && !PitSprite.PlaysOnce(PitState.Done) && PitSprite.CarFps(PitState.Done, 0, false) == 2, "Frame rates or still frames wrong.");
             // The garage front for rolling in and out leaves its door open, so a car in the bay shows through it.
             var front = PitRaster.Render(PitArt.GarageFront(PitArt.Lime, 0, 3, false), new Rect(0, 0, 100, 100), 50, 50);
             var px = new byte[50 * 50 * 4]; front.CopyPixels(px, 200, 0);
@@ -272,7 +272,7 @@ internal static class ClaudeTests
         check("Claude picks small, medium and large designs", () => {
             Assert(CardSizing.Claude(260, 180) == CardSizing.Design.Small && CardSizing.Claude(359, 400) == CardSizing.Design.Small && CardSizing.Claude(600, 279) == CardSizing.Design.Small && CardSizing.Claude(472, 310) == CardSizing.Design.Medium && CardSizing.Claude(639, 576) == CardSizing.Design.Medium && CardSizing.Claude(640, 420) == CardSizing.Design.Large, "Claude designs picked at the wrong sizes.");
             // The same numbers as the phone's CardSizing (AndroidTests: "Claude pit wall sizes match the PC's").
-            Assert(CardSizing.ClaudeRevs(860) && !CardSizing.ClaudeRevs(859) && CardSizing.ClaudeSide(1000) && !CardSizing.ClaudeSide(999) && CardSizing.ClaudeModels(560) && !CardSizing.ClaudeModels(559) && CardSizing.ClaudeLines(660) && !CardSizing.ClaudeLines(659)
+            Assert(CardSizing.ClaudeRevs(860) && !CardSizing.ClaudeRevs(859) && CardSizing.ClaudeSide(1000) && !CardSizing.ClaudeSide(999) && CardSizing.ClaudeModels(640) && !CardSizing.ClaudeModels(639) && CardSizing.ClaudeLines(740) && !CardSizing.ClaudeLines(739)
                 && CardSizing.ClaudeMediumRow(1) == 44 && CardSizing.ClaudeMediumRow(1.4) == 52 && CardSizing.ClaudeInlineCars(300, 5) == 3 && CardSizing.ClaudeInlineCars(200, 5) == 1 && CardSizing.ClaudeInlineCars(200, 2) == 2 && CardSizing.ClaudeInlineCars(100, 4) == 0
                 && CardSizing.ClaudeSmallMeter(152, 1) && !CardSizing.ClaudeSmallMeter(132, 1.4) && CardSizing.ClaudeSmallCar(252, 100) == 85 && CardSizing.ClaudeSmallCar(100, 20) == 48, "Claude sizes wrong.");
             Assert(!WidgetLayout.Default(new AppSettings()).First(p => p.Id == "Claude").Visible && WidgetLayout.Minimum("Claude") == new Size(260, 180) && WidgetLayout.Title("Claude") == "Claude Code", "Claude isn't a hidden widget with its minimum.");

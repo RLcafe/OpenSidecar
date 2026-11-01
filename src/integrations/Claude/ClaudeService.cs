@@ -29,6 +29,12 @@ namespace WidgetScreen
         public double Rate;
         public readonly Dictionary<ClaudePeriod, double[]> Mix = new Dictionary<ClaudePeriod, double[]>();
         public readonly Dictionary<ClaudePeriod, long[]> Lines = new Dictionary<ClaudePeriod, long[]>();
+        // Claude's replies in each period (one per API request): a number Ali can check against the thread itself.
+        public readonly Dictionary<ClaudePeriod, int> Replies = new Dictionary<ClaudePeriod, int>();
+        public int RepliesFor(ClaudePeriod period) { int value; return Replies.TryGetValue(period, out value) ? value : 0; }
+        // Tokens read from the prompt cache in each period: its own ledger column, apart from Tokens (Ali, 1 Nov 2026).
+        public readonly Dictionary<ClaudePeriod, long> CacheReads = new Dictionary<ClaudePeriod, long>();
+        public long CacheReadsFor(ClaudePeriod period) { long value; return CacheReads.TryGetValue(period, out value) ? value : 0; }
         public string Shown { get { return String.IsNullOrWhiteSpace(Title) ? ProjectName : Title; } }
         public long TokensFor(ClaudePeriod period) { long value; return Tokens.TryGetValue(period, out value) ? value : 0; }
         public double CostFor(ClaudePeriod period) { double value; return Cost.TryGetValue(period, out value) ? value : 0; }
@@ -61,13 +67,16 @@ namespace WidgetScreen
         public double Cost;
         // Its threads' model mix, weighted by their tokens, and their lines added and removed.
         public double[] Mix = new double[3];
-        public long Added, Removed;
+        public long Added, Removed, CacheReads;
+        public int Replies;
         public bool Collapsed;
         public int Running { get { return Threads.Count(t => t.Running); } }
         public bool NeedsYou { get { return Threads.Any(t => t.Running && t.State == ClaudeState.NeedsYou); } }
         public bool Asleep { get { return !Threads.Any(t => t.Running); } }
         public ClaudeState State { get { var first = Threads.Where(t => t.Running).OrderBy(t => ClaudeView.Rank(t.State)).FirstOrDefault(); return first == null ? ClaudeState.Ready : first.State; } }
-        public DateTime LastActive { get { return Threads.Count == 0 ? DateTime.MinValue : Threads.Max(t => t.LastActive); } }
+        // When a project with no thread in the period was last used (it still gets a quiet garage).
+        public DateTime Seen;
+        public DateTime LastActive { get { return Threads.Count == 0 ? Seen : Threads.Max(t => t.LastActive); } }
         public bool Working { get { return Threads.Any(t => t.Running && t.State == ClaudeState.Working); } }
         // Its garage's state: needs you (the beacon), busy (light under the shutter), all ended (dimmed) or quiet.
         public PitState Garage { get { return NeedsYou ? PitState.Need : Working ? PitState.Work : Asleep ? PitState.End : Threads.Any(t => t.Running && t.State == ClaudeState.Done) ? PitState.Done : PitState.Idle; } }
@@ -86,6 +95,9 @@ namespace WidgetScreen
         public readonly Dictionary<ClaudePeriod, List<ClaudeProjectUsage>> Usage = new Dictionary<ClaudePeriod, List<ClaudeProjectUsage>>();
         public readonly Dictionary<ClaudePeriod, DateTime> Starts = new Dictionary<ClaudePeriod, DateTime>();
         public readonly HashSet<string> Collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Every shown project this PC knows Claude Code was used in (by folder: its name and last use), so a project with
+        // no thread in the period still gets a quiet garage (decision 019).
+        public readonly Dictionary<string, KeyValuePair<string, DateTime>> Known = new Dictionary<string, KeyValuePair<string, DateTime>>(StringComparer.OrdinalIgnoreCase);
         // The pit wall (decision 017): tokens a minute over the last hour (oldest first) and now, the rev counter's
         // scale, the 5-hour lanes by project and today's facts. Worked out when the view is made.
         public double[] Burn = new double[ClaudePace.BurnMinutes];
@@ -107,8 +119,11 @@ namespace WidgetScreen
                     Folder = g.Key, Name = g.First().ProjectName, Collapsed = Collapsed.Contains(g.Key),
                     Threads = g.OrderBy(t => t.Running ? Rank(t.State) : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
                     Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)), Mix = GroupMix(g, period),
-                    Added = g.Sum(t => t.LinesFor(period)[0]), Removed = g.Sum(t => t.LinesFor(period)[1]) })
-                .OrderBy(g => g.NeedsYou ? 0 : g.Running > 0 ? 1 : 2).ThenByDescending(g => g.LastActive).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                    Added = g.Sum(t => t.LinesFor(period)[0]), Removed = g.Sum(t => t.LinesFor(period)[1]), Replies = g.Sum(t => t.RepliesFor(period)), CacheReads = g.Sum(t => t.CacheReadsFor(period)) })
+                .OrderBy(g => g.NeedsYou ? 0 : g.Running > 0 ? 1 : 2).ThenByDescending(g => g.LastActive).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList()
+                .Concat(Known.Where(k => !Threads.Any(t => (t.Running || t.LastActive >= start) && String.Equals(t.Project, k.Key, StringComparison.OrdinalIgnoreCase)))
+                    .OrderByDescending(k => k.Value.Value)
+                    .Select(k => new ClaudeProjectGroup { Folder = k.Key, Name = k.Value.Key, Seen = k.Value.Value, Collapsed = Collapsed.Contains(k.Key) })).ToList();
         }
         private static double[] GroupMix(IEnumerable<ClaudeSession> threads, ClaudePeriod period)
         {
@@ -147,7 +162,7 @@ namespace WidgetScreen
                 make("sample-5", "api-server", "Rate limit middleware", null, 95, "Opus 5.5", 268000),
                 make("sample-6", "api-server", "Bump dependencies", null, 1500, "Sonnet 5.5", 41000),
                 make("sample-2", "widget-screen", "Claude card critters", ClaudeState.Working, 14, "Opus 5.5", 1830000),
-                make("sample-7", "widget-screen", "Phone polling interval", ClaudeState.Done, 31, "Opus 5.5", 640000),
+                make("sample-7", "widget-screen", "Phone polling interval", ClaudeState.Done, 12, "Opus 5.5", 640000),
                 make("sample-8", "widget-screen", "Fix the Arrange button", null, 180, "Opus 5.5", 905000),
                 make("sample-9", "widget-screen", "Release notes for v0.29", null, 420, "Sonnet 5.5", 122000),
                 make("sample-10", "widget-screen", "", null, 2900, "Opus 5.5", 77000),
@@ -166,6 +181,7 @@ namespace WidgetScreen
                     long[] l; t.Lines[period] = t.TokensFor(period) > 0 && lines.TryGetValue(t.Id, out l) ? l : new long[2];
                 }
                 double rate; rates.TryGetValue(t.Id, out rate); t.Rate = rate;
+                foreach (ClaudePeriod period in Enum.GetValues(typeof(ClaudePeriod))) { t.Replies[period] = (int)(t.TokensFor(period) / 9000); t.CacheReads[period] = t.TokensFor(period) * 12; }
                 t.Car = ClaudePace.Car(t.MixFor(ClaudePeriod.Week), t.Model);
             }
             threads.First(t => t.Id == "sample-3").Compacting = true;
@@ -186,7 +202,7 @@ namespace WidgetScreen
                 { "api-server", new[] { 2, 3, 4, 5, 4, 3, 2, 1, 1, 2, 3, 3, 2, 1, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 1, 0, 0, 3, 4 } },
                 { "photo-manager", new[] { 5, 6, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 1, 0, 2 } } };
             foreach (var pair in profiles) view.Lanes.Add(new ClaudeLane { Folder = "C:\\Code\\" + pair.Key, Name = pair.Key, Bins = pair.Value.Select(v => v * 61000.0).ToArray() });
-            view.Facts = new ClaudeFacts { Tokens = 4676800, Cost = 11.4, Prompt = 4400000, CacheRead = 4004000, Tools = 312, Asked = 41, Denied = 7, Added = 2100, Removed = 460, LinesThreads = 4, Telemetry = true };
+            view.Facts = new ClaudeFacts { Tokens = 4676800, Cost = 11.4, Replies = 519, Prompt = 4400000, CacheRead = 4004000, Tools = 312, Asked = 41, Denied = 7, Added = 2100, Removed = 460, LinesThreads = 4, Telemetry = true };
             return view;
         }
         private static ClaudeProjectUsage P(string name, long tokens, double cost) { return new ClaudeProjectUsage { Folder = name == "Other" ? "" : "C:\\Code\\" + name, Name = name, Tokens = tokens, Cost = cost }; }
@@ -574,12 +590,22 @@ namespace WidgetScreen
                 {
                     if (s.Model.Length == 0) { var last = mine.Where(u => u.Model.Length > 0).OrderByDescending(u => u.At).FirstOrDefault(); if (last != null) s.Model = ModelName(last.Model); }
                     if (mine.Count > 0) { var newest = mine.Max(u => u.At); if (newest > s.LastActive) s.LastActive = newest; }
-                    foreach (var pair in starts) { s.Tokens[pair.Key] = ClaudeUsage.Total(mine, pair.Value); s.Cost[pair.Key] = ClaudeUsage.Cost(mine, pair.Value); }
+                    foreach (var pair in starts) { s.Tokens[pair.Key] = ClaudeUsage.Total(mine, pair.Value); s.Cost[pair.Key] = ClaudeUsage.Cost(mine, pair.Value); s.Replies[pair.Key] = mine.Count(u => u.At >= pair.Value); s.CacheReads[pair.Key] = mine.Where(u => u.At >= pair.Value).Sum(u => u.CacheRead); }
                 }
-                else if (usage != null) foreach (var pair in starts) { s.Tokens[pair.Key] = 0; s.Cost[pair.Key] = 0; }
+                else if (usage != null) foreach (var pair in starts) { s.Tokens[pair.Key] = 0; s.Cost[pair.Key] = 0; s.Replies[pair.Key] = 0; s.CacheReads[pair.Key] = 0; }
                 list.Add(s);
             }
             view.Threads = list;
+            // Every shown project with any known use: the Claude app's threads (any age) and the logs of the last week.
+            Action<string, DateTime> remember = (folder, at) => {
+                string key = ProjectOf(folder);
+                if (key.Length == 0 || (shown != null && !shown(key))) return;
+                KeyValuePair<string, DateTime> was;
+                if (!view.Known.TryGetValue(key, out was) || was.Value < at) view.Known[key] = new KeyValuePair<string, DateTime>(ClaudeBridge.ProjectName(key), at);
+            };
+            foreach (var t in app.Values) if (!t.Archived) remember(t.Folder, t.LastActive);
+            foreach (var pair in lastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) remember(folder, pair.Value); }
+            foreach (var t in list) remember(t.Project, t.LastActive);
             view.Sessions = ClaudeView.Order(list.Where(s => s.Running));
             foreach (var pair in starts) view.Starts[pair.Key] = pair.Value;
             if (usage != null) foreach (var pair in starts) view.Usage[pair.Key] = ClaudeUsage.ByProject(usage, pair.Value, 6, folderOf, shown);
@@ -615,11 +641,27 @@ namespace WidgetScreen
                 DateTime[] m; if (!times.TryGetValue(t.Id, out m)) m = new DateTime[4];
                 t.Pit = ClaudePace.State(t, now, m[Decided], m[Finished], m[Failed], m[Requested]);
             }
-            // A lane for each of the four projects that used the most in the last five hours.
+            // A lane for every project used in the last five hours (up to six), and in the room left, the busiest
+            // threads of projects that had more than one, each under its project (decision 019: one project busy
+            // meant a single lane).
             DateTime fiveHours = now - ClaudePace.FiveHours;
-            view.Lanes = mine.Where(e => e.At >= fiveHours).GroupBy(e => ClaudeUsage.Key(folderOf(e)), StringComparer.OrdinalIgnoreCase)
-                .Where(g => g.Key.Length > 0).OrderByDescending(g => g.Sum(e => e.Tokens)).Take(4)
-                .Select(g => new ClaudeLane { Folder = g.Key, Name = ClaudeBridge.ProjectName(g.Key), Bins = ClaudePace.Bins(g, now, TimeSpan.FromMinutes(10), ClaudePace.LaneBins) }).ToList();
+            var bin = TimeSpan.FromMinutes(10);
+            var projects = mine.Where(e => e.At >= fiveHours).GroupBy(e => ClaudeUsage.Key(folderOf(e)), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Key.Length > 0).OrderByDescending(g => g.Sum(e => e.Tokens)).Take(ClaudePace.MostLanes).ToList();
+            var titles = view.Threads.ToDictionary(t => t.Id, t => ClaudeTitles.Placeholder(t.Title) ? ClaudeTitles.IdLabel(t.Id) : t.Title.Trim());
+            var busiest = projects.SelectMany(g => g.GroupBy(e => e.Session).Where(t => t.Key.Length > 0).Select(t => new { Project = g.Key, Thread = t }))
+                .Where(x => projects.First(g => g.Key == x.Project).Select(e => e.Session).Distinct().Count() > 1)
+                .OrderByDescending(x => x.Thread.Sum(e => e.Tokens)).Take(ClaudePace.MostLanes - projects.Count).ToList();
+            view.Lanes = new List<ClaudeLane>();
+            foreach (var g in projects)
+            {
+                view.Lanes.Add(new ClaudeLane { Folder = g.Key, Name = ClaudeBridge.ProjectName(g.Key), Bins = ClaudePace.Bins(g, now, bin, ClaudePace.LaneBins) });
+                foreach (var x in busiest.Where(x => x.Project == g.Key))
+                {
+                    string title; if (!titles.TryGetValue(x.Thread.Key, out title)) title = ClaudeTitles.IdLabel(x.Thread.Key);
+                    view.Lanes.Add(new ClaudeLane { Folder = g.Key, Session = x.Thread.Key, Name = title, Bins = ClaudePace.Bins(x.Thread, now, bin, ClaudePace.LaneBins) });
+                }
+            }
             // Today's facts.
             DateTime today = view.Starts[ClaudePeriod.Today];
             var todays = mine.Where(e => e.At >= today).ToList();
@@ -627,7 +669,7 @@ namespace WidgetScreen
             var todayLines = lineList.Where(l => l.At >= today && ids.Contains(l.Session)).ToList();
             int results = todayTools.Count(t => t.Result);
             view.Facts = new ClaudeFacts {
-                Tokens = todays.Sum(e => e.Tokens), Cost = todays.Sum(e => e.Cost), Prompt = todays.Sum(e => e.Prompt), CacheRead = todays.Sum(e => e.CacheRead),
+                Tokens = todays.Sum(e => e.Tokens), Cost = todays.Sum(e => e.Cost), Replies = todays.Count, Prompt = todays.Sum(e => e.Prompt), CacheRead = todays.Sum(e => e.CacheRead),
                 Tools = results > 0 ? results : todayTools.Count(t => !t.Result), Asked = todayTools.Count(t => !t.Result && t.Asked), Denied = todayTools.Count(t => !t.Result && t.Denied),
                 Added = todayLines.Sum(l => l.Added), Removed = todayLines.Sum(l => l.Removed), LinesThreads = todayLines.Select(l => l.Session).Distinct().Count(),
                 Telemetry = Telemetry.LastReceived > DateTime.MinValue || toolList.Count > 0 || lineList.Count > 0 };
