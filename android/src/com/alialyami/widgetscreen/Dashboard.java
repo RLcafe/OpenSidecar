@@ -27,7 +27,8 @@ import com.alialyami.widgetscreen.views.ScaledHost;
 import com.alialyami.widgetscreen.widgets.CalendarWidget;
 import com.alialyami.widgetscreen.widgets.ClipboardWidget;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
-import com.alialyami.widgetscreen.views.CritterView;
+import com.alialyami.widgetscreen.core.PitArt;
+import com.alialyami.widgetscreen.views.PitSprite;
 import com.alialyami.widgetscreen.widgets.ClaudeWidget;
 import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
@@ -447,9 +448,10 @@ public final class Dashboard {
         pill.setBackground(ui.pressable(ui.theme.raised, Theme.WARNING, 2, 12));
         pill.setPadding(ui.px(10), ui.px(4), ui.px(16), ui.px(4));
         pill.setMinimumHeight(ui.px(48));
-        claudePillCritter = new CritterView(activity, ui.theme);
-        claudePillCritter.set("needs", "pill");
-        pill.addView(claudePillCritter, ui.ll(ui.px(32), ui.px(32)));
+        // The pill's car waits with its hazards on (one still frame: the header never animates).
+        PitSprite car = new PitSprite(activity);
+        car.show("pill", PitSprite.carFrames(PitArt.AMBER, PitArt.NEED, new PitArt.Look(), 40), 0, false);
+        pill.addView(car, ui.ll(ui.px(40), ui.px(PitSprite.carHeight(40))));
         TextView words = ui.text("Claude needs you", ui.small(), Theme.WARNING);
         words.setTypeface(Ui.MEDIUM);
         pill.addView(words, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
@@ -465,7 +467,6 @@ public final class Dashboard {
     // The header pill (as on the PC): a Claude Code session needs you while the Claude card is on another page. A
     // session that newly needs you taps the phone once while the app is open.
     private View claudePill;
-    private CritterView claudePillCritter;
     private int claudeNeeds = -1;
     private void updateClaudePill() {
         PcState state = pc.state;
@@ -477,7 +478,6 @@ public final class Dashboard {
         if (claudePill == null) return;
         boolean show = needs > 0 && state.claudePage >= 0 && !editor.isVisible("Claude") && !editor.editing();
         claudePill.setVisibility(show ? View.VISIBLE : View.GONE);
-        if (claudePillCritter != null) claudePillCritter.setPhase(ticks % 2 == 0 && !quiet(), quiet());
     }
 
     private void updatePages() {

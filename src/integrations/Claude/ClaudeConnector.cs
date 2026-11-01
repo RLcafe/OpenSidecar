@@ -18,7 +18,7 @@ namespace WidgetScreen
         // The events the bridge listens to. Notification only for questions (a permission or an elicitation).
         public static readonly string[][] Events = {
             new[] { "SessionStart", null }, new[] { "UserPromptSubmit", null }, new[] { "PostToolUse", "*" },
-            new[] { "Notification", "permission_prompt|elicitation_dialog" }, new[] { "PermissionRequest", "*" }, new[] { "Stop", null }, new[] { "SessionEnd", null } };
+            new[] { "Notification", "permission_prompt|elicitation_dialog" }, new[] { "PermissionRequest", "*" }, new[] { "Stop", null }, new[] { "SessionEnd", null }, new[] { "PreCompact", null } };
         // Claude Code's OpenTelemetry export, to Widget Screen's loopback receiver (ClaudeTelemetry). Usage numbers and
         // event names only: prompts, responses and tool details stay off (OTEL_LOG_USER_PROMPTS, OTEL_LOG_TOOL_DETAILS
         // are never set).

@@ -60,21 +60,12 @@ public final class ClaudeText {
         message = message.trim();
         return message.toLowerCase(Locale.ROOT).startsWith(permission.toLowerCase(Locale.ROOT)) && message.length() > permission.length() ? "Wants to use " + message.substring(permission.length()) : message;
     }
-    // The heading: "CLAUDE CODE", "api-server needs you" or "2 sessions need you".
-    public static String heading(PcState.Claude claude) {
-        List<PcState.ClaudeSession> needs = new ArrayList<PcState.ClaudeSession>();
-        for (PcState.ClaudeSession s : claude.sessions) if ("needs".equals(s.state)) needs.add(s);
-        return needs.isEmpty() ? "CLAUDE CODE" : needs.size() == 1 ? needs.get(0).project + " needs you" : needs.size() + " sessions need you";
-    }
-    // The flag at the heading's right: "SAMPLE · 3 RUNNING", and "AS OF 10:42" when the meters are old (Medium).
-    public static String flag(PcState.Claude claude, double now, boolean use24, boolean withAge) {
+    // The flag at the heading's right: "SAMPLE", and "AS OF 10:42" when the meters are old or the last check failed.
+    public static String flag(PcState.Claude claude, double now, boolean use24) {
         List<String> parts = new ArrayList<String>();
         if (claude.sample) parts.add("SAMPLE");
-        if (!claude.sessions.isEmpty()) parts.add(claude.sessions.size() + " RUNNING");
-        if (withAge && old(claude, now)) parts.add("AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
-        StringBuilder text = new StringBuilder();
-        for (String part : parts) { if (text.length() > 0) text.append(" · "); text.append(part); }
-        return text.toString();
+        if (old(claude, now)) parts.add("AS OF " + clock(claude.updatedAt, use24).toUpperCase(Locale.ROOT));
+        return join(parts);
     }
     public static final String SIGN_IN = "Sign in to Claude in Settings → Claude on the PC to see plan limits.", SIGN_IN_ENDED = "The PC's Claude sign-in has ended. Sign in again in Settings → Claude on the PC.";
     // The meters' empty states: the PC's own Claude sign-in is what fills them (decision 015).
@@ -104,8 +95,23 @@ public final class ClaudeText {
         return "≈ $" + shortNumber(dollars / 1e3) + "k";
     }
     public static String threads(int count) { return count == 1 ? "1 thread" : count + " threads"; }
-    // Under a project critter: "3 threads · 1.8M · ≈ $2.01".
-    public static String groupDetail(PcState.ClaudeGroup group, boolean counted) { return threads(group.threads.size()) + (counted ? " · " + usage(group.tokens, group.cost) : ""); }
+    public static String cars(int count) { return count == 1 ? "1 car" : count + " cars"; }
+    // Under a project's name: "3 threads · 2 running · Claude app", or when its threads ended.
+    public static String groupDetail(PcState.Claude claude, PcState.ClaudeGroup group, double now) {
+        List<String> parts = new ArrayList<String>(); parts.add(threads(group.threads.size()));
+        int running = 0; String where = null; boolean mixed = false; double last = 0;
+        for (String id : group.threads) {
+            PcState.ClaudeThread t = claude.thread(id); if (t == null) continue;
+            last = Math.max(last, t.lastActive);
+            if (!t.running) continue;
+            running++;
+            if (!t.where.isEmpty()) { if (where == null) where = t.where; else if (!where.equals(t.where)) mixed = true; }
+        }
+        if (running > 0) parts.add(running + " running");
+        if (where != null && !mixed) parts.add("Desktop".equals(where) ? "Claude app" : where);
+        else if (running == 0 && last > 0) parts.add("ended " + duration(now - last) + " ago");
+        return join(parts);
+    }
     // "3:40 pm" today, otherwise the day ("Thu").
     public static String ago(double at, double now, boolean use24) {
         java.time.ZonedDateTime local = Instant.ofEpochMilli((long) (at * 1000)).atZone(ZoneId.systemDefault()), today = Instant.ofEpochMilli((long) (now * 1000)).atZone(ZoneId.systemDefault());
@@ -114,6 +120,76 @@ public final class ClaudeText {
     // A baby's label: the title the Claude app (or the user) gave the thread; never its prompts.
     public static String threadTitle(PcState.ClaudeThread thread, double now, boolean use24) {
         return thread.title != null && !thread.title.trim().isEmpty() ? thread.title.trim() : "Untitled · " + ago(thread.lastActive, now, use24);
+    }
+    // The heading's live summary: "1 needs you · 2 running · 6 threads today".
+    public static String summary(PcState.Claude claude, int period, boolean threads) {
+        if (!claude.connected && claude.threads.isEmpty()) return "Not connected";
+        List<String> parts = new ArrayList<String>();
+        if (claude.needsYou() > 0) parts.add(claude.needsYou() + " needs you");
+        if (claude.working() > 0) parts.add(claude.working() + " running");
+        if (threads) {
+            int count = 0; for (PcState.ClaudeGroup g : claude.groups[period]) count += g.threads.size();
+            parts.add(threads(count) + (period == 0 ? " in 5 h" : period == 1 ? " today" : " this week"));
+        }
+        if (parts.isEmpty()) parts.add(claude.sessions.isEmpty() ? "Nothing running" : "All quiet");
+        return join(parts);
+    }
+    // "resets 4:18 pm · in 1 h 38 m".
+    public static String fiveHourReset(PcState.ClaudeWindow window, double now, boolean use24) {
+        if (window == null || window.resetsAt <= 0) return "";
+        if (!current(window, now)) return "reset";
+        if (window.pct >= 100) return reset(window, now, use24);
+        double left = window.resetsAt - now;
+        String in = left >= 3600 ? (int) (left / 3600) + " h " + (int) ((left % 3600) / 60) + " m" : Math.max(1, (int) Math.ceil(left / 60)) + " m";
+        return "resets " + when(window.resetsAt, now, use24) + " · in " + in;
+    }
+    // "resets Wed 9:00 am".
+    public static String weekReset(PcState.ClaudeWindow window, boolean use24) {
+        if (window == null || window.resetsAt <= 0) return "";
+        java.time.ZonedDateTime local = Instant.ofEpochMilli((long) (window.resetsAt * 1000)).atZone(ZoneId.systemDefault());
+        return "resets " + local.format(DateTimeFormatter.ofPattern("EEE", Locale.US)) + " " + clock(window.resetsAt, use24);
+    }
+    // The narrower weekly windows in one line: "Opus only 18% · Sonnet 9%".
+    public static String extras(PcState.Claude claude, double now) {
+        List<String> parts = new ArrayList<String>();
+        for (int i = 0; i < Math.min(2, claude.extra.size()); i++) { PcState.ClaudeWindow w = claude.extra.get(i); parts.add(w.name.replace(" week", "") + (i == 0 ? " only " : " ") + Math.round(percent(w, now)) + "%"); }
+        return join(parts);
+    }
+    public static String lap(int lap) { return lap < 0 ? "WEEK" : "WEEK · LAP " + (lap + 1) + " OF 7"; }
+    public static String[] lapDays(PcState.ClaudeWindow week, double now) {
+        String[] days = new String[7];
+        double start = week != null && week.resetsAt > 0 ? week.resetsAt - ClaudePit.WEEK : now - 6 * 86400;
+        for (int i = 0; i < 7; i++) days[i] = Instant.ofEpochMilli((long) ((start + i * 86400) * 1000)).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE", Locale.US));
+        return days;
+    }
+    // A thread's chip: what its car is doing.
+    public static String chip(String pit) {
+        switch (pit == null ? "" : pit) {
+            case "need": return "Needs you"; case "work": return "Working"; case "rev": return "Tool run"; case "pit": return "Compacting";
+            case "stuck": return "Retrying"; case "done": return "Done"; case "end": return "Ended"; default: return "Ready";
+        }
+    }
+    // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").
+    public static String where(PcState.ClaudeThread thread, double now) {
+        if (!thread.running) return "ended " + duration(now - thread.lastActive) + " ago";
+        String age = duration(now - thread.since);
+        return thread.where.isEmpty() ? age : thread.where + " · " + age;
+    }
+    public static String added(long lines) { return "+" + tokens(lines); }
+    public static String removed(long lines) { return "−" + tokens(lines); }
+    // The ledger's dollars without the "≈" (the column says it): "7.10", "12", "1.2k".
+    public static String dollars(double value) { String money = money(value); return money.substring(money.indexOf('$') + 1); }
+    public static String mix(double[] mix) {
+        String[] names = { "Opus", "Sonnet", "Haiku" };
+        List<String> parts = new ArrayList<String>();
+        for (int i = 0; i < 3; i++) if (mix[i] > 0.005) parts.add(names[i] + " " + Math.round(mix[i] * 100) + "%");
+        return parts.isEmpty() ? "No replies in this period" : join(parts);
+    }
+    public static String share(double share) { return Double.isNaN(share) ? "—" : Math.round(share * 100) + "%"; }
+    private static String join(List<String> parts) {
+        StringBuilder text = new StringBuilder();
+        for (String part : parts) { if (text.length() > 0) text.append(" · "); text.append(part); }
+        return text.toString();
     }
     public static String noThreads(int period) { return "No Claude Code threads " + (period == 0 ? "in the last 5 hours." : period == 1 ? "today." : "this week."); }
     // A project critter's face: the most urgent running thread's (needs, working, done, ready); asleep with none running.

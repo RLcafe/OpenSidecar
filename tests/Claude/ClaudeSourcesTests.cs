@@ -70,6 +70,56 @@ internal static class ClaudeSourcesTests
 
     public static void Run(string directory, Action<string, Action> check)
     {
+        check("Claude pit wall telemetry: tool decisions, lines in both temporalities, cache counts and the facts", () => {
+            Func<string, string, string, string> record = (name, session, extra) => "{\"timeUnixNano\":\"" + Nanos(Now.AddMinutes(-1)) + "\",\"attributes\":[{\"key\":\"event.name\",\"value\":{\"stringValue\":\"" + name + "\"}},{\"key\":\"session.id\",\"value\":{\"stringValue\":\"" + session + "\"}}" + extra + "]}";
+            Func<string, string, string> attr = (key, value) => ",{\"key\":\"" + key + "\",\"value\":{\"stringValue\":\"" + value + "\"}}";
+            string logs = "{\"resourceLogs\":[{\"scopeLogs\":[{\"logRecords\":[" + record("tool_decision", "p1", attr("decision", "accept") + attr("source", "user_temporary")) + ","
+                + record("tool_decision", "p1", attr("decision", "reject") + attr("source", "user_reject")) + "," + record("tool_decision", "p1", attr("decision", "accept") + attr("source", "config")) + ","
+                + record("tool_result", "p1", attr("success", "true")) + "," + record("api_error", "p1", attr("status_code", "429")) + "]}]}]}";
+            var events = ClaudeOtlp.ParseLogs(logs);
+            Assert(events.Count == 5 && events[0].Asked && !events[0].Denied && events[1].Asked && events[1].Denied && !events[2].Asked && events[4].Name == "api_error", "Tool decisions parsed wrongly.");
+            var usage = ClaudeOtlp.ParseLogs(LogsFixture("p1", "req_p", Now))[1].Usage;
+            Assert(usage.Prompt == 6300 && usage.CacheRead == 5000, "A reply's cache counts parsed wrongly.");
+            var parsed = ClaudeUsage.Parse(LogLine("req_l", Now, "C:\\Code\\pit", "p1", 700) + "\n", new Dictionary<string, ClaudeUsageEntry>(), "p1");
+            Assert(parsed.Count == 1 && parsed[0].Prompt == 6000 && parsed[0].CacheRead == 5000, "A log line's cache counts parsed wrongly.");
+            // lines_of_code.count: a delta series adds up; a cumulative one counts only what it grew by.
+            Func<int, string, double, string> lines = (temporality, type, value) => "{\"resourceMetrics\":[{\"scopeMetrics\":[{\"metrics\":[{\"name\":\"claude_code.lines_of_code.count\",\"sum\":{\"aggregationTemporality\":" + temporality
+                + ",\"dataPoints\":[{\"attributes\":[{\"key\":\"session.id\",\"value\":{\"stringValue\":\"p1\"}},{\"key\":\"type\",\"value\":{\"stringValue\":\"" + type + "\"}}],\"startTimeUnixNano\":\"" + Nanos(Now.AddHours(-1)) + "\",\"timeUnixNano\":\"" + Nanos(Now.AddMinutes(-1)) + "\",\"asInt\":\"" + value + "\"}]}}]}]}]}";
+            var metric = ClaudeOtlp.ParseMetrics(lines(2, "added", 40));
+            Assert(metric.Count == 2 && metric.Any(e => e.Name == "active") && metric.Any(e => e.Name == "lines" && e.Added == 40 && e.Cumulative), "Lines metrics parsed wrongly.");
+            using (var service = new ClaudeService(Fresh(directory, "bridge-pit"), Fresh(directory, "config-pit")))
+            {
+                service.Receive(events);
+                service.Receive(ClaudeOtlp.ParseMetrics(lines(2, "added", 40)));
+                service.Receive(ClaudeOtlp.ParseMetrics(lines(2, "added", 55)));
+                service.Receive(ClaudeOtlp.ParseMetrics(lines(1, "removed", 7)));
+                service.Receive(ClaudeOtlp.ParseMetrics(lines(1, "removed", 3)));
+                var kept = service.LinesEntries;
+                Assert(kept.Sum(l => l.Added) == 55 && kept.Sum(l => l.Removed) == 10, "Lines added up wrongly: +" + kept.Sum(l => l.Added) + " −" + kept.Sum(l => l.Removed));
+                Assert(service.ToolEntries.Count(t => t.Result) == 1 && service.ToolEntries.Count(t => !t.Result && t.Asked) == 2 && service.ToolEntries.Count(t => t.Denied) == 1, "Tool calls kept wrongly.");
+                service.Receive(ClaudeOtlp.ParseLogs(LogsFixture("p1", "req_p", Now.AddMinutes(-1))));
+                var view = service.View(Now, service.Usage.Entries);
+                var thread = view.Threads.FirstOrDefault(t => t.Id == "p1");
+                Assert(thread != null && thread.LinesFor(ClaudePeriod.Today)[0] == 55 && thread.LinesFor(ClaudePeriod.Today)[1] == 10 && thread.MixFor(ClaudePeriod.Today)[0] == 1 && thread.Car == PitCar.GrandTourer, "The thread's lines, mix or car are wrong.");
+                var f = view.Facts;
+                Assert(f.Telemetry && f.Tools == 1 && f.Asked == 2 && f.Denied == 1 && f.Added == 55 && f.Removed == 10 && f.LinesThreads == 1 && f.Prompt == 6300 && f.CacheRead == 5000 && Math.Abs(f.CacheHit - 5000.0 / 6300) < 1e-9, "Today's facts wrong.");
+                Assert(view.Burn.Length == 60 && view.Burn.Sum() == 6500 && view.Rate == 3250 && view.Scale == ClaudePace.MinScale && view.Lanes.Count == 1 && view.Lanes[0].Bins.Sum() == 6500, "Burn or lanes wrong.");
+            }
+        });
+
+        check("Claude's PreCompact hook puts the car on the jack until the compaction ends", () => {
+            string bridge = Fresh(directory, "bridge-compact");
+            Action<string, string> hook = (name, extra) => ClaudeBridge.Hook("{\"session_id\":\"c1\",\"cwd\":\"C:/Code/api\",\"hook_event_name\":\"" + name + "\"" + extra + "}", bridge, null, Now);
+            hook("UserPromptSubmit", "");
+            hook("PreCompact", ",\"trigger\":\"auto\"");
+            var s = ClaudeBridge.Read(ClaudeBridge.SessionPath(bridge, "c1"));
+            Assert(s.Compacting && s.State == ClaudeState.Working, "PreCompact didn't mark the session compacting.");
+            hook("SessionStart", ",\"source\":\"compact\"");
+            s = ClaudeBridge.Read(ClaudeBridge.SessionPath(bridge, "c1"));
+            Assert(!s.Compacting && s.State == ClaudeState.Working, "The compaction didn't end, or the session stopped working.");
+            Assert(ClaudeConnector.Events.Any(e => e[0] == "PreCompact"), "Connect doesn't add the PreCompact hook.");
+        });
+
         check("Claude prices follow Claude Code's catalog, and unknown models cost nothing", () => {
             Assert(Math.Abs(ClaudePrices.Cost("claude-opus-5-5", 1000000, 0, 0, 0, 0) - 4) < 1e-9 && Math.Abs(ClaudePrices.Cost("claude-opus-5-5-20261001", 0, 1000000, 0, 0, 0) - 20) < 1e-9, "Opus 5.5 priced wrongly.");
             Assert(Math.Abs(ClaudePrices.Cost("claude-opus-5", 1000000, 0, 0, 0, 1000000) - 5.5) < 1e-9 && Math.Abs(ClaudePrices.Cost("claude-opus-5-5[1m]", 0, 0, 1000000, 1000000, 0) - 13) < 1e-9, "Opus 5 or cache writes priced wrongly.");

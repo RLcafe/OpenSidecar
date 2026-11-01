@@ -19,6 +19,16 @@ namespace WidgetScreen
         public string Name = "", Session = "", Service = "", Entrypoint = "", Repository = "";
         public DateTime At;
         public ClaudeUsageEntry Usage;
+        // tool_decision: "accept" or "reject", and who decided ("config", "hook", "user_temporary", "user_reject"…).
+        public string Decision = "", Source = "";
+        // "lines" (claude_code.lines_of_code.count): lines added or removed. A cumulative series counts from its start,
+        // so the service turns it into what changed since the last export (Series names it).
+        public double Added, Removed;
+        public bool Cumulative;
+        public string Series = "";
+        // Who decided a tool use: the user (asked, allowed or denied it) rather than settings or a hook.
+        public bool Asked { get { return Source.StartsWith("user", StringComparison.OrdinalIgnoreCase); } }
+        public bool Denied { get { return String.Equals(Decision, "reject", StringComparison.OrdinalIgnoreCase); } }
     }
 
     // Claude Code's OpenTelemetry export in OTLP/HTTP JSON (docs/decisions/015-claude-sign-in-and-telemetry.md). Logs carry
@@ -56,18 +66,21 @@ namespace WidgetScreen
                                 long hour = Math.Min(creation, Long(attributes, "cache_creation_1h_tokens"));
                                 cost = ClaudePrices.Cost(model, input, output, creation - hour, hour, read);
                             }
-                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + read + creation, Cost = Math.Max(0, cost), FromTelemetry = true };
+                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + read + creation, Prompt = input + read + creation, CacheRead = read, Cost = Math.Max(0, cost), FromTelemetry = true };
                         }
+                        else if (name == "tool_decision") { e.Decision = Value(attributes, "decision") ?? ""; e.Source = Value(attributes, "source") ?? ""; }
                         result.Add(e);
                     }
             }
             return result;
         }
 
-        // One "active" event per session a metrics export mentions, at its newest data point.
+        // One "active" event per session a metrics export mentions, at its newest data point, and a "lines" event for
+        // each lines_of_code data point (added or removed).
         public static List<ClaudeTelemetryEvent> ParseMetrics(string json)
         {
             var newest = new Dictionary<string, ClaudeTelemetryEvent>();
+            var lines = new List<ClaudeTelemetryEvent>();
             object parsed; if (!ClaudeJson.TryParse(json, out parsed)) return new List<ClaudeTelemetryEvent>();
             foreach (var resource in Objects(ClaudeJson.List(ClaudeJson.Obj(parsed), "resourceMetrics")))
             {
@@ -78,17 +91,41 @@ namespace WidgetScreen
                         string name = ClaudeJson.Str(metric, "name") ?? "";
                         if (!name.StartsWith("claude_code.", StringComparison.Ordinal)) continue;
                         var data = ClaudeJson.Obj(metric, "sum") ?? ClaudeJson.Obj(metric, "gauge");
+                        // OTLP JSON writes the temporality as a number (1 delta, 2 cumulative) or its enum name.
+                        object temporality = data == null ? null : data.Get("aggregationTemporality");
+                        bool cumulative = (temporality is JsonNumber && ((JsonNumber)temporality).Value == 2) || (temporality is string && ((string)temporality).IndexOf("CUMULATIVE", StringComparison.OrdinalIgnoreCase) >= 0);
                         foreach (var point in Objects(ClaudeJson.List(data, "dataPoints")))
                         {
                             var attributes = Attributes(ClaudeJson.List(point, "attributes"));
                             var e = Event("active", attributes, resourceAttributes, Time(point, attributes));
                             if (e.Session.Length == 0) continue;
+                            if (name == "claude_code.lines_of_code.count")
+                            {
+                                string type = Value(attributes, "type") ?? "";
+                                double value = PointValue(point);
+                                if (!System.Double.IsNaN(value) && value >= 0 && (type == "added" || type == "removed"))
+                                {
+                                    var start = Number(point.Get("startTimeUnixNano"));
+                                    lines.Add(new ClaudeTelemetryEvent { Name = "lines", Session = e.Session, At = e.At, Added = type == "added" ? value : 0, Removed = type == "removed" ? value : 0,
+                                        Cumulative = cumulative, Series = e.Session + "|" + type + "|" + (start is double ? ((double)start).ToString("R", CultureInfo.InvariantCulture) : "") });
+                                }
+                            }
                             ClaudeTelemetryEvent known;
                             if (!newest.TryGetValue(e.Session, out known) || known.At < e.At) newest[e.Session] = e;
                         }
                     }
             }
-            return newest.Values.ToList();
+            return newest.Values.Concat(lines).ToList();
+        }
+        // A number data point's value: asInt (a string in OTLP JSON) or asDouble.
+        private static double PointValue(JsonObject point)
+        {
+            foreach (var key in new[] { "asInt", "asDouble" })
+            {
+                var number = Number(point.Get(key));
+                if (number is double) return (double)number;
+            }
+            return System.Double.NaN;
         }
 
         private static ClaudeTelemetryEvent Event(string name, Dictionary<string, object> attributes, Dictionary<string, object> resource, DateTime at)

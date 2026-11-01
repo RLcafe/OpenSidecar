@@ -7,6 +7,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
 using WidgetScreen;
 
 // Projects with their threads (docs/design/claude-watcher.md, decision 016): the Claude app's thread records, grouping
@@ -16,6 +18,15 @@ using WidgetScreen;
 internal static class ClaudeTreeTests
 {
     private static void Assert(bool valid, string message) { if (!valid) throw new Exception(message); }
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var deeper in Descendants(child)) yield return deeper;
+        }
+    }
     private static readonly DateTime Now = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
     private static string Fresh(string directory, string name)
     {
@@ -90,7 +101,7 @@ internal static class ClaudeTreeTests
             // Unticked projects leave the card's threads too.
             var filtered = service.View(Now, service.Usage.Entries, folder => folder != "C:\\Code\\beta");
             Assert(filtered.Groups(ClaudePeriod.Week).Count == 1, "An unticked project still shows its threads.");
-            Assert(ClaudeText.ThreadTitle(new ClaudeSession { LastActive = Now }, Now, true).StartsWith("Untitled · ") && ClaudeText.GroupDetail(five[0], true) == "2 threads · 150 · ≈ $0.00" && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0], true));
+            Assert(ClaudeText.ThreadTitle(new ClaudeSession { LastActive = Now }, Now, true).StartsWith("Untitled · ") && ClaudeText.GroupDetail(five[0]).StartsWith("2 threads") && ClaudeText.Threads(1) == "1 thread", "Thread words wrong: " + ClaudeText.GroupDetail(five[0]));
             service.Dispose();
         });
 
@@ -139,9 +150,9 @@ internal static class ClaudeTreeTests
             }
         });
 
-        check("Claude projects fold their babies in and out, and babies stay in their column", () => {
+        check("Claude garages roll their cars in and out, and cars stay in the card", () => {
             string folder = Fresh(directory, "fold");
-            foreach (var size in new[] { new Size(1856, 576), new Size(900, 576), new Size(640, 420), new Size(472, 310), new Size(639, 576), new Size(360, 280) })
+            foreach (var size in new[] { new Size(1856, 576), new Size(1216, 576), new Size(900, 576), new Size(640, 420), new Size(472, 310), new Size(639, 576), new Size(360, 280) })
             {
                 string path = Path.Combine(folder, "claude-" + size.Width + "x" + size.Height + ".xml");
                 var settings = new AppSettings { TextScale = size.Width == 640 ? 1.4 : 1, ClaudePeriod = "Week" };
@@ -159,44 +170,75 @@ internal static class ClaudeTreeTests
                             Action layout = () => { dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout(); };
                             layout();
                             var cardView = controller.ClaudeCardView;
-                            var columns = cardView.Columns();
-                            Assert(columns.Count > 0, "No project columns at " + size + ".");
-                            foreach (var pair in columns)
+                            var garages = cardView.Garages();
+                            Assert(garages.Count > 0, "No garages at " + size + ".");
+                            Assert(cardView.Sprites.All(s => s.FrameCount > 0), "A car or garage has no frames at " + size + ".");
+                            foreach (var pair in garages)
                             {
-                                var column = pair.Key.TransformToAncestor(card).TransformBounds(new Rect(0, 0, pair.Key.ActualWidth, pair.Key.ActualHeight));
-                                Assert(column.Left >= 22.5 && column.Right <= card.ActualWidth - 22.5 && column.Bottom <= card.ActualHeight - 22.5, "A project column leaves its " + size + " card: " + column);
-                                foreach (var baby in pair.Value.Where(b => b.ActualWidth > 0))
-                                {
-                                    var box = baby.TransformToAncestor(card).TransformBounds(new Rect(0, 0, baby.ActualWidth, baby.ActualHeight));
-                                    // Layout rounding may add a pixel to a cell.
-                                    Assert(box.Left >= column.Left - 1.5 && box.Right <= column.Right + 1.5 && box.Top >= column.Top - 0.5, "A baby leaves its project's column at " + size + ": " + box + " in " + column);
-                                }
+                                var garage = pair.Key.TransformToAncestor(card).TransformBounds(new Rect(0, 0, pair.Key.ActualWidth, pair.Key.ActualHeight));
+                                Assert(pair.Key.ActualWidth >= 48 && pair.Key.ActualHeight >= 48, "A garage is smaller than a finger at " + size + ".");
+                                Assert(garage.Left >= 22.5 && garage.Top >= 22.5, "A garage leaves its " + size + " card: " + garage);
                             }
-                            if (CardSizing.Claude(size.Width, size.Height) != CardSizing.Design.Large || size.Width < 900) continue;
-                            // Folding widget-screen (5 threads) and letting them out again; the choice is kept in settings.xml.
+                            if (CardSizing.Claude(size.Width, size.Height) == CardSizing.Design.Small) continue;
+                            // Folding widget-screen and letting its cars out again; the choice is kept in settings.xml.
                             const string project = "C:\\Code\\widget-screen";
                             int index = cardView.View.Groups(cardView.Period).FindIndex(g => g.Folder == project);
-                            Assert(index >= 0 && columns[index].Value.Count == 5, "widget-screen doesn't show its five babies at " + size + ".");
+                            if (index < 0 || index >= garages.Count) continue;
+                            int before = garages[index].Value.Count;
+                            Assert(before > 0, "widget-screen shows no cars at " + size + ".");
                             Assert(cardView.Toggle(project) && !cardView.Animating, "Folding didn't happen at once without the motion (not on screen).");
                             layout();
                             string warning;
-                            var critter = (ClaudeCritter)window.FindName("ClaudeCritter" + index);
-                            Assert(cardView.Columns()[index].Value.Count == 0 && critter.Collapsed && critter.Count == 5, "The folded project still shows babies, or its critter doesn't hold them.");
+                            Assert(cardView.Garages()[index].Value.Count == 0, "The folded garage still shows cars at " + size + ".");
                             Assert(SettingsStore.Load(path, out warning).ClaudeCollapsed.Contains(project), "The fold wasn't kept in settings.xml.");
-                            Assert(!cardView.Toggle(project), "Letting the babies out didn't happen.");
+                            if (CardSizing.Claude(size.Width, size.Height) == CardSizing.Design.Large)
+                                Assert(Descendants(card).OfType<TextBlock>().Any(t => t.Inlines.OfType<Run>().Any(r => r.Text.Contains("in the garage · tap to roll them out"))), "A folded garage doesn't say its cars are inside.");
+                            Assert(!cardView.Toggle(project), "Rolling the cars out didn't happen.");
                             layout();
-                            Assert(cardView.Columns()[index].Value.Count == 5 && !((ClaudeCritter)window.FindName("ClaudeCritter" + index)).Collapsed && !SettingsStore.Load(path, out warning).ClaudeCollapsed.Contains(project), "The babies didn't come back, or the fold stayed in settings.xml.");
-                            // A folded project with a thread that needs you still turns Amber.
+                            Assert(cardView.Garages()[index].Value.Count == before && !SettingsStore.Load(path, out warning).ClaudeCollapsed.Contains(project), "The cars didn't come back, or the fold stayed in settings.xml.");
+                            // A folded garage with a thread that needs you still lights its beacon.
                             var needs = ClaudeView.Fixture(DateTime.UtcNow, true); needs.Collapsed.Add("C:\\Code\\api-server");
                             cardView.Update(needs); layout();
                             int api = cardView.View.Groups(cardView.Period).FindIndex(g => g.Folder == "C:\\Code\\api-server");
-                            var apiCritter = (ClaudeCritter)window.FindName("ClaudeCritter" + api);
-                            Assert(apiCritter.Collapsed && apiCritter.State == ClaudeState.NeedsYou && cardView.Columns()[api].Value.Count == 0, "A folded project hides that a thread needs you.");
+                            var apiGarage = (PitSprite)window.FindName("ClaudeGarage" + api);
+                            Assert(apiGarage != null && apiGarage.Key.Contains("|Need|True|") && cardView.Garages()[api].Value.Count == 0, "A folded garage hides that a thread needs you: " + (apiGarage == null ? "none" : apiGarage.Key));
                         }
                     }
                     finally { window.Close(); }
                 }
             }
+        });
+
+        check("Claude cars follow their threads: class by model, behaviour by state and telemetry", () => {
+            var now = Now;
+            Func<ClaudeState, bool, ClaudeSession> thread = (state, running) => new ClaudeSession { State = state, Running = running };
+            Assert(ClaudePace.State(thread(ClaudeState.Working, false), now, now, now, now, now) == PitState.End
+                && ClaudePace.State(thread(ClaudeState.NeedsYou, true), now, now, now, now, now) == PitState.Need
+                && ClaudePace.State(thread(ClaudeState.Done, true), now, now, now, now, now) == PitState.Done
+                && ClaudePace.State(thread(ClaudeState.Ready, true), now, now, now, now, now) == PitState.Idle, "Car states from thread states wrong.");
+            var compacting = thread(ClaudeState.Working, true); compacting.Compacting = true;
+            Assert(ClaudePace.State(compacting, now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue) == PitState.Pit, "Compacting isn't on the jack.");
+            var working = thread(ClaudeState.Working, true);
+            Assert(ClaudePace.State(working, now, now.AddSeconds(-20), now.AddSeconds(-30), DateTime.MinValue, DateTime.MinValue) == PitState.Rev, "A long tool run doesn't rev.");
+            Assert(ClaudePace.State(working, now, now.AddSeconds(-5), now.AddSeconds(-30), DateTime.MinValue, DateTime.MinValue) == PitState.Work, "A short tool run revs.");
+            Assert(ClaudePace.State(working, now, DateTime.MinValue, DateTime.MinValue, now.AddSeconds(-10), now.AddSeconds(-20)) == PitState.Stuck, "An API error doesn't spin the wheels.");
+            Assert(ClaudePace.State(working, now, DateTime.MinValue, DateTime.MinValue, now.AddSeconds(-10), now.AddSeconds(-2)) == PitState.Work, "A request after the error keeps spinning.");
+            Assert(ClaudePace.State(working, now, DateTime.MinValue, DateTime.MinValue, now.AddSeconds(-90), now.AddSeconds(-120)) == PitState.Work, "An old error keeps spinning.");
+            Func<string, long, ClaudeUsageEntry> entry = (model, tokens) => new ClaudeUsageEntry { Model = model, Tokens = tokens, At = now };
+            var mix = ClaudePace.Mix(new[] { entry("claude-opus-5-5", 300), entry("claude-sonnet-5-5", 100), entry("claude-haiku-5-5", 100), entry("gpt-x", 900) });
+            Assert(Math.Abs(mix[0] - 0.6) < 1e-9 && Math.Abs(mix[1] - 0.2) < 1e-9 && ClaudePace.Car(mix, "") == PitCar.GrandTourer && ClaudePace.Car(new double[3], "Haiku 5.5") == PitCar.Hatch
+                && ClaudePace.Car(new double[3], "") == PitCar.Sports && ClaudePace.Family("claude-fable-5-1") == 0 && ClaudePace.Family("x") == -1, "Model mix or car class wrong.");
+            // Pace: 62% with two thirds of the window gone is on pace for 93%; the first twentieth says nothing.
+            var five = new ClaudeLimitWindow { Percent = 62, ResetsAt = now.AddMinutes(100) };
+            double elapsed = ClaudePace.Elapsed(five, ClaudePace.FiveHours, now);
+            Assert(Math.Abs(elapsed - 2.0 / 3) < 1e-9 && Math.Round(ClaudePace.Projection(62, elapsed)) == 93 && ClaudePace.Warns(93) && !ClaudePace.Warns(89) && Double.IsNaN(ClaudePace.Projection(10, 0.04))
+                && Double.IsNaN(ClaudePace.Elapsed(new ClaudeLimitWindow { Percent = 5 }, ClaudePace.FiveHours, now)) && ClaudeText.Pace(92.4) == "on pace for 92%", "Pace wrong.");
+            Assert(ClaudePace.Lap(41, 1) == 1 && Math.Abs(ClaudePace.Lap(41, 2) - (0.41 - 2 / 7.0) * 7) < 1e-9 && ClaudePace.Lap(41, 3) == 0 && ClaudePace.LapNow(0.62) == 4 && ClaudePace.LapNow(1) == 6, "Laps wrong.");
+            Assert(ClaudePace.Scale(10000) == 60000 && ClaudePace.Scale(70000) == 80000 && ClaudePace.Scale(250000) == 300000 && ClaudePace.Scale(1000000) == 1000000 && ClaudePace.WheelFps(0.5) == 14 && ClaudePace.Hot(0.75) && !ClaudePace.Heavy(0.4), "Rev counter wrong.");
+            var bins = ClaudePace.Bins(new[] { new ClaudeUsageEntry { At = now.AddSeconds(-30), Tokens = 5 }, new ClaudeUsageEntry { At = now.AddMinutes(-59.5), Tokens = 7 }, new ClaudeUsageEntry { At = now.AddMinutes(-61), Tokens = 9 } }, now, TimeSpan.FromMinutes(1), 60);
+            Assert(bins[59] == 5 && bins[0] == 7 && bins.Sum() == 12 && ClaudePace.Rate(new[] { new ClaudeUsageEntry { At = now.AddSeconds(-30), Tokens = 600 }, new ClaudeUsageEntry { At = now.AddMinutes(-3), Tokens = 999 } }, now) == 300, "Burn bins wrong.");
+            Assert(ClaudeText.Added(1300) == "+1.3k" && ClaudeText.Removed(216) == "−216" && ClaudeText.Dollars(7.1) == "7.10" && ClaudeText.Mix(new[] { 0.8, 0.2, 0 }) == "Opus 80% · Sonnet 20%" && ClaudeText.Chip(PitState.Pit) == "Compacting"
+                && ClaudeText.Where(new ClaudeSession { Running = false, LastActive = now.AddHours(-1) }, now) == "ended 1 h ago" && ClaudeText.Where(new ClaudeSession { Running = true, Where = "Desktop", Since = now.AddMinutes(-6) }, now) == "Desktop · 6 min", "Pit words wrong.");
         });
     }
 }

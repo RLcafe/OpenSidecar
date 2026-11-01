@@ -2,6 +2,41 @@
 
 The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
 
+## v2: the pit wall (decision 017)
+
+Ali approved the v2 design on 1 Nov 2026: [claude-watcher-v2.html](claude-watcher-v2.html) is the spec (its layouts, sample data, drawing code and animation table). He chose the drawn pixel-art cars over generated art, so the page's image-prompt pack and its "one thing to confirm" panel don't apply. This section supersedes the critters described below; the sources, the project filter, the refresh intervals and folding per project stay as they were. The technical choices are in [decision 017](../decisions/017-claude-pit-wall.md).
+
+As built, both apps:
+
+- **Large** (from 640 × 420) has these rows:
+  - **Heading:** "CLAUDE CODE · PIT WALL" (from 900 units of body; "CLAUDE CODE" below that), a dot and the live summary, the Sample or "as of" flag, and the 5 h / Today / Week switch (64 × 48 buttons).
+  - **Plan row** (124 units tall):
+    - the 5-hour tank: gauge, percentage, "on pace for 92%", "resets 4:18 pm · in 1 h 38 m";
+    - the week: "WEEK · LAP 5 OF 7", "resets Wed 9:00 am", the percentage, pace, the Opus/Sonnet windows, and seven laps with day names and the flag;
+    - from 860 units of body, the revs: gauge with a redline, tokens a minute, the hour's burn line.
+    - Without plan limits, one tile says what they need.
+  - **Pit stop strip:** only while a thread needs Ali. Its car with hazards, "Pit stop: title · project", "Wants to use Bash · waiting 2 min · Claude app" and Go to it (shown when its window can be found).
+  - **Ledger,** which scrolls inside the card:
+    - Garage rows are 52 units: the garage (a 48-unit tap target), name, "3 threads · 2 running · Claude app" (or "4 cars in the garage · tap to roll them out" with a count bubble), a share bar, tokens, ≈ $, model mix and lines.
+    - Car rows are 36 units: car, chip (Needs you, Working, Tool run, Compacting, Retrying, Done, Ended, Ready), title, where and age, tokens, ≈ $, mix and lines. A running car's row brings its window forward, and ended rows are at 62%.
+    - The models column needs a 560-unit table, lines 660.
+  - **Side panel** (300 units, from 1000 units of body): the 5-hour lanes for the four busiest projects, with times under them, and four facts.
+- **Medium:**
+  - the heading (title, summary, flag);
+  - two mini tiles (5-HOUR or WEEK, the reset time or day, the percentage, "pace 92%", and a pace meter with the projection hatched);
+  - then 44-unit garage rows (taller at bigger text sizes): garage, name with up to three inline cars (or the count bubble), "Needs you · title" in Amber, tokens and $ (from 400 wide).
+- **Small:**
+  - the car that needs Ali (or the most urgent running one), a third of the card's width;
+  - its project, "Needs you · 2 min" or "Working · 6 min", and "+1 working · 4 more threads";
+  - then "5-HOUR 62%", "pace 92% · 4:18 pm" and the pace meter, when the text above leaves room.
+- **The card's border** still turns Amber 2 units when a thread needs Ali, and the header pill shows a still car with its hazards on.
+- **Motion,** per the spec's animation table: stepped 8-frame cycles on one frame clock per card. It stops when the card is hidden, the window is minimised or in the tray, the phone app is in the background, or Quiet mode is on (state swaps only). Rolling in and out takes 1.2 s in the project's rows: tail lights toward you going in, headlights toward you coming out. Only cars that show in the ledger move.
+- **Data added:** pace and laps from the reset times; tool decisions, results, API errors and lines changed from telemetry; cache reads per reply; and a PreCompact hook for compacting. Connect adds the hook, so older connections offer Update connection once.
+
+Renders: `tests\size-design-renders.ps1` scenes `claude-small` (300 × 200), `claude-medium` (472 × 310), `claude-large` (1216 × 576), `claude-large-narrow` (900 × 576), `claude-large-min` (640 × 420), `claude-wide`, `claude-needs`, `claude-needs-small`, `claude-needs-large` and `claude-pill`.
+
+Not verified: the phone's views on a device (no device or emulator was available), the roll on the phone, real telemetry for tools and lines from a session started after Update connection, and a real compaction firing PreCompact.
+
 ## Projects and their threads (decision 016)
 
 Ali asked (1 Nov 2026) for the projects with their threads under them, then for each project to be a big critter with its threads as baby critters that it eats and spits out. This section supersedes the Medium and Large layouts described further down (the lineup, the session rows and the usage panel). Small is unchanged.

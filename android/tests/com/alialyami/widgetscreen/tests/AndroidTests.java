@@ -4,7 +4,9 @@ import com.alialyami.widgetscreen.core.AppSettings;
 import com.alialyami.widgetscreen.core.CalendarText;
 import com.alialyami.widgetscreen.core.CardSizing;
 import com.alialyami.widgetscreen.core.ClaudeText;
-import com.alialyami.widgetscreen.core.Critter;
+import com.alialyami.widgetscreen.core.ClaudePit;
+import com.alialyami.widgetscreen.core.PitArt;
+import com.alialyami.widgetscreen.core.PitPath;
 import com.alialyami.widgetscreen.core.ClipText;
 import com.alialyami.widgetscreen.core.DashboardFit;
 import com.alialyami.widgetscreen.core.Format;
@@ -379,7 +381,13 @@ public final class AndroidTests {
             ok(state.claude.threads.size() == 10 && state.claude.groups[2].size() == 3 && state.claude.every == 2, "claude threads and week groups from the PC");
             for (PcState.ClaudeGroup g : state.claude.groups[2]) for (String id : g.threads) ok(state.claude.thread(id) != null && state.claude.thread(id).project.equals(g.project), "a baby under the wrong project: " + id);
             PcState.ClaudeGroup api = null; for (PcState.ClaudeGroup g : state.claude.groups[2]) if (g.project.equals("api-server")) api = g;
-            ok(api != null && api.key.equals("C:\\Code\\api-server") && api.threads.size() == 3 && "needs".equals(ClaudeText.groupState(state.claude, api)) && api.threads.get(0).equals("sample-1"), "the api-server project critter");
+            ok(api != null && api.key.equals("C:\\Code\\api-server") && api.threads.size() == 3 && "needs".equals(ClaudeText.groupState(state.claude, api)) && api.threads.get(0).equals("sample-1"), "the api-server project's garage");
+            // The pit wall: each thread's car and what it does, the burn, the lanes and today's facts.
+            PcState.ClaudeThread face = state.claude.thread("sample-3"), first = state.claude.thread("sample-1"), busy = state.claude.thread("sample-2");
+            ok(face != null && "pit".equals(face.pit) && "sport".equals(face.car) && "need".equals(first.pit) && "gt".equals(first.car) && first.mix[2][0] == 1 && first.lines[0][0] == 412 && first.lines[0][1] == 96
+                && "work".equals(busy.pit) && busy.rate == 41000 && "end".equals(state.claude.thread("sample-5").pit), "cars from the PC");
+            ok(state.claude.burn.length == 60 && state.claude.burn[59] > 0 && state.claude.rate == 50000 && state.claude.scale >= 60000 && state.claude.lanes.size() == 3 && state.claude.lanes.get(0).bins.length == 30
+                && state.claude.facts.tools == 312 && state.claude.facts.asked == 41 && state.claude.facts.telemetry && Math.round(state.claude.facts.cacheHit() * 100) == 91 && api.mix[0] > 0.9 && api.added == 462, "burn, lanes and facts from the PC");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
             if (!state.system.error) ok(!state.system.cpuTempState.isEmpty() && !state.system.fpsState.isEmpty() && state.system.showCpuTemp && state.system.showFps, "system sensors: " + state.system.cpuTempState + " " + state.system.fpsState);
@@ -479,43 +487,68 @@ public final class AndroidTests {
             ok(NotesText.line("  Call the\nbank\t now ").equals("Call the bank now") && NotesText.line(new String(new char[500]).replace('\0', 'y')).length() == 200 && NotesText.line(" \n ").isEmpty(), "line");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Notes").visible && WidgetLayout.title("Notes").equals("Notes and to-do"), "hidden by default");
         } });
-        check("Claude critters match the PC's and pick designs at the same sizes", new Action() { public void run() {
-            ok(Critter.hash("a") == 3826002220L && Critter.hash("") == 2166136261L && Critter.hash("api-server") == Critter.hash(" API-Server "), "hash");
-            ok(Critter.shape("api-server") == 2 && Critter.accent("api-server") == 1 && Critter.shape("widget-screen") == 1 && Critter.shape("aeq") == 0 && Critter.accent("notes") == 0 && Critter.accent("photo-manager") == 2, "the same critters as the PC");
-            ok(Critter.hop("needs", true, false) == -4 && Critter.hop("needs", true, true) == 0 && Critter.pupilX("working", true, false) == 3 && Critter.pupilX("working", true, true) == -3 && Critter.eyesOpen("needs") && !Critter.eyesOpen("done"), "quiet critters");
+        check("Claude pit wall sizes, colours and art match the PC's", new Action() { public void run() {
+            ok(PitArt.hash("a") == 3826002220L && PitArt.hash("") == 2166136261L && PitArt.hash("api-server") == PitArt.hash(" API-Server "), "hash");
+            ok(PitArt.accent("api-server") == PitArt.ACCENTS[1] && PitArt.accent("notes") == PitArt.ACCENTS[0] && PitArt.accent("photo-manager") == PitArt.ACCENTS[2], "the same project colours as the PC");
             ok(CardSizing.claude(260, 180) == CardSizing.SMALL && CardSizing.claude(359, 400) == CardSizing.SMALL && CardSizing.claude(600, 279) == CardSizing.SMALL && CardSizing.claude(472, 310) == CardSizing.MEDIUM && CardSizing.claude(639, 576) == CardSizing.MEDIUM && CardSizing.claude(640, 420) == CardSizing.LARGE, "designs");
-            ok(CardSizing.claudeStrip(1) == 84 && CardSizing.claudeStrip(1.4) == 94 && CardSizing.claudeColumns(1808, 3) == 3 && CardSizing.claudeColumns(592, 5) == 2 && CardSizing.claudeColumns(200, 2) == 1 && CardSizing.claudeColumns(900, 0) == 0 && CardSizing.claudeBabyCell(1) == 84 && CardSizing.claudeBabyCell(1.4) == 90 && CardSizing.claudeBabiesPerRow(400, 1) == 4 && Critter.baby(100) == 40 && Critter.baby(40) == 24, "sizes");
-            ok(CardSizing.claudeMediumColumns(424, 5) == 3 && CardSizing.claudeMediumColumns(1000, 3) == 3 && CardSizing.claudeMediumBabies(130, 1) && !CardSizing.claudeMediumBabies(70, 1) && CardSizing.claudeMediumBabyCount(140, 30, 5) == 3 && CardSizing.claudeMediumBabyCount(60, 30, 5) == 0 && CardSizing.claudeMediumBabyCount(140, 30, 2) == 2, "medium sizes as on the PC");
+            ok(CardSizing.claudeRevs(860) && !CardSizing.claudeRevs(859) && CardSizing.claudeSide(1000) && !CardSizing.claudeSide(999) && CardSizing.claudeModels(560) && !CardSizing.claudeModels(559) && CardSizing.claudeLines(660) && !CardSizing.claudeLines(659)
+                && CardSizing.claudeMediumRow(1) == 44 && CardSizing.claudeMediumRow(1.4) == 52 && CardSizing.claudeInlineCars(300, 5) == 3 && CardSizing.claudeInlineCars(200, 5) == 1 && CardSizing.claudeInlineCars(200, 2) == 2 && CardSizing.claudeInlineCars(100, 4) == 0
+                && CardSizing.claudeSmallMeter(152, 1) && !CardSizing.claudeSmallMeter(132, 1.4) && CardSizing.claudeSmallCar(252, 100) == 85 && CardSizing.claudeSmallCar(100, 20) == 48, "sizes as on the PC");
             WidgetLayout.Placement claude = WidgetLayout.find(WidgetLayout.defaults(), "Claude");
             ok(claude != null && !claude.visible && WidgetLayout.title("Claude").equals("Claude Code") && WidgetLayout.minimum("Claude")[0] == 260 && WidgetLayout.minimum("Claude")[1] == 180, "hidden by default");
+            // The SVG paths the art uses read the same as the PC's Geometry.Parse.
+            java.util.List<float[]> path = PitPath.parse("M4 41 Q4 34 14 32 L40 29H50V31h-2v1l8 -6 z M20 32.5L-16 27");
+            ok(path.size() == 11 && path.get(0)[0] == PitPath.MOVE && path.get(1)[0] == PitPath.QUAD && path.get(1)[3] == 14 && path.get(3)[1] == 50 && path.get(4)[2] == 31 && path.get(5)[1] == 48 && path.get(6)[2] == 32
+                && path.get(7)[1] == 56 && path.get(7)[2] == 26 && path.get(8)[0] == PitPath.CLOSE && path.get(9)[0] == PitPath.MOVE && path.get(9)[2] == 32.5f, "path reading");
+            ok(PitPath.parse("M84 20 L83 29").size() == 2 && PitPath.parse("M8 22h84v74H8Z M20 40h60v56H20Z").size() == 10, "path shapes");
+            // Every state and car draws, moving states change between frames, Done and Ended play once and rest on frame 7.
+            for (int state = PitArt.IDLE; state <= PitArt.END; state++)
+                for (int car = PitArt.GT; car <= PitArt.HATCH; car++) {
+                    PitArt.Look look = new PitArt.Look(car, true, true, true);
+                    ok(PitArt.car(PitArt.ACCENTS[0], state, look, 0).size() > 20, "a car draws nothing in state " + state);
+                    for (PitArt.Op op : PitArt.car(PitArt.ACCENTS[0], state, look, 3)) if (op.kind == PitArt.Op.PATH) ok(!PitPath.parse(op.path).isEmpty(), "an unreadable path: " + op.path);
+                }
+            StringBuilder first = new StringBuilder(), second = new StringBuilder();
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.WORK, new PitArt.Look(), 0)) first.append(op.path).append(op.matrix == null ? "" : java.util.Arrays.toString(op.matrix));
+            for (PitArt.Op op : PitArt.car(PitArt.LIME, PitArt.WORK, new PitArt.Look(), 1)) second.append(op.path).append(op.matrix == null ? "" : java.util.Arrays.toString(op.matrix));
+            ok(!first.toString().equals(second.toString()), "working wheels don't turn");
+            ok(PitArt.fps(PitArt.WORK, 0, false) == 4 && PitArt.fps(PitArt.WORK, 1, false) == 24 && PitArt.fps(PitArt.IDLE, 0, false) == 0 && PitArt.fps(PitArt.IDLE, 0, true) == 6 && PitArt.still(PitArt.DONE) == 7 && PitArt.still(PitArt.END) == 7 && PitArt.still(PitArt.NEED) == 0 && PitArt.once(PitArt.END) && !PitArt.once(PitArt.WORK), "frame rates as on the PC");
+            ok(PitArt.state("pit") == PitArt.PIT && PitArt.state("nonsense") == PitArt.IDLE && PitArt.car("gt") == PitArt.GT && PitArt.car("hatch") == PitArt.HATCH && PitArt.car("") == PitArt.SPORT && PitArt.pixelSize(150) == 3 && PitArt.pixelSize(48) == 2, "names");
+            ok(PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 0).size() > PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 1).size() && PitArt.front(PitArt.LIME, true).size() > PitArt.front(PitArt.LIME, false).size(), "the beacon blinks, the headlights light");
+        } });
+        check("Claude pace, laps and the rev counter work out like the PC's", new Action() { public void run() {
+            double now = 1700000000;
+            PcState.ClaudeWindow five = new PcState.ClaudeWindow(); five.pct = 62; five.resetsAt = now + 100 * 60;
+            double elapsed = ClaudePit.elapsed(five, ClaudePit.FIVE_HOURS, now);
+            ok(Math.abs(elapsed - 2.0 / 3) < 1e-9 && Math.round(ClaudePit.projection(62, elapsed)) == 93 && ClaudePit.warns(93) && !ClaudePit.warns(89) && Double.isNaN(ClaudePit.projection(10, 0.04)) && ClaudePit.pace(92.4).equals("on pace for 92%"), "pace");
+            PcState.ClaudeWindow unknown = new PcState.ClaudeWindow(); unknown.pct = 5;
+            ok(Double.isNaN(ClaudePit.elapsed(unknown, ClaudePit.FIVE_HOURS, now)) && ClaudePit.lap(41, 1) == 1 && Math.abs(ClaudePit.lap(41, 2) - (0.41 - 2 / 7.0) * 7) < 1e-9 && ClaudePit.lap(41, 3) == 0 && ClaudePit.lapNow(0.62) == 4 && ClaudePit.lapNow(1) == 6, "laps");
+            ok(ClaudePit.wheelFps(0.5) == 14 && ClaudePit.hot(0.75) && !ClaudePit.heavy(0.4) && ClaudePit.share(30000, 60000) == 0.5 && ClaudePit.fuel(90) && !ClaudePit.fuel(89), "the rev counter");
+            ok(ClaudeText.added(1300).equals("+1.3k") && ClaudeText.removed(216).equals("−216") && ClaudeText.dollars(7.1).equals("7.10") && ClaudeText.mix(new double[] { 0.8, 0.2, 0 }).equals("Opus 80% · Sonnet 20%") && ClaudeText.chip("pit").equals("Compacting") && ClaudeText.share(0.914).equals("91%") && ClaudeText.share(Double.NaN).equals("—"), "pit words");
         } });
         check("Claude designs leave room for their text at 140%", new Action() { public void run() {
-            // Line heights as the views lay them out: about 1.33 times the text size; captions are 13, unscaled.
-            double t = 1.4, small = 15 * t * 1.33, body = 18 * t * 1.33, title = 24 * t * 1.33, caption = 13 * 1.33;
-            for (double[] size : new double[][] { { 360, 280 }, { 472, 310 }, { 639, 576 }, { 1856, 300 } }) {
-                double width = size[0] - 48, height = size[1] - 48;
-                ok(CardSizing.claude(size[0], size[1]) == CardSizing.MEDIUM, "medium at " + size[0]);
-                double room = height - 36 - (CardSizing.claudeStrip(t) + 12);
-                int columns = CardSizing.claudeMediumColumns(width, 6);
-                boolean babies = CardSizing.claudeMediumBabies(room, t);
-                double parent = CardSizing.claudeMediumParent(room, width / columns, t, babies), baby = Math.max(16, Math.round(parent * 0.4));
-                ok(parent + 6 + small + (babies ? 8 + baby : 0) <= room + 0.5, "a Medium project overflows at " + size[0] + " x " + size[1]);
-                ok(parent <= width / columns * 0.55 + 0.5 && CardSizing.claudeMediumBabyCount(width / columns - 8, baby, 9) * (baby + 4) + (baby + 4) <= width / columns + 0.5, "Medium babies leave their column at " + size[0]);
-                ok(CardSizing.claudeStrip(t) >= 20 + small + 6 + 10 + 4 + caption, "the strip is too short for its text");
+            // Line heights as the views lay them out: about 1.33 times the text size; captions are 12–13, unscaled.
+            double t = 1.4;
+            for (double[] size : new double[][] { { 360, 280 }, { 472, 310 }, { 639, 576 } }) {
+                double height = size[1] - 48, head = Math.max(24, Math.ceil(15 * t * 1.34));
+                double room = height - head - 10 - CardSizing.CLAUDE_MINI_HEIGHT - 6;
+                ok(room >= CardSizing.claudeMediumRow(t), "Medium leaves no room for a garage at " + size[0] + " x " + size[1]);
+                ok(CardSizing.claudeMediumRow(t) >= Math.round(15 * t) * 1.33 + 12 * 1.33, "a Medium row is too short for its text");
+                ok(CardSizing.CLAUDE_MINI_HEIGHT >= 16 + 12 * 1.33 + 28 * 1.17 + 14, "the mini tiles are too short");
             }
-            for (double[] size : new double[][] { { 640, 420 }, { 900, 576 }, { 1856, 576 } }) {
-                double width = size[0] - 48, area = size[1] - 48 - 28 - 12 - (CardSizing.claudeStrip(t) + 20) - 12;
-                int columns = CardSizing.claudeColumns(width, 9);
-                double column = (width - 16 * (columns - 1)) / columns, parent = CardSizing.claudeParent(column, area, t), baby = Critter.baby(parent);
-                ok(parent + CardSizing.claudeHeadText(t) <= area + 0.5 && CardSizing.claudeHeadText(t) >= 6 + body + caption, "a Large project head overflows at " + size[0] + " x " + size[1]);
-                ok(CardSizing.claudeBabiesPerRow(column, t) * CardSizing.claudeBabyCell(t) <= column + 0.5 && CardSizing.claudeBabyHeight(baby, t) >= baby + 4 + 2 * small + caption, "Large babies don't fit their cells at " + size[0]);
-                ok(column >= CardSizing.CLAUDE_COLUMN_MIN - 0.5, "a Large column is too narrow at " + size[0]);
+            for (double[] size : new double[][] { { 640, 420 }, { 1216, 576 } }) {
+                double width = size[0] - 48, height = size[1] - 48;
+                double ledger = height - 48 - 12 - CardSizing.CLAUDE_PLAN_HEIGHT - 12 - Math.max(60, Math.round(16 * t) * 1.35 + 13 * 1.35 + 14) - 12;
+                ok(ledger >= 24 + Math.max(52, Math.ceil(Math.round(17 * t) * 1.33 + 12 * 1.33 + 10)), "Large leaves no room for a garage at " + size[0] + " x " + size[1]);
+                ok(CardSizing.CLAUDE_PLAN_HEIGHT >= 20 + 13 * 1.33 + 40 * 1.12 + 2 * 13 * 1.33, "the plan row is too short");
+                ok(!CardSizing.claudeSide(width) || width - 16 - CardSizing.CLAUDE_SIDE_WIDTH >= 560, "the side panel squeezes the ledger at " + size[0]);
             }
             for (double[] size : new double[][] { { 260, 180 }, { 359, 279 } }) {
-                double width = size[0] - 48, room = size[1] - 48 - 16;
-                double critter = CardSizing.claudeSmallCritter(width, room);
-                ok(critter <= room + 0.5 && critter <= width * 0.42 + 0.5, "the Small critter leaves its card");
-                double side = (room < 150 ? body : title) + 4 + small + 4 + caption + 4 + caption;
+                double width = size[0] - 48, height = size[1] - 48;
+                boolean meter = CardSizing.claudeSmallMeter(height, t);
+                double room = height - (meter ? CardSizing.CLAUDE_SMALL_METER_HEIGHT : 0), car = CardSizing.claudeSmallCar(width, room);
+                ok(car * 60 / 140 <= room + 0.5 && car <= width * 0.34 + 0.5 || car == 48, "the Small car leaves its card");
+                double side = Math.round(17 * t) * 1.33 + 13 * 1.33 + 12 * 1.33 + 13 * 1.33;
                 ok(side <= room + 0.5, "the Small text column overflows at " + size[0] + " x " + size[1]);
             }
         } });
@@ -531,9 +564,9 @@ public final class AndroidTests {
             PcState.Claude c = state.claude;
             ok(state.claudeNeeds == 2 && state.claudePage == 1 && c.connected && c.sessions.size() == 2 && c.sessions.get(0).tokens[2] == 7 && c.sessions.get(0).canFocus && c.sessions.get(0).shown().equals("api"), "sessions");
             ok(c.fiveHour.pct == 23.5 && c.fiveHour.resetsAt == 1738425600 && c.week == null && c.limitsKnown() && c.usage[0].size() == 1 && c.usage[2].isEmpty() && c.source.equals("online"), "limits and usage");
-            ok(ClaudeText.heading(c).equals("2 sessions need you") && ClaudeText.flag(c, 1700000000 + 60, true, true).equals("2 RUNNING") && ClaudeText.flag(c, 1700000000 + 3600, true, true).startsWith("2 RUNNING · AS OF ") && ClaudeText.source(c, true).endsWith("checked online"), "heading and flag");
+            ok(ClaudeText.summary(c, 1, false).equals("2 needs you") && ClaudeText.flag(c, 1700000000 + 60, true).equals("") && ClaudeText.flag(c, 1700000000 + 3600, true).startsWith("AS OF ") && ClaudeText.source(c, true).endsWith("checked online"), "summary and flag");
             PcState empty = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":false,\"noPlan\":true,\"plan\":\"current\",\"sessions\":[]}}")));
-            ok(!empty.claude.limitsKnown() && ClaudeText.limitsMissing(empty.claude).equals("Plan limits need a Claude Pro or Max login.") && empty.claudePage == -1 && ClaudeText.heading(empty.claude).equals("CLAUDE CODE"), "empty");
+            ok(!empty.claude.limitsKnown() && ClaudeText.limitsMissing(empty.claude).equals("Plan limits need a Claude Pro or Max login.") && empty.claudePage == -1 && ClaudeText.summary(empty.claude, 1, true).equals("Not connected"), "empty");
         } });
         check("Claude project critters: threads, groups, folds and the polling interval", new Action() { public void run() {
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"logsRead\":true,\"every\":7,\"period\":\"Week\",\"sessions\":[],"
@@ -545,11 +578,10 @@ public final class AndroidTests {
             c.every = 1; ok(ClaudeText.pollEvery(c) == 2, "the phone asks at most every 2 s");
             PcState.ClaudeGroup g = c.groups[2].get(0);
             ok(g.key.equals("C:\\Code\\alpha") && g.collapsed && g.threads.size() == 2 && c.groups[0].isEmpty(), "a group keeps only known threads");
-            ok(ClaudeText.groupState(c, g).equals("working") && !ClaudeText.groupNeeds(c, g) && ClaudeText.groupDetail(g, true).equals("2 threads · 7 · ≈ $0.50") && ClaudeText.threads(1).equals("1 thread"), "project words");
+            ok(ClaudeText.groupState(c, g).equals("working") && !ClaudeText.groupNeeds(c, g) && ClaudeText.groupDetail(c, g, 1700000000).equals("2 threads · 1 running") && ClaudeText.threads(1).equals("1 thread"), "project words");
             ok(ClaudeText.threadTitle(c.thread("t1"), 1700000000, true).equals("Fix it") && ClaudeText.threadTitle(c.thread("t2"), 1700000000, true).startsWith("Untitled · ") && ClaudeText.noThreads(0).equals("No Claude Code threads in the last 5 hours."), "thread words");
             c.thread("t1").running = false; ok(ClaudeText.groupState(c, g).equals("ready"), "a project with nothing running sleeps");
-            double[] b = Critter.body(2);
-            ok(Critter.bubbleY(b) == 42 && Critter.bubbleX(b) == 86 && Critter.mouthWidth(1) == 14 && Critter.mouthHeight(0) == 1.5 && Critter.cheekRadius(b) == 9, "folded critter numbers as on the PC");
+            ok(ClaudeText.groupDetail(c, g, 1700000000 + 3600).equals("2 threads · ended 1 h ago") && ClaudeText.cars(2).equals("2 cars"), "an ended project's words");
         } });
         check("Claude plan sign-in states, cost and extra windows read like the PC's", new Action() { public void run() {
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"logsRead\":true,\"plan\":\"failed\",\"sessions\":[{\"id\":\"a\",\"project\":\"api\",\"state\":\"working\",\"where\":\"Desktop\",\"tokens\":{\"week\":9},\"cost\":{\"fiveHour\":0.5,\"today\":1.25,\"week\":12.6}}],"
@@ -558,13 +590,13 @@ public final class AndroidTests {
             PcState.Claude c = state.claude;
             ok(c.plan.equals("failed") && c.sessions.get(0).where.equals("Desktop") && c.sessions.get(0).cost[1] == 1.25 && c.sessions.get(0).cost[2] == 12.6 && c.usage[2].get(0).cost == 2.01, "cost and where");
             ok(c.extra.size() == 1 && c.extra.get(0).name.equals("Opus week") && c.extra.get(0).pct == 12, "extra windows");
-            ok(ClaudeText.source(c, true).startsWith("Plan limits as of ") && ClaudeText.old(c, 1700000000 + 60) && ClaudeText.flag(c, 1700000000 + 60, true, true).contains("AS OF "), "failed check shows old numbers");
+            ok(ClaudeText.source(c, true).startsWith("Plan limits as of ") && ClaudeText.old(c, 1700000000 + 60) && ClaudeText.flag(c, 1700000000 + 60, true).contains("AS OF "), "failed check shows old numbers");
             ok(ClaudeText.money(0.4219).equals("≈ $0.42") && ClaudeText.money(12.6).equals("≈ $13") && ClaudeText.money(1234).equals("≈ $1.2k") && ClaudeText.money(0).equals("≈ $0") && ClaudeText.usage(1800000, 2.01).equals("1.8M · ≈ $2.01"), "money");
             PcState.Claude signedOut = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[]}}"))).claude;
             PcState.Claude expired = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"plan\":\"expired\",\"sessions\":[]}}"))).claude;
             ok(signedOut.plan.equals("signedOut") && ClaudeText.limitsMissing(signedOut).equals(ClaudeText.SIGN_IN) && ClaudeText.limitsMissing(expired).equals(ClaudeText.SIGN_IN_ENDED), "sign-in messages");
             // The same thresholds as the PC's CardSizing.
-            ok(!CardSizing.claudeSmallPercent(132, 1.4) && CardSizing.claudeSmallPercent(132, 1), "small caption");
+            ok(!CardSizing.claudeSmallMeter(132, 1.4) && CardSizing.claudeSmallMeter(152, 1), "small meter");
         } });
         check("Clipboard history picks the PC's designs and reads the PC's previews", new Action() { public void run() {
             ok(CardSizing.clip(240, 200) == CardSizing.SMALL && CardSizing.clip(472, 310) == CardSizing.MEDIUM && CardSizing.clip(439, 576) == CardSizing.MEDIUM && CardSizing.clip(440, 400) == CardSizing.LARGE, "designs");

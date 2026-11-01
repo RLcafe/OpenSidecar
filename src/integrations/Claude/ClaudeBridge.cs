@@ -20,6 +20,8 @@ namespace WidgetScreen
         public double Context = Double.NaN;
         public int Pid, WindowPid;
         public long Window;
+        // Between PreCompact and the SessionStart that follows a compaction (or the next turn): the car is on the jack.
+        public bool Compacting;
 
         public static string StateName(ClaudeState state) { return state == ClaudeState.Working ? "working" : state == ClaudeState.NeedsYou ? "needs" : state == ClaudeState.Done ? "done" : "ready"; }
         public static ClaudeState ParseState(string name) { return name == "working" ? ClaudeState.Working : name == "needs" ? ClaudeState.NeedsYou : name == "done" ? ClaudeState.Done : ClaudeState.Ready; }
@@ -31,6 +33,7 @@ namespace WidgetScreen
             o["project"] = Project; o["title"] = Title; o["message"] = Message; o["model"] = Model; o["transcript"] = Transcript;
             if (!Double.IsNaN(Context)) o["context"] = new JsonNumber(Math.Round(Context, 1));
             o["pid"] = new JsonNumber(Pid); o["windowPid"] = new JsonNumber(WindowPid); o["window"] = new JsonNumber(Window);
+            if (Compacting) o["compacting"] = true;
             return o;
         }
         public static ClaudeSessionFile FromJson(JsonObject o)
@@ -40,6 +43,7 @@ namespace WidgetScreen
                 Project = ClaudeJson.Str(o, "project") ?? "", Title = ClaudeJson.Str(o, "title") ?? "", Message = ClaudeJson.Str(o, "message") ?? "",
                 Model = ClaudeJson.Str(o, "model") ?? "", Transcript = ClaudeJson.Str(o, "transcript") ?? "", Context = ClaudeJson.Num(o, "context") };
             s.Since = Long(o, "since"); s.LastEvent = Long(o, "lastEvent"); s.Pid = (int)Long(o, "pid"); s.WindowPid = (int)Long(o, "windowPid"); s.Window = Long(o, "window");
+            s.Compacting = o.Get("compacting") is bool && (bool)o.Get("compacting");
             return s;
         }
         private static long Long(JsonObject o, string key) { double v = ClaudeJson.Num(o, key); return Double.IsNaN(v) ? 0 : (long)v; }
@@ -152,8 +156,11 @@ namespace WidgetScreen
             string path = SessionPath(bridge, id);
             if (name == "SessionEnd") { WithSession(id, () => Delete(path)); return; }
             ClaudeState? next = null; string message = "";
+            // A compaction starts with PreCompact and ends with SessionStart (source "compact"); any turn's news ends it too.
+            bool? compacting = name == "PreCompact" ? true : name == "SessionEnd" || name == "Notification" ? (bool?)null : false;
             switch (name)
             {
+                case "PreCompact": break;
                 case "SessionStart": next = ClaudeJson.Str(o, "source") == "compact" ? (ClaudeState?)null : ClaudeState.Ready; break;
                 case "UserPromptSubmit": case "PostToolUse": case "PreToolUse": next = ClaudeState.Working; break;
                 // A permission dialog is showing (the desktop app's Code tab sends no permission Notification).
@@ -189,6 +196,7 @@ namespace WidgetScreen
                     if (next.Value != session.State) session.Since = Epoch(now);
                     session.State = next.Value; session.Message = message; changed = true;
                 }
+                if (compacting.HasValue && compacting.Value != session.Compacting) { session.Compacting = compacting.Value; changed = true; }
                 if (session.Pid == 0 || name == "SessionStart")
                 {
                     var found = owner == null ? new ClaudeProcesses.Owner() : owner();

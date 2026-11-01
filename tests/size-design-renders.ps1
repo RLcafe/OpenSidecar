@@ -35,11 +35,15 @@ $scenes = [ordered]@{
     'notes'         = @{ Notes = @(0, 0, 472, 310); Prayer = @(488, 0, 300, 200) }
     'notes-large'   = @{ Notes = @(0, 0, 1000, 420) }
     # Claude Code with its labelled fixture (--render-claude-sample): "Sample" shows in the card's heading.
-    'claude-small'  = @{ Claude = @(0, 0, 300, 220); Focus = @(316, 0, 320, 576) }
+    'claude-small'  = @{ Claude = @(0, 0, 300, 200); Focus = @(316, 0, 320, 576) }
     'claude-medium' = @{ Claude = @(0, 0, 472, 310); Focus = @(488, 0, 320, 576) }
-    'claude-large'  = @{ Claude = @(0, 0, 900, 576); Focus = @(916, 0, 320, 576) }
+    'claude-large'  = @{ Claude = @(0, 0, 1216, 576); Focus = @(1232, 0, 320, 576) }
+    'claude-large-narrow' = @{ Claude = @(0, 0, 900, 576); Focus = @(916, 0, 320, 576) }
+    'claude-large-min' = @{ Claude = @(0, 0, 640, 420) }
+    'claude-wide'   = @{ Claude = @(0, 0, 1856, 576) }
     'claude-needs'  = @{ Claude = @(0, 0, 472, 310); Storage = @(488, 0, 300, 220) }
-    'claude-needs-large' = @{ Claude = @(0, 0, 760, 576) }
+    'claude-needs-small' = @{ Claude = @(0, 0, 300, 200); Storage = @(316, 0, 300, 220) }
+    'claude-needs-large' = @{ Claude = @(0, 0, 1216, 576) }
     # The Claude card on a second page: the header's pill says a session needs you.
     'claude-pill'   = @{ Focus = @(0, 0, 320, 576); Media = @(336, 0, 472, 310) }
 }

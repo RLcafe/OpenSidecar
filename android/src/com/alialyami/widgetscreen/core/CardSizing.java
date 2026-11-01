@@ -229,34 +229,25 @@ public final class CardSizing {
     public static int notes(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 700 && height >= 300 ? LARGE : MEDIUM; }
     public static double notesListColumn(double width) { return clamp(Math.floor(width * 0.46), 300, 520); }
 
-    // Claude Code (docs/design/claude-watcher.md), the same numbers as the Windows CardSizing: one loud critter under
-    // 360 wide or 280 tall, a row of project critters with a few threads over the plan meters between, and project
-    // columns (a big critter with its threads as babies under it) under a meter strip from 640 × 420.
+    // Claude Code (docs/design/claude-watcher-v2.html; decision 017), the same numbers as the Windows CardSizing: the car
+    // that needs you over the 5-hour meter under 360 wide or 280 tall, the two plan meters over the top garages between,
+    // and the pit wall (plan row, pit stop strip, ledger, and from 1000 units of body the lanes and facts) from 640 × 420.
     public static int claude(double width, double height) { return width < 360 || height < 280 ? SMALL : width >= 640 && height >= 420 ? LARGE : MEDIUM; }
-    public static double claudeStrip(double textScale) { return Math.ceil(60 + 24 * textScale); }
-    public static final double CLAUDE_COLUMN_MIN = 216;
-    public static int claudeColumns(double bodyWidth, int projects) { return projects <= 0 ? 0 : (int) clamp(Math.floor((bodyWidth + 16) / (CLAUDE_COLUMN_MIN + 16)), 1, projects); }
-    public static double claudeHeadText(double textScale) { return 6 + Math.ceil(24 * textScale) + 18; }
-    public static double claudeParent(double columnWidth, double areaHeight, double textScale) { return clamp(Math.floor(Math.min(columnWidth * 0.4, (areaHeight - claudeHeadText(textScale)) * 0.45)), 48, 104); }
-    public static double claudeBabyCell(double textScale) { return Math.ceil(70 + 14 * textScale); }
-    public static int claudeBabiesPerRow(double columnWidth, double textScale) { return Math.max(1, (int) Math.floor((columnWidth + 6) / (claudeBabyCell(textScale) + 6))); }
-    // The title takes up to two lines.
-    public static double claudeBabyHeight(double baby, double textScale) { return baby + 4 + 2 * Math.ceil(20 * textScale) + 18; }
-    public static int claudeMediumColumns(double bodyWidth, int projects) { return projects <= 0 ? 0 : (int) clamp(Math.floor((bodyWidth + 12) / 136), 1, Math.min(6, projects)); }
-    public static double claudeMediumName(double textScale) { return 6 + Math.ceil(20 * textScale); }
-    public static boolean claudeMediumBabies(double room, double textScale) { return Math.floor((room - claudeMediumName(textScale) - 8) / 1.4) >= 40; }
-    public static double claudeMediumParent(double room, double columnWidth, double textScale, boolean babies) {
-        double space = room - claudeMediumName(textScale);
-        return clamp(Math.floor(Math.min(babies ? (space - 8) / 1.4 : space, columnWidth * 0.55)), 32, 88);
-    }
-    public static int claudeMediumBabyCount(double columnWidth, double baby, int threads) {
-        int fit = (int) Math.max(0, Math.floor((columnWidth + 4) / (baby + 4)));
+    public static final double CLAUDE_PLAN_HEIGHT = 124, CLAUDE_SIDE_WIDTH = 300;
+    public static boolean claudeRevs(double bodyWidth) { return bodyWidth >= 860; }
+    public static boolean claudeSide(double bodyWidth) { return bodyWidth >= 1000; }
+    public static boolean claudeModels(double tableWidth) { return tableWidth >= 560; }
+    public static boolean claudeLines(double tableWidth) { return tableWidth >= 660; }
+    public static final double CLAUDE_MINI_HEIGHT = 84;
+    public static double claudeMediumRow(double textScale) { return Math.max(44, Math.ceil(Math.round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
+    public static int claudeInlineCars(double nameRoom, int threads) {
+        int fit = (int) Math.max(0, Math.floor((nameRoom - 110) / 32));
         if (threads <= Math.min(3, fit)) return threads;
         return (int) clamp(Math.min(3, fit - 1), 0, 3);
     }
-    // The Small card's caption line under its critter: only when the text beside the critter still fits above it.
-    public static boolean claudeSmallPercent(double bodyHeight, double textScale) { return bodyHeight >= 8 + 104 * textScale; }
-    public static double claudeSmallCritter(double bodyWidth, double bodyHeight) { return clamp(Math.floor(Math.min(bodyHeight - 16, bodyWidth * 0.42)), 48, 140); }
+    public static final double CLAUDE_SMALL_METER_HEIGHT = 52;
+    public static boolean claudeSmallMeter(double bodyHeight, double textScale) { return bodyHeight >= CLAUDE_SMALL_METER_HEIGHT + Math.ceil(Math.round(17 * textScale) * 1.33) + 34 + 17; }
+    public static double claudeSmallCar(double bodyWidth, double room) { return clamp(Math.floor(Math.min(bodyWidth * 0.34, room * 140 / 60)), 48, 120); }
     // Clipboard history (docs/design/clipboard-history.md): the same numbers as CardSizing.cs.
     public static int clip(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 400 ? LARGE : MEDIUM; }
 

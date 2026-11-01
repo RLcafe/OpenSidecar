@@ -12,6 +12,12 @@ using WidgetScreen;
 // Claude Code's real folder is never read or written here.
 internal static class ClaudeTests
 {
+    private static bool Same(System.Windows.Media.Imaging.BitmapSource a, System.Windows.Media.Imaging.BitmapSource b)
+    {
+        var x = new byte[a.PixelWidth * a.PixelHeight * 4]; var y = new byte[b.PixelWidth * b.PixelHeight * 4];
+        a.CopyPixels(x, a.PixelWidth * 4, 0); b.CopyPixels(y, b.PixelWidth * 4, 0);
+        return x.SequenceEqual(y);
+    }
     private static void Assert(bool valid, string message) { if (!valid) throw new Exception(message); }
     private static bool Shown(DependencyObject element, DependencyObject root)
     {
@@ -227,27 +233,48 @@ internal static class ClaudeTests
             Assert(view.Sessions.Select(s => s.Id).SequenceEqual(new[] { "needs-old", "needs-new", "work", "done", "ready" }), "Order wrong: " + String.Join(",", view.Sessions.Select(s => s.Id)));
             Assert(!File.Exists(ClaudeBridge.SessionPath(bridge, "ancient")) && !File.Exists(ClaudeBridge.SessionPath(bridge, "gone")), "Forgotten or closed sessions linger.");
             Assert(!service.ReadSessions(Now, false), "Unchanged files were read again.");
-            Assert(ClaudeText.Heading(view) == "2 sessions need you" && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Done · 3 h", "State words wrong.");
+            Assert(ClaudeText.Summary(view, ClaudePeriod.Today, false) == "2 needs you · 1 running" && ClaudeText.StateWords(ClaudeState.NeedsYou, Now.AddMinutes(-2), Now, false) == "Needs you · 2 min" && ClaudeText.StateWords(ClaudeState.Working, Now, Now, false) == "Working" && ClaudeText.StateWords(ClaudeState.Done, Now.AddHours(-3), Now, true) == "Done · 3 h", "State words wrong.");
             Assert(ClaudeBridge.ProjectName("C:\\Code\\api-server\\") == "api-server" && ClaudeBridge.ProjectName("/home/a/b") == "b" && ClaudeBridge.ProjectName("") == "Claude Code", "Project names wrong.");
         });
 
-        check("Claude critters pick the same body and colour for a project", () => {
-            Assert(CritterPose.Hash("api-server") == CritterPose.Hash(" API-Server ") && CritterPose.Hash("") == 2166136261u && CritterPose.Hash("a") == 3826002220u, "The critter hash changed.");
-            var shapes = new HashSet<int>(); var accents = new HashSet<int>();
-            foreach (var name in new[] { "api-server", "widget-screen", "photo-manager", "notes", "scada-bom", "aeq", "otsec", "brainstorming" }) { shapes.Add(CritterPose.Shape(name)); accents.Add(CritterPose.Accent(name)); }
-            Assert(shapes.Count == 3 && accents.Count == 3 && shapes.All(s => s >= 0 && s < 3), "Projects don't spread over the bodies and colours.");
-            Assert(CritterPose.Hop(ClaudeState.NeedsYou, true, false) == -4 && CritterPose.Hop(ClaudeState.NeedsYou, true, true) == 0 && CritterPose.PupilX(ClaudeState.Working, true, false) == 3 && CritterPose.PupilX(ClaudeState.Working, true, true) == -3, "Quiet mode doesn't keep the critters still.");
-            foreach (int shape in new[] { 0, 1, 2 }) { var b = CritterPose.Body(shape); Assert(b[0] >= 10 && b[1] >= 26 && b[2] <= 90 && b[3] <= 94 && CritterPose.MouthY(b) < b[3], "A body leaves its box."); }
+        check("Claude cars and garages: the same colour for a project, hard pixels and a frame per step", () => {
+            Assert(PitArt.Hash("api-server") == PitArt.Hash(" API-Server ") && PitArt.Hash("") == 2166136261u && PitArt.Hash("a") == 3826002220u, "The project hash changed (the phone's PitArt.java must match).");
+            var accents = new HashSet<uint>();
+            foreach (var name in new[] { "api-server", "widget-screen", "photo-manager", "notes", "scada-bom", "aeq", "otsec", "brainstorming" }) accents.Add(PitArt.Accent(name));
+            Assert(accents.Count == 3 && !accents.Contains(PitArt.Amber), "Projects don't spread over Lime, Glacier and Lavender, or one got Amber.");
+            // Every frame is opaque or clear, never half see-through, and colours sit on the 17-step ramp.
+            foreach (PitState state in Enum.GetValues(typeof(PitState)))
+                foreach (PitCar car in Enum.GetValues(typeof(PitCar)))
+                {
+                    string key; var frames = PitSprite.CarFrames(PitArt.Accents[1], state, new PitArt.CarLook { Car = car, Fuel = true, Hot = true, Fast = true }, 48, out key);
+                    Assert(frames.Length == 8 && frames.All(f => f.PixelWidth == 24 && f.PixelHeight == 10 + 2 * 3), "A car's frames have the wrong size: " + frames[0].PixelWidth + "x" + frames[0].PixelHeight);
+                    var pixels = new byte[frames[0].PixelWidth * frames[0].PixelHeight * 4]; frames[0].CopyPixels(pixels, frames[0].PixelWidth * 4, 0);
+                    int solid = 0;
+                    for (int i = 0; i < pixels.Length; i += 4) { Assert(pixels[i + 3] == 0 || pixels[i + 3] == 255, "A half see-through pixel in " + state + "."); if (pixels[i + 3] == 255) { solid++; Assert(pixels[i] % 17 == 0 && pixels[i + 1] % 17 == 0 && pixels[i + 2] % 17 == 0, "A colour off the ramp."); } }
+                    Assert(solid > 60, "The " + car + " in " + state + " drew almost nothing.");
+                }
+            // Moving states really change between frames.
+            string k1; var working = PitSprite.CarFrames(PitArt.Lime, PitState.Work, new PitArt.CarLook(), 150, out k1);
+            Assert(!Same(working[0], working[1]) && PitRaster.PixelSize(150) == 3 && PitRaster.PixelSize(48) == 2, "Working wheels don't turn, or pixel sizes wrong.");
+            string k2; var need = PitSprite.CarFrames(PitArt.Lime, PitState.Need, new PitArt.CarLook(), 150, out k2);
+            Assert(!Same(need[0], need[5]), "Hazards don't blink.");
+            string k3; var garages = PitSprite.GarageFrames(PitArt.Lime, PitState.Need, true, 4, 40, out k3);
+            Assert(garages.Length == 2 && !Same(garages[0], garages[1]), "The garage's beacon doesn't blink while folded.");
+            Assert(PitSprite.CarFps(PitState.Work, 0, false) == 4 && PitSprite.CarFps(PitState.Work, 1, false) == 24 && PitSprite.CarFps(PitState.Idle, 0, false) == 0 && PitSprite.CarFps(PitState.Idle, 0, true) == 6
+                && PitSprite.StillFrame(PitState.Done) == 7 && PitSprite.StillFrame(PitState.End) == 7 && PitSprite.StillFrame(PitState.Need) == 0, "Frame rates or still frames wrong.");
+            // The garage front for rolling in and out leaves its door open, so a car in the bay shows through it.
+            var front = PitRaster.Render(PitArt.GarageFront(PitArt.Lime, 0, 3, false), new Rect(0, 0, 100, 100), 50, 50);
+            var px = new byte[50 * 50 * 4]; front.CopyPixels(px, 200, 0);
+            Assert(px[(35 * 50 + 25) * 4 + 3] == 0 && px[(35 * 50 + 6) * 4 + 3] == 255, "The garage front doesn't leave its door open for the cars.");
+            Assert(PitArt.Front(PitArt.Lime, true).Count > PitArt.Front(PitArt.Lime, false).Count && PitArt.Rear(PitArt.Lime, true).Count == PitArt.Rear(PitArt.Lime, false).Count, "Headlights or brake lights missing.");
         });
 
         check("Claude picks small, medium and large designs", () => {
             Assert(CardSizing.Claude(260, 180) == CardSizing.Design.Small && CardSizing.Claude(359, 400) == CardSizing.Design.Small && CardSizing.Claude(600, 279) == CardSizing.Design.Small && CardSizing.Claude(472, 310) == CardSizing.Design.Medium && CardSizing.Claude(639, 576) == CardSizing.Design.Medium && CardSizing.Claude(640, 420) == CardSizing.Design.Large, "Claude designs picked at the wrong sizes.");
-            Assert(CardSizing.ClaudeStrip(1) == 84 && CardSizing.ClaudeStrip(1.4) == 94 && CardSizing.ClaudeColumns(1808, 3) == 3 && CardSizing.ClaudeColumns(592, 5) == 2 && CardSizing.ClaudeColumns(200, 2) == 1 && CardSizing.ClaudeColumns(900, 0) == 0
-                && CardSizing.ClaudeBabyCell(1) == 84 && CardSizing.ClaudeBabyCell(1.4) == 90 && CardSizing.ClaudeBabiesPerRow(400, 1) == 4 && CritterPose.Baby(100) == 40 && CritterPose.Baby(40) == 24, "Claude sizes wrong.");
-            // The same numbers as the phone's CardSizing (AndroidTests: "Claude project critters…").
-            Assert(CardSizing.ClaudeMediumColumns(424, 5) == 3 && CardSizing.ClaudeMediumColumns(1000, 3) == 3 && CardSizing.ClaudeMediumBabies(130, 1) && !CardSizing.ClaudeMediumBabies(70, 1)
-                && CardSizing.ClaudeMediumBabyCount(140, 30, 5) == 3 && CardSizing.ClaudeMediumBabyCount(60, 30, 5) == 0 && CardSizing.ClaudeMediumBabyCount(140, 30, 2) == 2
-                && !CardSizing.ClaudeSmallPercent(132, 1.4) && CardSizing.ClaudeSmallPercent(132, 1), "Claude project critters and captions sized wrongly.");
+            // The same numbers as the phone's CardSizing (AndroidTests: "Claude pit wall sizes match the PC's").
+            Assert(CardSizing.ClaudeRevs(860) && !CardSizing.ClaudeRevs(859) && CardSizing.ClaudeSide(1000) && !CardSizing.ClaudeSide(999) && CardSizing.ClaudeModels(560) && !CardSizing.ClaudeModels(559) && CardSizing.ClaudeLines(660) && !CardSizing.ClaudeLines(659)
+                && CardSizing.ClaudeMediumRow(1) == 44 && CardSizing.ClaudeMediumRow(1.4) == 52 && CardSizing.ClaudeInlineCars(300, 5) == 3 && CardSizing.ClaudeInlineCars(200, 5) == 1 && CardSizing.ClaudeInlineCars(200, 2) == 2 && CardSizing.ClaudeInlineCars(100, 4) == 0
+                && CardSizing.ClaudeSmallMeter(152, 1) && !CardSizing.ClaudeSmallMeter(132, 1.4) && CardSizing.ClaudeSmallCar(252, 100) == 85 && CardSizing.ClaudeSmallCar(100, 20) == 48, "Claude sizes wrong.");
             Assert(!WidgetLayout.Default(new AppSettings()).First(p => p.Id == "Claude").Visible && WidgetLayout.Minimum("Claude") == new Size(260, 180) && WidgetLayout.Title("Claude") == "Claude Code", "Claude isn't a hidden widget with its minimum.");
             Assert(!new AppSettings().ClaudeChime && new AppSettings().ClaudeShowNewProjects && new AppSettings().ClaudeProjects == null, "Claude settings defaults wrong.");
         });
@@ -281,11 +308,11 @@ internal static class ClaudeTests
                                 var dashboard = (FrameworkElement)window.FindName("Dashboard");
                                 dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                                 var card = (FrameworkElement)window.FindName("ClaudeCard");
-                                Assert(card.Visibility == Visibility.Visible && window.FindName("ClaudeView") != null && window.FindName("ClaudeCritter0") != null, "Claude built no design at " + size + " (" + pair.Key + ").");
+                                Assert(card.Visibility == Visibility.Visible && window.FindName("ClaudeView") != null && Descendants(card).OfType<PitSprite>().Any(), "Claude built no design (or no car) at " + size + " (" + pair.Key + ").");
                                 Assert(controller.ClaudeCardView.Current == CardSizing.Claude(size.Width, size.Height), "Claude picked the wrong design at " + size + ".");
                                 if (pair.Key == "needs") Assert(((System.Windows.Controls.Border)card).BorderThickness.Left == 2, "The card doesn't light up when a session needs you.");
                                 if (pair.Key == "sample") Assert(((System.Windows.Controls.Border)card).BorderThickness.Left == 1, "The card stays lit.");
-                                foreach (var part in Descendants(card).OfType<FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is System.Windows.Controls.TextBlock || e is ClaudeCritter || e is SegmentBar || e is MeterBar || e is System.Windows.Controls.Button)))
+                                foreach (var part in Descendants(card).OfType<FrameworkElement>().Where(e => Shown(e, card) && e.ActualWidth > 0 && (e is System.Windows.Controls.TextBlock || e is PitSprite || e is PitInstrument || e is MeterBar || e is System.Windows.Controls.Button)))
                                 {
                                     var box = part.TransformToAncestor(card).TransformBounds(new Rect(0, 0, part.ActualWidth, part.ActualHeight));
                                     Assert(box.Left >= 22.5 && box.Top >= 22.5 && box.Right <= card.ActualWidth - 22.5 && box.Bottom <= card.ActualHeight - 22.5, "Claude (" + pair.Key + ") pushes " + part.GetType().Name + " " + (part is System.Windows.Controls.TextBlock ? "\"" + ((System.Windows.Controls.TextBlock)part).Text + "\" " : "") + "out of its " + size + " card: " + box);

@@ -21,9 +21,19 @@ namespace WidgetScreen
         public bool CanFocus;
         public readonly Dictionary<ClaudePeriod, long> Tokens = new Dictionary<ClaudePeriod, long>();
         public readonly Dictionary<ClaudePeriod, double> Cost = new Dictionary<ClaudePeriod, double>();
+        // The v2 card (decision 017): its car and what the car does, its tokens a minute right now, its model mix
+        // (Opus, Sonnet, Haiku shares) and lines added and removed per period.
+        public bool Compacting;
+        public PitState Pit = PitState.Idle;
+        public PitCar Car = PitCar.Sports;
+        public double Rate;
+        public readonly Dictionary<ClaudePeriod, double[]> Mix = new Dictionary<ClaudePeriod, double[]>();
+        public readonly Dictionary<ClaudePeriod, long[]> Lines = new Dictionary<ClaudePeriod, long[]>();
         public string Shown { get { return String.IsNullOrWhiteSpace(Title) ? ProjectName : Title; } }
         public long TokensFor(ClaudePeriod period) { long value; return Tokens.TryGetValue(period, out value) ? value : 0; }
         public double CostFor(ClaudePeriod period) { double value; return Cost.TryGetValue(period, out value) ? value : 0; }
+        public double[] MixFor(ClaudePeriod period) { double[] value; return Mix.TryGetValue(period, out value) ? value : new double[3]; }
+        public long[] LinesFor(ClaudePeriod period) { long[] value; return Lines.TryGetValue(period, out value) ? value : new long[2]; }
     }
 
     // How the plan meters' numbers stand: the widget's own sign-in and its last check.
@@ -49,12 +59,18 @@ namespace WidgetScreen
         public List<ClaudeSession> Threads = new List<ClaudeSession>();
         public long Tokens;
         public double Cost;
+        // Its threads' model mix, weighted by their tokens, and their lines added and removed.
+        public double[] Mix = new double[3];
+        public long Added, Removed;
         public bool Collapsed;
         public int Running { get { return Threads.Count(t => t.Running); } }
         public bool NeedsYou { get { return Threads.Any(t => t.Running && t.State == ClaudeState.NeedsYou); } }
         public bool Asleep { get { return !Threads.Any(t => t.Running); } }
         public ClaudeState State { get { var first = Threads.Where(t => t.Running).OrderBy(t => ClaudeView.Rank(t.State)).FirstOrDefault(); return first == null ? ClaudeState.Ready : first.State; } }
         public DateTime LastActive { get { return Threads.Count == 0 ? DateTime.MinValue : Threads.Max(t => t.LastActive); } }
+        public bool Working { get { return Threads.Any(t => t.Running && t.State == ClaudeState.Working); } }
+        // Its garage's state: needs you (the beacon), busy (light under the shutter), all ended (dimmed) or quiet.
+        public PitState Garage { get { return NeedsYou ? PitState.Need : Working ? PitState.Work : Asleep ? PitState.End : Threads.Any(t => t.Running && t.State == ClaudeState.Done) ? PitState.Done : PitState.Idle; } }
     }
 
     // Everything the Claude card shows at one moment.
@@ -70,7 +86,15 @@ namespace WidgetScreen
         public readonly Dictionary<ClaudePeriod, List<ClaudeProjectUsage>> Usage = new Dictionary<ClaudePeriod, List<ClaudeProjectUsage>>();
         public readonly Dictionary<ClaudePeriod, DateTime> Starts = new Dictionary<ClaudePeriod, DateTime>();
         public readonly HashSet<string> Collapsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // The pit wall (decision 017): tokens a minute over the last hour (oldest first) and now, the rev counter's
+        // scale, the 5-hour lanes by project and today's facts. Worked out when the view is made.
+        public double[] Burn = new double[ClaudePace.BurnMinutes];
+        public double Rate, Scale = ClaudePace.MinScale;
+        public List<ClaudeLane> Lanes = new List<ClaudeLane>();
+        public ClaudeFacts Facts = new ClaudeFacts();
+        public DateTime MadeAt = DateTime.UtcNow;
         public int NeedsYou { get { return Sessions.Count(s => s.State == ClaudeState.NeedsYou); } }
+        public int Working { get { return Sessions.Count(s => s.State == ClaudeState.Working); } }
 
         // The projects with a thread active in the period (or running), a project that needs you first, then ones with
         // something running, then the most recently active.
@@ -82,8 +106,16 @@ namespace WidgetScreen
                 .Select(g => new ClaudeProjectGroup {
                     Folder = g.Key, Name = g.First().ProjectName, Collapsed = Collapsed.Contains(g.Key),
                     Threads = g.OrderBy(t => t.Running ? Rank(t.State) : 4).ThenByDescending(t => t.LastActive).ThenBy(t => t.Id, StringComparer.Ordinal).ToList(),
-                    Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)) })
+                    Tokens = g.Sum(t => t.TokensFor(period)), Cost = g.Sum(t => t.CostFor(period)), Mix = GroupMix(g, period),
+                    Added = g.Sum(t => t.LinesFor(period)[0]), Removed = g.Sum(t => t.LinesFor(period)[1]) })
                 .OrderBy(g => g.NeedsYou ? 0 : g.Running > 0 ? 1 : 2).ThenByDescending(g => g.LastActive).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        private static double[] GroupMix(IEnumerable<ClaudeSession> threads, ClaudePeriod period)
+        {
+            var sums = new double[3];
+            foreach (var t in threads) { var mix = t.MixFor(period); long tokens = t.TokensFor(period); for (int i = 0; i < 3; i++) sums[i] += mix[i] * tokens; }
+            double total = sums.Sum();
+            return total <= 0 ? new double[3] : sums.Select(v => v / total).ToArray();
         }
         // A session has run and answered without rate limits: an API key or a logged-out Claude Code.
         public bool NoPlan { get { return Limits != null && !Limits.Known && Limits.MissingAt.HasValue; } }
@@ -122,6 +154,22 @@ namespace WidgetScreen
                 make("sample-3", "photo-manager", "Face grouping", ClaudeState.Done, 6, "Sonnet 5.5", 96400),
                 make("sample-11", "photo-manager", "Thumbnail cache", null, 260, "Sonnet 5.5", 58000) };
             if (needsYou) threads[0].Message = "Claude needs your permission to use Bash";
+            // The pit wall's sample readings: each thread's mix, lines and live burn, and what its car does.
+            var mixes = new Dictionary<string, double[]> { { "Opus 5.5", new[] { 1.0, 0, 0 } }, { "Sonnet 5.5", new[] { 0, 1.0, 0 } } };
+            var lines = new Dictionary<string, long[]> { { "sample-1", new long[] { 412, 96 } }, { "sample-2", new long[] { 880, 120 } }, { "sample-7", new long[] { 590, 180 } }, { "sample-8", new long[] { 38, 0 } }, { "sample-3", new long[] { 120, 34 } }, { "sample-5", new long[] { 50, 30 } } };
+            var rates = new Dictionary<string, double> { { "sample-1", needsYou ? 0 : 9000 }, { "sample-2", 41000 } };
+            foreach (var t in threads)
+            {
+                foreach (ClaudePeriod period in Enum.GetValues(typeof(ClaudePeriod)))
+                {
+                    t.Mix[period] = mixes[t.Model];
+                    long[] l; t.Lines[period] = t.TokensFor(period) > 0 && lines.TryGetValue(t.Id, out l) ? l : new long[2];
+                }
+                double rate; rates.TryGetValue(t.Id, out rate); t.Rate = rate;
+                t.Car = ClaudePace.Car(t.MixFor(ClaudePeriod.Week), t.Model);
+            }
+            threads.First(t => t.Id == "sample-3").Compacting = true;
+            foreach (var t in threads) t.Pit = ClaudePace.State(t, now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
             view.Threads = threads;
             view.Sessions = Order(threads.Where(t => t.Running));
             view.Limits = new ClaudeLimits { FiveHour = new ClaudeLimitWindow { Percent = needsYou ? 84 : 23, ResetsAt = now.AddMinutes(100) }, Week = new ClaudeLimitWindow { Percent = 41, ResetsAt = now.AddDays(3).AddHours(5) }, UpdatedAt = now.AddMinutes(-1), Source = "online" };
@@ -130,6 +178,15 @@ namespace WidgetScreen
             view.Usage[ClaudePeriod.Today] = new List<ClaudeProjectUsage> { P("widget-screen", 3660000, 4.03), P("api-server", 824000, 0.91), P("photo-manager", 192800, 0.21), P("Other", 54000, 0.06) };
             view.Usage[ClaudePeriod.Week] = new List<ClaudeProjectUsage> { P("widget-screen", 16470000, 18.1), P("api-server", 3708000, 4.08), P("photo-manager", 867600, 0.95), P("scada-bom", 2210000, 2.43), P("Other", 412000, 0.45) };
             foreach (var key in view.Usage.Keys.ToList()) view.Usage[key] = view.Usage[key].OrderByDescending(p => p.Name == "Other" ? -1 : p.Tokens).ToList();
+            // An hour of burn rising to now, and a lane per project for the last five hours.
+            for (int i = 0; i < ClaudePace.BurnMinutes; i++) view.Burn[i] = Math.Max(2000, 18000 + 14000 * Math.Sin(i / 7.0) + i * 300 + (i > 48 ? (i - 48) * 2600 : 0));
+            view.Rate = 50000; view.Scale = ClaudePace.Scale(view.Burn.Max());
+            var profiles = new Dictionary<string, int[]> {
+                { "widget-screen", new[] { 0, 0, 1, 2, 3, 2, 1, 0, 0, 1, 3, 4, 4, 3, 2, 3, 5, 6, 7, 6, 5, 6, 8, 9, 8, 7, 8, 9, 10, 9 } },
+                { "api-server", new[] { 2, 3, 4, 5, 4, 3, 2, 1, 1, 2, 3, 3, 2, 1, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 1, 0, 0, 3, 4 } },
+                { "photo-manager", new[] { 5, 6, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 1, 0, 2 } } };
+            foreach (var pair in profiles) view.Lanes.Add(new ClaudeLane { Folder = "C:\\Code\\" + pair.Key, Name = pair.Key, Bins = pair.Value.Select(v => v * 61000.0).ToArray() });
+            view.Facts = new ClaudeFacts { Tokens = 4676800, Cost = 11.4, Prompt = 4400000, CacheRead = 4004000, Tools = 312, Asked = 41, Denied = 7, Added = 2100, Removed = 460, LinesThreads = 4, Telemetry = true };
             return view;
         }
         private static ClaudeProjectUsage P(string name, long tokens, double cost) { return new ClaudeProjectUsage { Folder = name == "Other" ? "" : "C:\\Code\\" + name, Name = name, Tokens = tokens, Cost = cost }; }
@@ -191,6 +248,7 @@ namespace WidgetScreen
                 foreach (var e in events)
                 {
                     if (e.Usage != null) Usage.Add(e.Usage, now);
+                    if (Track(e, now)) continue;
                     ClaudeTelemetryEvent known;
                     if (!activity.TryGetValue(e.Session, out known) || known.At <= e.At)
                     {
@@ -202,6 +260,46 @@ namespace WidgetScreen
             TelemetryChanged = true;
         }
         private Dictionary<string, ClaudeTelemetryEvent> Activity { get { lock (activityGate) return new Dictionary<string, ClaudeTelemetryEvent>(activity); } }
+
+        // The v2 card's telemetry (decision 017): tool decisions and results, lines changed, and when each session last
+        // asked for a tool, finished one, made an API request or hit an API error. Kept a week. Returns true for a lines
+        // event, which says nothing about the session's state.
+        private readonly List<ClaudeToolEntry> tools = new List<ClaudeToolEntry>();
+        private readonly List<ClaudeLinesEntry> lines = new List<ClaudeLinesEntry>();
+        private readonly Dictionary<string, double> seriesLast = new Dictionary<string, double>();
+        private readonly Dictionary<string, DateTime[]> moments = new Dictionary<string, DateTime[]>();
+        private const int Decided = 0, Finished = 1, Failed = 2, Requested = 3;
+        private bool Track(ClaudeTelemetryEvent e, DateTime now)
+        {
+            if (e.At < now - ClaudeUsage.Kept) return e.Name == "lines";
+            DateTime[] times;
+            if (!moments.TryGetValue(e.Session, out times)) moments[e.Session] = times = new DateTime[4];
+            Action<int> mark = i => { if (e.At > times[i]) times[i] = e.At; };
+            switch (e.Name)
+            {
+                case "tool_decision": mark(Decided); tools.Add(new ClaudeToolEntry { At = e.At, Session = e.Session, Asked = e.Asked, Denied = e.Denied }); break;
+                case "tool_result": mark(Finished); tools.Add(new ClaudeToolEntry { At = e.At, Session = e.Session, Result = true }); break;
+                case "api_error": mark(Failed); break;
+                case "api_request": mark(Requested); break;
+                case "lines":
+                    {
+                        double value = e.Added + e.Removed, delta = value;
+                        if (e.Cumulative)
+                        {
+                            // A cumulative series counts from its start: only what it grew by since the last export is new.
+                            double last; delta = seriesLast.TryGetValue(e.Series, out last) && value >= last ? value - last : value;
+                            seriesLast[e.Series] = value;
+                        }
+                        if (delta > 0) lines.Add(new ClaudeLinesEntry { At = e.At, Session = e.Session, Added = e.Added > 0 ? (long)Math.Round(delta) : 0, Removed = e.Removed > 0 ? (long)Math.Round(delta) : 0 });
+                        return true;
+                    }
+            }
+            if (tools.Count > 20000 || lines.Count > 20000) { DateTime oldest = now - ClaudeUsage.Kept; tools.RemoveAll(t => t.At < oldest); lines.RemoveAll(l => l.At < oldest); }
+            return false;
+        }
+        // For the checks: what telemetry kept.
+        public List<ClaudeToolEntry> ToolEntries { get { lock (activityGate) return tools.ToList(); } }
+        public List<ClaudeLinesEntry> LinesEntries { get { lock (activityGate) return lines.ToList(); } }
 
         // ----- The hook files -----
 
@@ -377,7 +475,8 @@ namespace WidgetScreen
             foreach (var file in Sessions)
             {
                 sessions[file.Id] = new ClaudeSession { Id = file.Id, State = file.State, Since = ClaudeBridge.FromEpoch(file.Since), Project = file.Project,
-                    Title = file.Title, Message = file.Message, Model = file.Model, Pid = file.Pid, WindowPid = file.WindowPid, Window = file.Window };
+                    Title = file.Title, Message = file.Message, Model = file.Model, Pid = file.Pid, WindowPid = file.WindowPid, Window = file.Window,
+                    Compacting = file.Compacting && now - ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since)) < ClaudePace.CompactForgotten };
                 stateAt[file.Id] = ClaudeBridge.FromEpoch(file.Since);
             }
             foreach (var entry in Registry.Entries)
@@ -476,7 +575,55 @@ namespace WidgetScreen
             view.Sessions = ClaudeView.Order(list.Where(s => s.Running));
             foreach (var pair in starts) view.Starts[pair.Key] = pair.Value;
             if (usage != null) foreach (var pair in starts) view.Usage[pair.Key] = ClaudeUsage.ByProject(usage, pair.Value, 6, folderOf, shown);
+            PitWall(view, now, usage, perSession, folderOf, shown);
             return view;
+        }
+
+        // The v2 card's readings (decision 017): each thread's car, burn, mix and lines; the hour's burn and the rev
+        // counter's scale; a lane per project for the last five hours; and today's facts. Only shown projects count.
+        private void PitWall(ClaudeView view, DateTime now, List<ClaudeUsageEntry> usage, Dictionary<string, List<ClaudeUsageEntry>> perSession, Func<ClaudeUsageEntry, string> folderOf, Func<string, bool> shown)
+        {
+            List<ClaudeToolEntry> toolList; List<ClaudeLinesEntry> lineList; Dictionary<string, DateTime[]> times;
+            lock (activityGate) { toolList = tools.ToList(); lineList = lines.ToList(); times = moments.ToDictionary(p => p.Key, p => (DateTime[])p.Value.Clone()); }
+            var ids = new HashSet<string>(view.Threads.Select(t => t.Id));
+            var mine = usage == null ? new List<ClaudeUsageEntry>() : usage.Where(e => shown == null || shown(ClaudeUsage.Key(folderOf(e)))).ToList();
+            var minute = TimeSpan.FromMinutes(1);
+            view.Burn = ClaudePace.Bins(mine, now, minute, ClaudePace.BurnMinutes);
+            view.Rate = ClaudePace.Rate(mine, now);
+            view.Scale = ClaudePace.Scale(Math.Max(view.Burn.Max(), view.Rate));
+            var linesBySession = lineList.Where(l => ids.Contains(l.Session)).GroupBy(l => l.Session).ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var t in view.Threads)
+            {
+                List<ClaudeUsageEntry> entries; if (!perSession.TryGetValue(t.Id, out entries)) entries = new List<ClaudeUsageEntry>();
+                List<ClaudeLinesEntry> changed; linesBySession.TryGetValue(t.Id, out changed);
+                foreach (var pair in view.Starts)
+                {
+                    var from = pair.Value;
+                    t.Mix[pair.Key] = ClaudePace.Mix(entries.Where(e => e.At >= from));
+                    t.Lines[pair.Key] = changed == null ? new long[2] : new[] { changed.Where(l => l.At >= from).Sum(l => l.Added), changed.Where(l => l.At >= from).Sum(l => l.Removed) };
+                }
+                t.Rate = t.Running ? ClaudePace.Rate(entries, now) : 0;
+                t.Car = ClaudePace.Car(t.MixFor(ClaudePeriod.Week), t.Model);
+                DateTime[] m; if (!times.TryGetValue(t.Id, out m)) m = new DateTime[4];
+                t.Pit = ClaudePace.State(t, now, m[Decided], m[Finished], m[Failed], m[Requested]);
+            }
+            // A lane for each of the four projects that used the most in the last five hours.
+            DateTime fiveHours = now - ClaudePace.FiveHours;
+            view.Lanes = mine.Where(e => e.At >= fiveHours).GroupBy(e => ClaudeUsage.Key(folderOf(e)), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Key.Length > 0).OrderByDescending(g => g.Sum(e => e.Tokens)).Take(4)
+                .Select(g => new ClaudeLane { Folder = g.Key, Name = ClaudeBridge.ProjectName(g.Key), Bins = ClaudePace.Bins(g, now, TimeSpan.FromMinutes(10), ClaudePace.LaneBins) }).ToList();
+            // Today's facts.
+            DateTime today = view.Starts[ClaudePeriod.Today];
+            var todays = mine.Where(e => e.At >= today).ToList();
+            var todayTools = toolList.Where(t => t.At >= today && ids.Contains(t.Session)).ToList();
+            var todayLines = lineList.Where(l => l.At >= today && ids.Contains(l.Session)).ToList();
+            int results = todayTools.Count(t => t.Result);
+            view.Facts = new ClaudeFacts {
+                Tokens = todays.Sum(e => e.Tokens), Cost = todays.Sum(e => e.Cost), Prompt = todays.Sum(e => e.Prompt), CacheRead = todays.Sum(e => e.CacheRead),
+                Tools = results > 0 ? results : todayTools.Count(t => !t.Result), Asked = todayTools.Count(t => !t.Result && t.Asked), Denied = todayTools.Count(t => !t.Result && t.Denied),
+                Added = todayLines.Sum(l => l.Added), Removed = todayLines.Sum(l => l.Removed), LinesThreads = todayLines.Select(l => l.Session).Distinct().Count(),
+                Telemetry = Telemetry.LastReceived > DateTime.MinValue || toolList.Count > 0 || lineList.Count > 0 };
+            view.MadeAt = now;
         }
 
         // "claude-opus-5-5-20261001" reads "Opus 5.5".
