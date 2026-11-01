@@ -71,6 +71,8 @@ namespace WidgetScreen
         public bool RemoteEnabled { get; set; }
         // Move the dashboard to the tray while a paired phone shows it (Settings → Phone).
         public bool HideToTrayWithPhone { get; set; }
+        // Storage: a drive with less free space than this percentage shows in the warning colour (Settings → Widgets).
+        public int StorageLowPercent { get; set; }
         public string WeatherLocation { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
@@ -107,6 +109,7 @@ namespace WidgetScreen
             // surprised more than it helped when both screens were in use.
             HideToTrayWithPhone = false;
             FocusChime = true;
+            StorageLowPercent = StorageService.DefaultLowPercent;
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
@@ -151,6 +154,7 @@ namespace WidgetScreen
             SystemHeight = Clamp(SystemHeight, 326, 356, 326);
             MixerHeight = Clamp(MixerHeight, 476, 576, 576);
             if (FocusCustomMinutes != 0) FocusCustomMinutes = Math.Max(5, Math.Min(180, FocusCustomMinutes));
+            StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
             if (Shortcuts == null) Shortcuts = DefaultShortcuts();
             Shortcuts.RemoveAll(s => s == null);

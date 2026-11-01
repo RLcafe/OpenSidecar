@@ -54,7 +54,7 @@ namespace WidgetScreen
         // 80% of the reference canvas, less what rounding the canvas down to the snap grid can take off.
         private const double MinimumShrink = 0.78;
         // The clock moved into the header, so "Clock" is no longer a widget. Saved Clock placements are dropped on load.
-        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard" };
+        public static readonly string[] Ids = { "Focus", "Media", "Shortcuts", "Mixer", "System", "Weather", "Spotify", "Soundboard", "Storage" };
         public static string Title(string id)
         {
             switch (id) {
@@ -63,6 +63,7 @@ namespace WidgetScreen
                 case "Shortcuts": return "Quick launch";
                 case "Mixer": return "Sound mixer";
                 case "System": return "System stats";
+                case "Storage": return "Storage";
                 default: return id;
             }
         }
@@ -78,6 +79,7 @@ namespace WidgetScreen
                 case "Mixer": return new Size(320, 224);
                 case "System": return new Size(260, 280);
                 case "Soundboard": return new Size(300, 240);
+                case "Storage": return new Size(240, 152);
                 default: return new Size(232, 152);
             }
         }
@@ -124,7 +126,9 @@ namespace WidgetScreen
                 Place("Weather", infoX, stats ? settings.SystemHeight : 0, widths[3], stats ? ReferenceHeight - settings.SystemHeight : ReferenceHeight),
                 new WidgetPlacement { Id = "Spotify", X = 376, Y = 0, Width = 600, Height = 576, Visible = false },
                 // Starts hidden; turned on in Edit layout once Discord is set up.
-                new WidgetPlacement { Id = "Soundboard", X = 336, Y = 326, Width = 472, Height = 250, Visible = false }
+                new WidgetPlacement { Id = "Soundboard", X = 336, Y = 326, Width = 472, Height = 250, Visible = false },
+                // New widgets start hidden, so the default layout stays the same; they are turned on in Edit layout.
+                new WidgetPlacement { Id = "Storage", X = 1384, Y = 326, Width = 472, Height = 250, Visible = false }
             };
         }
         public static WidgetPlacement[] SpotifyDefault(AppSettings settings)
@@ -132,7 +136,7 @@ namespace WidgetScreen
             var result = Default(settings);
             foreach (var p in result)
             {
-                p.Visible = p.Id != "System" && p.Id != "Weather" && p.Id != "Soundboard";
+                p.Visible = DefaultShown.Contains(p.Id);
                 if (p.Id == "Focus") SetBounds(p, new Rect(0, 0, 320, 576));
                 if (p.Id == "Media") SetBounds(p, new Rect(336, 0, 472, 310));
                 if (p.Id == "Shortcuts") SetBounds(p, new Rect(336, 326, 472, 250));
@@ -381,7 +385,7 @@ namespace WidgetScreen
                 case "Focus": return new Size(320, 400);
                 case "Mixer": return new Size(456, 576);
                 case "Spotify": return new Size(560, 576);
-                case "Shortcuts": case "Weather": case "Soundboard": return new Size(472, 250);
+                case "Shortcuts": case "Weather": case "Soundboard": case "Storage": return new Size(472, 250);
                 default: return new Size(472, 310);
             }
         }

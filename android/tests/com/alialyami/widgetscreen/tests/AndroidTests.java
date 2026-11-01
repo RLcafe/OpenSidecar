@@ -8,6 +8,7 @@ import com.alialyami.widgetscreen.core.Json;
 import com.alialyami.widgetscreen.core.PcLink;
 import com.alialyami.widgetscreen.core.PcPairing;
 import com.alialyami.widgetscreen.core.PcState;
+import com.alialyami.widgetscreen.core.StorageText;
 import com.alialyami.widgetscreen.core.Spotify;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.Weather;
@@ -350,7 +351,8 @@ public final class AndroidTests {
             PcState state = PcState.parse(Json.obj(Json.parse(new String(Files.readAllBytes(sample.toPath()), StandardCharsets.UTF_8))));
             ok(!state.name.isEmpty() && state.focus != null && state.focus.durationMs > 0, "focus");
             ok(state.deck != null && !state.deck.isEmpty() && state.deck.get(0).label != null && !state.deck.get(0).glyph.isEmpty(), "deck");
-            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null, "every part");
+            ok(state.media != null && state.audio != null && state.system != null && state.weather != null && state.spotify != null && state.discord != null && state.storage != null, "every part");
+            if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
             // The Windows checks add a page, rename it Play and move it first, so the PC shows Main, the second page.
@@ -399,6 +401,20 @@ public final class AndroidTests {
             ok(CardSizing.weather(232, 152) == CardSizing.SMALL && CardSizing.weather(600, 219) == CardSizing.SMALL && CardSizing.weather(472, 250) == CardSizing.MEDIUM && CardSizing.weather(360, 576) == CardSizing.MEDIUM && CardSizing.weather(400, 340) == CardSizing.LARGE, "weather");
             ok(CardSizing.statsTileColumns(472, 4) == 2 && CardSizing.statsTileColumns(1200, 4) == 4 && CardSizing.statsTileColumns(1200, 1) == 1 && CardSizing.weatherHours(400) == 4 && CardSizing.weatherHours(800) == 5 && CardSizing.weatherHours(300) == 3, "tiles and hours");
             ok(CardSizing.statsListValue(39) == 22 && CardSizing.statsRing(143, 110) == 110 && CardSizing.statsTileValue(240) == 58, "reading sizes");
+        } });
+        check("Storage picks small, medium and large designs and words drives like the PC", new Action() { public void run() {
+            ok(CardSizing.storage(240, 152) == CardSizing.SMALL && CardSizing.storage(600, 199) == CardSizing.SMALL && CardSizing.storage(472, 250) == CardSizing.MEDIUM && CardSizing.storage(439, 576) == CardSizing.MEDIUM && CardSizing.storage(440, 340) == CardSizing.LARGE, "designs");
+            ok(CardSizing.storageCapacity(CardSizing.SMALL, 192, 68, 3) == 1 && CardSizing.storageCapacity(CardSizing.MEDIUM, 424, 166, 5) == 4 && CardSizing.storageDetailRows(166, 2) && !CardSizing.storageDetailRows(166, 3) && CardSizing.storageCapacity(CardSizing.LARGE, 424, 492, 3) == 6 && CardSizing.storageCapacity(CardSizing.LARGE, 1200, 300, 6) == 4, "capacity");
+            ok(CardSizing.storageTileColumns(472, 1) == 1 && CardSizing.storageTileColumns(472, 3) == 2 && CardSizing.storageTileColumns(1200, 6) == 4 && CardSizing.storageRing(200, 240) == 144 && CardSizing.storageListValue(40) == 20, "tiles");
+            double gb = 1024.0 * 1024 * 1024;
+            ok(StorageText.bytes(820.0 * 1024 * 1024).equals("820 MB") && StorageText.bytes(45.24 * gb).equals("45.2 GB") && StorageText.bytes(212.4 * gb).equals("212 GB") && StorageText.bytes(1.82 * 1024 * gb).equals("1.82 TB") && StorageText.bytes(12.5 * 1024 * gb).equals("12.5 TB") && StorageText.bytes(-5).equals("0 KB"), "sizes");
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"storage\":{\"lowPercent\":10,\"drives\":[{\"name\":\"C:\",\"label\":\"Windows\",\"total\":536870912000,\"free\":42949672960},{\"name\":\"D:\",\"label\":\"\",\"total\":1073741824000,\"free\":644245094400},{\"name\":\"\",\"total\":5}]}}")));
+            ok(state.storage != null && state.storage.drives.size() == 2 && state.storage.lowPercent == 10, "parse");
+            ok(StorageText.low(state.storage.drives.get(0), 10) && !StorageText.low(state.storage.drives.get(1), 10) && StorageText.lowFlag(state.storage.drives, 10).equals("C: LOW") && StorageText.title(state.storage.drives.get(0)).equals("C:  Windows") && StorageText.title(state.storage.drives.get(1)).equals("D:"), "low");
+            ok(StorageText.more(state.storage.drives, 1, 50).equals("+1 more drive") && StorageText.more(state.storage.drives, 0, 10).equals("+2 more drives  ·  1 low"), "more");
+            ok(PcState.parse(Json.obj(Json.parse("{\"storage\":{\"error\":true}}"))).storage.error, "error");
+            WidgetLayout.Placement storage = WidgetLayout.find(WidgetLayout.defaults(), "Storage");
+            ok(storage != null && !storage.visible && !WidgetLayout.find(WidgetLayout.defaults(1480, 552), "Storage").visible, "hidden by default");
         } });
         check("Sideways screens get the Windows arrangement, sized for phones", new Action() { public void run() {
             DashboardFit phone = DashboardFit.choose(2400, 1080, 2.625, "Auto");

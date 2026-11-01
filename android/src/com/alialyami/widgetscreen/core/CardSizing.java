@@ -133,5 +133,21 @@ public final class CardSizing {
     // The hours a Large forecast shows: up to five, as many as fit 72 units each.
     public static int weatherHours(double width) { return (int) clamp(Math.floor((width - 48 - 16) / 72), 3, 5); }
 
+    // Storage (docs/design/storage.md): a list under 340 wide or 200 tall, rows with names and sizes at the reference
+    // 472 × 250, and ring tiles from 440 × 340. Each design holds as many drives as its rows or tiles fit; the rest are
+    // counted in a last line. The same numbers as CardSizing.cs.
+    public static int storage(double width, double height) { return width < 340 || height < 200 ? SMALL : width >= 440 && height >= 340 ? LARGE : MEDIUM; }
+    // Medium rows carry a used-of-total line while every drive fits with it, and drop it to fit more drives.
+    public static final double STORAGE_LIST_ROW = 40, STORAGE_ROW_HEIGHT = 76, STORAGE_COMPACT_ROW = 36, STORAGE_TILE_HEIGHT = 150;
+    public static boolean storageDetailRows(double height, int count) { return count * STORAGE_ROW_HEIGHT + (count - 1) * 8 <= height; }
+    public static int storageCapacity(int design, double width, double height, int count) {
+        if (design == SMALL) return Math.max(1, (int) Math.floor((height + 8) / (STORAGE_LIST_ROW + 8)));
+        if (design == MEDIUM) return Math.max(1, (int) Math.floor((height + 4) / (STORAGE_COMPACT_ROW + 4)));
+        return storageTileColumns(width, count) * Math.max(1, (int) Math.floor((height + 12) / (STORAGE_TILE_HEIGHT + 12)));
+    }
+    public static int storageTileColumns(double width, int count) { return count <= 1 ? 1 : width >= 960 ? Math.min(count, 4) : Math.min(count, 2); }
+    public static double storageRing(double tileWidth, double tileHeight) { return clamp(Math.floor(Math.min(tileWidth - 24, tileHeight - 24 - 72)), 56, 200); }
+    public static double storageListValue(double rowHeight) { return clamp(Math.round(rowHeight * 0.5), 18, 32); }
+
     private static double clamp(double value, double min, double max) { return Double.isNaN(value) ? min : Math.max(min, Math.min(max, value)); }
 }

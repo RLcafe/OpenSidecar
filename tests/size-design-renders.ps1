@@ -1,4 +1,4 @@
-# Renders the cards in their Small, Medium and Large designs (docs/design/widget-size-views.md) at 1920 × 720 with
+﻿# Renders the cards in their Small, Medium and Large designs (docs/design/widget-size-views.md) at 1920 × 720 with
 # isolated settings, into artifacts\size-designs\. Readings are live: this PC's stats, audio and media, and Open-Meteo's
 # weather for London, so a render without network shows the offline state instead. Spotify and Discord aren't
 # connected in isolated settings; tests\Spotify\SpotifyTests.cs renders Spotify's Large design with labelled fixtures.
@@ -19,12 +19,16 @@ $scenes = [ordered]@{
     'cards-medium'  = @{ Focus = @(0, 0, 320, 400); Media = @(336, 0, 472, 310); Shortcuts = @(336, 326, 472, 250); Mixer = @(824, 0, 456, 360); Spotify = @(1296, 0, 560, 576) }
     'cards-large'   = @{ Focus = @(0, 0, 340, 576); Media = @(356, 0, 480, 576); Shortcuts = @(852, 0, 520, 400); Mixer = @(1388, 0, 468, 576) }
     'cards-wide'    = @{ Mixer = @(0, 0, 820, 576); Shortcuts = @(836, 0, 1020, 400) }
+    'storage-small' = @{ Storage = @(0, 0, 300, 184); Weather = @(0, 200, 300, 184); System = @(316, 0, 472, 250) }
+    'storage-medium' = @{ Storage = @(0, 0, 472, 250); Focus = @(488, 0, 320, 576) }
+    'storage-large' = @{ Storage = @(0, 0, 640, 576); Focus = @(656, 0, 320, 576) }
+    'storage-wide'  = @{ Storage = @(0, 0, 1200, 400) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
     $scene = $scenes[$name]
     $settings = Join-Path $output ($name + '-settings.xml')
-    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard') {
+    $placements = foreach ($id in 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', 'Soundboard', 'Storage') {
         $b = if ($scene.Contains($id)) { $scene[$id] } else { @(0, 0, 320, 300) }
         $visible = if ($scene.Contains($id)) { 'true' } else { 'false' }
         "<WidgetPlacement><Id>$id</Id><X>$($b[0])</X><Y>$($b[1])</Y><Width>$($b[2])</Width><Height>$($b[3])</Height><Visible>$visible</Visible></WidgetPlacement>"
