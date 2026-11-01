@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.21.0 (1 Nov 2026)
+
+A Prayer times widget (user request; Windows and the phone, the same designs on both):
+
+- **Today's five prayers and a countdown to the next.** The next prayer shows its time and "in 1 h 12 m"; past prayers are dimmed and the next one is in your accent colour. For 20 minutes after a prayer begins, the card's heading says so ("ASR NOW"). Turn it on in Edit layout; it starts hidden.
+- **Worked out on the PC, with no internet.** The times come from the sun's position with the standard astronomical method. Choose the calculation method (Umm al-Qura, Muslim World League, ISNA, Egypt, Karachi, Gulf, Kuwait, Qatar, Singapore, Turkey, Tehran or Jafari; the default follows your region) and the Asr school (Standard or Hanafi). Far-north summers use the angle-based rule, like published timetables. Checked against published timetables for Riyadh and London, within two minutes.
+- **A new Prayer tab in Settings, after Weather.** Search for a city (the same city search as Weather), or leave it to follow the weather city.
+- **An optional alert on the PC at each prayer time**, with an audio file you choose (such as an adhan recording) or a short built-in chime. Quiet mode keeps it silent, and a Stop button shows on the card and on your phone while it plays. It is off until you turn it on.
+- **Small, medium and large designs**: the next prayer alone; the next prayer beside today's five times; and the next prayer with its progress, sunrise, the Hijri date and the method, over the times as rows or (on a wide card) six tiles.
+- The phone shows the PC's times and counts down by itself; the alert plays on the PC only. Not yet tried on a phone, and the alert hasn't been heard at a real prayer time yet.
+
 ## v0.20.0 (1 Nov 2026)
 
 A World clocks widget (user request; Windows and the phone, the same designs on both):
