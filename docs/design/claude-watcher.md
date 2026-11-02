@@ -28,7 +28,7 @@ Package 2 of the Watcher action plan, Windows only (Ali, 2 Nov 2026: packages 2�
 - **Revving** means a tool call has run past twice its usual time for that tool (3 to 60 s); a request after the call ends it.
 - **Retrying.** A car stopped by an API error says "Retrying after an API error · HTTP 529 · attempt 3" in its tip.
 - **Time to the limit.** The 5-hour tank says "full in 1 h 40 at this pace", in the warning colour, when the last half hour's pace fills it before the reset.
-- **Plan chips** under the plan row, up to six: each narrower weekly window, extra usage (on or off, percent, used of limit), and a gateway's spend limit. A chip warns from 80%.
+- **Plan chips** under the plan row, up to six: narrower weekly windows beyond the two the week tile names, extra usage (on or off, percent, used of limit), and a gateway's spend limit. A chip warns from 80%. The chips step aside while a session needs you, so the ask strip and the ledger keep their room.
 - **Helpers apart.** A thread's tip says "Own 12.4k · helpers 3.1k tokens today".
 - **First scan.** Large logs are read from the newest end in 1 MB chunks, at most 64 MB a scan, down to the week's edge.
 

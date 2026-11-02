@@ -16,7 +16,7 @@ Claude Code watcher: honest numbers (package 2 of the Watcher action plan; Windo
 - **Revving means slow.** A car revs when a tool call runs past twice its usual time for that tool (3 to 60 s), not after a fixed 15 s. A request after a call ends it even if its result never came.
 - **Retries show.** A car hit by an API error says "Retrying after an API error · HTTP 529 · attempt 3" in its tip.
 - **When the 5-hour limit fills.** The tank says "full in 1 h 40 at this pace" when the last half hour's pace would fill it before it resets.
-- **Plan chips** under the plan row: the narrower weekly windows, extra usage, and a Claude apps gateway's spend limit, warning from 80%.
+- **Plan chips** under the plan row: narrower weekly windows beyond the two the week tile names, extra usage, and a Claude apps gateway's spend limit, warning from 80%. They step aside while a session needs you.
 - **Helpers apart.** A thread's tip splits its own tokens from its helpers' (subagents').
 - **Faster first scan.** Big logs are read from the newest end in 1 MB chunks, at most 64 MB a scan, stopping at the week's edge, so the card fills in at once and catches up over the next scans.
 - The phone link already carries the new numbers (`factsBy`, `factKinds`, `costSource`, `unpriced`, `limitEta`, `claudeCodeCost`, `estimateCost`, `spend`, and `helperTokens`, `costUsd`, `mode`, `revving`, `errorStatus`, `errorAttempt` per thread). The phone card doesn't show them yet.

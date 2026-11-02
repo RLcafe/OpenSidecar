@@ -372,14 +372,14 @@ namespace WidgetScreen
                     return new[] { counted ? ClaudeUsage.Format(f.Tokens) : "—", !counted ? when : showApi ? when + " · " + unknown + "$" + Dollars(f.Cost) + " API VALUE" : when + " · " + f.Replies + " REPLIES", showApi ? ApiValue(view, period) : TokensTip };
             }
         }
-        // The plan's chips (package 2): each narrower weekly window, extra usage and a gateway's spend limit, with
-        // whether it warns (80% and over, as the meters do).
+        // The plan's chips (package 2): the narrower weekly windows the week tile has no room for (it names two),
+        // extra usage and a gateway's spend limit, with whether it warns (80% and over, as the meters do).
         public const int MostPlanChips = 6;
         public static List<KeyValuePair<string, bool>> PlanChips(ClaudeLimits limits, DateTime now, bool use24)
         {
             var chips = new List<KeyValuePair<string, bool>>();
             if (limits == null) return chips;
-            foreach (var p in limits.Extra.Take(4))
+            foreach (var p in limits.Extra.Skip(2).Take(4))
             {
                 double pct = Percent(p.Value, now);
                 chips.Add(new KeyValuePair<string, bool>(p.Key + " " + Math.Round(pct) + "%" + (p.Value.ResetsAt.HasValue && p.Value.Current(now) ? " · resets " + When(p.Value.ResetsAt.Value, now, use24) : ""), Warns(pct)));
@@ -690,8 +690,9 @@ namespace WidgetScreen
             var root = Rows(new GridLength(48), new GridLength(12), Auto, Auto, Auto, new GridLength(12), Star);
             root.Children.Add(Header(width, true));
             root.Children.Add(At(PlanRow(width), 2));
-            // Package 2: the plan's narrower weekly windows, extra usage and a gateway's spend limit, as chips.
-            if (ClaudeText.PlanChips(view.Limits, DateTime.UtcNow, use24).Count > 0) root.Children.Add(At(PlanChips(), 3));
+            // Package 2: more narrower weekly windows, extra usage and a gateway's spend limit, as chips. They step
+            // aside while a session needs you, so the ask strip and the ledger keep their room.
+            if (!asking && ClaudeText.PlanChips(view.Limits, DateTime.UtcNow, use24).Count > 0) root.Children.Add(At(PlanChips(), 3));
             if (asking) { askStrip = AskStrip(); askStrip.Margin = new Thickness(0, 12, 0, 0); root.Children.Add(At(askStrip, 4)); }
             bool side = CardSizing.ClaudeSide(width);
             var ledger = side ? Columns(Star, new GridLength(16), new GridLength(CardSizing.ClaudeSideWidth)) : Columns(Star);
