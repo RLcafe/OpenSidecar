@@ -24,7 +24,7 @@ On 2 Nov 2026 Ali asked for the Watcher action plan's changes so far to reach th
    - The words match the PC's notification: "Claude needs you · api-server", "Fix the login: Wants to use Bash". Placeholder titles become "Thread 1b2187".
    - Settings → Widgets → Notify me when a Claude Code session needs me (`AppSettings.claudeNotify`, on by default). The PC's Quiet mode keeps it silent. Android 13 and later asks for the notification permission once, when the Claude card is on a page on the PC.
    - The icon is the waiting car's silhouette drawn by `PitArt`, so no image file is added.
-6. **Only while the app is open.** The phone asks the PC for `/state` only while the app is in front. Notifications therefore arrive while the app is open (another page, the list layout, a split screen). Watching from the background would need a foreground service polling the PC with a lasting notification, which costs battery and is a new kind of background work. That is left for Ali to decide.
+6. **Only while the app is open.** The phone asks the PC for `/state` only while the app is in front. Notifications therefore arrive while the app is open (another page, the list layout, a split screen). Watching from the background would need a foreground service polling the PC with a lasting notification, which costs battery and is a new kind of background work. Ali chose "Only while the app is open" (2 Nov 2026), so there is no background watcher.
 
 ## What can't be on the phone
 
