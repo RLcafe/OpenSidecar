@@ -1,6 +1,18 @@
 # Claude Code watcher (1 Nov 2026)
 
-The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals) [decision 023](../decisions/023-claude-trust-the-sources.md) (which sessions are alive, Stuck, the plan check and the telemetry port) and [decision 024](../decisions/024-claude-honest-numbers.md) (where costs come from, the side panel facts, and Windows first for packages 2–4).
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals) [decision 023](../decisions/023-claude-trust-the-sources.md) (which sessions are alive, Stuck, the plan check and the telemetry port) [decision 024](../decisions/024-claude-honest-numbers.md) (where costs come from, the side panel facts, and Windows first for packages 2–4) and [decision 025](../decisions/025-claude-instant-and-everywhere.md) (watchers, notifications, phone alerts, helpers on the car, resolved without the app).
+
+## Instant and everywhere (decision 025, v0.41.0)
+
+Package 3 of the Watcher action plan, Windows only (the phone link already sends what the phone will show).
+
+- **At once.** While the card is on a page, Windows says when a session file, Claude Code's session list, a log or a Claude app thread record changes, and the card follows straight away. Reading everything every 2 s becomes a 30 s fallback; a shown card with sessions running is still worked out at the chosen interval, since turns and revving go by the clock.
+- **Windows notifications.** When a session needs you, gets stuck, or finishes a turn of 10 minutes or more, a Windows notification names the project, the thread and what it waits for. A click brings the session forward. Settings → Claude → Notify me in Windows (on by default); Quiet mode keeps it silent.
+- **Phone alerts.** Every answer to the phone carries the last ten minutes of alerts, numbered (`claudeAlerts`, `claudeAlertSeq`, `claudeQuiet`), so the phone can raise its own notification within one poll.
+- **The pit crew.** A car carries a small figure for each helper (subagent) running, up to three then "+N", and a "3/5" sticker for its task list on cars wide enough. A lead whose helpers are still out is working, not on your turn. The tip says "2 helpers working · tasks 3 / 5".
+- **Resolved without the Claude app.** Closing Claude Code at its prompt, logging out or `/clear` keeps the thread, resolved and parked under its cover ("Closed in Claude Code" in the tip); a later reply or a resume takes it back out, and the Claude app's own record wins where there is one. SessionStart's title names the car.
+- **Garages and settings.** A `--worktree` session parks in the garage of the folder its worktree came from. An organisation's managed Claude Code settings that override the hooks, status line or telemetry are named in Settings → Claude and in the Connect sheet. `CLAUDE_CONFIG_DIR` set for the user is honoured even when Widget Screen started first.
+- **Lighter.** The project groups are worked out once per view, and a thread's tip is written when it opens, from what the card shows then.
 
 ## Honest numbers (decision 024, v0.40.0)
 

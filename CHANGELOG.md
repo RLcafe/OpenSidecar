@@ -6,6 +6,19 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.41.0 (2 Nov 2026)
+
+Claude Code watcher: instant and everywhere (package 3 of the Watcher action plan; Windows only, the phone follows later; decision 025).
+
+- **The card reacts at once.** Windows tells the card when a session, a log or a Claude app thread changes, so states show as they happen. The old 2-second read is now a 30-second fallback.
+- **Windows notifications** when a session needs you, gets stuck, or finishes a turn of 10 minutes or more. Click one to bring the session forward. Settings → Claude → Notify me in Windows when a session needs me (on by default; silent in Quiet mode).
+- **Helpers on the car.** Small pit-crew figures for each helper (subagent) running and a "3/5" task sticker. A lead whose helpers are still working counts as working.
+- **Resolved without the Claude app.** A thread you closed in Claude Code (exit, logout or `/clear`) shows as resolved, unless it picks up again. A thread's name comes from Claude Code's SessionStart when it sends one.
+- **Worktrees and managed settings.** A `--worktree` session sits in its original folder's garage. Settings → Claude says when an organisation's managed Claude Code settings override the hooks, status line or telemetry. `CLAUDE_CONFIG_DIR` set for your Windows user is honoured.
+- **Lighter and fresher.** Project groups are worked out once per update, and thread tips always show the current numbers.
+- The phone link already carries the alerts (`claudeAlerts`, `claudeAlertSeq`, `claudeQuiet`) and each thread's `tasksDone`, `tasksTotal` and `endReason`. The phone app shows them in the Android pass.
+- No new polling, ports or outbound calls; the watchers replace most of the 2-second reads.
+
 ## v0.40.0 (2 Nov 2026)
 
 Claude Code watcher: honest numbers (package 2 of the Watcher action plan; Windows only, the phone follows later; decision 024).
