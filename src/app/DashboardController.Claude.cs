@@ -15,6 +15,10 @@ namespace WidgetScreen
     // not), so the pill can light up from another page; the logs are read on the same interval only while the card is
     // on the page shown. The telemetry receiver listens on loopback while Claude Code is connected, and the plan check
     // runs on its own interval (300 s by default, longer while Anthropic turns checks away) while signed in.
+    // Package 3 (decision 025): while the card is on a page, Windows tells the dashboard when one of those folders
+    // changes (ClaudeWatch), so the card follows at once and the interval above is only a 30-second fallback; a shown card
+    // with sessions running is still worked out at the interval, since turns and revving go by the clock. New alerts
+    // become a Windows notification and ride to the phone in every /state.
     public sealed partial class DashboardController
     {
         private ClaudeService claude;
@@ -23,7 +27,12 @@ namespace WidgetScreen
         private PitSprite pillCar;
         private Task claudeScan;
         private DateTime lastClaudeScan = DateTime.MinValue, lastClaudeRead = DateTime.MinValue, lastClaudeAlive = DateTime.MinValue;
-        private bool claudeSample, claudeOnlineBusy, claudeDirty = true;
+        private bool claudeSample, claudeOnlineBusy, claudeDirty = true, claudeLogsWaiting, claudeWatchTried;
+        // Package 3: what newly happened to the running sessions (Windows notifications and the phone's alerts), and when
+        // the card was last worked out.
+        private readonly ClaudeAlerts claudeAlerts = new ClaudeAlerts();
+        private ClaudeToast claudeToast;
+        private DateTime lastClaudeRefresh = DateTime.MinValue;
         private readonly HashSet<string> claudeNeeding = new HashSet<string>();
         private string claudePagesKey; private int claudeFirstPage = -1;
         // The project ticks shown in Settings → Claude, by folder, until Save.
@@ -57,7 +66,10 @@ namespace WidgetScreen
             Button("ClaudePlanSecondsLess", () => StepClaudeSeconds("ClaudePlanSecondsBox", -10, ClaudeIntervals.Plan, settings.ClaudePlanSeconds));
             Button("ClaudePlanSecondsMore", () => StepClaudeSeconds("ClaudePlanSecondsBox", 10, ClaudeIntervals.Plan, settings.ClaudePlanSeconds));
             Control<TextBox>("ClaudePlanSecondsBox").TextChanged += (sender, e) => UpdateClaudePlanNote();
+            claudeToast = new ClaudeToast(id => { if (!disposed) FocusClaudeSession(id); });
             if (Program.Rendering) return;
+            // A watched folder changed or telemetry arrived (package 3): the card looks at once, on its own thread.
+            claude.Changed = () => { try { window.Dispatcher.BeginInvoke(new Action(ClaudeWatchFired)); } catch (Exception) { } };
             claude.CheckConnected();
             // After an update, Claude Code runs the bridge that came with it.
             if (claude.Connected) { claude.Connector.RefreshHook(BundledHook); claude.StartTelemetry(); }
@@ -119,11 +131,21 @@ namespace WidgetScreen
             if (claudeSample) return;
             // Renders never read this PC's sessions or logs, or ask for the plan's usage; they use the labelled sample.
             if (Program.Rendering) return;
-            if (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage) { if (claudeView != null && claudeView.NeedsYou > 0) { claudeView = null; UpdateClaudePill(); } return; }
+            if (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage)
+            {
+                if (claudeView != null && claudeView.NeedsYou > 0) { claudeView = null; UpdateClaudePill(); }
+                // Nothing shows the card: no folder is watched (package 3).
+                if (claudeWatchTried) { claude.Watch.Stop(); claudeWatchTried = false; }
+                return;
+            }
             DateTime now = DateTime.UtcNow;
             bool changed = false;
-            // Within a second of the chosen interval, so a 2 s interval doesn't drift to 3 on the 1 s heartbeat.
-            if (now - lastClaudeRead >= ClaudeEvery - TimeSpan.FromMilliseconds(500))
+            // The folders are watched while the card is on a page (package 3); folders that appear later join within 10 s.
+            if (ticks % 10 == 0 || !claudeWatchTried) { claudeWatchTried = true; claude.Watch.Watch(claude.WatchFolders()); }
+            // With the folders watched, reading every source is only a fallback every 30 s (or the chosen interval, if
+            // longer); without them, the chosen interval as before. Within a second of it, so 2 s doesn't drift to 3.
+            var every = claude.Watch.Running && ClaudeWatch.Fallback > ClaudeEvery ? ClaudeWatch.Fallback : ClaudeEvery;
+            if (now - lastClaudeRead >= every - TimeSpan.FromMilliseconds(500))
             {
                 lastClaudeRead = now;
                 bool alive = now - lastClaudeAlive >= TimeSpan.FromSeconds(5);
@@ -133,6 +155,11 @@ namespace WidgetScreen
                 if (claude.TelemetryChanged) { claude.TelemetryChanged = false; changed = true; }
                 if (Editor.IsVisible("Claude") && (claudeScan == null || claudeScan.IsCompleted)) ScanClaudeLogs();
             }
+            // A log changed while the card was hidden, a scan was running or one ran moments ago: it's read now.
+            if (claudeLogsWaiting && Editor.IsVisible("Claude") && (claudeScan == null || claudeScan.IsCompleted) && now - lastClaudeScan >= ClaudeEvery - TimeSpan.FromMilliseconds(500)) ScanClaudeLogs();
+            // Turns, revving and idling go by the clock, so a shown card with something running is worked out again at the
+            // chosen interval even when no file changed.
+            if (claude.Watch.Running && Editor.IsVisible("Claude") && claudeView != null && claudeView.Sessions.Count > 0 && now - lastClaudeRefresh >= ClaudeEvery - TimeSpan.FromMilliseconds(500)) changed = true;
             if (ticks % 10 == 0)
             {
                 bool was = claude.Connected; claude.CheckConnected(); changed |= was != claude.Connected;
@@ -155,11 +182,37 @@ namespace WidgetScreen
 
         private async void ScanClaudeLogs()
         {
-            lastClaudeScan = DateTime.UtcNow;
+            lastClaudeScan = DateTime.UtcNow; claudeLogsWaiting = false;
             var scan = Task.Run(() => claude.Usage.Scan(DateTime.UtcNow));
             claudeScan = scan;
             try { await scan; } catch (Exception) { }
-            if (!disposed) claudeDirty = true;
+            if (disposed) return;
+            claudeDirty = true;
+            // Watched, the new replies show as soon as they're read (package 3), not on the next heartbeat.
+            if (claude.Watch.Running && Editor.IsVisible("Claude")) RefreshClaudeView();
+        }
+
+        // A watched folder changed or telemetry arrived (package 3): only what changed is read, and the card follows.
+        // Log changes come in bursts while Claude writes, so they're read at most once per chosen interval (2 s by
+        // default), as before; the heartbeat picks up one that has to wait.
+        private void ClaudeWatchFired()
+        {
+            if (disposed || claudeSample || Program.Rendering) return;
+            var kinds = claude.Watch.Take();
+            if (kinds == ClaudeWatch.Kinds.None || (!Editor.IsVisible("Claude") && !ClaudeOnAnyPage)) return;
+            DateTime now = DateTime.UtcNow;
+            bool changed = false;
+            if ((kinds & ClaudeWatch.Kinds.Sessions) != 0)
+            {
+                bool alive = now - lastClaudeAlive >= TimeSpan.FromSeconds(5);
+                if (alive) lastClaudeAlive = now;
+                changed |= claude.ReadSessions(now, alive);
+                changed |= claude.ReadLimits();
+            }
+            if (claude.TelemetryChanged) { claude.TelemetryChanged = false; changed = true; }
+            if ((kinds & ClaudeWatch.Kinds.Logs) != 0) claudeLogsWaiting = true;
+            if (claudeLogsWaiting && Editor.IsVisible("Claude") && (claudeScan == null || claudeScan.IsCompleted) && now - lastClaudeScan >= ClaudeEvery - TimeSpan.FromMilliseconds(500)) ScanClaudeLogs();
+            if (changed) RefreshClaudeView();
         }
 
         private async void CheckClaudeOnline()
@@ -180,15 +233,33 @@ namespace WidgetScreen
         {
             claudeDirty = false;
             if (claudeSample) return;
+            lastClaudeRefresh = DateTime.UtcNow;
             claudeView = claude.View(DateTime.UtcNow, claude.Usage.Scanned ? claude.Usage.Entries : null, ClaudeFilter);
             ClaudeChoices(claudeView);
             claudeCard.Update(claudeView);
+            NotifyClaude(claudeAlerts.Update(claudeView.Sessions, DateTime.UtcNow));
             // A chime for each session that newly needs you, if Settings → Claude asks for one.
             var needing = claudeView.Sessions.Where(s => s.State == ClaudeState.NeedsYou).Select(s => s.Id).ToList();
             bool fresh = needing.Any(id => !claudeNeeding.Contains(id));
             claudeNeeding.Clear(); foreach (var id in needing) claudeNeeding.Add(id);
             if (fresh && settings.ClaudeChime && !settings.QuietMode) Chime();
             UpdateClaudePill();
+        }
+
+        // Package 3: a Windows notification for a session that newly needs you, got stuck or finished a long turn, unless
+        // Settings → Claude says not to or Quiet mode is on. The newest one shows (each replaces the last); the icon goes
+        // once nothing needs you.
+        private void NotifyClaude(List<ClaudeAlert> fresh)
+        {
+            if (claudeView == null || claudeToast == null) return;
+            if (claudeView.NeedsYou == 0 && claudeView.Stuck == 0) claudeToast.Clear();
+            if (fresh.Count == 0 || !settings.ClaudeToast || settings.QuietMode || Program.Rendering) return;
+            var a = fresh.OrderBy(x => x.Kind == "need" ? 0 : x.Kind == "stuck" ? 1 : 2).First();
+            string title = (a.Kind == "need" ? "Claude needs you" : a.Kind == "stuck" ? "Claude is stuck" : "Claude finished") + " · " + a.Project;
+            string what = a.Kind == "need" ? ClaudeText.Ask(a.Text) : a.Text;
+            if (what.Length == 0) what = a.Kind == "need" ? "Waiting for you" : a.Kind == "stuck" ? "Stopped on an error" : "Done";
+            if (fresh.Count > 1) what += " (and " + (fresh.Count - 1) + " more)";
+            claudeToast.Show(title, a.Title + ": " + what, a.Session, a.Kind != "done");
         }
 
         // The header pill: a session needs you while the Claude card is on another page.
@@ -237,6 +308,11 @@ namespace WidgetScreen
             Text("ClaudeTelemetryText", conflicts.Count > 0 ? "Telemetry is left out: your settings.json already sets " + String.Join(", ", conflicts) + ". Remove those to let Widget Screen show live usage per session; until then usage comes from Claude Code's logs."
                 : !claude.Connected ? "" : claude.Telemetry.Problem ?? (claude.Telemetry.LastReceived > DateTime.MinValue ? "Telemetry last arrived at " + ClaudeText.Clock(claude.Telemetry.LastReceived, settings.Use24HourClock) + "." : "Telemetry arrives from Claude Code sessions started after connecting."));
             Control<CheckBox>("ClaudeChimeChoice").IsChecked = settings.ClaudeChime;
+            Control<CheckBox>("ClaudeToastChoice").IsChecked = settings.ClaudeToast;
+            // Package 3: what the organisation's managed settings keep Widget Screen's connection from doing.
+            var managed = claude.Connector.ManagedOverrides();
+            Text("ClaudeManagedText", managed.Count == 0 ? "" : "Your organisation's managed Claude Code settings (" + claude.Connector.ManagedPath + ") take precedence over yours, so Widget Screen's " + String.Join(", ", managed) + (managed.Count == 1 ? " doesn't" : " don't") + " take effect. Ask whoever manages Claude Code on this PC to allow them.");
+            Control<TextBlock>("ClaudeManagedText").Visibility = managed.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             Control<CheckBox>("ClaudeStillChoice").IsChecked = settings.ClaudeStillInQuiet;
             Control<CheckBox>("ClaudeApiValueChoice").IsChecked = settings.ClaudeShowApiValue;
             Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked = !settings.ClaudeShowArchived;
@@ -301,6 +377,7 @@ namespace WidgetScreen
         private void SaveClaudeChoices(AppSettings candidate)
         {
             candidate.ClaudeChime = Control<CheckBox>("ClaudeChimeChoice").IsChecked == true;
+            candidate.ClaudeToast = Control<CheckBox>("ClaudeToastChoice").IsChecked == true;
             candidate.ClaudeStillInQuiet = Control<CheckBox>("ClaudeStillChoice").IsChecked == true;
             candidate.ClaudeShowApiValue = Control<CheckBox>("ClaudeApiValueChoice").IsChecked == true;
             candidate.ClaudeShowArchived = Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked != true;
@@ -333,8 +410,11 @@ namespace WidgetScreen
         private async void ConnectClaude()
         {
             bool update = claude.Connected;
+            // Package 3: say up front what the organisation's managed settings will override.
+            var managed = claude.Connector.ManagedOverrides();
             bool yes = await confirm.AskAsync("CLAUDE CODE", update ? "Update the connection?" : "Connect Claude Code?",
-                "This adds Widget Screen's hooks, status line and telemetry settings to your Claude Code settings (settings.json). Telemetry goes only to Widget Screen on this PC and never includes your prompts. A backup is saved next to it. Your current status line keeps showing.", update ? "Update" : "Connect");
+                "This adds Widget Screen's hooks, status line and telemetry settings to your Claude Code settings (settings.json). Telemetry goes only to Widget Screen on this PC and never includes your prompts. A backup is saved next to it. Your current status line keeps showing."
+                + (managed.Count == 0 ? "" : " Your organisation's managed settings override Widget Screen's " + String.Join(", ", managed) + ", so " + (managed.Count == 1 ? "that part" : "those parts") + " won't work until they're allowed."), update ? "Update" : "Connect");
             if (!yes || disposed) return;
             try
             {
@@ -403,6 +483,12 @@ namespace WidgetScreen
             }
             state["claudeNeeds"] = page < 0 || claudeView == null ? 0 : claudeView.NeedsYou;
             state["claudePage"] = page;
+            // Package 3: what newly happened in the last ten minutes, numbered, so the phone raises a notification for
+            // each one it hasn't seen (its screen still polls the claude section). Quiet mode on the PC keeps them silent.
+            state["claudeAlerts"] = page < 0 || claudeSample ? new object[0] : claudeAlerts.Recent(DateTime.UtcNow).Select(a => (object)D("seq", a.Seq, "kind", a.Kind, "session", a.Session,
+                "project", a.Project, "title", a.Title, "text", a.Text, "at", ClaudeBridge.Epoch(a.At) / 1000.0)).ToArray();
+            state["claudeAlertSeq"] = claudeAlerts.Seq;
+            state["claudeQuiet"] = settings.QuietMode;
         }
 
         // The phone's claude section: sessions, plan limits and usage, filtered like the card. Never a token.
@@ -433,6 +519,7 @@ namespace WidgetScreen
                     "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus, "archived", t.Archived, "resolved", t.Pit == PitState.Resolved,
                     "reason", t.Running && t.State == ClaudeState.Stuck ? t.Reason : "", "reasonText", t.Running && t.State == ClaudeState.Stuck ? ClaudeText.StuckReason(t, view, DateTime.UtcNow, settings.Use24HourClock) : "",
                     "context", t.Running && !Double.IsNaN(t.Context) ? (object)Math.Round(t.Context, 1) : null, "workers", t.Workers, "tasks", t.Tasks, "failed", t.Failed,
+                    "tasksDone", t.TasksDone, "tasksTotal", t.TasksTotal, "endReason", t.EndReason,
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),

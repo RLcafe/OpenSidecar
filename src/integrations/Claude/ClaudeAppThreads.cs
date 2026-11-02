@@ -55,6 +55,8 @@ namespace WidgetScreen
             return found.Where(Directory.Exists).ToList();
         }
 
+        // The claude-code-sessions folders found last (package 3 watches them).
+        public List<string> Roots { get { return roots.ToList(); } }
         public List<ClaudeAppThread> Threads { get { return files.Values.Select(c => c.Thread).Where(t => t != null).ToList(); } }
 
         // Re-reads changed records; returns whether anything changed.

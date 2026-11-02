@@ -46,6 +46,9 @@ namespace WidgetScreen
         public long DurationMs, ApiMs, LinesAdded, LinesRemoved, ContextSize;
         public bool Over200k;
         public string Style = "", Agent = "", Worktree = "", WorktreeBranch = "";
+        // Package 3: the folder a --worktree session's worktree was made from (the status line's worktree.original_cwd),
+        // which names its garage before any path guessing.
+        public string WorktreeOrigin = "";
         public const int MostWorkers = 32, MostTasks = 64;
 
         public static string StateName(ClaudeState state) { return state == ClaudeState.Working ? "working" : state == ClaudeState.NeedsYou ? "needs" : state == ClaudeState.Done ? "done" : state == ClaudeState.Stuck ? "stuck" : "ready"; }
@@ -83,6 +86,7 @@ namespace WidgetScreen
             if (Agent.Length > 0) o["agent"] = Agent;
             if (Worktree.Length > 0) o["worktree"] = Worktree;
             if (WorktreeBranch.Length > 0) o["worktreeBranch"] = WorktreeBranch;
+            if (WorktreeOrigin.Length > 0) o["worktreeOrigin"] = WorktreeOrigin;
             return o;
         }
         public static ClaudeSessionFile FromJson(JsonObject o)
@@ -100,6 +104,7 @@ namespace WidgetScreen
             s.CostUsd = ClaudeJson.Num(o, "costUsd"); s.DurationMs = Long(o, "durationMs"); s.ApiMs = Long(o, "apiMs");
             s.LinesAdded = Long(o, "linesAdded"); s.LinesRemoved = Long(o, "linesRemoved"); s.ContextSize = Long(o, "contextSize"); s.Over200k = ClaudeJson.Bool(o, "over200k");
             s.Style = ClaudeJson.Str(o, "style") ?? ""; s.Agent = ClaudeJson.Str(o, "agent") ?? ""; s.Worktree = ClaudeJson.Str(o, "worktree") ?? ""; s.WorktreeBranch = ClaudeJson.Str(o, "worktreeBranch") ?? "";
+            s.WorktreeOrigin = ClaudeJson.Str(o, "worktreeOrigin") ?? "";
             return s;
         }
         private static long Long(JsonObject o, string key) { double v = ClaudeJson.Num(o, key); return Double.IsNaN(v) ? 0 : (long)v; }
@@ -251,12 +256,12 @@ namespace WidgetScreen
             string path = SessionPath(bridge, id);
             if (name == "SessionEnd")
             {
-                // A session is alive until its own SessionEnd or its process is gone (decision 023). After /clear the
-                // process goes on with a new session, so the old one is kept, marked ended, for the card's ended
-                // threads; every other reason (exit, logout, resume elsewhere) takes the file away.
+                // A session is alive until its own SessionEnd or its process is gone (decision 023). After /clear, an
+                // exit at the prompt or a logout the file is kept, marked ended with its reason, so the card can show the
+                // thread as resolved without the Claude app (package 3); any other reason takes the file away.
                 string reason = ClaudeJson.Str(o, "reason") ?? "";
                 WithSession(id, () => {
-                    var ended = reason == "clear" ? Read(path) : null;
+                    var ended = Resolves(reason) ? Read(path) : null;
                     if (ended == null) { Delete(path); return; }
                     ended.Ended = true; ended.EndReason = reason; ended.State = ClaudeState.Ready; ended.Compacting = false; ended.Workers.Clear();
                     ended.LastEvent = Epoch(now);
@@ -279,7 +284,10 @@ namespace WidgetScreen
                         compacting = false;
                         if (ClaudeJson.Str(o, "source") == "compact") break;
                         next = ClaudeState.Ready;
-                        extra = s => { bool had = s.Workers.Count > 0 || s.Ended; s.Workers.Clear(); s.Ended = false; s.EndReason = ""; return had; };
+                        // The session's name when Claude Code sends one (package 3), so a thread outside the Claude app has
+                        // its name from the start.
+                        string named = Short(ClaudeJson.Str(o, "session_title") ?? ClaudeJson.Str(o, "session_name"), 120);
+                        extra = s => { bool had = s.Workers.Count > 0 || s.Ended; s.Workers.Clear(); s.Ended = false; s.EndReason = ""; if (named.Length > 0 && named != s.Title) { s.Title = named; had = true; } return had; };
                         break;
                     }
                 case "UserPromptSubmit": case "PostToolUse": case "PreToolUse": next = ClaudeState.Working; compacting = false; break;
@@ -424,6 +432,9 @@ namespace WidgetScreen
         }
         // The error Stuck keeps when Claude Code stops waiting for a usage limit, and the message a reset during sleep
         // shows.
+        // The SessionEnd reasons that mean the user closed the thread themselves (package 3): the file stays, ended, and the
+        // card shows the thread as resolved.
+        public static bool Resolves(string reason) { return reason == "clear" || reason == "prompt_input_exit" || reason == "logout"; }
         public const string QuotaDisabled = "quota_disabled", QuotaStale = "Your usage limit reset. Press Enter in Claude Code to carry on.";
         private static bool Stuck(ClaudeSessionFile s, string error, string details)
         {
@@ -485,6 +496,8 @@ namespace WidgetScreen
                 bool over = ClaudeJson.Bool(o, "exceeds_200k_tokens");
                 string style = Short(ClaudeJson.Str(ClaudeJson.Obj(o, "output_style"), "name"), 40), agent = Short(ClaudeJson.Str(ClaudeJson.Obj(o, "agent"), "name"), 60);
                 string tree = Short(ClaudeJson.Str(worktree, "name"), 80), branch = Short(ClaudeJson.Str(worktree, "branch"), 120);
+                string origin = ClaudeJson.Str(worktree, "original_cwd") ?? "";
+                if (origin.Length > 400) origin = "";
                 string path = SessionPath(bridge, id);
                 WithSession(id, () => {
                     var session = Read(path);
@@ -510,6 +523,7 @@ namespace WidgetScreen
                     if (style != session.Style) { session.Style = style; changed = true; }
                     if (agent != session.Agent) { session.Agent = agent; changed = true; }
                     if (tree != session.Worktree || branch != session.WorktreeBranch) { session.Worktree = tree; session.WorktreeBranch = branch; changed = true; }
+                    if (origin != session.WorktreeOrigin) { session.WorktreeOrigin = origin; changed = true; }
                     if (!Double.IsNaN(duration) && duration >= 0 && (changed || Math.Abs(duration - session.DurationMs) >= 60000)) { session.DurationMs = (long)duration; changed = true; }
                     if (!Double.IsNaN(api) && api >= 0 && (changed || Math.Abs(api - session.ApiMs) >= 60000)) { session.ApiMs = (long)api; changed = true; }
                     if (!changed) return;

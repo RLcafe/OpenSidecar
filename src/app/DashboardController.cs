@@ -1167,7 +1167,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             SaveNotesDraft(); disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); calendar.Dispose(); home.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
+            weather.Dispose(); calendar.Dispose(); home.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); if (claudeToast != null) claudeToast.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }

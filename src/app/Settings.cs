@@ -108,6 +108,9 @@ namespace WidgetScreen
         // Claude Code (Settings → Claude): a chime when a session starts needing you, and which projects the card shows.
         // A project with no choice follows ClaudeShowNewProjects (on by default). The plan meters always show the plan.
         public bool ClaudeChime { get; set; }
+        // A Windows notification when a session needs you, gets stuck or finishes a turn of 10 minutes or more (package 3;
+        // on by default, silent in Quiet mode).
+        public bool ClaudeToast { get; set; }
         // Quiet mode stops other motion; the Claude cars keep moving unless this is set (Ali, 1 Nov 2026; decision 019).
         public bool ClaudeStillInQuiet { get; set; }
         // The ledger's "API value" (what the tokens would cost at API list prices): off by default, since a plan
@@ -187,6 +190,7 @@ namespace WidgetScreen
             FocusChime = true;
             StorageLowPercent = StorageService.DefaultLowPercent;
             ClaudeShowNewProjects = true;
+            ClaudeToast = true;
             ClaudeCardSeconds = ClaudeIntervals.CardDefault; ClaudePlanSeconds = ClaudeIntervals.PlanDefault;
             ClaudePeriod = "Today";
             Monitor = "";
