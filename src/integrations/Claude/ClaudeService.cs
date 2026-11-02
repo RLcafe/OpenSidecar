@@ -690,6 +690,8 @@ namespace WidgetScreen
             var stateAt = new Dictionary<string, DateTime>();
             // A name the user gave a running session in Claude Code (its rename).
             var named = new Dictionary<string, string>();
+            // Claude Code's own name for a session it named itself (nameSource "derived"), a fallback after the app's title.
+            var derived = new Dictionary<string, string>();
             // Sessions /clear ended (decision 023): kept as ended threads while their process goes on.
             var ended = new Dictionary<string, DateTime>();
             foreach (var file in Sessions)
@@ -714,6 +716,7 @@ namespace WidgetScreen
                 if (s.Project.Length == 0) s.Project = entry.Folder;
                 if (s.Pid == 0) s.Pid = entry.Pid;
                 if (entry.NamedByUser && !String.IsNullOrWhiteSpace(entry.Name)) named[entry.Session] = entry.Name;
+                else if (!String.IsNullOrWhiteSpace(entry.Name)) derived[entry.Session] = entry.Name;
                 s.Where = ClaudeRegistry.Where(entry.Entrypoint);
                 if (s.Window == 0 && s.WindowPid == 0 && entry.Pid > 0)
                 {
@@ -798,10 +801,12 @@ namespace WidgetScreen
                 ClaudeAppThread a; app.TryGetValue(s.Id, out a);
                 // The name (decision 018): one the user typed (a rename in Claude Code's list or its log), else one
                 // generated (Claude Code's status line, the Claude app's), else the first line of the first request.
-                // Placeholders such as "Remote Control session (from a project)" count as none; the card falls back
-                // to a label from the id.
-                string rename, typed, asked; named.TryGetValue(s.Id, out rename); titles.TryGetValue(s.Id, out typed); prompts.TryGetValue(s.Id, out asked);
-                s.Title = ClaudeTitles.Pick(rename, typed, s.Title, a == null ? null : a.Title, asked);
+                // Placeholders such as "Remote Control session (from a project)" or "Local session (from a project)"
+                // count as none; then Claude Code's own derived name (v0.41.1), the first request, and last the card's
+                // label from the id.
+                string rename, typed, asked, own; named.TryGetValue(s.Id, out rename); titles.TryGetValue(s.Id, out typed); prompts.TryGetValue(s.Id, out asked); derived.TryGetValue(s.Id, out own);
+                if (own != null && String.Equals(own.Trim(), s.ProjectName, StringComparison.OrdinalIgnoreCase)) own = null;
+                s.Title = ClaudeTitles.Pick(rename, typed, s.Title, a == null ? null : a.Title, own, asked);
                 // Where it runs, beside the name: a Remote Control thread says so, running or ended.
                 if (a != null && a.Remote) s.Where = "Remote Control";
                 else if (!s.Running && s.Where.Length == 0 && a != null) s.Where = "Desktop";

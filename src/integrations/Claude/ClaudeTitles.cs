@@ -6,14 +6,15 @@ using System.Text.RegularExpressions;
 namespace WidgetScreen
 {
     // A thread's name on the Claude card (Ali, 1 Nov 2026; decision 018). The Claude app gives every Remote Control
-    // thread the same placeholder title ("Remote Control session (from a project)"), so placeholders count as no title.
+    // thread the same placeholder title ("Remote Control session (from a project)", since v0.41.1 also "Local session
+    // (from a project)" and "Cloud session"), so placeholders count as no title.
     // The name is then, in order: one the user typed (a rename), one the app or Claude Code generated, the first line
     // of the thread's first request, and last a short label from its id. Where a thread runs ("Remote Control",
     // "Desktop") is shown beside the name, never as it.
     public static class ClaudeTitles
     {
         public const int Longest = 60;
-        private static readonly Regex Generic = new Regex(@"^(remote control|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\(.*\))?$", RegexOptions.CultureInvariant);
+        private static readonly Regex Generic = new Regex(@"^(remote control|local|cloud|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\(.*\))?$", RegexOptions.CultureInvariant);
         private static readonly Regex Message = new Regex(@"<message\b[^>]*>(.*?)</message>", RegexOptions.Singleline | RegexOptions.CultureInvariant);
         private static readonly Regex Note = new Regex(@"<note\b[^>]*>(.*?)</note>", RegexOptions.Singleline | RegexOptions.CultureInvariant);
         private static readonly Regex Hidden = new Regex(@"<(system-reminder|local-command-stdout|local-command-stderr|command-message|command-args)\b[^>]*>.*?</\1>", RegexOptions.Singleline | RegexOptions.CultureInvariant);

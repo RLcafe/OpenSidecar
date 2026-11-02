@@ -90,6 +90,23 @@ internal static class SmokeTests
         DefaultFiveTests.Run(directory, Check);
         ReadingsTests.Run(directory, Check);
         SoundboardPadTests.Run(directory, Check);
+        Check("One dashboard per settings file: a second start shows the first and gives way (v0.41.1)", () => {
+            string settings = Path.Combine(directory, "single", "settings.xml"), other = Path.Combine(directory, "single-other", "settings.xml");
+            Assert(SingleInstance.Key(settings) == SingleInstance.Key(settings.ToUpperInvariant()) && SingleInstance.Key(settings) != SingleInstance.Key(other) && SingleInstance.Key(settings).StartsWith("WidgetScreen."), "The settings file's key is wrong.");
+            // A mutex belongs to its thread, so each later start is played on a thread of its own.
+            Func<string, TimeSpan, bool> starts = (path, patience) => { bool got = false; var t = new Thread(() => { var c = SingleInstance.Claim(path, patience); got = c != null; if (c != null) c.Dispose(); }); t.Start(); t.Join(); return got; };
+            using (var shown = new ManualResetEvent(false))
+            {
+                var first = SingleInstance.Claim(settings, TimeSpan.Zero);
+                Assert(first != null, "The first start didn't get its claim.");
+                first.OnShow(() => shown.Set());
+                Assert(!starts(settings, TimeSpan.FromMilliseconds(200)), "A second start on the same settings ran.");
+                Assert(shown.WaitOne(3000), "The second start didn't ask the first to show itself.");
+                Assert(starts(other, TimeSpan.Zero), "A start with its own settings file gave way.");
+                first.Dispose();
+            }
+            Assert(starts(settings, TimeSpan.Zero), "A start after the first closed gave way.");
+        });
         Check("Native XAML and control templates load", () => {
             using (var stream = typeof(AppSettings).Assembly.GetManifestResourceStream("WidgetScreen.MainWindow.xaml"))
             {
