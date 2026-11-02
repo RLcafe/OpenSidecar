@@ -41,6 +41,14 @@ public final class PitSprite extends View {
     private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF ringBox = new RectF();
 
+    // Package 3 (decision 025): the car's pit crew and task list, as two small stickers over its lower corners, like the
+    // PC's PitCrew. Left: a helper figure for each subagent running (up to three, then "+N"); right: "3/5" tasks done,
+    // on cars wide enough to read it.
+    private int workers, tasksDone, tasksTotal, crewPage, crewInk, crewAccent;
+    private boolean showTasks;
+    private final Paint crewPaint = new Paint(Paint.ANTI_ALIAS_FLAG), crewText = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF crewBox = new RectF(), crewBody = new RectF();
+
     public PitSprite(Context context) { super(context); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
 
     public String key() { return key; }
@@ -73,12 +81,56 @@ public final class PitSprite extends View {
         invalidate();
     }
 
+    public String crew() { return workers + "|" + tasksDone + "|" + tasksTotal; }
+    public void crew(int workers, int done, int total, boolean tasks, int page, int ink, int accent) {
+        if (this.workers == workers && tasksDone == done && tasksTotal == total && showTasks == tasks && crewPage == page && crewInk == ink && crewAccent == accent) return;
+        this.workers = workers; tasksDone = done; tasksTotal = total; showTasks = tasks; crewPage = page; crewInk = ink; crewAccent = accent;
+        invalidate();
+    }
+    private void drawCrew(Canvas canvas) {
+        float w = getWidth(), h = getHeight();
+        if (w <= 0 || h <= 0 || (workers <= 0 && (tasksTotal <= 0 || !showTasks))) return;
+        // The car fills the middle two thirds of the frame's height (a sixth above and below for lights and smoke).
+        float size = Math.max(6, Math.round(h * 0.42f * 2 / 3)), bottom = h * 5 / 6f + size * 0.25f, top = bottom - size, edge = Math.max(1, size / 8);
+        crewText.setColor(crewInk); crewText.setTextSize(size * 0.62f); crewText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        if (workers > 0) {
+            int shown = Math.min(3, workers);
+            float person = size * 0.62f, gap = size * 0.12f;
+            String more = workers > 3 ? "+" + (workers - 3) : null;
+            float width = gap + shown * (person + gap) + (more == null ? 0 : crewText.measureText(more) + gap);
+            crewBox.set(edge / 2, top, edge / 2 + width, bottom);
+            sticker(canvas, crewInk, edge, size);
+            crewPaint.setStyle(Paint.Style.FILL); crewPaint.setColor(crewInk);
+            for (int i = 0; i < shown; i++) {
+                float x = crewBox.left + gap + i * (person + gap) + person / 2;
+                canvas.drawCircle(x, top + size * 0.32f, person * 0.24f, crewPaint);
+                crewBody.set(x - person * 0.34f, top + size * 0.52f, x + person * 0.34f, top + size * 0.84f);
+                canvas.drawRoundRect(crewBody, person * 0.2f, person * 0.2f, crewPaint);
+            }
+            if (more != null) canvas.drawText(more, crewBox.right - gap - crewText.measureText(more), top + size / 2 - (crewText.descent() + crewText.ascent()) / 2, crewText);
+        }
+        if (tasksTotal > 0 && showTasks) {
+            String text = tasksDone + "/" + tasksTotal;
+            crewText.setTextSize(size * 0.7f);
+            float width = Math.min(w, crewText.measureText(text) + size * 0.5f);
+            crewBox.set(Math.max(0, w - width - edge / 2), top, w - edge / 2, bottom);
+            sticker(canvas, tasksDone >= tasksTotal ? crewAccent : crewInk, edge, size);
+            canvas.drawText(text, crewBox.centerX() - crewText.measureText(text) / 2, top + size / 2 - (crewText.descent() + crewText.ascent()) / 2, crewText);
+        }
+    }
+    // A sticker: the page colour, edged in ink (no shadow, as the Sticker Sheet asks).
+    private void sticker(Canvas canvas, int edgeColor, float edge, float size) {
+        crewPaint.setStyle(Paint.Style.FILL); crewPaint.setColor(crewPage); canvas.drawRoundRect(crewBox, size / 3, size / 3, crewPaint);
+        crewPaint.setStyle(Paint.Style.STROKE); crewPaint.setStrokeWidth(edge); crewPaint.setColor(edgeColor); canvas.drawRoundRect(crewBox, size / 3, size / 3, crewPaint);
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         if (frames.length == 0 || frames[frame] == null) return;
         Bitmap bitmap = frames[frame];
         source.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
         target.set(0, 0, getWidth(), getHeight());
         canvas.drawBitmap(bitmap, source, target, PIXELS);
+        drawCrew(canvas);
         int level = ClaudeText.contextLevel(ring);
         if (level == 0) return;
         float size = Math.max(10, Math.min(getHeight() * 0.5f, getWidth() * 0.26f)), stroke = Math.max(1.5f, size / 6), r = size / 2 - stroke / 2 - 0.5f;

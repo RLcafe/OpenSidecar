@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
         hideBars = dashboard.settings.hideSystemBars;
         applySystemBars();
         dashboard.attach(root);
+        if (getIntent() != null && getIntent().hasExtra(com.alialyami.widgetscreen.integrations.ClaudeNotifier.EXTRA)) dashboard.showClaude();
         // Android 13+ routes Back through this callback (predictive back); older versions call onBackPressed.
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, new android.window.OnBackInvokedCallback() {
@@ -139,6 +140,13 @@ public final class MainActivity extends Activity {
         try { unregisterReceiver(battery); } catch (Exception ignored) { }
         dashboard.onStop();
         super.onStop();
+    }
+
+    // A tapped Claude notification brings the app forward on the Claude card's page.
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.hasExtra(com.alialyami.widgetscreen.integrations.ClaudeNotifier.EXTRA) && dashboard != null) dashboard.showClaude();
     }
 
     private void back() {

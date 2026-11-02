@@ -557,7 +557,9 @@ namespace WidgetScreen
             return D("tokens", f.Tokens, "cost", Math.Round(f.Cost, 4), "cacheHit", OrNull(f.CacheHit), "tools", f.Tools, "slowTool", f.SlowTool, "slowMs", OrNull(f.SlowMs),
                 "runs", f.Runs, "runFailures", f.RunFailures, "failuresFromHooks", f.FailuresFromHooks, "errors", f.Errors, "helperShare", OrNull(f.HelperShare), "helpers", f.Helpers,
                 "editsAccepted", f.EditsAccepted, "editsRejected", f.EditsRejected, "commits", f.Commits, "pullRequests", f.PullRequests,
-                "activeUser", Math.Round(f.ActiveUser), "activeCli", Math.Round(f.ActiveCli), "metrics", f.Metrics, "added", f.Added, "removed", f.Removed);
+                "activeUser", Math.Round(f.ActiveUser), "activeCli", Math.Round(f.ActiveCli), "metrics", f.Metrics, "added", f.Added, "removed", f.Removed,
+                // The Android pass: what the phone's facts need besides, the same as the card's (replies, cache, asked, lines' threads).
+                "prompt", f.Prompt, "cacheRead", f.CacheRead, "replies", f.Replies, "asked", f.Asked, "denied", f.Denied, "linesThreads", f.LinesThreads, "telemetry", f.Telemetry, "askedPartial", f.AskedPartial);
         }
         private static object[] Names(List<KeyValuePair<string, double>> models) { return models.Take(4).Select(m => (object)D("name", m.Key, "share", Math.Round(m.Value, 3))).ToArray(); }
         private static object[] Shares(double[] mix) { return mix.Select(v => (object)Math.Round(v, 3)).ToArray(); }

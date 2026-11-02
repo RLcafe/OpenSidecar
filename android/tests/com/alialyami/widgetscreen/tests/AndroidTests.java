@@ -390,6 +390,11 @@ public final class AndroidTests {
                 && "work".equals(busy.pit) && busy.rate == 41000 && "end".equals(state.claude.thread("sample-5").pit), "cars from the PC");
             ok(state.claude.burn.length == 60 && state.claude.burn[59] > 0 && state.claude.rate == 50000 && state.claude.scale >= 60000 && state.claude.lanes.size() == 3 && state.claude.lanes.get(0).bins.length == 30
                 && state.claude.facts.tools == 312 && state.claude.facts.asked == 41 && state.claude.facts.telemetry && Math.round(state.claude.facts.cacheHit() * 100) == 91 && api.mix[0] > 0.9 && api.added == 462, "burn, lanes and facts from the PC");
+            // Packages 2 and 3 from the PC: each period's facts (with replies and asked), the four chosen, and a lead's crew.
+            PcState.ClaudeFacts week = state.claude.factsFor(2);
+            ok(state.claude.factsBy[2] != null && week.replies == 519 && week.asked == 41 && week.tools == 312 && week.telemetry && state.claude.factKinds.length == 4 && state.claude.factKinds[0].equals(ClaudeText.TOKENS)
+                && ClaudeText.fact(ClaudeText.TOKENS, state.claude, 2, true, false)[1].equals("WEEK · 519 REPLIES"), "package 2 facts from the PC");
+            ok(busy.workers == 2 && busy.tasksDone == 3 && busy.tasksTotal == 5 && ClaudeText.crew(busy).equals("2 helpers working · tasks 3 / 5") && state.claudeAlertSeq == 0 && state.claudeAlerts.isEmpty(), "package 3 crew and alerts from the PC");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
             if (!state.system.error) ok(!state.system.cpuTempState.isEmpty() && !state.system.fpsState.isEmpty() && state.system.showCpuTemp && state.system.showFps, "system sensors: " + state.system.cpuTempState + " " + state.system.fpsState);
@@ -519,7 +524,7 @@ public final class AndroidTests {
             ok(PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 0).size() > PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 1).size() && PitArt.front(PitArt.LIME, true).size() > PitArt.front(PitArt.LIME, false).size(), "the beacon blinks, the headlights light");
         } });
         check("Claude thread names skip placeholders like the PC's, and say where they ran", new Action() { public void run() {
-            for (String generic : new String[] { "", "Remote Control", "Remote Control session (from a project)", "New session", "Untitled", "Claude Code" }) ok(ClaudeText.placeholder(generic), "a placeholder counts as a title: " + generic);
+            for (String generic : new String[] { "", "Remote Control", "Remote Control session (from a project)", "Local session (from a project)", "Local session", "Cloud session", "New session", "Untitled", "Claude Code" }) ok(ClaudeText.placeholder(generic), "a placeholder counts as a title: " + generic);
             ok(!ClaudeText.placeholder("Remote control the TV") && !ClaudeText.placeholder("Add the export button"), "a real title counts as a placeholder");
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"threads\":["
                 + "{\"id\":\"1b21871a-de34\",\"project\":\"alpha\",\"title\":\"Remote Control session (from a project)\",\"running\":false,\"where\":\"Remote Control\",\"lastActive\":1700000000},"
@@ -527,6 +532,62 @@ public final class AndroidTests {
             PcState.ClaudeThread placeholder = state.claude.thread("1b21871a-de34"), named = state.claude.thread("t2");
             ok(ClaudeText.threadTitle(placeholder, 1700003600, true).equals("Thread 1b2187") && ClaudeText.threadTitle(named, 1700000000, true).equals("Add a dark mode toggle"), "thread names");
             ok(ClaudeText.where(placeholder, 1700003600).equals("Remote Control · ended 1 h ago") && ClaudeText.where(named, 1700000000).equals("Remote Control · 6 min"), "where a thread ran");
+        } });
+        check("Claude's honest numbers (package 2) read and read out like the PC's", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"logsRead\":true,\"apiValue\":true,\"sessions\":[],"
+                + "\"threads\":[{\"id\":\"t1\",\"project\":\"alpha\",\"title\":\"Fix the login\",\"running\":true,\"state\":\"working\",\"pit\":\"stuck\",\"mode\":\"plan\",\"costUsd\":4.2,\"revving\":true,"
+                + "\"errorStatus\":529,\"errorAttempt\":3,\"tokens\":{\"today\":1500000},\"replies\":{\"today\":12},\"helperTokens\":{\"today\":300000},\"cost\":{\"today\":3.1}},"
+                + "{\"id\":\"t2\",\"project\":\"alpha\",\"running\":true,\"state\":\"stuck\",\"pit\":\"stuck\",\"reasonText\":\"Rate limited\",\"errorStatus\":null}],"
+                + "\"facts\":{\"tokens\":10,\"replies\":7,\"asked\":2,\"telemetry\":true},"
+                + "\"factsBy\":{\"today\":{\"tokens\":2000000,\"cost\":5.5,\"cacheHit\":0.914,\"tools\":40,\"slowTool\":\"Bash\",\"slowMs\":95000,\"runs\":50,\"runFailures\":11,\"errors\":2,\"helperShare\":0.25,\"helpers\":3,"
+                + "\"editsAccepted\":9,\"editsRejected\":1,\"commits\":2,\"pullRequests\":1,\"activeUser\":1500,\"activeCli\":6000,\"metrics\":true,\"added\":1300,\"removed\":216,\"replies\":33,\"asked\":4,\"linesThreads\":2,\"telemetry\":true},"
+                + "\"week\":{\"tokens\":9000000,\"metrics\":false}},"
+                + "\"factKinds\":[\"slowest\",\"failures\",\"slowest\",\"nonsense\"],\"costSource\":{\"today\":\"mixed\"},\"unpriced\":{\"today\":[\"claude-x\"]},\"limitEta\":100,\"claudeCodeCost\":12.5,\"estimateCost\":11,"
+                + "\"limits\":{\"fiveHour\":{\"pct\":50,\"resetsAt\":1700018000},\"extra\":[{\"name\":\"Opus week\",\"pct\":10},{\"name\":\"Sonnet week\",\"pct\":20},{\"name\":\"Cowork week\",\"pct\":85,\"resetsAt\":1700003600}],"
+                + "\"extraUsage\":{\"enabled\":true,\"pct\":25,\"used\":12.4,\"limit\":50},\"spend\":{\"pct\":40,\"usedUsd\":20,\"limitUsd\":50,\"period\":\"monthly\"}}}}")));
+            PcState.Claude c = state.claude;
+            ok(c.factKinds.length == 4 && c.factKinds[0].equals("slowest") && c.factKinds[1].equals("failures") && c.factKinds[2].equals("tokens") && c.factKinds[3].equals("cache"), "fact choices cleaned like the PC's: " + String.join(",", c.factKinds));
+            ok(ClaudeText.cleanFacts(null).length == 4 && ClaudeText.cleanFacts(ClaudeText.ALL_FACTS)[3].equals("lines"), "default and full fact choices");
+            String[] slow = ClaudeText.fact("slowest", c, 1, true, true), fail = ClaudeText.fact("failures", c, 1, true, true), tokens = ClaudeText.fact("tokens", c, 1, true, true), active = ClaudeText.fact("active", c, 1, true, true);
+            ok(slow[0].equals("1 min") && slow[1].equals("SLOWEST · BASH") && fail[0].equals("22%") && fail[1].equals("11 OF 50 FAILED") && ClaudeText.factWarns("failures", c, 1) && ClaudeText.factWarns("errors", c, 1), "slowest tool and failures: " + slow[0] + " " + fail[0]);
+            ok(tokens[0].equals("2M") && tokens[1].equals("TODAY · ~$5.50 API VALUE") && tokens[2].contains("Price unknown for claude-x") && tokens[2].contains("Claude Code where it sent them") && tokens[2].contains("Claude Code counts $13 in all; Widget Screen counts $11"), "the tokens fact with unpriced models: " + tokens[1] + " / " + tokens[2]);
+            ok(active[0].equals("1 h 40") && active[1].equals("CLAUDE · YOU 25 MIN") && ClaudeText.fact("edits", c, 1, true, false)[1].equals("EDITS OK · 1 REJECTED") && ClaudeText.fact("commits", c, 1, true, false)[1].equals("COMMITS · 1 PRS")
+                && ClaudeText.fact("helpers", c, 1, true, false)[0].equals("25%") && ClaudeText.fact("cache", c, 1, true, false)[0].equals("91%") && ClaudeText.fact("lines", c, 1, true, false)[1].equals("−216 · 2 THREADS"), "the other facts");
+            ok(ClaudeText.fact("edits", c, 2, true, false)[0].equals("—") && ClaudeText.fact("edits", c, 2, true, false)[2].equals(ClaudeText.NEEDS_TELEMETRY) && c.factsFor(2).replies == 7 && c.factsFor(2).asked == 2 && c.factsFor(0) == c.facts,
+                "a period without telemetry, an older PC's facts and a missing period");
+            ok(ClaudeText.paceLine(92.4, 100).equals("on pace for 92% · full in 1 h 40 at this pace") && ClaudeText.paceLine(Double.NaN, 25).equals("full in 25 min at this pace") && ClaudeText.paceLine(50, Double.NaN).equals("on pace for 50%") && ClaudeText.span(3900).equals("1 h 05") && c.limitEta == 100, "time to the 5-hour limit");
+            java.util.List<String[]> chips = ClaudeText.planChips(c, 1700000000, true);
+            ok(chips.size() == 3 && chips.get(0)[0].equals("Cowork week 85% · resets 23:13".replace("23:13", ClaudeText.when(1700003600, 1700000000, true))) && chips.get(0)[1].equals("warn") && chips.get(1)[0].equals("Extra usage 25% · 12.4 of 50") && chips.get(1)[1].isEmpty()
+                && chips.get(2)[0].equals("Spend limit 40% · $20 of $50 monthly"), "plan chips: " + (chips.isEmpty() ? "" : chips.get(0)[0]));
+            PcState.ClaudeThread t1 = c.thread("t1"), t2 = c.thread("t2");
+            ok(t1.helperTokens[1] == 300000 && t1.costUsd == 4.2 && t1.mode.equals("plan") && t1.revving && t1.apiError && !t2.apiError && Double.isNaN(t2.costUsd), "thread numbers");
+            ok(ClaudeText.retrying(t1).equals("Retrying after an API error · HTTP 529 · attempt 3") && ClaudeText.retryingNow(t1) && !ClaudeText.retryingNow(t2) && ClaudeText.helpersLine(t1, 1).equals("Own 1.2M · helpers 300k tokens today")
+                && ClaudeText.setup(t1, true).equals("Mode plan · Claude Code counts $4.20") && ClaudeText.setup(t1, false).equals("Mode plan"), "retrying, helpers and setup words");
+            String details = ClaudeText.details(t1, c, 1, 1700000000, true, true, true);
+            ok(details.startsWith("Fix the login · alpha\n") && details.contains("Retrying after an API error") && details.contains("Own 1.2M") && details.contains("~≈ $3.10 API value today"), "a thread's details: " + details);
+        } });
+        check("Claude alerts (package 3) notify once each, and cars show their crew and how they ended", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"name\":\"PC\",\"claudeAlertSeq\":4,\"claudeQuiet\":false,\"claudeAlerts\":["
+                + "{\"seq\":3,\"kind\":\"stuck\",\"session\":\"s1\",\"project\":\"alpha\",\"title\":\"Fix the login\",\"text\":\"Rate limited\",\"at\":1700000000},"
+                + "{\"seq\":4,\"kind\":\"need\",\"session\":\"s2a9f\",\"project\":\"beta\",\"title\":\"Remote Control session\",\"text\":\"Claude needs your permission to use Bash\",\"at\":1700000060}]}")));
+            ok(state.claudeAlerts.size() == 2 && state.claudeAlertSeq == 4 && !state.claudeQuiet && state.claudeAlerts.get(1).at == 1700000060, "alerts from the PC");
+            ok(ClaudeText.freshAlerts(state.claudeAlerts, 4, -1).isEmpty(), "the first answer only sets the mark");
+            ok(ClaudeText.freshAlerts(state.claudeAlerts, 4, 3).size() == 1 && ClaudeText.freshAlerts(state.claudeAlerts, 4, 3).get(0).seq == 4 && ClaudeText.freshAlerts(state.claudeAlerts, 4, 4).isEmpty(), "each alert once");
+            ok(ClaudeText.freshAlerts(state.claudeAlerts, 4, 9).size() == 2, "a PC that started again counts from 1 again");
+            ok(ClaudeText.alertTitle(state.claudeAlerts.get(1)).equals("Claude needs you · beta") && ClaudeText.alertText(state.claudeAlerts.get(1)).equals("Thread s2a9f: Wants to use Bash")
+                && ClaudeText.alertTitle(state.claudeAlerts.get(0)).equals("Claude is stuck · alpha") && ClaudeText.alertText(state.claudeAlerts.get(0)).equals("Fix the login: Rate limited"), "notification words");
+            PcState.ClaudeAlert done = new PcState.ClaudeAlert(); done.kind = "done"; done.title = "Ship it"; done.session = "s3";
+            ok(ClaudeText.alertTitle(done).equals("Claude finished") && ClaudeText.alertText(done).equals("Ship it: Done"), "a finished turn with no words");
+            PcState threads = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"threads\":["
+                + "{\"id\":\"t1\",\"project\":\"alpha\",\"running\":true,\"state\":\"working\",\"workers\":1,\"tasksDone\":5,\"tasksTotal\":5},"
+                + "{\"id\":\"t2\",\"project\":\"alpha\",\"running\":false,\"endReason\":\"prompt_input_exit\",\"lastActive\":1700000000,\"pit\":\"resolved\",\"resolved\":true}]}}")));
+            PcState.ClaudeThread lead = threads.claude.thread("t1"), closed = threads.claude.thread("t2");
+            ok(ClaudeText.crew(lead).equals("1 helper working · tasks 5 / 5") && ClaudeText.tasks(lead).equals("5 / 5") && closed.endReason.equals("prompt_input_exit") && ClaudeText.endedBy(closed.endReason).equals("Closed in Claude Code")
+                && ClaudeText.endedBy("logout").equals("Ended when Claude Code logged out") && ClaudeText.endedBy("clear").equals("Cleared with /clear") && ClaudeText.endedBy("other").isEmpty(), "crew, tasks and end reasons");
+            ok(ClaudeText.details(closed, threads.claude, 1, 1700003600, true, false, false).contains("Closed in Claude Code") && ClaudeText.details(lead, threads.claude, 1, 1700003600, true, false, false).contains("1 helper working"), "details name the crew and the end");
+            AppSettings settings = AppSettings.fromProperties(new java.util.Properties());
+            AppSettings off = AppSettings.fromProperties(new java.util.Properties()); off.claudeNotify = false;
+            ok(settings.claudeNotify && !AppSettings.fromProperties(off.toProperties()).claudeNotify, "phone notifications are on by default and saved");
         } });
         check("Claude tells Needs you, Your turn and Idle apart, and follows the PC's still flag and thread lanes", new Action() { public void run() {
             ok(ClaudeText.chip("need").equals("Needs you") && ClaudeText.chip("done").equals("Your turn") && ClaudeText.chip("idle").equals("Idle") && ClaudeText.state("done").equals("Your turn"), "chips");

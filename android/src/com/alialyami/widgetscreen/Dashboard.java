@@ -20,6 +20,7 @@ import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.WidgetLayout;
 import com.alialyami.widgetscreen.integrations.Async;
+import com.alialyami.widgetscreen.integrations.ClaudeNotifier;
 import com.alialyami.widgetscreen.integrations.Images;
 import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
@@ -198,6 +199,7 @@ public final class Dashboard {
         updateClock(); updateQuiet();
         if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
         updateClaudePill();
+        updateClaudeAlerts();
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.stateChanged(); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -477,6 +479,24 @@ public final class Dashboard {
     // session that newly needs you taps the phone once while the app is open.
     private View claudePill;
     private int claudeNeeds = -1;
+    // Package 3: the PC's Claude alerts as phone notifications, and a tapped notification's wish to see the card.
+    private ClaudeNotifier claudeNotifier;
+    private boolean claudeWanted;
+    private void updateClaudeAlerts() {
+        PcState state = pc.state;
+        if (state == null || pc.problem != null) return;
+        try {
+            if (claudeNotifier == null) claudeNotifier = new ClaudeNotifier(activity);
+            claudeNotifier.prepare(state, settings.claudeNotify);
+            claudeNotifier.update(state, settings.claudeNotify);
+        } catch (Exception e) { /* Notifications never break the dashboard. */ }
+        if (claudeWanted && state.claudePage >= 0) { claudeWanted = false; showPage(state.claudePage); }
+    }
+    // A tapped Claude notification: show the page with the Claude card (once the PC says which).
+    public void showClaude() {
+        if (pc.state != null && pc.online() && pc.state.claudePage >= 0) showPage(pc.state.claudePage);
+        else claudeWanted = true;
+    }
     private void updateClaudePill() {
         PcState state = pc.state;
         int needs = state != null && pc.online() ? state.claudeNeeds : 0;
@@ -743,7 +763,10 @@ public final class Dashboard {
 
     // The one way the phone asks "are you sure": a themed sheet over the dashboard (the same look as the PC's), with
     // 52-unit buttons. Tapping outside, Cancel or Back answers no.
-    public void confirm(String title, String subject, String detail, String action, final Runnable yes) {
+    public void confirm(String title, String subject, String detail, String action, final Runnable yes) { sheet(title, subject, detail, 6, "Cancel", action, yes); }
+    // The same sheet to read something (a Claude thread's details, what a fact means): Close, and an optional action.
+    public void info(String title, String subject, String detail, String action, final Runnable act) { sheet(title, subject, detail, 14, "Close", act == null ? null : action, act); }
+    private void sheet(String title, String subject, String detail, int detailLines, String cancelLabel, String action, final Runnable yes) {
         closeConfirm();
         if (root == null) return;
         Ui sheetUi = ui != null ? ui : new Ui(activity, Theme.of(look().theme, look().accent), look(), 1f);
@@ -758,15 +781,17 @@ public final class Dashboard {
         panel.addView(sheetUi.label(title), sheetUi.ll(Ui.MATCH, Ui.WRAP));
         TextView subjectText = Ui.wrap(sheetUi.heading(subject), 3); subjectText.setTypeface(Ui.MEDIUM);
         panel.addView(subjectText, sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
-        if (detail != null && !detail.isEmpty()) panel.addView(Ui.wrap(sheetUi.smallText(detail), 6), sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
+        if (detail != null && !detail.isEmpty()) panel.addView(Ui.wrap(sheetUi.smallText(detail), detailLines), sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         LinearLayout buttons = sheetUi.row();
         buttons.setGravity(Gravity.END);
-        TextView cancel = sheetUi.button("Cancel", new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); } });
+        TextView cancel = sheetUi.button(cancelLabel, new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); } });
         cancel.setMinWidth(sheetUi.px(140));
-        buttons.addView(cancel, sheetUi.margins(sheetUi.ll(Ui.WRAP, sheetUi.px(52)), 0, 0, 12, 0));
-        TextView go = sheetUi.accentButton(action, new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); yes.run(); } });
-        go.setMinWidth(sheetUi.px(170));
-        buttons.addView(go, sheetUi.ll(Ui.WRAP, sheetUi.px(52)));
+        buttons.addView(cancel, sheetUi.margins(sheetUi.ll(Ui.WRAP, sheetUi.px(52)), 0, 0, action == null ? 0 : 12, 0));
+        if (action != null && yes != null) {
+            TextView go = sheetUi.accentButton(action, new View.OnClickListener() { @Override public void onClick(View v) { closeConfirm(); yes.run(); } });
+            go.setMinWidth(sheetUi.px(170));
+            buttons.addView(go, sheetUi.ll(Ui.WRAP, sheetUi.px(52)));
+        }
         panel.addView(buttons, sheetUi.margins(sheetUi.ll(Ui.MATCH, Ui.WRAP), 0, 24, 0, 0));
         int width = Math.min(sheetUi.px(600), Math.max(1, root.getWidth() - root.getPaddingLeft() - root.getPaddingRight() - sheetUi.px(32)));
         scrim.addView(panel, sheetUi.frame(width, Ui.WRAP, Gravity.CENTER));

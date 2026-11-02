@@ -164,7 +164,7 @@ public final class ClaudeText {
     public static String threadTitle(PcState.ClaudeThread thread, double now, boolean use24) {
         return !placeholder(thread.title) ? thread.title.trim() : idLabel(thread.id);
     }
-    private static final java.util.regex.Pattern GENERIC = java.util.regex.Pattern.compile("^(remote control|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\\(.*\\))?$");
+    private static final java.util.regex.Pattern GENERIC = java.util.regex.Pattern.compile("^(remote control|local|cloud|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\\(.*\\))?$");
     // An empty title, or one that names the kind of thread rather than the thread (the same rule as the PC's).
     public static boolean placeholder(String title) {
         if (title == null || title.trim().isEmpty()) return true;
@@ -288,6 +288,209 @@ public final class ClaudeText {
     // The phone asks the PC for the claude section on the PC card's interval, never more often than every 2 s.
     public static int pollEvery(PcState.Claude claude) { return Math.max(2, claude == null ? 2 : claude.every); }
     public static int period(String name) { return "FiveHour".equals(name) ? 0 : "Week".equals(name) ? 2 : 1; }
+
+    // ----- Package 2 (decision 024), the same words as the PC's ClaudeText -----
+
+    // The side panel's facts: four of these, picked in Settings → Claude on the PC.
+    public static final String TOKENS = "tokens", CACHE = "cache", TOOLS = "tools", LINES = "lines", SLOWEST = "slowest", FAILURES = "failures",
+        ERRORS = "errors", HELPERS = "helpers", EDITS = "edits", COMMITS = "commits", ACTIVE = "active";
+    public static final String[] ALL_FACTS = { TOKENS, CACHE, TOOLS, LINES, SLOWEST, FAILURES, ERRORS, HELPERS, EDITS, COMMITS, ACTIVE };
+    public static final String[] DEFAULT_FACTS = { TOKENS, CACHE, TOOLS, LINES };
+    // Four known kinds, no repeats, defaults filling any gap (ClaudeFactKinds.Clean).
+    public static String[] cleanFacts(String[] kinds) {
+        List<String> result = new ArrayList<String>();
+        java.util.List<String> all = java.util.Arrays.asList(ALL_FACTS);
+        for (String k : kinds == null ? new String[0] : kinds) if (result.size() < 4 && all.contains(k) && !result.contains(k)) result.add(k);
+        for (String k : DEFAULT_FACTS) if (result.size() < 4 && !result.contains(k)) result.add(k);
+        for (String k : ALL_FACTS) if (result.size() < 4 && !result.contains(k)) result.add(k);
+        return result.toArray(new String[0]);
+    }
+    public static final String NEEDS_TELEMETRY = "Comes from Claude Code's telemetry, which hasn't sent any yet (Settings → Claude → Update connection on the PC).";
+    public static final String TOKENS_TIP = "Fresh input, cache writes and output. Cache reads aren't counted here (see Cache hits).";
+    public static final String API_VALUE_TIP = "What the same use would cost on Anthropic's API at list prices, cache reads included. It isn't what your Claude plan charges: the plan meters show your plan's use.";
+    public static String periodName(int period) { return period >= 0 && period < 3 ? PERIOD_NAMES[period] : "Today"; }
+    // "1 h 40", "1 h", "25 min", "40 s".
+    public static String span(double seconds) {
+        if (Double.isNaN(seconds) || seconds < 60) return Math.max(0, (int) (Double.isNaN(seconds) ? 0 : seconds)) + " s";
+        if (seconds < 3600) return (int) (seconds / 60) + " min";
+        int minutes = (int) ((seconds % 3600) / 60);
+        return (int) (seconds / 3600) + " h" + (minutes > 0 ? String.format(Locale.US, " %02d", minutes) : "");
+    }
+    // The 5-hour tank's time to the limit: "full in 1 h 40 at this pace" (nothing when it lasts to the reset).
+    public static String eta(double minutes) { return Double.isNaN(minutes) ? "" : "full in " + span(minutes * 60) + " at this pace"; }
+    // The tank's pace line: the projection and, when it fills before the reset, when.
+    public static String paceLine(double projection, double etaMinutes) {
+        String pace = ClaudePit.pace(projection), eta = eta(etaMinutes);
+        return pace.isEmpty() ? eta : eta.isEmpty() ? pace : pace + " · " + eta;
+    }
+    // "~" before an API value that leaves out replies from a model with no known price, and what it means.
+    public static String unpriced(List<String> models) { return models == null || models.isEmpty() ? "" : "~"; }
+    public static String unpricedTip(List<String> models) {
+        if (models == null || models.isEmpty()) return "";
+        List<String> named = new ArrayList<String>(models.subList(0, Math.min(3, models.size())));
+        String names = String.join(", ", named) + (models.size() > 3 ? " and " + (models.size() - 3) + " more" : "");
+        return "Price unknown for " + names + ": those replies count $0 here unless Claude Code's status line gave the session's cost.";
+    }
+    // The API value's explanation: what it is, where its numbers came from, and Claude Code's own count beside it.
+    public static String apiValue(PcState.Claude claude, int period) {
+        List<String> lines = new ArrayList<String>(); lines.add(API_VALUE_TIP);
+        String source = claude.costSource[Math.max(0, Math.min(2, period))];
+        lines.add("claude".equals(source) ? "Costs from Claude Code's telemetry." : "statusline".equals(source) ? "Costs from Claude Code's status line, shared out by reply size." : "mixed".equals(source) ? "Costs from Claude Code where it sent them, else from list prices." : "Costs from list prices.");
+        if (!Double.isNaN(claude.claudeCodeCost)) lines.add("Running sessions: Claude Code counts $" + dollars(claude.claudeCodeCost) + " in all; Widget Screen counts $" + dollars(claude.estimateCost) + " for them this week.");
+        String unknown = unpricedTip(claude.unpriced[Math.max(0, Math.min(2, period))]);
+        if (!unknown.isEmpty()) lines.add(unknown);
+        return String.join("\n", lines);
+    }
+    // An API error telemetry saw on a working thread: "Retrying after an API error · HTTP 529 · attempt 3".
+    public static String retrying(PcState.ClaudeThread thread) {
+        if (thread == null || !thread.apiError) return "";
+        return "Retrying after an API error" + (thread.errorStatus > 0 ? " · HTTP " + thread.errorStatus : "") + (thread.errorAttempt > 0 ? " · attempt " + thread.errorAttempt : "");
+    }
+    // A working car spinning after an API error (not a lasting Stuck): the row says it is retrying.
+    public static boolean retryingNow(PcState.ClaudeThread thread) { return thread != null && thread.running && "stuck".equals(thread.pit) && !"stuck".equals(thread.state) && !retrying(thread).isEmpty(); }
+    public static String percentOf(double share) { return share(share); }
+    // A side-panel fact for the period: its value, the words under it and what it means (ClaudeText.Fact on the PC).
+    public static String[] fact(String kind, PcState.Claude claude, int period, boolean counted, boolean showApi) {
+        PcState.ClaudeFacts f = claude.factsFor(period);
+        String when = periodName(period).toUpperCase(Locale.ROOT), lower = periodName(period).toLowerCase(Locale.ROOT);
+        switch (kind == null ? "" : kind) {
+            case CACHE:
+                return new String[] { share(f.cacheHit()), "CACHE HITS", tokens(f.cacheRead) + " tokens read from the cache " + lower + " (not counted in the token totals)" };
+            case TOOLS:
+                return new String[] { counted ? String.valueOf(f.tools) : "—", toolsKey(f), toolsTip(f) };
+            case LINES:
+                boolean any = f.added > 0 || f.removed > 0;
+                return new String[] { any ? added(f.added) : "—", any ? removed(f.removed) + " · " + threads(f.linesThreads).toUpperCase(Locale.ROOT) : "LINES", "Lines added and removed " + lower + ", from Claude Code's logs" };
+            case SLOWEST:
+                return new String[] { Double.isNaN(f.slowMs) ? "—" : span(f.slowMs / 1000), !f.slowTool.isEmpty() ? "SLOWEST · " + f.slowTool.toUpperCase(Locale.ROOT) : "SLOWEST TOOL", f.telemetry ? "The tool with the longest average run " + lower + ", from Claude Code's telemetry." : NEEDS_TELEMETRY };
+            case FAILURES:
+                return new String[] { share(f.failureRate()), f.runs > 0 ? f.runFailures + " OF " + f.runs + " FAILED" : "TOOL FAILURES",
+                    f.failuresFromHooks ? "Tool calls that failed: the sessions' failure counts from Claude Code's hooks over the logs' tool calls " + lower + "." : "Tool runs that failed " + lower + ", from Claude Code's telemetry." };
+            case ERRORS:
+                return new String[] { f.telemetry ? String.valueOf(f.errors) : "—", "API ERRORS · LAST HOUR", f.telemetry ? "Requests to Claude that failed in the last hour (Claude Code retries most by itself)." : NEEDS_TELEMETRY };
+            case HELPERS:
+                return new String[] { share(f.helperShare), "HELPERS · " + when, "The subagents' share of the tokens " + lower + (f.helpers > 0 ? "; " + f.helpers + " finished" : "") + "." };
+            case EDITS:
+                return new String[] { f.metrics ? String.valueOf(f.editsAccepted) : "—", f.metrics ? "EDITS OK · " + f.editsRejected + " REJECTED" : "EDITS", f.metrics ? "Edits, writes and notebook edits you accepted and rejected " + lower + "." : NEEDS_TELEMETRY };
+            case COMMITS:
+                return new String[] { f.metrics ? String.valueOf(f.commits) : "—", f.metrics ? "COMMITS · " + f.pullRequests + " PRS" : "COMMITS", f.metrics ? "Git commits and pull requests Claude Code made " + lower + "." : NEEDS_TELEMETRY };
+            case ACTIVE:
+                return new String[] { f.metrics ? span(f.activeCli) : "—", f.metrics ? "CLAUDE · YOU " + span(f.activeUser).toUpperCase(Locale.ROOT) : "ACTIVE TIME", f.metrics ? "Time Claude worked (tools and replies) and time you were active (typing and reading) " + lower + ", from Claude Code's telemetry." : NEEDS_TELEMETRY };
+            default:
+                String unknown = unpriced(claude.unpriced[Math.max(0, Math.min(2, period))]);
+                return new String[] { counted ? tokens(f.tokens) : "—", !counted ? when : showApi ? when + " · " + unknown + "$" + dollars(f.cost) + " API VALUE" : when + " · " + f.replies + " REPLIES", showApi ? apiValue(claude, period) : TOKENS_TIP };
+        }
+    }
+    // A fact that warns: API errors in the last hour, or a fifth or more of the tool runs failing.
+    public static boolean factWarns(String kind, PcState.Claude claude, int period) {
+        PcState.ClaudeFacts f = claude.factsFor(period);
+        return (ERRORS.equals(kind) && f.errors > 0) || (FAILURES.equals(kind) && !Double.isNaN(f.failureRate()) && f.failureRate() >= 0.2);
+    }
+    public static String toolsTip(PcState.ClaudeFacts f) {
+        String calls = "Tool calls, from Claude Code's logs.";
+        if (!f.telemetry) return calls + " Which ones asked you comes from Claude Code's telemetry (Settings → Claude → Update connection on the PC).";
+        return calls + " " + f.asked + " asked you and " + f.denied + " were denied" + (f.askedPartial ? ", from the sessions that sent telemetry (not every session does, so this is partial)." : ".");
+    }
+    // The plan's chips: the narrower weekly windows the week tile has no room for (it names two), extra usage and a
+    // gateway's spend limit, each { words, "warn" or "" } (warning from 80%, as the meters do).
+    public static final int MOST_PLAN_CHIPS = 6;
+    public static List<String[]> planChips(PcState.Claude claude, double now, boolean use24) {
+        List<String[]> chips = new ArrayList<String[]>();
+        if (claude == null) return chips;
+        for (int i = 2; i < Math.min(6, claude.extra.size()); i++) {
+            PcState.ClaudeWindow w = claude.extra.get(i);
+            double pct = percent(w, now);
+            chips.add(new String[] { w.name + " " + Math.round(pct) + "%" + (w.resetsAt > 0 && current(w, now) ? " · resets " + when(w.resetsAt, now, use24) : ""), warns(pct) ? "warn" : "" });
+        }
+        PcState.ClaudeExtraUsage extra = claude.extraUsage;
+        if (extra != null) {
+            String amounts = !Double.isNaN(extra.used) && !Double.isNaN(extra.limit) ? " · " + amount(extra.used) + " of " + amount(extra.limit) : "";
+            chips.add(new String[] { !extra.enabled ? "Extra usage off" : "Extra usage " + (Double.isNaN(extra.pct) ? "on" : Math.round(extra.pct) + "%") + amounts, extra.enabled && !Double.isNaN(extra.pct) && warns(extra.pct) ? "warn" : "" });
+        }
+        PcState.ClaudeSpend spend = claude.spend;
+        if (spend != null) {
+            String money = !Double.isNaN(spend.usedUsd) && !Double.isNaN(spend.limitUsd) ? " · $" + dollars(spend.usedUsd) + " of $" + dollars(spend.limitUsd) : "";
+            chips.add(new String[] { "Spend limit " + Math.round(spend.pct) + "%" + money + (spend.period.isEmpty() ? "" : " " + spend.period), warns(spend.pct) ? "warn" : "" });
+        }
+        return chips.size() > MOST_PLAN_CHIPS ? new ArrayList<String[]>(chips.subList(0, MOST_PLAN_CHIPS)) : chips;
+    }
+    // "12.4", "50": an amount as the PC writes it ("0.##").
+    private static String amount(double value) {
+        String text = String.format(Locale.US, "%.2f", value);
+        return text.contains(".") ? text.replaceAll("0+$", "").replaceAll("\\.$", "") : text;
+    }
+    // A thread's own tokens and its helpers', for the period: "Own 1.2M · helpers 300k tokens today".
+    public static String helpersLine(PcState.ClaudeThread thread, int period) {
+        long helpers = thread.helperTokens[period];
+        if (helpers <= 0) return "";
+        return "Own " + tokens(Math.max(0, thread.tokens[period] - helpers)) + " · helpers " + tokens(helpers) + " tokens " + periodName(period).toLowerCase(Locale.ROOT);
+    }
+    // A running thread's setup: "Mode plan · Claude Code counts $4.20".
+    public static String setup(PcState.ClaudeThread thread, boolean showApi) {
+        List<String> parts = new ArrayList<String>();
+        if (thread.running && !thread.mode.isEmpty()) parts.add("Mode " + thread.mode);
+        if (showApi && !Double.isNaN(thread.costUsd)) parts.add("Claude Code counts $" + dollars(thread.costUsd));
+        return join(parts);
+    }
+
+    // ----- Package 3 (decision 025) -----
+
+    // "2 helpers working · tasks 3 / 5", or "".
+    public static String crew(PcState.ClaudeThread thread) {
+        List<String> parts = new ArrayList<String>();
+        if (thread.workers > 0) parts.add(thread.workers == 1 ? "1 helper working" : thread.workers + " helpers working");
+        if (thread.tasksTotal > 0) parts.add("tasks " + tasks(thread));
+        return join(parts);
+    }
+    // The car's task sticker: "3 / 5".
+    public static String tasks(PcState.ClaudeThread thread) { return thread.tasksDone + " / " + thread.tasksTotal; }
+    // Why Claude Code ended a thread it kept.
+    public static String endedBy(String reason) {
+        return "prompt_input_exit".equals(reason) ? "Closed in Claude Code" : "logout".equals(reason) ? "Ended when Claude Code logged out" : "clear".equals(reason) ? "Cleared with /clear" : "";
+    }
+    // A thread's details, read aloud and shown when its row is held: the PC's tooltip, in the same order.
+    public static String details(PcState.ClaudeThread thread, PcState.Claude claude, int period, double now, boolean use24, boolean counted, boolean showApi) {
+        List<String> lines = new ArrayList<String>();
+        lines.add(threadTitle(thread, now, use24) + " · " + thread.project);
+        lines.add(thread.running ? stateWords(thread.state, thread.since, now, true) + ("needs".equals(thread.state) && !ask(thread.message).isEmpty() ? " · " + ask(thread.message) : "") : "Ended · last active " + ago(thread.lastActive, now, use24));
+        if (stuck(thread)) lines.add(stuckReason(thread));
+        if (retryingNow(thread)) lines.add(retrying(thread));
+        String context = thread.running ? contextTip(thread.context) : "";
+        if (!context.isEmpty()) lines.add(context);
+        String crew = thread.running ? crew(thread) : "";
+        if (!crew.isEmpty()) lines.add(crew);
+        String ended = thread.running ? "" : endedBy(thread.endReason);
+        if (!ended.isEmpty()) lines.add(ended);
+        String helpers = counted ? helpersLine(thread, period) : "";
+        if (!helpers.isEmpty()) lines.add(helpers);
+        String setup = setup(thread, showApi);
+        if (!setup.isEmpty()) lines.add(setup);
+        List<String> detail = new ArrayList<String>();
+        if (counted) detail.add(tokens(thread.tokens[period]) + " tokens · " + replies(thread.replies[period]) + (showApi ? " · " + unpriced(claude.unpriced[period]) + money(thread.cost[period]) + " API value" : "") + " " + periodName(period).toLowerCase(Locale.ROOT));
+        if (!thread.model.isEmpty()) detail.add(thread.model);
+        if (!thread.where.isEmpty()) detail.add(thread.where);
+        if (!detail.isEmpty()) lines.add(join(detail));
+        return String.join("\n", lines);
+    }
+    // A Claude alert as a notification: its title ("Claude needs you · api-server") and words ("Fix the login: Wants to use Bash").
+    public static String alertTitle(PcState.ClaudeAlert alert) {
+        return ("need".equals(alert.kind) ? "Claude needs you" : "stuck".equals(alert.kind) ? "Claude is stuck" : "Claude finished") + (alert.project.isEmpty() ? "" : " · " + alert.project);
+    }
+    public static String alertText(PcState.ClaudeAlert alert) {
+        String what = "need".equals(alert.kind) ? ask(alert.text) : alert.text == null ? "" : alert.text.trim();
+        if (what.isEmpty()) what = "need".equals(alert.kind) ? "Waiting for you" : "stuck".equals(alert.kind) ? "Stopped on an error" : "Done";
+        String title = placeholder(alert.title) ? idLabel(alert.session) : alert.title.trim();
+        return title + ": " + what;
+    }
+    // The alerts to raise now, oldest first: those numbered past the last one seen. The first answer after the app
+    // starts only sets the mark (nothing from before it pops up); a PC that started again counts from 1 again.
+    public static List<PcState.ClaudeAlert> freshAlerts(List<PcState.ClaudeAlert> alerts, long seq, long seen) {
+        List<PcState.ClaudeAlert> fresh = new ArrayList<PcState.ClaudeAlert>();
+        if (seen < 0 || alerts == null) return fresh;
+        long from = seq < seen ? 0 : seen;
+        for (PcState.ClaudeAlert a : alerts) if (a.seq > from) fresh.add(a);
+        return fresh;
+    }
 
     // A project row's or session's usage: "1.8M · ≈ $2.01".
     public static String usage(long tokens, double cost) { return tokens(tokens) + " · " + money(cost); }
