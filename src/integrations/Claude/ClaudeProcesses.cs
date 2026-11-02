@@ -14,7 +14,7 @@ namespace WidgetScreen
     {
         public struct Owner { public int ClaudePid, WindowPid; public long Window; }
 
-        private static bool IsClaude(string exe) { return String.Equals(exe, "claude.exe", StringComparison.OrdinalIgnoreCase) || String.Equals(exe, "node.exe", StringComparison.OrdinalIgnoreCase); }
+        private static bool IsClaude(string exe) { return String.Equals(exe, "claude.exe", StringComparison.OrdinalIgnoreCase) || String.Equals(exe, "node.exe", StringComparison.OrdinalIgnoreCase) || String.Equals(exe, "bun.exe", StringComparison.OrdinalIgnoreCase); }
         // Windows whose windows aren't a session's own: the desktop shell and system processes.
         private static bool StopsWalk(string exe)
         {
@@ -80,8 +80,13 @@ namespace WidgetScreen
             return owner;
         }
 
-        // Whether the session's Claude Code still runs. A reused process id belongs to another program, so the name counts too.
-        public static bool Alive(int pid)
+        // Whether the session's Claude Code still runs (decision 023): any running process with its id counts, whatever
+        // its name (Claude Code runs as claude.exe, node.exe, bun.exe or a renamed build; the name only decides where a
+        // window is looked for). A process that started more than a minute after the session was first seen has reused
+        // the id, so it doesn't count. A process this app may not ask about counts as running.
+        public static readonly TimeSpan ReuseSlack = TimeSpan.FromMinutes(1);
+        public static bool Alive(int pid) { return Alive(pid, null); }
+        public static bool Alive(int pid, DateTime? seenBy)
         {
             if (pid <= 0) return true;
             try
@@ -89,8 +94,14 @@ namespace WidgetScreen
                 using (var process = Process.GetProcessById(pid))
                 {
                     if (process.HasExited) return false;
-                    string name = process.ProcessName + ".exe";
-                    return IsClaude(name);
+                    if (seenBy.HasValue && seenBy.Value > DateTime.MinValue)
+                    {
+                        DateTime started;
+                        try { started = process.StartTime.ToUniversalTime(); }
+                        catch (Exception) { return true; }
+                        if (started > seenBy.Value.ToUniversalTime() + ReuseSlack) return false;
+                    }
+                    return true;
                 }
             }
             catch (ArgumentException) { return false; }

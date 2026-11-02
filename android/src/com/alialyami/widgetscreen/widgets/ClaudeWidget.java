@@ -63,7 +63,8 @@ public final class ClaudeWidget extends Widget {
     private long lastFrame;
 
     private interface Fill { void run(PcState.Claude c, double now); }
-    private static final class CarPart { String id, key; PitSprite sprite; double width; boolean dim; }
+    // onlyWorst: on Medium, only the fullest context in its garage shows its ring (decision 023).
+    private static final class CarPart { String id, key; PitSprite sprite; double width; boolean dim, onlyWorst; }
     private static final class GaragePart { String key; PitSprite sprite; View tap; final List<CarPart> cars = new ArrayList<CarPart>(); }
 
     public ClaudeWidget(Dashboard dash) { super("Claude", dash); }
@@ -481,10 +482,12 @@ public final class ClaudeWidget extends Widget {
             fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
                 PcState.ClaudeThread t = c.thread(tid); if (t == null) return;
                 tap.setAlpha(ClaudeText.parked(t.pit) ? 0.45f : t.running ? 1f : 0.62f);
-                chip.setText(ClaudeText.chip(t.pit).toUpperCase(Locale.ROOT));
+                chip.setText(ClaudeText.chip(t).toUpperCase(Locale.ROOT));
                 chip(chip, t.pit);
                 name2.setText(ClaudeText.threadTitle(t, now, dash.use24())); name2.setTextColor("need".equals(t.pit) ? Theme.WARNING : ui.theme.text);
-                where.setText(ClaudeText.where(t, now));
+                // A stuck thread says why where it would say where it runs (decision 023).
+                boolean stuck = ClaudeText.stuck(t);
+                where.setText(stuck ? ClaudeText.stuckReason(t) : ClaudeText.where(t, now)); where.setTextColor(stuck ? Theme.WARNING : ui.theme.muted);
                 ttokens.setText(counted(c) ? ClaudeText.tokens(t.tokens[period]) : "—"); tcached.setText(counted(c) ? ClaudeText.tokens(t.cache[period]) : "");
                 tdollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(t.cost[period]) : String.valueOf(t.replies[period]));
                 tmix.setText(models(t.models[period]));
@@ -536,7 +539,11 @@ public final class ClaudeWidget extends Widget {
             facts.addView(row, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, r == 0 ? 0 : 4, 0, 0));
         }
         side.addView(facts, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 10, 4, 0));
+        // The PC can't receive telemetry (decision 023): "Telemetry off: port 43832 in use".
+        final TextView warning = trimmed(ui.text("", 12, Theme.WARNING));
+        side.addView(warning, ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 2, 4, 0));
         fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
+            warning.setText(c.warning); warning.setVisibility(c.warning.isEmpty() ? View.GONE : View.VISIBLE);
             double max = 1; for (PcState.ClaudeLane l : c.lanes) for (double v : l.bins) max = Math.max(max, v);
             for (PitViews.Lane b : bins) { b.maximum = max; b.invalidate(); }
             start.setText(ClaudeText.clock(now - ClaudePit.FIVE_HOURS, dash.use24())); middle.setText(ClaudeText.clock(now - 150 * 60, dash.use24()));
@@ -584,7 +591,7 @@ public final class ClaudeWidget extends Widget {
             if (isFolded) first.addView(bubble(group.threads.size()), ui.margins(ui.ll(Ui.WRAP, ui.px(20)), 8, 0, 0, 0));
             for (int j = 0; j < shown; j++) {
                 PcState.ClaudeThread t = c.thread(group.threads.get(j));
-                CarPart part = car(t, group.key, 30, true);
+                CarPart part = car(t, group.key, 30, true); part.onlyWorst = true;
                 FrameLayout holder = new FrameLayout(ui.context); holder.addView(part.sprite, ui.frame(ui.px(30), ui.px(PitSprite.carHeight(30)), Gravity.CENTER));
                 first.addView(tappable(holder, t), ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), j == 0 ? 8 : 2, 0, 0, 0));
                 garage.cars.add(part);
@@ -599,10 +606,12 @@ public final class ClaudeWidget extends Widget {
             final String key = group.key;
             fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
                 PcState.ClaudeGroup g = group(c, key); if (g == null) return;
-                PcState.ClaudeThread asking = null; for (String id : g.threads) { PcState.ClaudeThread t = c.thread(id); if (t != null && t.running && "needs".equals(t.state)) { asking = t; break; } }
+                PcState.ClaudeThread asking = null, stuck = null;
+                for (String id : g.threads) { PcState.ClaudeThread t = c.thread(id); if (t != null && t.running && "needs".equals(t.state)) { asking = t; break; } if (stuck == null && ClaudeText.stuck(t)) stuck = t; }
+                if (asking != null) stuck = null;
                 name.setTextColor(asking != null ? Theme.WARNING : ui.theme.text);
-                sub.setText(asking != null ? "Needs you · " + ClaudeText.threadTitle(asking, now, dash.use24()) : isFolded ? ClaudeText.cars(g.threads.size()) + " in the garage" : ClaudeText.groupDetail(c, g, now, true));
-                sub.setTextColor(asking != null ? Theme.WARNING : ui.theme.muted);
+                sub.setText(asking != null ? "Needs you · " + ClaudeText.threadTitle(asking, now, dash.use24()) : stuck != null ? "Stuck · " + ClaudeText.stuckReason(stuck) : isFolded ? ClaudeText.cars(g.threads.size()) + " in the garage" : ClaudeText.groupDetail(c, g, now, true));
+                sub.setTextColor(asking != null || stuck != null ? Theme.WARNING : ui.theme.muted);
                 tokens.setText(counted(c) ? ClaudeText.tokens(g.tokens) : "—"); dollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(g.cost) : String.valueOf(g.replies));
                 renderGarage(c, garage, g);
             } });
@@ -662,7 +671,9 @@ public final class ClaudeWidget extends Widget {
                 PcState.ClaudeSession s = null; for (PcState.ClaudeSession x : c.sessions) if (x.id.equals(id)) s = x;
                 if (s == null) return;
                 project.setText(s.project);
-                state.setText(ClaudeText.stateWords(s.state, s.since, now, true)); state.setTextColor("needs".equals(s.state) ? Theme.WARNING : ui.theme.muted);
+                boolean stuck = "stuck".equals(s.state);
+                state.setText(stuck ? "Stuck · " + ClaudeText.stuckReason(c.thread(s.id)) : ClaudeText.stateWords(s.state, s.since, now, true));
+                state.setTextColor("needs".equals(s.state) || stuck ? Theme.WARNING : ui.theme.muted);
                 int working = 0, total = 0; boolean other = false;
                 for (PcState.ClaudeSession x : c.sessions) if (!x.id.equals(id)) { if ("working".equals(x.state)) working++; if ("needs".equals(x.state)) other = true; }
                 for (PcState.ClaudeGroup g : c.groups[period]) total += g.threads.size();
@@ -727,7 +738,20 @@ public final class ClaudeWidget extends Widget {
         for (Fill fill : fills) fill.run(c, now);
         // The fuel lamp follows the plan's tightest window: the 5-hour one, or the week when the plan has none.
         double five = ClaudeText.percent(c.fiveHour != null ? c.fiveHour : c.week, now);
-        for (CarPart part : cars) renderCar(c, part, part.id == null ? null : c.thread(part.id), five);
+        // Medium shows one context ring per garage: its fullest running thread's.
+        java.util.Map<String, PcState.ClaudeThread> worst = new java.util.HashMap<String, PcState.ClaudeThread>();
+        for (CarPart part : cars) {
+            PcState.ClaudeThread t = part.onlyWorst && part.id != null ? c.thread(part.id) : null;
+            if (t == null || !t.running || ClaudeText.contextLevel(t.context) == 0) continue;
+            PcState.ClaudeThread best = worst.get(part.key);
+            if (best == null || t.context > best.context) worst.put(part.key, t);
+        }
+        for (CarPart part : cars) {
+            PcState.ClaudeThread t = part.id == null ? null : c.thread(part.id);
+            renderCar(c, part, t, five);
+            boolean ringed = t != null && t.running && (!part.onlyWorst || worst.get(part.key) == t);
+            part.sprite.ring(ringed ? t.context : Double.NaN, ui.theme.page, ui.theme.track, ui.theme.muted);
+        }
         updateClock();
     }
     private void renderCar(PcState.Claude c, CarPart part, PcState.ClaudeThread t, double five) {

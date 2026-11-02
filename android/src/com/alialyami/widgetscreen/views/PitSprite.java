@@ -11,6 +11,7 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.View;
 
+import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.core.PitArt;
 import com.alialyami.widgetscreen.core.PitPath;
 
@@ -33,6 +34,12 @@ public final class PitSprite extends View {
     public boolean once;
     private final Rect source = new Rect();
     private final RectF target = new RectF();
+    // A car's context ring (decision 023), on its top right corner: how full the thread's context window is, from 60%
+    // (muted), 80% (Amber, compaction soon) and 95% (Amber with a filled centre). NaN or under 60% draws none.
+    private double ring = Double.NaN;
+    private int ringPage, ringTrack, ringMuted;
+    private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF ringBox = new RectF();
 
     public PitSprite(Context context) { super(context); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
 
@@ -58,6 +65,13 @@ public final class PitSprite extends View {
         if (next != frame) { frame = next; invalidate(); }
     }
     public void hold() { if (frame != still && !once && frames.length > 0) { frame = still; invalidate(); } }
+    public double ring() { return ring; }
+    public void ring(double percent, int page, int track, int muted) {
+        double shown = ClaudeText.contextLevel(percent) == 0 ? Double.NaN : Math.round(percent);
+        if ((Double.isNaN(shown) && Double.isNaN(ring)) || (shown == ring && page == ringPage && muted == ringMuted)) return;
+        ring = shown; ringPage = page; ringTrack = track; ringMuted = muted;
+        invalidate();
+    }
 
     @Override protected void onDraw(Canvas canvas) {
         if (frames.length == 0 || frames[frame] == null) return;
@@ -65,6 +79,17 @@ public final class PitSprite extends View {
         source.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
         target.set(0, 0, getWidth(), getHeight());
         canvas.drawBitmap(bitmap, source, target, PIXELS);
+        int level = ClaudeText.contextLevel(ring);
+        if (level == 0) return;
+        float size = Math.max(10, Math.min(getHeight() * 0.5f, getWidth() * 0.26f)), stroke = Math.max(1.5f, size / 6), r = size / 2 - stroke / 2 - 0.5f;
+        float cx = getWidth() - size / 2, cy = size / 2;
+        int ink = level == 1 ? ringMuted : com.alialyami.widgetscreen.core.Theme.WARNING;
+        ringPaint.setStyle(Paint.Style.FILL); ringPaint.setColor(ringPage); canvas.drawCircle(cx, cy, size / 2, ringPaint);
+        ringPaint.setStyle(Paint.Style.STROKE); ringPaint.setStrokeWidth(stroke); ringPaint.setStrokeCap(Paint.Cap.ROUND);
+        ringPaint.setColor(ringTrack); canvas.drawCircle(cx, cy, r, ringPaint);
+        ringBox.set(cx - r, cy - r, cx + r, cy + r);
+        ringPaint.setColor(ink); canvas.drawArc(ringBox, -90, (float) (Math.min(99.9, ring) * 3.6), false, ringPaint);
+        if (level == 3) { ringPaint.setStyle(Paint.Style.FILL); canvas.drawCircle(cx, cy, Math.max(1, r - stroke), ringPaint); }
     }
 
     // ----- Making the frames -----

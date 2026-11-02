@@ -150,6 +150,8 @@ namespace WidgetScreen
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;
+                // Stuck stays until the next turn starts (decision 023), however long ago the error was.
+                case ClaudeState.Stuck: return PitState.Stuck;
                 case ClaudeState.Done: return thread.Compacting ? PitState.Pit : !settled ? PitState.Done : thread.Resolved ? PitState.Resolved : PitState.Idle;
                 case ClaudeState.Ready: return thread.Compacting ? PitState.Pit : settled && thread.Resolved ? PitState.Resolved : PitState.Idle;
             }
@@ -159,6 +161,9 @@ namespace WidgetScreen
             return PitState.Work;
         }
         public static string StateName(PitState state) { return state.ToString().ToLowerInvariant(); }
+        // The car's context ring (decision 023): 0 none (under 60% or unknown), 1 from 60%, 2 from 80% (compaction
+        // soon), 3 from 95%.
+        public static int ContextLevel(double percent) { return Double.IsNaN(percent) || percent < 60 ? 0 : percent < 80 ? 1 : percent < 95 ? 2 : 3; }
         // Whether Settings → Claude hides a thread in this state (its tokens still count in its project's totals).
         public static bool Hidden(PitState state, bool showArchived, bool hideIdle) { return (Parked(state) && !showArchived) || (state == PitState.Idle && hideIdle); }
         // Archived or resolved: under the cover, dimmed the most, last in its project.

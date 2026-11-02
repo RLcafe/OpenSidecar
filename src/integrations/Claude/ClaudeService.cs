@@ -27,6 +27,12 @@ namespace WidgetScreen
         // Archived in the Claude app (its isArchived flag), or resolved: its latest reply completed the job and
         // nothing newer has happened (decision 020).
         public bool Archived, Resolved;
+        // Decision 023: why a Stuck session stopped (StopFailure's error, or "quota_disabled") and its details; how
+        // full its context window is (0–100, NaN when unknown); subagents running and open tasks; tool calls that
+        // failed or auto mode denied, and the last failure.
+        public string Reason = "", ReasonText = "", LastError = "";
+        public double Context = Double.NaN;
+        public int Workers, Tasks, Failed, Denied;
         public PitState Pit = PitState.Idle;
         public PitCar Car = PitCar.Sports;
         public double Rate;
@@ -48,8 +54,9 @@ namespace WidgetScreen
         public long[] LinesFor(ClaudePeriod period) { long[] value; return Lines.TryGetValue(period, out value) ? value : new long[2]; }
     }
 
-    // How the plan meters' numbers stand: the widget's own sign-in and its last check.
-    public enum ClaudePlanState { SignedOut, Reading, Current, Failed, Expired }
+    // How the plan meters' numbers stand: the widget's own sign-in and its last check. NoMeters: signed in, but the
+    // plan has no usage meters (the usage check answered 403; decision 023).
+    public enum ClaudePlanState { SignedOut, Reading, Current, Failed, Expired, NoMeters }
 
     // A project in Settings → Claude → Projects: its folder, when it was last used, this week's usage and its tick.
     public sealed class ClaudeProjectInfo
@@ -114,6 +121,9 @@ namespace WidgetScreen
         public List<ClaudeLane> Lanes = new List<ClaudeLane>();
         public ClaudeFacts Facts = new ClaudeFacts();
         public DateTime MadeAt = DateTime.UtcNow;
+        // "Telemetry off: port 43832 in use" when the receiver couldn't listen where settings.json sends it (decision 023).
+        public string TelemetryWarning = "";
+        public int Stuck { get { return Sessions.Count(s => s.State == ClaudeState.Stuck); } }
         public int NeedsYou { get { return Sessions.Count(s => s.State == ClaudeState.NeedsYou); } }
         public int Working { get { return Sessions.Count(s => s.State == ClaudeState.Working); } }
         // Settings → Claude: show archived threads (off by default) and hide idle ones (off by default; decision 020).
@@ -157,12 +167,12 @@ namespace WidgetScreen
         public bool NoPlan { get { return Limits != null && !Limits.Known && Limits.MissingAt.HasValue; } }
         public List<ClaudeProjectUsage> UsageFor(ClaudePeriod period) { List<ClaudeProjectUsage> list; return Usage.TryGetValue(period, out list) ? list : new List<ClaudeProjectUsage>(); }
 
-        // Needs you first (longest waiting first), then Working, Done and Ready, newest first within each.
+        // Needs you first (longest waiting first), then Stuck, Working, Done and Ready, newest first within each.
         public static List<ClaudeSession> Order(IEnumerable<ClaudeSession> sessions)
         {
             return sessions.OrderBy(s => Rank(s.State)).ThenBy(s => s.State == ClaudeState.NeedsYou ? s.Since.Ticks : -s.Since.Ticks).ThenBy(s => s.Id, StringComparer.Ordinal).ToList();
         }
-        public static int Rank(ClaudeState state) { return state == ClaudeState.NeedsYou ? 0 : state == ClaudeState.Working ? 1 : state == ClaudeState.Done ? 2 : 3; }
+        public static int Rank(ClaudeState state) { return state == ClaudeState.NeedsYou ? 0 : state == ClaudeState.Stuck ? 1 : state == ClaudeState.Working ? 2 : state == ClaudeState.Done ? 3 : 4; }
 
         // The labelled fixture for renders and checks ("Sample" in the heading). Never shown as live data.
         public static ClaudeView Fixture(DateTime now, bool needsYou)
@@ -209,6 +219,8 @@ namespace WidgetScreen
                 t.Car = ClaudePace.Car(t.MixFor(ClaudePeriod.Week), t.Model);
             }
             threads.First(t => t.Id == "sample-3").Compacting = true;
+            // Context rings (decision 023): one thread near compaction, one past 60%.
+            threads.First(t => t.Id == "sample-2").Context = 82; threads.First(t => t.Id == "sample-7").Context = 64;
             foreach (var t in threads) t.Pit = ClaudePace.State(t, now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
             view.Threads = threads;
             view.Sessions = Order(threads.Where(t => t.Running));
@@ -349,9 +361,10 @@ namespace WidgetScreen
 
         // ----- The hook files -----
 
-        // Reads the session files that changed since last time; drops sessions whose Claude Code has gone (when alive
-        // is checked) or that have been quiet for 12 hours. Claude Code's own list is read alongside. Returns whether
-        // anything changed.
+        // Reads the session files that changed since last time. A session is alive until its own SessionEnd or its
+        // process is gone (decision 023): a file goes when alive is checked and its process has exited (or the id now
+        // belongs to a later process). A file with no known process, or one /clear ended, goes after 12 quiet hours.
+        // Claude Code's own list is read alongside. Returns whether anything changed.
         public bool ReadSessions(DateTime now, bool checkAlive)
         {
             bool changed = false;
@@ -370,24 +383,56 @@ namespace WidgetScreen
                     }
             }
             catch (Exception) { }
-            foreach (var path in files.Keys.Where(p => !present.Contains(p)).ToList()) { files.Remove(path); changed = true; }
+            foreach (var path in files.Keys.Where(p => !present.Contains(p)).ToList()) { Gone(files[path].Session); files.Remove(path); changed = true; }
             foreach (var pair in files.ToList())
             {
                 var s = pair.Value.Session; if (s == null) continue;
-                bool forgotten = now - ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since)) > ClaudeBridge.Forgotten;
-                if (forgotten || (checkAlive && !ClaudeProcesses.Alive(s.Pid)))
+                bool forgotten = (s.Pid <= 0 || s.Ended) && now - ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since)) > ClaudeBridge.Forgotten;
+                if (forgotten || (checkAlive && s.Pid > 0 && !(SessionAlive ?? (Func<ClaudeSessionFile, bool>)DefaultAlive)(s)))
                 {
                     // Closed without SessionEnd (the terminal went away): the file goes too, so it doesn't come back.
                     try { File.Delete(pair.Key); } catch (Exception) { }
-                    files.Remove(pair.Key); changed = true;
+                    Gone(s); files.Remove(pair.Key); changed = true;
                 }
             }
-            changed |= Registry.Read(RegistryAlive ?? (pid => pid > 0 && ClaudeProcesses.Alive(pid)), checkAlive);
+            Func<ClaudeRegistryEntry, bool> listed;
+            if (RegistryAlive != null) { var test = RegistryAlive; listed = e => test(e.Pid); }
+            else listed = e => e.Pid > 0 && ClaudeProcesses.Alive(e.Pid, e.Started);
+            changed |= Registry.Read(listed, checkAlive);
             changed |= AppThreads.Read(now);
             return changed;
         }
-        // The checks replace the process test, since their sample processes aren't Claude Code.
+        // Sessions whose hook file went (SessionEnd, or their process left): their logs no longer make them running.
+        private readonly HashSet<string> gone = new HashSet<string>(StringComparer.Ordinal);
+        private void Gone(ClaudeSessionFile s) { if (s == null) return; if (gone.Count > 1000) gone.Clear(); gone.Add(s.Id); }
+        // A hook file's process: running, and started before the session was first seen (Since only moves later).
+        private static bool DefaultAlive(ClaudeSessionFile s) { return ClaudeProcesses.Alive(s.Pid, ClaudeBridge.FromEpoch(s.Since)); }
+        // The checks replace the process tests, since their sample process ids are made up.
         public Func<int, bool> RegistryAlive;
+        public Func<ClaudeSessionFile, bool> SessionAlive;
+
+        // ----- Telemetry's port (decision 023) -----
+
+        // Listens where settings.json sends telemetry (the port Connect wrote), or on the default port.
+        public bool StartTelemetry()
+        {
+            int port = Connector.ConfiguredPort();
+            return Telemetry.Start(port > 0 ? port : Connector.TelemetryPort);
+        }
+        // Connect binds first, then writes the port it got into settings.json: the default, or the next free one of
+        // ClaudeTelemetry.PortsTried. With every one taken it writes the default and the card says telemetry is off.
+        public void Connect(string hookSource)
+        {
+            bool bound = Telemetry.StartFirstFree(Connector.TelemetryPort);
+            Connector.Connect(hookSource, bound ? Telemetry.Port : Connector.TelemetryPort);
+        }
+        // "Telemetry off: port 43832 in use", while connected and the receiver can't listen where telemetry is sent.
+        public string TelemetryWarning()
+        {
+            if (!Connected || Telemetry.Running || Telemetry.Problem == null) return "";
+            int port = Connector.ConfiguredPort();
+            return port > 0 ? "Telemetry off: port " + port + " in use" : "";
+        }
 
         // The plan limits Claude Code's status line last wrote. Returns whether they changed.
         public bool ReadLimits()
@@ -425,6 +470,7 @@ namespace WidgetScreen
                 if (Account == null || Account.Expired) return Account != null ? ClaudePlanState.Expired : ClaudePlanState.SignedOut;
                 if (!Account.SignedIn) return ClaudePlanState.SignedOut;
                 if (onlineFailed) return ClaudePlanState.Failed;
+                if (Account.NoMeters) return ClaudePlanState.NoMeters;
                 return onlineLimits == null ? ClaudePlanState.Reading : ClaudePlanState.Current;
             }
         }
@@ -445,7 +491,8 @@ namespace WidgetScreen
             {
                 var limits = await Account.UsageAsync(DateTime.UtcNow).ConfigureAwait(false);
                 backoff = TimeSpan.Zero;
-                if (limits == null) { onlineFailed = false; return true; }
+                // No numbers: the sign-in ended or the plan has no meters; the old online numbers no longer stand.
+                if (limits == null) { onlineFailed = false; if (Account.NoMeters) onlineLimits = null; return true; }
                 onlineLimits = limits; onlineFailed = false;
                 return true;
             }
@@ -522,12 +569,17 @@ namespace WidgetScreen
             var stateAt = new Dictionary<string, DateTime>();
             // A name the user gave a running session in Claude Code (its rename).
             var named = new Dictionary<string, string>();
+            // Sessions /clear ended (decision 023): kept as ended threads while their process goes on.
+            var ended = new Dictionary<string, DateTime>();
             foreach (var file in Sessions)
             {
                 sessions[file.Id] = new ClaudeSession { Id = file.Id, State = file.State, Since = ClaudeBridge.FromEpoch(file.Since), Project = file.Project,
-                    Title = file.Title, Message = file.Message, Model = file.Model, Pid = file.Pid, WindowPid = file.WindowPid, Window = file.Window,
-                    Compacting = file.Compacting && now - ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since)) < ClaudePace.CompactForgotten };
+                    Title = file.Title, Message = file.Message, Model = ModelName(file.Model), Pid = file.Pid, WindowPid = file.WindowPid, Window = file.Window,
+                    Compacting = file.Compacting && now - ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since)) < ClaudePace.CompactForgotten,
+                    Reason = file.State == ClaudeState.Stuck ? file.Error : "", ReasonText = file.State == ClaudeState.Stuck ? file.ErrorText : "", Context = file.Context,
+                    Workers = file.Workers.Count, Tasks = file.OpenTasks, Failed = file.Failed, Denied = file.Denied, LastError = file.LastError };
                 stateAt[file.Id] = ClaudeBridge.FromEpoch(file.Since);
+                if (file.Ended) ended[file.Id] = ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since));
             }
             var listedPids = new HashSet<int>(Registry.Entries.Select(e => e.Pid));
             foreach (var pid in owners.Keys.Where(p => !listedPids.Contains(p)).ToList()) owners.Remove(pid);
@@ -547,8 +599,10 @@ namespace WidgetScreen
                     if (!owners.TryGetValue(entry.Pid, out cached) || now - cached.Key > OwnerKept) { cached = new KeyValuePair<DateTime, ClaudeProcesses.Owner>(now, ClaudeProcesses.OwnerOf(entry.Pid)); owners[entry.Pid] = cached; }
                     s.Window = cached.Value.Window; s.WindowPid = cached.Value.WindowPid;
                 }
-                // Claude Code's own list wins when it changed after the hook's news.
-                if (listed.HasValue && entry.StatusChanged > stateAt[entry.Session].AddSeconds(1))
+                // Claude Code's own list wins when it changed after the hook's news, except that its "idle" doesn't
+                // undo Stuck: only a new turn (busy or waiting) does (decision 023).
+                bool keepStuck = hooked && s.State == ClaudeState.Stuck && listed == ClaudeState.Done;
+                if (listed.HasValue && !keepStuck && entry.StatusChanged > stateAt[entry.Session].AddSeconds(1))
                 {
                     var next = listed.Value;
                     // Idle is Done after a turn, Ready before one.
@@ -576,17 +630,23 @@ namespace WidgetScreen
                 DateTime at; stateAt.TryGetValue(e.Session, out at);
                 if (working && e.At > at.AddSeconds(1) && s.State != ClaudeState.Working)
                 {
-                    s.State = ClaudeState.Working; s.Since = e.At; s.Message = ""; stateAt[e.Session] = e.At;
+                    s.State = ClaudeState.Working; s.Since = e.At; s.Message = ""; s.Reason = ""; s.ReasonText = ""; stateAt[e.Session] = e.At;
                 }
             }
 
-            foreach (var s in sessions.Values) s.Running = true;
+            foreach (var s in sessions.Values)
+            {
+                DateTime endedAt;
+                s.Running = !ended.TryGetValue(s.Id, out endedAt);
+                if (!s.Running) { s.State = ClaudeState.Ready; s.Since = endedAt; s.LastActive = endedAt; s.Compacting = false; s.Reason = ""; s.ReasonText = ""; }
+            }
             // The ended threads of the last week: the Claude app's list (archived ones marked, decision 020) and the
             // logs, which know every way Claude Code runs.
             var lastSeen = Usage.LastSeen; var titles = Usage.Titles; var prompts = Usage.Prompts;
             var app = new Dictionary<string, ClaudeAppThread>();
             foreach (var t in AppThreads.Threads) { ClaudeAppThread known; if (!app.TryGetValue(t.Session, out known) || known.LastActive < t.LastActive) app[t.Session] = t; }
             DateTime oldest = starts[ClaudePeriod.Week];
+            var perSession = usage == null ? new Dictionary<string, List<ClaudeUsageEntry>>() : usage.GroupBy(u => u.Session).ToDictionary(g => g.Key, g => g.ToList());
             foreach (var id in app.Keys.Concat(lastSeen.Keys).Distinct().ToList())
             {
                 if (sessions.ContainsKey(id)) continue;
@@ -595,9 +655,16 @@ namespace WidgetScreen
                 DateTime last = a != null && a.LastActive > seen ? a.LastActive : seen;
                 if (last < oldest) continue;
                 // Archived threads are kept, marked, and hidden by the card unless Settings → Claude shows them.
-                sessions[id] = new ClaudeSession { Id = id, State = ClaudeState.Ready, Since = last, LastActive = last, Archived = a != null && a.Archived };
+                var thread = new ClaudeSession { Id = id, State = ClaudeState.Ready, Since = last, LastActive = last, Archived = a != null && a.Archived };
+                // A session only the logs know, with a reply in the last two minutes, is running (decision 023): one
+                // started before Connect by a Claude Code that keeps no session list. One whose hook file went is not.
+                // The reply's own time counts, not the log file's (Claude Code touches a log long after a turn).
+                List<ClaudeUsageEntry> replies; DateTime replied = DateTime.MinValue;
+                if (seen > DateTime.MinValue && perSession.TryGetValue(id, out replies) && replies.Count > 0) replied = replies.Max(u => u.At);
+                if (replied > DateTime.MinValue && now - replied <= TelemetryOnly && replied <= now + TimeSpan.FromMinutes(1) && !gone.Contains(id) && (a == null || !a.Archived))
+                { thread.Running = true; thread.State = ClaudeState.Working; thread.Since = replied; }
+                sessions[id] = thread;
             }
-            var perSession = usage == null ? new Dictionary<string, List<ClaudeUsageEntry>>() : usage.GroupBy(u => u.Session).ToDictionary(g => g.Key, g => g.ToList());
 
             var list = new List<ClaudeSession>();
             foreach (var s in sessions.Values)
@@ -646,6 +713,7 @@ namespace WidgetScreen
             foreach (var pair in lastSeen) { string folder; if (folders.TryGetValue(pair.Key, out folder)) remember(folder, pair.Value); }
             foreach (var t in list) remember(t.Project, t.LastActive);
             view.Sessions = ClaudeView.Order(list.Where(s => s.Running));
+            view.TelemetryWarning = TelemetryWarning();
             foreach (var pair in starts) view.Starts[pair.Key] = pair.Value;
             if (usage != null) foreach (var pair in starts) view.Usage[pair.Key] = ClaudeUsage.ByProject(usage, pair.Value, 6, folderOf, shown);
             PitWall(view, now, usage, perSession, folderOf, shown);

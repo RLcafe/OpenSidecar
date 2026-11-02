@@ -18,7 +18,36 @@ public final class ClaudeText {
     public static final double STALE = 15 * 60;
 
     public static String state(String state) {
-        return "needs".equals(state) ? "Needs you" : "working".equals(state) ? "Working" : "done".equals(state) ? "Your turn" : "Ready";
+        return "needs".equals(state) ? "Needs you" : "working".equals(state) ? "Working" : "done".equals(state) ? "Your turn" : "stuck".equals(state) ? "Stuck" : "Ready";
+    }
+    // Why a thread is stuck (decision 023): the PC's words ("Rate limited, resets 14:05"), else the error's own.
+    public static String stuckReason(PcState.ClaudeThread thread) {
+        if (thread == null) return "";
+        if (!thread.reasonText.isEmpty()) return thread.reasonText;
+        switch (thread.reason) {
+            case "rate_limit": return "Rate limited";
+            case "overloaded": return "Overloaded, try again";
+            case "authentication_failed": case "oauth_org_not_allowed": return "Sign in again";
+            case "cloud_credential_error": return "Cloud credentials failed";
+            case "account_on_hold": return "Account on hold";
+            case "billing_error": return "Billing problem";
+            case "invalid_request": return "Request refused";
+            case "model_not_found": return "Model not available";
+            case "server_error": return "Server error, try again";
+            case "max_output_tokens": return "Reply too long";
+            case "quota_disabled": return "Stopped waiting for the usage limit";
+            default: return "API error";
+        }
+    }
+    public static boolean stuck(PcState.ClaudeThread thread) { return thread != null && thread.running && "stuck".equals(thread.state); }
+    // The car's context ring (decision 023), the same as the PC's: 0 none (under 60% or unknown), 1 from 60%, 2 from
+    // 80% (compaction soon), 3 from 95%.
+    public static int contextLevel(double percent) { return Double.isNaN(percent) || percent < 60 ? 0 : percent < 80 ? 1 : percent < 95 ? 2 : 3; }
+    public static String contextTip(double percent) {
+        int level = contextLevel(percent);
+        if (level == 0) return "";
+        String used = "Context " + Math.round(percent) + "% used";
+        return level == 1 ? used : level == 2 ? used + ", compaction soon" : used + ", compaction next";
     }
     // "now", "2 min", "3 h".
     public static String duration(double seconds) {
@@ -73,9 +102,11 @@ public final class ClaudeText {
         return join(parts);
     }
     public static final String SIGN_IN = "Sign in to Claude in Settings → Claude on the PC to see plan limits.", SIGN_IN_ENDED = "The PC's Claude sign-in has ended. Sign in again in Settings → Claude on the PC.";
+    public static final String NO_METERS = "Your plan has no usage meters.";
     // The meters' empty states: the PC's own Claude sign-in is what fills them (decision 015).
     public static String limitsMissing(PcState.Claude claude) {
         if ("expired".equals(claude.plan)) return SIGN_IN_ENDED;
+        if ("noMeters".equals(claude.plan)) return NO_METERS;
         if ("reading".equals(claude.plan)) return "Reading your plan's limits…";
         if ("failed".equals(claude.plan)) return "Couldn't read your plan's limits. Trying again soon.";
         if ("current".equals(claude.plan)) return claude.noPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
@@ -150,6 +181,7 @@ public final class ClaudeText {
         if (!claude.connected && claude.threads.isEmpty()) return "Not connected";
         List<String> parts = new ArrayList<String>();
         if (claude.needsYou() > 0) parts.add(claude.needsYou() + " needs you");
+        if (claude.stuck() > 0) parts.add(claude.stuck() + " stuck");
         int turn = 0; for (PcState.ClaudeThread t : claude.threads) if (t.running && "done".equals(t.pit)) turn++;
         if (turn > 0) parts.add(turn + " your turn");
         if (claude.working() > 0) parts.add(claude.working() + " running");
@@ -202,6 +234,10 @@ public final class ClaudeText {
             case "stuck": return "Retrying"; case "done": return "Your turn"; case "end": return "Ended"; case "archived": return "Archived"; case "resolved": return "Resolved"; default: return "Idle";
         }
     }
+    // A thread's chip word, like the PC's: a lasting Stuck says so; a working car spinning after an API error is retrying.
+    public static String chip(PcState.ClaudeThread thread) {
+        return thread != null && "stuck".equals(thread.pit) && "stuck".equals(thread.state) ? "Stuck" : chip(thread == null ? "" : thread.pit);
+    }
     // Where a thread runs and for how long in its state ("Desktop · 6 min"), or when it ended ("ended 1 h ago").
     public static String where(PcState.ClaudeThread thread, double now) {
         if (!thread.running) return (thread.where.isEmpty() ? "" : thread.where + " · ") + "ended " + duration(now - thread.lastActive) + " ago";
@@ -242,7 +278,7 @@ public final class ClaudeText {
     }
     public static String noThreads(int period) { return "No Claude Code threads " + (period == 0 ? "in the last 5 hours." : period == 1 ? "today." : "this week."); }
     // A project critter's face: the most urgent running thread's (needs, working, done, ready); asleep with none running.
-    public static int rank(String state) { return "needs".equals(state) ? 0 : "working".equals(state) ? 1 : "done".equals(state) ? 2 : 3; }
+    public static int rank(String state) { return "needs".equals(state) ? 0 : "stuck".equals(state) ? 1 : "working".equals(state) ? 2 : "done".equals(state) ? 3 : 4; }
     public static String groupState(PcState.Claude claude, PcState.ClaudeGroup group) {
         String best = "ready"; int rank = 9;
         for (String id : group.threads) { PcState.ClaudeThread t = claude.thread(id); if (t != null && t.running && rank(t.state) < rank) { rank = rank(t.state); best = t.state; } }

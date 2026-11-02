@@ -116,6 +116,12 @@ public final class PcState {
         public double since, lastActive;
         public final long[] tokens = new long[3];
         public final double[] cost = new double[3];
+        // Decision 023: why a stuck thread stopped (StopFailure's error, e.g. "rate_limit") and the PC's words for it
+        // ("Rate limited, resets 14:05"); how full its context window is (0–100, NaN when unknown); subagents running,
+        // open tasks and tool calls that failed.
+        public String reason = "", reasonText = "";
+        public double context = Double.NaN;
+        public int workers, tasks, failed;
         // The pit wall (decision 017): its car ("gt", "sport", "hatch"), what the car does ("idle", "work", "rev",
         // "need", "pit", "stuck", "done", "end", "archived", "resolved"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
         // Haiku shares) and lines added and removed.
@@ -164,8 +170,12 @@ public final class PcState {
     }
     public static final class Claude {
         public boolean connected, sample, logsFailed, logsRead, noPlan;
-        // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed or expired.
+        // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed, expired or noMeters.
         public String plan = "signedOut";
+        // "Telemetry off: port 43832 in use" when the PC can't receive Claude Code's telemetry (decision 023).
+        public String warning = "";
+        // The plan's extra usage (paid credits past the limits), when the PC's usage check reported it.
+        public ClaudeExtraUsage extraUsage;
         // How often the PC's card reads again (Settings → Claude), and the period the PC's card shows.
         public int every = 2;
         public String period = "Today";
@@ -193,7 +203,9 @@ public final class PcState {
         public boolean limitsKnown() { return fiveHour != null || week != null; }
         public int working() { int n = 0; for (ClaudeSession s : sessions) if ("working".equals(s.state)) n++; return n; }
         public int needsYou() { int n = 0; for (ClaudeSession s : sessions) if ("needs".equals(s.state)) n++; return n; }
+        public int stuck() { int n = 0; for (ClaudeSession s : sessions) if ("stuck".equals(s.state)) n++; return n; }
     }
+    public static final class ClaudeExtraUsage { public boolean enabled; public double limit = Double.NaN, used = Double.NaN, pct = Double.NaN; }
     // The PC's clipboard history (docs/design/clipboard-history.md): short previews, newest first.
     public static final class Clip { public String id = "", text = ""; public int length; public double at; }
     public static final class Clipboard {
@@ -514,13 +526,16 @@ public final class PcState {
         if (!text(c, "plan").isEmpty()) claude.plan = text(c, "plan");
         if (Json.value(c, "every") instanceof Number) claude.every = Math.max(1, (int) Json.number(c, "every"));
         if (!text(c, "period").isEmpty()) claude.period = text(c, "period");
-        claude.still = flag(c, "still"); claude.apiValue = flag(c, "apiValue");
+        claude.still = flag(c, "still"); claude.apiValue = flag(c, "apiValue"); claude.warning = text(c, "warning");
         for (Object item : Json.array(c, "threads")) {
             Map<String, Object> t = Json.obj(item);
             ClaudeThread thread = new ClaudeThread();
             thread.id = text(t, "id"); thread.project = text(t, "project"); thread.title = text(t, "title"); thread.state = text(t, "state"); thread.running = flag(t, "running");
             thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus"); thread.archived = flag(t, "archived"); thread.resolved = flag(t, "resolved");
             thread.since = Json.number(t, "since"); thread.lastActive = Json.number(t, "lastActive");
+            thread.reason = text(t, "reason"); thread.reasonText = text(t, "reasonText");
+            thread.context = Json.value(t, "context") instanceof Number ? Json.number(t, "context") : Double.NaN;
+            thread.workers = (int) Json.number(t, "workers"); thread.tasks = (int) Json.number(t, "tasks"); thread.failed = (int) Json.number(t, "failed");
             Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
             for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }
             if (thread.state.isEmpty()) thread.state = "ready";
@@ -562,6 +577,14 @@ public final class PcState {
         for (Object item : Json.array(limits, "extra")) {
             ClaudeWindow extra = window(item);
             if (extra != null) { extra.name = text(Json.obj(item), "name"); if (!extra.name.isEmpty()) claude.extra.add(extra); }
+        }
+        Map<String, Object> paid = Json.obj(Json.value(limits, "extraUsage"));
+        if (paid != null && !paid.isEmpty()) {
+            ClaudeExtraUsage extra = new ClaudeExtraUsage(); extra.enabled = flag(paid, "enabled");
+            if (Json.value(paid, "limit") instanceof Number) extra.limit = Json.number(paid, "limit");
+            if (Json.value(paid, "used") instanceof Number) extra.used = Json.number(paid, "used");
+            if (Json.value(paid, "pct") instanceof Number) extra.pct = Json.number(paid, "pct");
+            claude.extraUsage = extra;
         }
         Map<String, Object> burn = Json.obj(Json.value(c, "burn"));
         claude.rate = Json.number(burn, "rate");

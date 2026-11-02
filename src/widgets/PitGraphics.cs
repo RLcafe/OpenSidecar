@@ -191,4 +191,33 @@ namespace WidgetScreen
             }
         }
     }
+
+    // A car's context ring (decision 023): how full the thread's context window is, as an arc from the top, from 60%
+    // (Muted), 80% (Amber, compaction soon) and 95% (Amber with a filled centre). Draws nothing below 60% or when the
+    // reading is unknown. It sits on the car's top right corner on a Page-coloured disc, so it reads over any paint.
+    public sealed class ContextRing : PitInstrument
+    {
+        public double Percent = Double.NaN;
+        protected override void OnRender(DrawingContext dc)
+        {
+            int level = ClaudePace.ContextLevel(Percent);
+            double size = Math.Min(ActualWidth, ActualHeight);
+            if (level == 0 || size <= 0) return;
+            var centre = new Point(ActualWidth / 2, ActualHeight / 2);
+            double stroke = Math.Max(1.5, size / 6), r = size / 2 - stroke / 2 - 0.5;
+            Brush ink = level == 1 ? B("Muted") : B("Warning");
+            dc.DrawEllipse(B("Page"), null, centre, size / 2, size / 2);
+            dc.DrawEllipse(null, Line(B("Track"), stroke), centre, r, r);
+            double f = Math.Max(0, Math.Min(0.999, Percent / 100)), a0 = -Math.PI / 2, a1 = a0 + f * 2 * Math.PI;
+            var arc = new StreamGeometry();
+            using (var c = arc.Open())
+            {
+                c.BeginFigure(new Point(centre.X + r * Math.Cos(a0), centre.Y + r * Math.Sin(a0)), false, false);
+                c.ArcTo(new Point(centre.X + r * Math.Cos(a1), centre.Y + r * Math.Sin(a1)), new Size(r, r), 0, f > 0.5, SweepDirection.Clockwise, true, false);
+            }
+            arc.Freeze();
+            dc.DrawGeometry(null, Line(ink, stroke), arc);
+            if (level == 3) dc.DrawEllipse(ink, null, centre, Math.Max(1, r - stroke), Math.Max(1, r - stroke));
+        }
+    }
 }
