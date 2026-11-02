@@ -17,7 +17,15 @@ Claude Code watcher on the phone: packages 2 and 3 of the Watcher action plan re
 - **Retries and endings.** A thread retrying after an API error says so with the HTTP status and attempt, and a thread closed in Claude Code says how it ended.
 - **Hold a thread** for its details, as the PC's tooltip shows them: helpers' tokens apart, mode, Claude Code's own cost, crew, and Go to it.
 - **Phone notifications** when a Claude Code session needs you, gets stuck or finishes a long turn, while the app is open. A tap opens the Claude card's page. Settings → Widgets → Notify me when a Claude Code session needs me (on by default; silent in the PC's Quiet mode). Android 13 and later asks for permission once.
+- The phone also treats "Local session" and "Cloud session" titles as no name, like the PC since v0.41.1.
 - The PC adds replies, asked tool calls and lines' threads to each period's facts for the phone. No new polling, ports or outbound calls.
+
+## v0.41.1 (2 Nov 2026)
+
+Claude Code watcher fix (Ali's report: threads and their names didn't show; Windows only, the phone gets the better names through the link).
+
+- **Thread names show again.** The Claude app now calls its threads "Local session (from a project)". That counts as no title now (so do "Local session" and "Cloud session"), so the card uses Claude Code's own name for the session, then the first line of the first request, then the id label. A name you give a session still wins.
+- **One dashboard per settings file.** Starting Widget Screen while it already runs brings the running copy forward (out of the tray, or up from the taskbar, without taking the focus from a game) instead of opening a second one underneath, which lost the Claude telemetry port. Renders and copies with their own `--settings` still run side by side, and a restart for full-sensors mode waits for the old copy to close.
 
 ## v0.41.0 (2 Nov 2026)
 

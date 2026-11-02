@@ -524,7 +524,7 @@ public final class AndroidTests {
             ok(PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 0).size() > PitArt.garage(PitArt.LIME, PitArt.NEED, true, 4, 1).size() && PitArt.front(PitArt.LIME, true).size() > PitArt.front(PitArt.LIME, false).size(), "the beacon blinks, the headlights light");
         } });
         check("Claude thread names skip placeholders like the PC's, and say where they ran", new Action() { public void run() {
-            for (String generic : new String[] { "", "Remote Control", "Remote Control session (from a project)", "New session", "Untitled", "Claude Code" }) ok(ClaudeText.placeholder(generic), "a placeholder counts as a title: " + generic);
+            for (String generic : new String[] { "", "Remote Control", "Remote Control session (from a project)", "Local session (from a project)", "Local session", "Cloud session", "New session", "Untitled", "Claude Code" }) ok(ClaudeText.placeholder(generic), "a placeholder counts as a title: " + generic);
             ok(!ClaudeText.placeholder("Remote control the TV") && !ClaudeText.placeholder("Add the export button"), "a real title counts as a placeholder");
             PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"threads\":["
                 + "{\"id\":\"1b21871a-de34\",\"project\":\"alpha\",\"title\":\"Remote Control session (from a project)\",\"running\":false,\"where\":\"Remote Control\",\"lastActive\":1700000000},"

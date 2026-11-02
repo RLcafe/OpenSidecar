@@ -164,7 +164,7 @@ public final class ClaudeText {
     public static String threadTitle(PcState.ClaudeThread thread, double now, boolean use24) {
         return !placeholder(thread.title) ? thread.title.trim() : idLabel(thread.id);
     }
-    private static final java.util.regex.Pattern GENERIC = java.util.regex.Pattern.compile("^(remote control|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\\(.*\\))?$");
+    private static final java.util.regex.Pattern GENERIC = java.util.regex.Pattern.compile("^(remote control|local|cloud|new|untitled|claude code|claude|desktop|vs code|terminal|session|thread)( (session|chat|thread|conversation))?( ?\\(.*\\))?$");
     // An empty title, or one that names the kind of thread rather than the thread (the same rule as the PC's).
     public static boolean placeholder(String title) {
         if (title == null || title.trim().isEmpty()) return true;

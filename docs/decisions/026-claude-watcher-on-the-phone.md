@@ -26,6 +26,8 @@ On 2 Nov 2026 Ali asked for the Watcher action plan's changes so far to reach th
    - The icon is the waiting car's silhouette drawn by `PitArt`, so no image file is added.
 6. **Only while the app is open.** The phone asks the PC for `/state` only while the app is in front. Notifications therefore arrive while the app is open (another page, the list layout, a split screen). Watching from the background would need a foreground service polling the PC with a lasting notification, which costs battery and is a new kind of background work. Ali chose "Only while the app is open" (2 Nov 2026), so there is no background watcher.
 
+7. **Placeholder titles, as on the PC since v0.41.1.** "Local session (from a project)", "Local session" and "Cloud session" count as no name on the phone too (`ClaudeText.placeholder`), so a thread shows the PC's better name or its id label.
+
 ## What can't be on the phone
 
 - The Windows-only parts of packages 2 and 3 have nothing to do on the phone: the folder watchers, Connect's status line refresh, managed settings, telemetry and the chunked log scan all happen on the PC.

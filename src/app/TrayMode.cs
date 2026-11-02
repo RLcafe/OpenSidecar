@@ -49,6 +49,14 @@ namespace WidgetScreen
             if (Changed != null) Changed();
         }
 
+        // A second start of the app (SingleInstance) brings this one back: out of the tray, or up from the taskbar.
+        // Like the phone's return, it doesn't take the focus from a game.
+        public void Bring()
+        {
+            if (Hidden) { Show(false); return; }
+            if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        }
+
         private void ShowIcon(bool automatic)
         {
             if (icon == null)
