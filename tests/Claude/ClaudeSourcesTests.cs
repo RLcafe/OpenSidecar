@@ -167,7 +167,8 @@ internal static class ClaudeSourcesTests
             var usage = events[1].Usage;
             Assert(events[1].Name == "api_request" && usage != null && usage.Tokens == 1500 && usage.CacheRead == 5000 && Math.Abs(usage.Cost - 0.0123) < 1e-9 && usage.Request == "req_1" && usage.Model == "claude-opus-5-5" && usage.FromTelemetry && usage.At == Now, "The api_request event's usage parsed wrongly.");
             var metrics = ClaudeOtlp.ParseMetrics(MetricsFixture("s-otel", Now));
-            Assert(metrics.Count == 1 && metrics[0].Name == "active" && metrics[0].Session == "s-otel" && metrics[0].At == Now, "Metrics didn't mark the session active once, at its newest point.");
+            // Package 2 also turns each token.usage point into a "metric" event (ClaudeNumbersTests).
+            Assert(metrics.Count(m => m.Name == "active") == 1 && metrics[0].Name == "active" && metrics[0].Session == "s-otel" && metrics[0].At == Now && metrics.Count(m => m.Name == "metric" && m.Metric == "token.usage") == 2, "Metrics didn't mark the session active once, at its newest point.");
             Assert(ClaudeOtlp.ParseLogs("not json").Count == 0 && ClaudeOtlp.ParseLogs("{\"resourceLogs\":[{\"scopeLogs\":[{\"logRecords\":[{\"body\":{\"stringValue\":\"claude_code.api_request\"}}]}]}]}").Count == 0 && ClaudeOtlp.ParseMetrics("[]").Count == 0, "Broken or session-less telemetry was used.");
         });
 
@@ -197,8 +198,8 @@ internal static class ClaudeSourcesTests
                     stream.Write(head, 0, head.Length);
                     using (var reader = new StreamReader(stream)) Assert((reader.ReadLine() ?? "").Contains(" 413 "), "An oversized body wasn't refused.");
                 }
-                for (int i = 0; i < 50 && received.Count < 3; i++) Thread.Sleep(20);
-                lock (received) Assert(received.Count == 3 && received.Any(e => e.Usage != null && e.Usage.Request == "req_w"), "Received telemetry didn't reach the dashboard.");
+                for (int i = 0; i < 50 && received.Count < 5; i++) Thread.Sleep(20);
+                lock (received) Assert(received.Count == 5 && received.Any(e => e.Usage != null && e.Usage.Request == "req_w"), "Received telemetry didn't reach the dashboard.");
                 // Bound to 127.0.0.1: another address on this PC can't reach it.
                 var other = Dns.GetHostAddresses(Dns.GetHostName()).FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
                 if (other != null)

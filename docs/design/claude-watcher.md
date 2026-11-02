@@ -1,6 +1,36 @@
 # Claude Code watcher (1 Nov 2026)
 
-The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals) and [decision 023](../decisions/023-claude-trust-the-sources.md) (which sessions are alive, Stuck, the plan check and the telemetry port).
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals) [decision 023](../decisions/023-claude-trust-the-sources.md) (which sessions are alive, Stuck, the plan check and the telemetry port) and [decision 024](../decisions/024-claude-honest-numbers.md) (where costs come from, the side panel facts, and Windows first for packages 2–4).
+
+## Honest numbers (decision 024, v0.40.0)
+
+Package 2 of the Watcher action plan, Windows only (Ali, 2 Nov 2026: packages 2–4 on Windows first, the phone afterwards). The phone link already sends the new numbers.
+
+- **Costs.** Claude Code's own cost from telemetry comes first, then list prices. A reply from an unknown model shares what's left of the session's total from the status line. With neither, the API value gets a "~" and a tip naming the model; it never shows a made-up $0. The tip says where the costs came from and compares Claude Code's count for the running sessions with the widget's.
+- **Status line.** It refreshes every 30 s (unless you set your own) and keeps Claude Code's cost, clocks, lines, context size, style, agent and worktree. The thread's tip shows the mode, agent, worktree and style.
+- **Side panel facts.** Settings → Claude → Side panel facts picks four, for the card's period:
+
+  | Fact | Value | Words under it |
+  | --- | --- | --- |
+  | Tokens | tokens | period · replies or API value |
+  | Cache hits | % of input from the cache | CACHE HITS |
+  | Tool calls | calls from the logs | how many asked you |
+  | Lines | +added | −removed · threads |
+  | Slowest tool | its average run | SLOWEST · TOOL |
+  | Tool failures | % failed | N OF M FAILED |
+  | API errors | errors in the last hour | API ERRORS · LAST HOUR |
+  | Helpers | subagents' share of tokens | HELPERS · period |
+  | Edits | accepted | EDITS OK · N REJECTED |
+  | Commits | commits | COMMITS · N PRS |
+  | Active time | Claude's | CLAUDE · YOU time |
+
+  API errors and a failure rate of 20% or more show in the warning colour. Facts that need telemetry show "—" until it arrives.
+- **Revving** means a tool call has run past twice its usual time for that tool (3 to 60 s); a request after the call ends it.
+- **Retrying.** A car stopped by an API error says "Retrying after an API error · HTTP 529 · attempt 3" in its tip.
+- **Time to the limit.** The 5-hour tank says "full in 1 h 40 at this pace", in the warning colour, when the last half hour's pace fills it before the reset.
+- **Plan chips** under the plan row, up to six: narrower weekly windows beyond the two the week tile names, extra usage (on or off, percent, used of limit), and a gateway's spend limit. A chip warns from 80%. The chips step aside while a session needs you, so the ask strip and the ledger keep their room.
+- **Helpers apart.** A thread's tip says "Own 12.4k · helpers 3.1k tokens today".
+- **First scan.** Large logs are read from the newest end in 1 MB chunks, at most 64 MB a scan, down to the week's edge.
 
 ## Trust the sources (decision 023, v0.39.0)
 

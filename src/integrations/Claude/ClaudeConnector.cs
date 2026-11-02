@@ -141,6 +141,7 @@ namespace WidgetScreen
 
         // Whether a connection made by an older Widget Screen lacks something this one adds (a hook event or its
         // matcher, the telemetry settings). Settings → Claude then offers Update connection.
+        public const int StatusRefresh = 30;
         public bool NeedsUpdate()
         {
             try
@@ -154,6 +155,9 @@ namespace WidgetScreen
                     if (!((hooks == null ? null : hooks.Get(entry[0]) as List<object>) ?? new List<object>()).OfType<JsonObject>()
                         .Any(g => ClaudeJson.Str(g, "matcher") == matcher && (ClaudeJson.List(g, "hooks") ?? new List<object>()).Any(h => Ours(h) && ClaudeJson.Str(h as JsonObject, "command") == Command("hook")))) return true;
                 }
+                // Package 2's status line refreshes on a timer too.
+                var status = ClaudeJson.Obj(root, "statusLine");
+                if (Ours(status) && !(status.Get("refreshInterval") is JsonNumber)) return true;
                 var env = ClaudeJson.Obj(root, "env");
                 if (Conflicts(env, OurEnv()).Count > 0) return false;
                 foreach (var t in Telemetry(TelemetryPort))
@@ -201,6 +205,10 @@ namespace WidgetScreen
             else if (line == null && File.Exists(previous)) File.Delete(previous);
             var ours = new JsonObject(); ours["type"] = "command"; ours["command"] = Command("statusline");
             if (line != null && line.Contains("padding")) ours["padding"] = line.Get("padding");
+            // Package 2: re-run every 30 s as well as on events, so cost, time and the plan stay current while a
+            // coordinator waits on helpers. A refresh the user already chose is kept.
+            object refresh = line == null ? null : line.Get("refreshInterval");
+            ours["refreshInterval"] = refresh is JsonNumber && ((JsonNumber)refresh).Value >= 1 ? refresh : new JsonNumber(StatusRefresh);
             root["statusLine"] = ours;
 
             // Telemetry to the loopback receiver, unless the user already sends it somewhere: then it's left alone.

@@ -1016,6 +1016,14 @@
                     <TextBlock Text="Resolved: the Claude app says the latest reply completed the job. Archived: you archived it in the Claude app. On: they leave the card and the phone, and each project says how many it hides. Off: they park last, dimmed. A resolved thread that starts working again or needs you shows right away." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
                     <CheckBox x:Name="ClaudeHideIdleChoice" Content="Hide idle threads" AutomationProperties.Name="Hide idle Claude threads"/>
                     <TextBlock Text="Open threads that have waited 30 minutes or more. Their tokens still count in their project's totals." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,24"/>
+                    <TextBlock Text="Side panel facts" FontSize="24" Margin="0,0,0,12"/>
+                    <TextBlock Text="The four facts beside the 5-hour lanes on a large Claude card, for the period it shows. Tool times, failures, API errors, edits, commits and active time come from Claude Code's telemetry." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <Grid Margin="0,0,0,24"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                      <ComboBox x:Name="ClaudeFact0Choice" Margin="0,0,0,8" AutomationProperties.Name="First side panel fact"/>
+                      <ComboBox x:Name="ClaudeFact1Choice" Grid.Column="2" Margin="0,0,0,8" AutomationProperties.Name="Second side panel fact"/>
+                      <ComboBox x:Name="ClaudeFact2Choice" Grid.Row="1" AutomationProperties.Name="Third side panel fact"/>
+                      <ComboBox x:Name="ClaudeFact3Choice" Grid.Row="1" Grid.Column="2" AutomationProperties.Name="Fourth side panel fact"/>
+                    </Grid>
                     <TextBlock Text="Refresh" FontSize="24" Margin="0,0,0,12"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                       <TextBlock Text="Update the card every" VerticalAlignment="Center" Width="250" FontSize="{DynamicResource BodySize}"/>

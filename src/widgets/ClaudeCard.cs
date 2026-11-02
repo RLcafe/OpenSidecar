@@ -262,8 +262,19 @@ namespace WidgetScreen
             lines.Add(thread.Running ? StateWords(thread.State, thread.Since, now, true) + (thread.State == ClaudeState.NeedsYou && !String.IsNullOrWhiteSpace(thread.Message) ? " · " + Ask(thread.Message) : "") : "Ended · last active " + Ago(thread.LastActive, now, use24));
             if (thread.Running && thread.State == ClaudeState.Stuck)
                 lines.Add(StuckReason(thread, null, now, use24) + (String.IsNullOrWhiteSpace(thread.ReasonText) ? "" : ": " + thread.ReasonText.Trim()));
+            if (thread.Running && thread.Pit == PitState.Stuck && thread.State != ClaudeState.Stuck && Retrying(thread).Length > 0) lines.Add(Retrying(thread));
             string context = thread.Running ? ContextTip(thread.Context) : "";
             if (context.Length > 0) lines.Add(context);
+            // Package 2: helpers' tokens apart from the thread's own, Claude Code's own cost, its mode and setup.
+            long helpers = thread.HelperTokensFor(period);
+            if (counted && helpers > 0) lines.Add("Own " + ClaudeUsage.Format(Math.Max(0, thread.TokensFor(period) - helpers)) + " · helpers " + ClaudeUsage.Format(helpers) + " tokens " + PeriodName(period).ToLowerInvariant());
+            var setup = new List<string>();
+            if (thread.Running && thread.Mode.Length > 0) setup.Add("Mode " + thread.Mode);
+            if (thread.Agent.Length > 0) setup.Add("Agent " + thread.Agent);
+            if (thread.Worktree.Length > 0) setup.Add("Worktree " + thread.Worktree);
+            if (thread.Style.Length > 0 && !String.Equals(thread.Style, "default", StringComparison.OrdinalIgnoreCase)) setup.Add("Style " + thread.Style);
+            if (apiValue && !Double.IsNaN(thread.CostUsd)) setup.Add("Claude Code counts $" + Dollars(thread.CostUsd));
+            if (setup.Count > 0) lines.Add(String.Join(" · ", setup));
             var detail = new List<string>();
             if (counted) detail.Add(ClaudeUsage.Format(thread.TokensFor(period)) + " tokens · " + Replies(thread.RepliesFor(period)) + (apiValue ? " · " + ClaudeUsage.Money(thread.CostFor(period)) + " API value" : "") + " " + PeriodName(period).ToLowerInvariant());
             if (!String.IsNullOrWhiteSpace(thread.Model)) detail.Add(thread.Model);
@@ -285,6 +296,111 @@ namespace WidgetScreen
             var parts = Enumerable.Range(0, 3).Where(i => mix[i] > 0.005).Select(i => names[i] + " " + Math.Round(mix[i] * 100) + "%").ToList();
             return parts.Count == 0 ? "No replies in this period" : String.Join(" · ", parts);
         }
+        // ----- Package 2 -----
+
+        // "1 h 40", "25 min", "40 s".
+        public static string Span(TimeSpan time)
+        {
+            if (time < TimeSpan.FromMinutes(1)) return Math.Max(0, (int)time.TotalSeconds) + " s";
+            if (time < TimeSpan.FromHours(1)) return (int)time.TotalMinutes + " min";
+            return (int)time.TotalHours + " h" + (time.Minutes > 0 ? " " + time.Minutes.ToString("00", CultureInfo.InvariantCulture) : "");
+        }
+        // The 5-hour tank's time to the limit: "full in 1 h 40 at this pace" (nothing when it lasts to the reset).
+        public static string Eta(double minutes) { return Double.IsNaN(minutes) ? "" : "full in " + Span(TimeSpan.FromMinutes(minutes)) + " at this pace"; }
+        // The tank's pace line: the projection and, when it fills before the reset, when.
+        public static string PaceLine(double projection, double etaMinutes)
+        {
+            string pace = Pace(projection), eta = Eta(etaMinutes);
+            return pace.Length == 0 ? eta : eta.Length == 0 ? pace : pace + " · " + eta;
+        }
+        // "~" before an API value that leaves out replies from a model with no known price, and what the tip says.
+        public static string Unpriced(List<string> models) { return models == null || models.Count == 0 ? "" : "~"; }
+        public static string UnpricedTip(List<string> models)
+        {
+            if (models == null || models.Count == 0) return "";
+            return "Price unknown for " + String.Join(", ", models.Take(3)) + (models.Count > 3 ? " and " + (models.Count - 3) + " more" : "") + ": those replies count $0 here unless Claude Code's status line gave the session's cost.";
+        }
+        // The API value's tip: what it is, where its numbers came from, and Claude Code's own count for the running
+        // sessions beside the widget's.
+        public static string ApiValue(ClaudeView view, ClaudePeriod period)
+        {
+            var lines = new List<string> { ApiValueTip };
+            string source = view.CostSourceFor(period);
+            lines.Add(source == "claude" ? "Costs from Claude Code's telemetry." : source == "statusline" ? "Costs from Claude Code's status line, shared out by reply size." : source == "mixed" ? "Costs from Claude Code where it sent them, else from list prices." : "Costs from list prices.");
+            if (!Double.IsNaN(view.ClaudeCodeCost)) lines.Add("Running sessions: Claude Code counts $" + Dollars(view.ClaudeCodeCost) + " in all; Widget Screen counts $" + Dollars(view.EstimateCost) + " for them this week.");
+            string unknown = UnpricedTip(view.UnpricedFor(period));
+            if (unknown.Length > 0) lines.Add(unknown);
+            return String.Join("\n", lines);
+        }
+        // An API error telemetry saw on a working thread: "Retrying after an API error · HTTP 529 · attempt 3".
+        public static string Retrying(ClaudeSession thread)
+        {
+            if (thread.ErrorAt == DateTime.MinValue) return "";
+            return "Retrying after an API error" + (thread.ErrorStatus > 0 ? " · HTTP " + thread.ErrorStatus : "") + (thread.ErrorAttempt > 0 ? " · attempt " + thread.ErrorAttempt : "");
+        }
+        // A side-panel fact (package 2): its value, the words under it and its tip, for the period.
+        public static string[] Fact(string kind, ClaudeView view, ClaudePeriod period, bool counted, bool showApi)
+        {
+            var f = view.FactsFor(period);
+            string when = PeriodName(period).ToUpperInvariant(), lower = PeriodName(period).ToLowerInvariant();
+            var c = CultureInfo.InvariantCulture;
+            switch (kind)
+            {
+                case ClaudeFactKinds.Cache:
+                    return new[] { Percent(f.CacheHit), "CACHE HITS", ClaudeUsage.Format(f.CacheRead) + " tokens read from the cache " + lower + " (not counted in the token totals)" };
+                case ClaudeFactKinds.Tools:
+                    return new[] { counted ? f.Tools.ToString(c) : "—", ToolsKey(f), ToolsTip(f) };
+                case ClaudeFactKinds.Lines:
+                    return new[] { f.Added > 0 || f.Removed > 0 ? Added(f.Added) : "—", f.Added > 0 || f.Removed > 0 ? Removed(f.Removed) + " · " + Threads(f.LinesThreads).ToUpperInvariant() : "LINES", "Lines added and removed " + lower + ", from Claude Code's logs" };
+                case ClaudeFactKinds.Slowest:
+                    return new[] { Double.IsNaN(f.SlowMs) ? "—" : Span(TimeSpan.FromMilliseconds(f.SlowMs)), f.SlowTool.Length > 0 ? "SLOWEST · " + f.SlowTool.ToUpperInvariant() : "SLOWEST TOOL", f.Telemetry ? "The tool with the longest average run " + lower + ", from Claude Code's telemetry." : NeedsTelemetry };
+                case ClaudeFactKinds.Failures:
+                    return new[] { Percent(f.FailureRate), f.Runs > 0 ? f.RunFailures + " OF " + f.Runs + " FAILED" : "TOOL FAILURES",
+                        f.FailuresFromHooks ? "Tool calls that failed: the sessions' failure counts from Claude Code's hooks over the logs' tool calls " + lower + "." : "Tool runs that failed " + lower + ", from Claude Code's telemetry." };
+                case ClaudeFactKinds.Errors:
+                    return new[] { f.Telemetry ? f.Errors.ToString(c) : "—", "API ERRORS · LAST HOUR", f.Telemetry ? "Requests to Claude that failed in the last hour (Claude Code retries most by itself)." : NeedsTelemetry };
+                case ClaudeFactKinds.Helpers:
+                    return new[] { Percent(f.HelperShare), "HELPERS · " + when, "The subagents' share of the tokens " + lower + (f.Helpers > 0 ? "; " + f.Helpers + " finished" : "") + "." };
+                case ClaudeFactKinds.Edits:
+                    return new[] { f.Metrics ? f.EditsAccepted.ToString(c) : "—", f.Metrics ? "EDITS OK · " + f.EditsRejected + " REJECTED" : "EDITS", f.Metrics ? "Edits, writes and notebook edits you accepted and rejected " + lower + "." : NeedsTelemetry };
+                case ClaudeFactKinds.Commits:
+                    return new[] { f.Metrics ? f.Commits.ToString(c) : "—", f.Metrics ? "COMMITS · " + f.PullRequests + " PRS" : "COMMITS", f.Metrics ? "Git commits and pull requests Claude Code made " + lower + "." : NeedsTelemetry };
+                case ClaudeFactKinds.Active:
+                    return new[] { f.Metrics ? Span(TimeSpan.FromSeconds(f.ActiveCli)) : "—", f.Metrics ? "CLAUDE · YOU " + Span(TimeSpan.FromSeconds(f.ActiveUser)).ToUpperInvariant() : "ACTIVE TIME", f.Metrics ? "Time Claude worked (tools and replies) and time you were active (typing and reading) " + lower + ", from Claude Code's telemetry." : NeedsTelemetry };
+                default:
+                    string unknown = Unpriced(view.UnpricedFor(period));
+                    return new[] { counted ? ClaudeUsage.Format(f.Tokens) : "—", !counted ? when : showApi ? when + " · " + unknown + "$" + Dollars(f.Cost) + " API VALUE" : when + " · " + f.Replies + " REPLIES", showApi ? ApiValue(view, period) : TokensTip };
+            }
+        }
+        // The plan's chips (package 2): the narrower weekly windows the week tile has no room for (it names two),
+        // extra usage and a gateway's spend limit, with whether it warns (80% and over, as the meters do).
+        public const int MostPlanChips = 6;
+        public static List<KeyValuePair<string, bool>> PlanChips(ClaudeLimits limits, DateTime now, bool use24)
+        {
+            var chips = new List<KeyValuePair<string, bool>>();
+            if (limits == null) return chips;
+            foreach (var p in limits.Extra.Skip(2).Take(4))
+            {
+                double pct = Percent(p.Value, now);
+                chips.Add(new KeyValuePair<string, bool>(p.Key + " " + Math.Round(pct) + "%" + (p.Value.ResetsAt.HasValue && p.Value.Current(now) ? " · resets " + When(p.Value.ResetsAt.Value, now, use24) : ""), Warns(pct)));
+            }
+            var extra = limits.ExtraUsage;
+            if (extra != null)
+            {
+                var c = CultureInfo.InvariantCulture;
+                string amounts = !Double.IsNaN(extra.Used) && !Double.IsNaN(extra.Limit) ? " · " + extra.Used.ToString("0.##", c) + " of " + extra.Limit.ToString("0.##", c) : "";
+                chips.Add(new KeyValuePair<string, bool>(!extra.Enabled ? "Extra usage off" : "Extra usage " + (Double.IsNaN(extra.Percent) ? "on" : Math.Round(extra.Percent) + "%") + amounts, extra.Enabled && !Double.IsNaN(extra.Percent) && Warns(extra.Percent)));
+            }
+            var spend = limits.Spend;
+            if (spend != null)
+            {
+                string dollars = !Double.IsNaN(spend.UsedUsd) && !Double.IsNaN(spend.LimitUsd) ? " · $" + Dollars(spend.UsedUsd) + " of $" + Dollars(spend.LimitUsd) : "";
+                chips.Add(new KeyValuePair<string, bool>("Spend limit " + Math.Round(spend.Percent) + "%" + dollars + (spend.Period.Length > 0 ? " " + spend.Period : ""), Warns(spend.Percent)));
+            }
+            return chips.Take(MostPlanChips).ToList();
+        }
+        public const string NeedsTelemetry = "Comes from Claude Code's telemetry, which hasn't sent any yet (Settings → Claude → Update connection).";
+
         // The narrower weekly windows in one line: "Opus only 18% · Sonnet 9%".
         public static string Extras(ClaudeLimits limits, DateTime now)
         {
@@ -378,11 +494,15 @@ namespace WidgetScreen
             if (rolling == null && next != null) { collapsed.Clear(); collapsed.UnionWith(next.Collapsed); }
             Rebuild();
         }
-        public void Configure(bool use24Hour, ClaudePeriod chosen, bool apiValue = false)
+        public void Configure(bool use24Hour, ClaudePeriod chosen, bool apiValue = false, string[] facts = null)
         {
             use24 = use24Hour;
-            if (chosen != period || apiValue != showApi) { period = chosen; showApi = apiValue; built = ""; Rebuild(); } else Render();
+            var kinds = ClaudeFactKinds.Clean(facts);
+            if (chosen != period || apiValue != showApi || !kinds.SequenceEqual(factKinds)) { period = chosen; showApi = apiValue; factKinds = kinds; built = ""; Rebuild(); } else Render();
         }
+        // Settings → Claude → the side panel's four facts (package 2).
+        private string[] factKinds = ClaudeFactKinds.Default;
+        public string[] FactKinds { get { return factKinds; } }
         // Settings → Claude → Show what the tokens would cost at API list prices (off by default; decision 019): the
         // ledger's third number column shows that, or else each thread's replies.
         private bool showApi;
@@ -447,7 +567,7 @@ namespace WidgetScreen
             var groups = String.Join(";", view.Groups(period).Select(g => g.Folder + (collapsed.Contains(g.Folder) ? "!" : "") + ":" + String.Join(",", g.Threads.Select(t => t.Id + (t.Running && t.CanFocus ? "*" : "")))));
             var asking = view.Sessions.FirstOrDefault(s => s.State == ClaudeState.NeedsYou);
             return view.Connected + "|" + view.Sample + "|" + String.Join(",", view.Sessions.Select(s => s.Id + ":" + s.CanFocus)) + "|" + groups + "|" + (asking == null ? "" : asking.Id + asking.CanFocus)
-                + "|" + (view.Limits != null && view.Limits.Known) + view.NoPlan + view.Plan + "|" + (view.Limits == null ? 0 : view.Limits.Extra.Count) + "|" + view.LogsFailed + "|" + String.Join(",", view.Lanes.Select(l => l.Folder)) + "|" + view.Facts.Telemetry;
+                + "|" + (view.Limits != null && view.Limits.Known) + view.NoPlan + view.Plan + "|" + ClaudeText.PlanChips(view.Limits, DateTime.UtcNow, use24).Count + "|" + view.LogsFailed + "|" + String.Join(",", view.Lanes.Select(l => l.Folder)) + "|" + view.Facts.Telemetry;
         }
 
         private void Build()
@@ -567,16 +687,43 @@ namespace WidgetScreen
         private FrameworkElement BuildLarge(double width, double height)
         {
             bool asking = view.Sessions.Any(s => s.State == ClaudeState.NeedsYou);
-            var root = Rows(new GridLength(48), new GridLength(12), Auto, Auto, new GridLength(12), Star);
+            var root = Rows(new GridLength(48), new GridLength(12), Auto, Auto, Auto, new GridLength(12), Star);
             root.Children.Add(Header(width, true));
             root.Children.Add(At(PlanRow(width), 2));
-            if (asking) { askStrip = AskStrip(); askStrip.Margin = new Thickness(0, 12, 0, 0); root.Children.Add(At(askStrip, 3)); }
+            // Package 2: more narrower weekly windows, extra usage and a gateway's spend limit, as chips. They step
+            // aside while a session needs you, so the ask strip and the ledger keep their room.
+            if (!asking && ClaudeText.PlanChips(view.Limits, DateTime.UtcNow, use24).Count > 0) root.Children.Add(At(PlanChips(), 3));
+            if (asking) { askStrip = AskStrip(); askStrip.Margin = new Thickness(0, 12, 0, 0); root.Children.Add(At(askStrip, 4)); }
             bool side = CardSizing.ClaudeSide(width);
             var ledger = side ? Columns(Star, new GridLength(16), new GridLength(CardSizing.ClaudeSideWidth)) : Columns(Star);
             ledger.Children.Add(Ledger(side ? width - 16 - CardSizing.ClaudeSideWidth : width));
             if (side) ledger.Children.Add(At(SidePanel(), 0, 2));
-            root.Children.Add(At(names.Add(ledger, "ClaudeLedgerArea"), 5));
+            root.Children.Add(At(names.Add(ledger, "ClaudeLedgerArea"), 6));
             return root;
+        }
+        // The chips under the plan row: "Opus week 18% · resets Thu", "Extra usage 25% · 12.40 of 50", …
+        private FrameworkElement PlanChips()
+        {
+            var row = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+            var blocks = new List<TextBlock>();
+            for (int i = 0; i < ClaudeText.MostPlanChips; i++)
+            {
+                var text = Trimmed(Text("", 12, "Muted"));
+                var chip = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 6, 4), Child = text, BorderThickness = new Thickness(1) };
+                chip.SetResourceReference(Border.BorderBrushProperty, "Track");
+                blocks.Add(text); row.Children.Add(names.Add(chip, "ClaudePlanChip" + i));
+            }
+            fills.Add(now => {
+                var chips = ClaudeText.PlanChips(view.Limits, now, use24);
+                for (int i = 0; i < blocks.Count; i++)
+                {
+                    var chip = (Border)row.Children[i];
+                    chip.Visibility = i < chips.Count ? Visibility.Visible : Visibility.Collapsed;
+                    if (i >= chips.Count) continue;
+                    blocks[i].Text = chips[i].Key; blocks[i].SetResourceReference(TextBlock.ForegroundProperty, chips[i].Value ? "Warning" : "Muted");
+                }
+            });
+            return names.Add(row, "ClaudePlanChips");
         }
 
         // The plan row: the 5-hour tank, the week's laps and the rev counter (from 900 wide).
@@ -624,7 +771,9 @@ namespace WidgetScreen
                 bool warn = ClaudePace.Warns(projection) || ClaudeText.Warns(pct);
                 gauge.Value = pct / 100; gauge.Projection = Double.IsNaN(projection) ? Double.NaN : projection / 100; gauge.Pace = elapsed; gauge.Warn = pct >= 100; gauge.InvalidateVisual();
                 if (w == null) value.Text = "—"; else SetBig(value, pct, ClaudeText.Warns(pct) ? "Warning" : "Text");
-                pace.Text = ClaudeText.Pace(projection); pace.SetResourceReference(TextBlock.ForegroundProperty, warn ? "Warning" : "Muted");
+                // Package 2: when the tank fills at the last half hour's pace, if that's before it resets.
+                pace.Text = ClaudeText.PaceLine(projection, view.LimitEtaMinutes); pace.SetResourceReference(TextBlock.ForegroundProperty, warn || !Double.IsNaN(view.LimitEtaMinutes) ? "Warning" : "Muted");
+                pace.ToolTip = Double.IsNaN(view.LimitEtaMinutes) ? null : "At the last half hour's pace, across every project, the 5-hour limit fills before it resets.";
                 reset.Text = w == null ? ClaudeText.NoFiveHour : ClaudeText.FiveHourReset(w, now, use24); reset.SetResourceReference(TextBlock.ForegroundProperty, pct >= 100 ? "Warning" : "Muted");
             });
             return Tile(row, 12, new Thickness(12, 10, 14, 10));
@@ -904,7 +1053,7 @@ namespace WidgetScreen
             block.Inlines.Add(new Run(" " + ClaudeText.Removed(removed)) { Foreground = Solid(0xFFF09A9A) });
         }
 
-        // The side panel: the 5-hour lanes and today's four facts.
+        // The side panel: the 5-hour lanes and four facts for the period (Settings → Claude picks them; package 2).
         private FrameworkElement SidePanel()
         {
             var side = new StackPanel();
@@ -952,15 +1101,19 @@ namespace WidgetScreen
                 double max = Math.Max(1, view.Lanes.SelectMany(l => l.Bins).DefaultIfEmpty(0).Max());
                 foreach (var b in bins) { b.Maximum = max; b.InvalidateVisual(); }
                 start.Text = ClaudeText.Clock(now - ClaudePace.FiveHours, use24); middle.Text = ClaudeText.Clock(now - TimeSpan.FromMinutes(150), use24);
-                var f = view.Facts;
-                values[0].Text = Counted ? ClaudeUsage.Format(f.Tokens) : "—"; keys[0].Text = !Counted ? "TODAY" : showApi ? "TODAY · $" + ClaudeText.Dollars(f.Cost) + " API VALUE" : "TODAY · " + f.Replies + " REPLIES";
-                values[1].Text = ClaudeText.Percent(f.CacheHit); keys[1].Text = "CACHE HITS";
-                values[1].ToolTip = ClaudeUsage.Format(f.CacheRead) + " tokens read from the cache today (not counted in the token totals)";
-                values[2].Text = Counted ? f.Tools.ToString(CultureInfo.InvariantCulture) : "—"; keys[2].Text = ClaudeText.ToolsKey(f);
-                values[2].ToolTip = ClaudeText.ToolsTip(f);
-                values[3].Inlines.Clear();
-                if (f.Added > 0 || f.Removed > 0) { values[3].Inlines.Add(new Run(ClaudeText.Added(f.Added)) { Foreground = Solid(PitArt.Lime) }); keys[3].Text = ClaudeText.Removed(f.Removed) + " · " + ClaudeText.Threads(f.LinesThreads).ToUpperInvariant(); }
-                else { values[3].Inlines.Add(new Run("—")); keys[3].Text = "LINES"; }
+                // The four facts Settings → Claude picked, for the chosen period (package 2).
+                for (int i = 0; i < 4; i++)
+                {
+                    string kind = factKinds[i];
+                    var fact = ClaudeText.Fact(kind, view, period, Counted, showApi);
+                    values[i].Inlines.Clear();
+                    if (kind == ClaudeFactKinds.Lines && fact[0] != "—") values[i].Inlines.Add(new Run(fact[0]) { Foreground = Solid(PitArt.Lime) });
+                    else values[i].Inlines.Add(new Run(fact[0]));
+                    keys[i].Text = fact[1];
+                    values[i].ToolTip = fact[2]; keys[i].ToolTip = fact[2];
+                    bool warn = (kind == ClaudeFactKinds.Errors && view.FactsFor(period).Errors > 0) || (kind == ClaudeFactKinds.Failures && view.FactsFor(period).FailureRate >= 0.2);
+                    values[i].SetResourceReference(TextBlock.ForegroundProperty, warn ? "Warning" : "Text");
+                }
             });
             return names.Add(side, "ClaudeSide");
         }

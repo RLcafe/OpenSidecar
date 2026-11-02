@@ -38,6 +38,14 @@ namespace WidgetScreen
         // SessionEnd with reason "clear": the thread ended but its Claude Code process goes on with a new session.
         public bool Ended;
         public string EndReason = "";
+        // Package 2: what Claude Code's status line says about the session (statusline.md "Available data"). Its own
+        // cost estimate (cost.total_cost_usd, NaN until it sends one), wall-clock and API time, lines changed, the
+        // context window's size and whether the last reply passed 200k tokens, the output style, the --agent name and
+        // the worktree it is in.
+        public double CostUsd = Double.NaN;
+        public long DurationMs, ApiMs, LinesAdded, LinesRemoved, ContextSize;
+        public bool Over200k;
+        public string Style = "", Agent = "", Worktree = "", WorktreeBranch = "";
         public const int MostWorkers = 32, MostTasks = 64;
 
         public static string StateName(ClaudeState state) { return state == ClaudeState.Working ? "working" : state == ClaudeState.NeedsYou ? "needs" : state == ClaudeState.Done ? "done" : state == ClaudeState.Stuck ? "stuck" : "ready"; }
@@ -64,6 +72,17 @@ namespace WidgetScreen
             if (Cwd.Length > 0) o["cwd"] = Cwd;
             if (Ended) o["ended"] = true;
             if (EndReason.Length > 0) o["endReason"] = EndReason;
+            if (!Double.IsNaN(CostUsd)) o["costUsd"] = new JsonNumber(Math.Round(CostUsd, 6));
+            if (DurationMs > 0) o["durationMs"] = new JsonNumber(DurationMs);
+            if (ApiMs > 0) o["apiMs"] = new JsonNumber(ApiMs);
+            if (LinesAdded > 0) o["linesAdded"] = new JsonNumber(LinesAdded);
+            if (LinesRemoved > 0) o["linesRemoved"] = new JsonNumber(LinesRemoved);
+            if (ContextSize > 0) o["contextSize"] = new JsonNumber(ContextSize);
+            if (Over200k) o["over200k"] = true;
+            if (Style.Length > 0) o["style"] = Style;
+            if (Agent.Length > 0) o["agent"] = Agent;
+            if (Worktree.Length > 0) o["worktree"] = Worktree;
+            if (WorktreeBranch.Length > 0) o["worktreeBranch"] = WorktreeBranch;
             return o;
         }
         public static ClaudeSessionFile FromJson(JsonObject o)
@@ -78,6 +97,9 @@ namespace WidgetScreen
             s.Failed = (int)Long(o, "failed"); s.Denied = (int)Long(o, "denied");
             s.Workers = Strings(o, "workers"); s.Tasks = Strings(o, "tasks"); s.TasksDone = Strings(o, "tasksDone");
             s.Cwd = ClaudeJson.Str(o, "cwd") ?? ""; s.Ended = ClaudeJson.Bool(o, "ended"); s.EndReason = ClaudeJson.Str(o, "endReason") ?? "";
+            s.CostUsd = ClaudeJson.Num(o, "costUsd"); s.DurationMs = Long(o, "durationMs"); s.ApiMs = Long(o, "apiMs");
+            s.LinesAdded = Long(o, "linesAdded"); s.LinesRemoved = Long(o, "linesRemoved"); s.ContextSize = Long(o, "contextSize"); s.Over200k = ClaudeJson.Bool(o, "over200k");
+            s.Style = ClaudeJson.Str(o, "style") ?? ""; s.Agent = ClaudeJson.Str(o, "agent") ?? ""; s.Worktree = ClaudeJson.Str(o, "worktree") ?? ""; s.WorktreeBranch = ClaudeJson.Str(o, "worktreeBranch") ?? "";
             return s;
         }
         private static long Long(JsonObject o, string key) { double v = ClaudeJson.Num(o, key); return Double.IsNaN(v) ? 0 : (long)v; }
@@ -101,9 +123,21 @@ namespace WidgetScreen
         public double Limit = Double.NaN, Used = Double.NaN, Percent = Double.NaN;
     }
 
+    // A Claude apps gateway's spend limit, from the status line's rate_limits.spend_limit (package 2): the share used
+    // (0–100, more once past it), when its period resets, and the dollars used and allowed with the period's name when
+    // the gateway sends them (NaN and "" when not).
+    public sealed class ClaudeSpendLimit
+    {
+        public double Percent, UsedUsd = Double.NaN, LimitUsd = Double.NaN;
+        public DateTime? ResetsAt;
+        public string Period = "";
+    }
+
     // The plan's five-hour and weekly limits, from Claude Code's status line or the usage check.
     public sealed class ClaudeLimits
     {
+        // A gateway's spend limit, when Claude Code's status line reported one.
+        public ClaudeSpendLimit Spend;
         // Extra usage, when the usage check reported it (decision 023).
         public ClaudeExtraUsage ExtraUsage;
         public ClaudeLimitWindow FiveHour, Week;
@@ -122,6 +156,15 @@ namespace WidgetScreen
             if (FiveHour != null) o["fiveHour"] = Window(FiveHour);
             if (Week != null) o["week"] = Window(Week);
             if (MissingAt.HasValue) o["missingAt"] = new JsonNumber(ClaudeBridge.Epoch(MissingAt.Value));
+            if (Spend != null)
+            {
+                var spend = new JsonObject(); spend["pct"] = new JsonNumber(Math.Round(Spend.Percent, 1));
+                if (Spend.ResetsAt.HasValue) spend["resetsAt"] = new JsonNumber(ClaudeBridge.Epoch(Spend.ResetsAt.Value));
+                if (!Double.IsNaN(Spend.UsedUsd)) spend["usedUsd"] = new JsonNumber(Math.Round(Spend.UsedUsd, 2));
+                if (!Double.IsNaN(Spend.LimitUsd)) spend["limitUsd"] = new JsonNumber(Math.Round(Spend.LimitUsd, 2));
+                if (Spend.Period.Length > 0) spend["period"] = Spend.Period;
+                o["spend"] = spend;
+            }
             return o;
         }
         private static JsonObject Window(ClaudeLimitWindow w)
@@ -137,6 +180,13 @@ namespace WidgetScreen
             double updated = ClaudeJson.Num(o, "updatedAt"), missing = ClaudeJson.Num(o, "missingAt");
             limits.UpdatedAt = Double.IsNaN(updated) ? DateTime.MinValue : ClaudeBridge.FromEpoch(updated);
             if (!Double.IsNaN(missing)) limits.MissingAt = ClaudeBridge.FromEpoch(missing);
+            var spend = ClaudeJson.Obj(o, "spend");
+            if (spend != null && !Double.IsNaN(ClaudeJson.Num(spend, "pct")))
+            {
+                double resets = ClaudeJson.Num(spend, "resetsAt");
+                limits.Spend = new ClaudeSpendLimit { Percent = ClaudeJson.Num(spend, "pct"), UsedUsd = ClaudeJson.Num(spend, "usedUsd"), LimitUsd = ClaudeJson.Num(spend, "limitUsd"), Period = ClaudeJson.Str(spend, "period") ?? "" };
+                if (!Double.IsNaN(resets)) limits.Spend.ResetsAt = ClaudeBridge.FromEpoch(resets);
+            }
             return limits;
         }
         private static ClaudeLimitWindow ParseWindow(JsonObject o)
@@ -419,7 +469,7 @@ namespace WidgetScreen
             }
             if (rate != null || limits.MissingAt.HasValue)
             {
-                bool same = previous != null && rate != null && previous.Source == "statusline" && Same(previous.FiveHour, limits.FiveHour) && Same(previous.Week, limits.Week) && now - previous.UpdatedAt < TimeSpan.FromSeconds(60);
+                bool same = previous != null && rate != null && previous.Source == "statusline" && Same(previous.FiveHour, limits.FiveHour) && Same(previous.Week, limits.Week) && SameSpend(previous.Spend, limits.Spend) && now - previous.UpdatedAt < TimeSpan.FromSeconds(60);
                 bool sameMissing = previous != null && rate == null && previous.MissingAt.HasValue && now - previous.MissingAt.Value < TimeSpan.FromSeconds(60);
                 if (rate != null) { limits.UpdatedAt = now; limits.Source = "statusline"; }
                 if (!same && !sameMissing) WriteAtomic(LimitsPath(bridge), ClaudeJson.Compact(limits.ToJson()));
@@ -429,6 +479,12 @@ namespace WidgetScreen
             {
                 string title = ClaudeJson.Str(o, "session_name") ?? "", model = ClaudeJson.Str(ClaudeJson.Obj(o, "model"), "display_name") ?? "";
                 string project = ClaudeJson.Str(ClaudeJson.Obj(o, "workspace"), "project_dir") ?? ClaudeJson.Str(o, "cwd") ?? "";
+                var cost = ClaudeJson.Obj(o, "cost"); var worktree = ClaudeJson.Obj(o, "worktree");
+                double costUsd = ClaudeJson.Num(cost, "total_cost_usd"), duration = ClaudeJson.Num(cost, "total_duration_ms"), api = ClaudeJson.Num(cost, "total_api_duration_ms");
+                double added = ClaudeJson.Num(cost, "total_lines_added"), removed = ClaudeJson.Num(cost, "total_lines_removed"), size = ClaudeJson.Num(context, "context_window_size");
+                bool over = ClaudeJson.Bool(o, "exceeds_200k_tokens");
+                string style = Short(ClaudeJson.Str(ClaudeJson.Obj(o, "output_style"), "name"), 40), agent = Short(ClaudeJson.Str(ClaudeJson.Obj(o, "agent"), "name"), 60);
+                string tree = Short(ClaudeJson.Str(worktree, "name"), 80), branch = Short(ClaudeJson.Str(worktree, "branch"), 120);
                 string path = SessionPath(bridge, id);
                 WithSession(id, () => {
                     var session = Read(path);
@@ -444,12 +500,29 @@ namespace WidgetScreen
                     if (model.Length > 0 && model != session.Model) { session.Model = model; changed = true; }
                     if (project.Length > 0 && project != session.Project) { session.Project = project; changed = true; }
                     if (!Double.IsNaN(contextPercent) && (Double.IsNaN(session.Context) || Math.Abs(contextPercent - session.Context) >= 1)) { session.Context = contextPercent; changed = true; }
+                    // Package 2: Claude Code's own numbers. A cent of cost, a line or a setting is a change; the clocks
+                    // only count once they have moved a minute, so a refresh every 30 s doesn't rewrite the file.
+                    if (!Double.IsNaN(costUsd) && costUsd >= 0 && (Double.IsNaN(session.CostUsd) || Math.Abs(costUsd - session.CostUsd) >= 0.005)) { session.CostUsd = costUsd; changed = true; }
+                    if (!Double.IsNaN(added) && (long)added != session.LinesAdded) { session.LinesAdded = Math.Max(0, (long)added); changed = true; }
+                    if (!Double.IsNaN(removed) && (long)removed != session.LinesRemoved) { session.LinesRemoved = Math.Max(0, (long)removed); changed = true; }
+                    if (!Double.IsNaN(size) && size > 0 && (long)size != session.ContextSize) { session.ContextSize = (long)size; changed = true; }
+                    if (over != session.Over200k) { session.Over200k = over; changed = true; }
+                    if (style != session.Style) { session.Style = style; changed = true; }
+                    if (agent != session.Agent) { session.Agent = agent; changed = true; }
+                    if (tree != session.Worktree || branch != session.WorktreeBranch) { session.Worktree = tree; session.WorktreeBranch = branch; changed = true; }
+                    if (!Double.IsNaN(duration) && duration >= 0 && (changed || Math.Abs(duration - session.DurationMs) >= 60000)) { session.DurationMs = (long)duration; changed = true; }
+                    if (!Double.IsNaN(api) && api >= 0 && (changed || Math.Abs(api - session.ApiMs) >= 60000)) { session.ApiMs = (long)api; changed = true; }
                     if (!changed) return;
                     session.LastEvent = Math.Max(session.LastEvent, Epoch(now));
                     WriteAtomic(path, ClaudeJson.Compact(session.ToJson()));
                 });
             }
             return DefaultLine(rate != null ? limits : null, contextPercent, now);
+        }
+        private static bool SameSpend(ClaudeSpendLimit a, ClaudeSpendLimit b)
+        {
+            if (a == null || b == null) return a == b;
+            return Math.Abs(a.Percent - b.Percent) < 0.05 && a.ResetsAt == b.ResetsAt && (a.UsedUsd == b.UsedUsd || (Double.IsNaN(a.UsedUsd) && Double.IsNaN(b.UsedUsd))) && (a.LimitUsd == b.LimitUsd || (Double.IsNaN(a.LimitUsd) && Double.IsNaN(b.LimitUsd))) && a.Period == b.Period;
         }
         private static bool Same(ClaudeLimitWindow a, ClaudeLimitWindow b)
         {
@@ -471,7 +544,13 @@ namespace WidgetScreen
         // the docs; an ISO time has been seen too). Either window may be missing.
         public static ClaudeLimits ParseRateLimits(JsonObject rate, DateTime now)
         {
-            return new ClaudeLimits { FiveHour = ParseWindow(ClaudeJson.Obj(rate, "five_hour"), "used_percentage"), Week = ParseWindow(ClaudeJson.Obj(rate, "seven_day"), "used_percentage"), UpdatedAt = now, Source = "statusline" };
+            var limits = new ClaudeLimits { FiveHour = ParseWindow(ClaudeJson.Obj(rate, "five_hour"), "used_percentage"), Week = ParseWindow(ClaudeJson.Obj(rate, "seven_day"), "used_percentage"), UpdatedAt = now, Source = "statusline" };
+            // Behind a Claude apps gateway: the spend limit (its percentage can pass 100; the dollars may come later).
+            var spend = ClaudeJson.Obj(rate, "spend_limit");
+            double pct = ClaudeJson.Num(spend, "used_percentage");
+            if (spend != null && !Double.IsNaN(pct))
+                limits.Spend = new ClaudeSpendLimit { Percent = Math.Max(0, pct), ResetsAt = ParseTime(spend.Get("resets_at")), UsedUsd = ClaudeJson.Num(spend, "used_usd"), LimitUsd = ClaudeJson.Num(spend, "limit_usd"), Period = Short(ClaudeJson.Str(spend, "period") ?? "", 20) };
+            return limits;
         }
 
         // The read-only usage check's answer (GET api.anthropic.com/api/oauth/usage, undocumented): five_hour and

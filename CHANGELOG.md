@@ -6,6 +6,22 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.40.0 (2 Nov 2026)
+
+Claude Code watcher: honest numbers (package 2 of the Watcher action plan; Windows only, the phone follows later; decision 024).
+
+- **Claude Code's own cost.** The API value uses Claude Code's own cost where its telemetry sends one, and list prices otherwise. Replies from a model with no known price share what's left of the session's total from Claude Code's status line; with no total, the value shows "~" with a tip naming the model, instead of counting $0. The tip also compares Claude Code's count for the running sessions with the widget's.
+- **The status line refreshes every 30 s** and keeps Claude Code's cost, session and API time, lines, context size, output style, agent and worktree. A refresh you set yourself is kept. Settings → Claude offers Update connection once.
+- **Side panel facts you choose.** Settings → Claude → Side panel facts picks four of: tokens, cache hits, tool calls, lines, slowest tool, tool failures, API errors in the last hour, helpers' share, edits accepted and rejected, commits and pull requests, and active time (Claude's and yours). They follow the card's period.
+- **Revving means slow.** A car revs when a tool call runs past twice its usual time for that tool (3 to 60 s), not after a fixed 15 s. A request after a call ends it even if its result never came.
+- **Retries show.** A car hit by an API error says "Retrying after an API error · HTTP 529 · attempt 3" in its tip.
+- **When the 5-hour limit fills.** The tank says "full in 1 h 40 at this pace" when the last half hour's pace would fill it before it resets.
+- **Plan chips** under the plan row: narrower weekly windows beyond the two the week tile names, extra usage, and a Claude apps gateway's spend limit, warning from 80%. They step aside while a session needs you.
+- **Helpers apart.** A thread's tip splits its own tokens from its helpers' (subagents').
+- **Faster first scan.** Big logs are read from the newest end in 1 MB chunks, at most 64 MB a scan, stopping at the week's edge, so the card fills in at once and catches up over the next scans.
+- The phone link already carries the new numbers (`factsBy`, `factKinds`, `costSource`, `unpriced`, `limitEta`, `claudeCodeCost`, `estimateCost`, `spend`, and `helperTokens`, `costUsd`, `mode`, `revving`, `errorStatus`, `errorAttempt` per thread). The phone card doesn't show them yet.
+- No new timers, polling or outbound calls; the usage check stays the only one, every 5 minutes.
+
 ## v0.39.0 (2 Nov 2026)
 
 Claude Code watcher: trust the sources (package 1 of the Watcher action plan; Windows and the phone; decision 023).
