@@ -8,8 +8,9 @@ using System.Threading;
 
 namespace WidgetScreen
 {
-    // A session's state as the critters show it (docs/design/claude-watcher.md).
-    public enum ClaudeState { Ready, Working, NeedsYou, Done }
+    // A session's state as the card shows it (docs/design/claude-watcher.md). Stuck (decision 023): Claude Code's
+    // turn ended on an API error (StopFailure) or it stopped waiting for a usage limit, until the next turn starts.
+    public enum ClaudeState { Ready, Working, NeedsYou, Done, Stuck }
 
     // One Claude Code session, as the bridge records it in sessions\<id>.json.
     public sealed class ClaudeSessionFile
@@ -20,11 +21,29 @@ namespace WidgetScreen
         public double Context = Double.NaN;
         public int Pid, WindowPid;
         public long Window;
-        // Between PreCompact and the SessionStart that follows a compaction (or the next turn): the car is on the jack.
+        // Between PreCompact and PostCompact (or the SessionStart that follows a compaction, or the next turn): the car
+        // is on the jack.
         public bool Compacting;
+        // Decision 023. Why the last turn got stuck: StopFailure's error ("rate_limit", "overloaded", …) or
+        // "quota_disabled", with its details (200 characters at most). Kept until the next turn starts.
+        public string Error = "", ErrorText = "";
+        // Tool calls that failed (PostToolUseFailure) and the last one ("Bash: Exit code 1", 80 characters at most), and
+        // tool calls auto mode denied (PermissionDenied).
+        public int Failed, Denied;
+        public string LastError = "";
+        // Subagents running now (SubagentStart until SubagentStop) and the task list's tasks (TaskCreated, TaskCompleted).
+        public List<string> Workers = new List<string>(), Tasks = new List<string>(), TasksDone = new List<string>();
+        // The folder Claude Code's shell is in now (CwdChanged); Project stays the one the session started in.
+        public string Cwd = "";
+        // SessionEnd with reason "clear": the thread ended but its Claude Code process goes on with a new session.
+        public bool Ended;
+        public string EndReason = "";
+        public const int MostWorkers = 32, MostTasks = 64;
 
-        public static string StateName(ClaudeState state) { return state == ClaudeState.Working ? "working" : state == ClaudeState.NeedsYou ? "needs" : state == ClaudeState.Done ? "done" : "ready"; }
-        public static ClaudeState ParseState(string name) { return name == "working" ? ClaudeState.Working : name == "needs" ? ClaudeState.NeedsYou : name == "done" ? ClaudeState.Done : ClaudeState.Ready; }
+        public static string StateName(ClaudeState state) { return state == ClaudeState.Working ? "working" : state == ClaudeState.NeedsYou ? "needs" : state == ClaudeState.Done ? "done" : state == ClaudeState.Stuck ? "stuck" : "ready"; }
+        public static ClaudeState ParseState(string name) { return name == "working" ? ClaudeState.Working : name == "needs" ? ClaudeState.NeedsYou : name == "done" ? ClaudeState.Done : name == "stuck" ? ClaudeState.Stuck : ClaudeState.Ready; }
+        // Tasks created and not yet completed.
+        public int OpenTasks { get { return Tasks.Count(t => !TasksDone.Contains(t)); } }
 
         public JsonObject ToJson()
         {
@@ -34,6 +53,17 @@ namespace WidgetScreen
             if (!Double.IsNaN(Context)) o["context"] = new JsonNumber(Math.Round(Context, 1));
             o["pid"] = new JsonNumber(Pid); o["windowPid"] = new JsonNumber(WindowPid); o["window"] = new JsonNumber(Window);
             if (Compacting) o["compacting"] = true;
+            if (Error.Length > 0) o["error"] = Error;
+            if (ErrorText.Length > 0) o["errorText"] = ErrorText;
+            if (Failed > 0) o["failed"] = new JsonNumber(Failed);
+            if (Denied > 0) o["denied"] = new JsonNumber(Denied);
+            if (LastError.Length > 0) o["lastError"] = LastError;
+            if (Workers.Count > 0) o["workers"] = Workers.Cast<object>().ToList();
+            if (Tasks.Count > 0) o["tasks"] = Tasks.Cast<object>().ToList();
+            if (TasksDone.Count > 0) o["tasksDone"] = TasksDone.Cast<object>().ToList();
+            if (Cwd.Length > 0) o["cwd"] = Cwd;
+            if (Ended) o["ended"] = true;
+            if (EndReason.Length > 0) o["endReason"] = EndReason;
             return o;
         }
         public static ClaudeSessionFile FromJson(JsonObject o)
@@ -43,10 +73,15 @@ namespace WidgetScreen
                 Project = ClaudeJson.Str(o, "project") ?? "", Title = ClaudeJson.Str(o, "title") ?? "", Message = ClaudeJson.Str(o, "message") ?? "",
                 Model = ClaudeJson.Str(o, "model") ?? "", Transcript = ClaudeJson.Str(o, "transcript") ?? "", Context = ClaudeJson.Num(o, "context") };
             s.Since = Long(o, "since"); s.LastEvent = Long(o, "lastEvent"); s.Pid = (int)Long(o, "pid"); s.WindowPid = (int)Long(o, "windowPid"); s.Window = Long(o, "window");
-            s.Compacting = o.Get("compacting") is bool && (bool)o.Get("compacting");
+            s.Compacting = ClaudeJson.Bool(o, "compacting");
+            s.Error = ClaudeJson.Str(o, "error") ?? ""; s.ErrorText = ClaudeJson.Str(o, "errorText") ?? ""; s.LastError = ClaudeJson.Str(o, "lastError") ?? "";
+            s.Failed = (int)Long(o, "failed"); s.Denied = (int)Long(o, "denied");
+            s.Workers = Strings(o, "workers"); s.Tasks = Strings(o, "tasks"); s.TasksDone = Strings(o, "tasksDone");
+            s.Cwd = ClaudeJson.Str(o, "cwd") ?? ""; s.Ended = ClaudeJson.Bool(o, "ended"); s.EndReason = ClaudeJson.Str(o, "endReason") ?? "";
             return s;
         }
         private static long Long(JsonObject o, string key) { double v = ClaudeJson.Num(o, key); return Double.IsNaN(v) ? 0 : (long)v; }
+        private static List<string> Strings(JsonObject o, string key) { return (ClaudeJson.List(o, key) ?? new List<object>()).OfType<string>().ToList(); }
     }
 
     // One plan window: how much of it is used (0–100) and when it resets.
@@ -58,9 +93,19 @@ namespace WidgetScreen
         public bool Current(DateTime now) { return !ResetsAt.HasValue || ResetsAt.Value > now; }
     }
 
+    // The plan's extra usage (paid credits past the limits), from the usage check's extra_usage: whether it is on, the
+    // monthly limit and the credits used, and the share used (0–100, NaN when not given).
+    public sealed class ClaudeExtraUsage
+    {
+        public bool Enabled;
+        public double Limit = Double.NaN, Used = Double.NaN, Percent = Double.NaN;
+    }
+
     // The plan's five-hour and weekly limits, from Claude Code's status line or the usage check.
     public sealed class ClaudeLimits
     {
+        // Extra usage, when the usage check reported it (decision 023).
+        public ClaudeExtraUsage ExtraUsage;
         public ClaudeLimitWindow FiveHour, Week;
         // Narrower weekly windows the usage check may add ("Opus week", "Sonnet week", a model's own), for the Large panel.
         public List<KeyValuePair<string, ClaudeLimitWindow>> Extra = new List<KeyValuePair<string, ClaudeLimitWindow>>();
@@ -154,32 +199,148 @@ namespace WidgetScreen
             string id = ClaudeJson.Str(o, "session_id"), name = ClaudeJson.Str(o, "hook_event_name") ?? "";
             if (String.IsNullOrEmpty(id)) return;
             string path = SessionPath(bridge, id);
-            if (name == "SessionEnd") { WithSession(id, () => Delete(path)); return; }
+            if (name == "SessionEnd")
+            {
+                // A session is alive until its own SessionEnd or its process is gone (decision 023). After /clear the
+                // process goes on with a new session, so the old one is kept, marked ended, for the card's ended
+                // threads; every other reason (exit, logout, resume elsewhere) takes the file away.
+                string reason = ClaudeJson.Str(o, "reason") ?? "";
+                WithSession(id, () => {
+                    var ended = reason == "clear" ? Read(path) : null;
+                    if (ended == null) { Delete(path); return; }
+                    ended.Ended = true; ended.EndReason = reason; ended.State = ClaudeState.Ready; ended.Compacting = false; ended.Workers.Clear();
+                    ended.LastEvent = Epoch(now);
+                    WriteAtomic(path, ClaudeJson.Compact(ended.ToJson()));
+                });
+                return;
+            }
             ClaudeState? next = null; string message = "";
-            // A compaction starts with PreCompact and ends with SessionStart (source "compact"); any turn's news ends it too.
-            bool? compacting = name == "PreCompact" ? true : name == "SessionEnd" || name == "Notification" ? (bool?)null : false;
+            // A compaction starts with PreCompact and ends with PostCompact or the SessionStart after it; a turn's news
+            // ends it too. Side events (subagents, tasks, a failed tool, a model switch) leave it as it is.
+            bool? compacting = null;
+            // What the event adds to the file, applied under the session's lock.
+            Func<ClaudeSessionFile, bool> extra = null;
             switch (name)
             {
-                case "PreCompact": break;
-                case "SessionStart": next = ClaudeJson.Str(o, "source") == "compact" ? (ClaudeState?)null : ClaudeState.Ready; break;
-                case "UserPromptSubmit": case "PostToolUse": case "PreToolUse": next = ClaudeState.Working; break;
+                case "PreCompact": compacting = true; break;
+                case "PostCompact": compacting = false; break;
+                case "SessionStart":
+                    {
+                        compacting = false;
+                        if (ClaudeJson.Str(o, "source") == "compact") break;
+                        next = ClaudeState.Ready;
+                        extra = s => { bool had = s.Workers.Count > 0 || s.Ended; s.Workers.Clear(); s.Ended = false; s.EndReason = ""; return had; };
+                        break;
+                    }
+                case "UserPromptSubmit": case "PostToolUse": case "PreToolUse": next = ClaudeState.Working; compacting = false; break;
                 // A permission dialog is showing (the desktop app's Code tab sends no permission Notification).
                 case "PermissionRequest":
                     {
                         string tool = ClaudeJson.Str(o, "tool_name") ?? "";
                         message = tool.Length > 0 ? "Claude needs your permission to use " + tool : "Claude needs your permission";
-                        next = ClaudeState.NeedsYou;
+                        next = ClaudeState.NeedsYou; compacting = false;
                         break;
                     }
-                case "Stop": next = ClaudeState.Done; break;
+                case "Stop":
+                    {
+                        next = ClaudeState.Done; compacting = false;
+                        // Stop lists what is still in flight; with no subagent among it, none is running any more.
+                        var tasks = ClaudeJson.List(o, "background_tasks");
+                        if (tasks != null && !tasks.OfType<JsonObject>().Any(t => (ClaudeJson.Str(t, "type") ?? "") == "subagent"))
+                            extra = s => { bool had = s.Workers.Count > 0; s.Workers.Clear(); return had; };
+                        break;
+                    }
+                // The turn ended on an API error (decision 023): Stuck with its reason until the next turn.
+                case "StopFailure":
+                    {
+                        string error = ClaudeJson.Str(o, "error") ?? "", details = ClaudeJson.Str(o, "error_details") ?? ClaudeJson.Str(o, "last_assistant_message") ?? "";
+                        next = ClaudeState.Stuck; compacting = false;
+                        extra = s => Stuck(s, error.Length > 0 ? error : "unknown", details);
+                        break;
+                    }
+                case "PostToolUseFailure":
+                    {
+                        // An interrupt is the user pressing Esc, not a failure.
+                        if (ClaudeJson.Bool(o, "is_interrupt")) return;
+                        string failure = Short((ClaudeJson.Str(o, "tool_name") ?? "Tool") + ": " + FirstLine(ClaudeJson.Str(o, "error")), 80);
+                        extra = s => { s.Failed++; s.LastError = failure; return true; };
+                        break;
+                    }
+                case "PermissionDenied": extra = s => { s.Denied++; return true; }; break;
+                case "SubagentStart":
+                    {
+                        string agent = ClaudeJson.Str(o, "agent_id") ?? "";
+                        if (agent.Length == 0) return;
+                        extra = s => { if (s.Workers.Contains(agent)) return false; s.Workers.Add(agent); if (s.Workers.Count > ClaudeSessionFile.MostWorkers) s.Workers.RemoveAt(0); return true; };
+                        break;
+                    }
+                // SubagentStop also fires for Claude Code's internal agents (prompt suggestions, /btw): only ids
+                // SubagentStart named count.
+                case "SubagentStop":
+                    {
+                        string agent = ClaudeJson.Str(o, "agent_id") ?? "";
+                        extra = s => s.Workers.Remove(agent);
+                        break;
+                    }
+                case "TaskCreated":
+                    {
+                        string task = ClaudeJson.Str(o, "task_id") ?? "";
+                        if (task.Length == 0) return;
+                        extra = s => { if (s.Tasks.Contains(task)) return false; s.Tasks.Add(task); if (s.Tasks.Count > ClaudeSessionFile.MostTasks) s.Tasks.RemoveAt(0); return true; };
+                        break;
+                    }
+                case "TaskCompleted":
+                    {
+                        string task = ClaudeJson.Str(o, "task_id") ?? "";
+                        if (task.Length == 0) return;
+                        extra = s => {
+                            if (s.TasksDone.Contains(task)) return false;
+                            if (!s.Tasks.Contains(task)) { s.Tasks.Add(task); if (s.Tasks.Count > ClaudeSessionFile.MostTasks) s.Tasks.RemoveAt(0); }
+                            s.TasksDone.Add(task); if (s.TasksDone.Count > ClaudeSessionFile.MostTasks) s.TasksDone.RemoveAt(0);
+                            return true;
+                        };
+                        break;
+                    }
+                // The model as Claude Code names it ("claude-opus-5-5"); the dashboard shows it by name.
+                case "PostModelSwitch":
+                    {
+                        string model = ClaudeJson.Str(o, "to_model") ?? "";
+                        if (model.Length == 0) return;
+                        extra = s => { if (s.Model == model) return false; s.Model = model; return true; };
+                        break;
+                    }
+                case "CwdChanged":
+                    {
+                        string cwd = ClaudeJson.Str(o, "new_cwd") ?? "";
+                        if (cwd.Length == 0) return;
+                        extra = s => { if (s.Cwd == cwd) return false; s.Cwd = cwd; return true; };
+                        break;
+                    }
                 case "Notification":
                     {
                         string type = ClaudeJson.Str(o, "notification_type") ?? "";
                         message = ClaudeJson.Str(o, "message") ?? "";
-                        // Only a question waits on the user; "Claude is waiting for your input" (idle_prompt) stays Done.
-                        bool asks = type == "permission_prompt" || type == "elicitation_dialog" || (type.Length == 0 && message.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!asks) return;
-                        next = ClaudeState.NeedsYou;
+                        switch (type)
+                        {
+                            // A question waits on the user; "Claude is waiting for your input" (idle_prompt) stays Done.
+                            case "permission_prompt": case "elicitation_dialog": case "elicitation_url_dialog": case "agent_needs_input": next = ClaudeState.NeedsYou; break;
+                            case "agent_completed": next = ClaudeState.Done; message = ""; break;
+                            // Claude Code waited out a usage limit and carries on.
+                            case "quota_auto_resume_fired": next = ClaudeState.Working; message = ""; break;
+                            // The limit reset while the PC slept: Claude Code waits for Enter.
+                            case "quota_auto_resume_stale": next = ClaudeState.NeedsYou; if (message.Length == 0) message = QuotaStale; break;
+                            // Claude Code stopped waiting for the limit without carrying on.
+                            case "quota_auto_resume_disabled":
+                                {
+                                    string details = message; message = "";
+                                    next = ClaudeState.Stuck;
+                                    extra = s => Stuck(s, QuotaDisabled, details);
+                                    break;
+                                }
+                            default:
+                                if (type.Length == 0 && message.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0) { next = ClaudeState.NeedsYou; break; }
+                                return;
+                        }
                         break;
                     }
                 default: return;
@@ -196,7 +357,10 @@ namespace WidgetScreen
                     if (next.Value != session.State) session.Since = Epoch(now);
                     session.State = next.Value; session.Message = message; changed = true;
                 }
+                // A new turn (anything but Stuck) clears the last turn's error.
+                if (next.HasValue && next.Value != ClaudeState.Stuck && session.Error.Length > 0) { session.Error = ""; session.ErrorText = ""; changed = true; }
                 if (compacting.HasValue && compacting.Value != session.Compacting) { session.Compacting = compacting.Value; changed = true; }
+                if (extra != null && extra(session)) changed = true;
                 if (session.Pid == 0 || name == "SessionStart")
                 {
                     var found = owner == null ? new ClaudeProcesses.Owner() : owner();
@@ -207,6 +371,28 @@ namespace WidgetScreen
                 session.LastEvent = Epoch(now);
                 WriteAtomic(path, ClaudeJson.Compact(session.ToJson()));
             });
+        }
+        // The error Stuck keeps when Claude Code stops waiting for a usage limit, and the message a reset during sleep
+        // shows.
+        public const string QuotaDisabled = "quota_disabled", QuotaStale = "Your usage limit reset. Press Enter in Claude Code to carry on.";
+        private static bool Stuck(ClaudeSessionFile s, string error, string details)
+        {
+            string text = Short(details, 200);
+            if (s.Error == error && s.ErrorText == text) return false;
+            s.Error = error; s.ErrorText = text;
+            return true;
+        }
+        private static string FirstLine(string text)
+        {
+            if (String.IsNullOrEmpty(text)) return "failed";
+            int cut = text.IndexOfAny(new[] { '\r', '\n' });
+            string line = (cut >= 0 ? text.Substring(0, cut) : text).Trim();
+            return line.Length == 0 ? "failed" : line;
+        }
+        private static string Short(string text, int most)
+        {
+            text = (text ?? "").Trim();
+            return text.Length <= most ? text : text.Substring(0, most - 1) + "…";
         }
 
         // ----- Status line mode -----
@@ -297,7 +483,7 @@ namespace WidgetScreen
             object parsed; if (!ClaudeJson.TryParse(json, out parsed)) return null;
             var o = ClaudeJson.Obj(parsed); if (o == null) return null;
             var limits = new ClaudeLimits { FiveHour = ParseWindow(ClaudeJson.Obj(o, "five_hour"), "utilization"), Week = ParseWindow(ClaudeJson.Obj(o, "seven_day"), "utilization"), UpdatedAt = now, Source = "online" };
-            foreach (var pair in new[] { new[] { "seven_day_opus", "Opus week" }, new[] { "seven_day_sonnet", "Sonnet week" } })
+            foreach (var pair in new[] { new[] { "seven_day_opus", "Opus week" }, new[] { "seven_day_sonnet", "Sonnet week" }, new[] { "seven_day_cowork", "Cowork week" }, new[] { "seven_day_oauth_apps", "Apps week" } })
             {
                 var window = ParseWindow(ClaudeJson.Obj(o, pair[0]), "utilization");
                 if (window != null) limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(pair[1], window));
@@ -324,6 +510,13 @@ namespace WidgetScreen
                     if (!String.IsNullOrWhiteSpace(name) && !limits.Extra.Any(p => p.Key.StartsWith(name.Trim() + " ", StringComparison.OrdinalIgnoreCase)))
                         limits.Extra.Add(new KeyValuePair<string, ClaudeLimitWindow>(name.Trim() + " week", window));
                 }
+            }
+            var extra = ClaudeJson.Obj(o, "extra_usage");
+            if (extra != null)
+            {
+                double limit = ClaudeJson.Num(extra, "monthly_limit"), used = ClaudeJson.Num(extra, "used_credits"), pct = ClaudeJson.Num(extra, "utilization");
+                if (Double.IsNaN(pct) && !Double.IsNaN(limit) && !Double.IsNaN(used) && limit > 0) pct = 100 * used / limit;
+                limits.ExtraUsage = new ClaudeExtraUsage { Enabled = ClaudeJson.Bool(extra, "is_enabled"), Limit = limit, Used = used, Percent = Double.IsNaN(pct) ? pct : Math.Max(0, Math.Min(100, pct)) };
             }
             return limits.Known ? limits : null;
         }

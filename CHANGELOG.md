@@ -6,6 +6,21 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.39.0 (2 Nov 2026)
+
+Claude Code watcher: trust the sources (package 1 of the Watcher action plan; Windows and the phone; decision 023).
+
+- **No live session disappears.** A session leaves the card only when it ends or its process exits, whatever the process is called. `/clear` keeps it. Sessions that only Claude Code's own list or its logs know show too, straight after Connect.
+- **Stuck:** a turn that ended on an API error shows a spinning car with the reason ("Rate limited, resets 14:05", "Overloaded, try again", "Sign in again", "Reply too long"…) until the next prompt.
+- **Usage-limit waits:** Claude Code carrying on by itself shows as working, waiting for Enter as Needs you, and giving up as Stuck.
+- **Context ring** on each car from 60% of the context window, warning from 80%.
+- **Plans with no usage meters** say so instead of asking you to sign in again. A sign-in ends only when it can't be renewed. Cowork and apps weekly limits and extra usage are read.
+- **Telemetry port:** Connect picks a free port (43832–43839), and the card says when the port is taken.
+- **More hooks:** failed tools, denied permissions, helpers, tasks, model switches and folder changes. Settings → Claude offers Update connection once.
+- Cursor, JetBrains, Zed and the Agent SDKs are named as where a thread runs.
+- **The phone shows the same.** The phone link adds `reason`, `reasonText`, `context`, `workers`, `tasks` and `failed` per thread, `warning`, and `extraUsage` in the limits.
+- No new timers or polling; the usage check stays the only outbound call, every 5 minutes.
+
 ## v0.38.0 (1 Nov 2026)
 
 Sticker Sheet, phase 5: the Soundboard (Ali's approved redesign; Windows and the phone; decision 021). Ali skipped phase 4 and the rest of phase 5, so the redesign ends here.

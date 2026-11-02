@@ -18,10 +18,16 @@ namespace WidgetScreen
         // Besides the latest backup, dated copies (settings.json.widgetscreen-backup-20261101-174512); the newest
         // KeptBackups stay, so a second Connect never loses the original (review fix 11).
         public const int KeptBackups = 5;
-        // The events the bridge listens to. Notification only for questions (a permission or an elicitation).
+        // The events the bridge listens to (decision 023 added the second and third rows). Notification only for the
+        // types that change a session: questions, background sessions and the usage-limit wait. PreModelSwitch is left
+        // out: PostModelSwitch carries the same names after the fact, and a hook before the switch could only slow it.
+        public const string NotificationTypes = "permission_prompt|elicitation_dialog|elicitation_url_dialog|agent_needs_input|agent_completed|quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled";
         public static readonly string[][] Events = {
             new[] { "SessionStart", null }, new[] { "UserPromptSubmit", null }, new[] { "PostToolUse", "*" },
-            new[] { "Notification", "permission_prompt|elicitation_dialog" }, new[] { "PermissionRequest", "*" }, new[] { "Stop", null }, new[] { "SessionEnd", null }, new[] { "PreCompact", null } };
+            new[] { "Notification", NotificationTypes }, new[] { "PermissionRequest", "*" }, new[] { "Stop", null }, new[] { "SessionEnd", null }, new[] { "PreCompact", null },
+            new[] { "StopFailure", null }, new[] { "PostToolUseFailure", "*" }, new[] { "PostCompact", null }, new[] { "PermissionDenied", "*" },
+            new[] { "SubagentStart", null }, new[] { "SubagentStop", null }, new[] { "TaskCreated", null }, new[] { "TaskCompleted", null },
+            new[] { "PostModelSwitch", null }, new[] { "CwdChanged", null } };
         // Claude Code's OpenTelemetry export, to Widget Screen's loopback receiver (ClaudeTelemetry). Usage numbers and
         // event names only: prompts, responses and tool details stay off (OTEL_LOG_USER_PROMPTS, OTEL_LOG_TOOL_DETAILS
         // are never set).
@@ -30,8 +36,9 @@ namespace WidgetScreen
             return new[] {
                 new[] { "CLAUDE_CODE_ENABLE_TELEMETRY", "1" }, new[] { "OTEL_METRICS_EXPORTER", "otlp" }, new[] { "OTEL_LOGS_EXPORTER", "otlp" },
                 new[] { "OTEL_EXPORTER_OTLP_PROTOCOL", "http/json" }, new[] { "OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:" + port },
-                new[] { "OTEL_METRIC_EXPORT_INTERVAL", "10000" }, new[] { "OTEL_METRICS_INCLUDE_REPOSITORY", "true" } };
+                new[] { "OTEL_METRIC_EXPORT_INTERVAL", "10000" }, new[] { "OTEL_METRICS_INCLUDE_REPOSITORY", "true" }, new[] { "OTEL_METRICS_INCLUDE_ENTRYPOINT", "true" } };
         }
+        public const string Endpoint = "OTEL_EXPORTER_OTLP_ENDPOINT", Loopback = "http://127.0.0.1:";
         public readonly int TelemetryPort;
 
         public readonly string ConfigFolder, BridgeFolder;
@@ -112,8 +119,28 @@ namespace WidgetScreen
             return keys;
         }
 
-        // Whether a connection made by an older Widget Screen lacks something this one adds (a hook event, the
-        // telemetry settings). Settings → Claude then offers Update connection.
+        // The loopback port settings.json sends telemetry to, when Widget Screen set it (Connect writes the port it could
+        // bind, decision 023); 0 otherwise.
+        public int ConfiguredPort()
+        {
+            try
+            {
+                if (!File.Exists(SettingsPath) || !OurEnv().Contains(Endpoint)) return 0;
+                var env = ClaudeJson.Obj(ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(SettingsPath, Encoding.UTF8))), "env");
+                return PortOf(env == null ? null : Text(env.Get(Endpoint)));
+            }
+            catch (Exception) { return 0; }
+        }
+        // "http://127.0.0.1:43833" is 43833; anything else is 0.
+        public static int PortOf(string endpoint)
+        {
+            int port;
+            if (endpoint == null || !endpoint.StartsWith(Loopback, StringComparison.Ordinal)) return 0;
+            return Int32.TryParse(endpoint.Substring(Loopback.Length).TrimEnd('/'), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out port) && port > 0 && port < 65536 ? port : 0;
+        }
+
+        // Whether a connection made by an older Widget Screen lacks something this one adds (a hook event or its
+        // matcher, the telemetry settings). Settings → Claude then offers Update connection.
         public bool NeedsUpdate()
         {
             try
@@ -122,20 +149,30 @@ namespace WidgetScreen
                 var root = ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(SettingsPath, Encoding.UTF8)));
                 var hooks = ClaudeJson.Obj(root, "hooks");
                 foreach (var entry in Events)
-                    if (!((hooks == null ? null : hooks.Get(entry[0]) as List<object>) ?? new List<object>()).OfType<JsonObject>().Any(g => (ClaudeJson.List(g, "hooks") ?? new List<object>()).Any(h => Ours(h) && ClaudeJson.Str(h as JsonObject, "command") == Command("hook")))) return true;
+                {
+                    string matcher = entry[1];
+                    if (!((hooks == null ? null : hooks.Get(entry[0]) as List<object>) ?? new List<object>()).OfType<JsonObject>()
+                        .Any(g => ClaudeJson.Str(g, "matcher") == matcher && (ClaudeJson.List(g, "hooks") ?? new List<object>()).Any(h => Ours(h) && ClaudeJson.Str(h as JsonObject, "command") == Command("hook")))) return true;
+                }
                 var env = ClaudeJson.Obj(root, "env");
                 if (Conflicts(env, OurEnv()).Count > 0) return false;
                 foreach (var t in Telemetry(TelemetryPort))
-                    if (env == null || Text(env.Get(t[0])) != t[1]) return true;
+                {
+                    string value = env == null ? null : Text(env.Get(t[0]));
+                    // The endpoint may name any loopback port Connect could bind.
+                    if (t[0] == Endpoint ? PortOf(value) == 0 : value != t[1]) return true;
+                }
                 return false;
             }
             catch (Exception) { return false; }
         }
 
         // Copies the bridge into its stable folder, then adds the hooks and status line. hookSource is the
-        // ClaudeHook.exe that came with this app. Throws InvalidOperationException with a message for the user.
-        public void Connect(string hookSource)
+        // ClaudeHook.exe that came with this app; port is the loopback port telemetry goes to (the one the receiver
+        // could bind; 0 for TelemetryPort). Throws InvalidOperationException with a message for the user.
+        public void Connect(string hookSource, int port = 0)
         {
+            if (port <= 0) port = TelemetryPort;
             var root = Load();
             if (String.IsNullOrEmpty(hookSource) || !File.Exists(hookSource)) throw new InvalidOperationException(ClaudeBridge.HookExe + " is missing from Widget Screen's folder. Reinstall Widget Screen, then try again.");
             Directory.CreateDirectory(BridgeFolder);
@@ -173,7 +210,7 @@ namespace WidgetScreen
             if (Conflicts(env, previouslyOurs).Count == 0)
             {
                 if (env == null) { env = new JsonObject(); root["env"] = env; }
-                foreach (var t in Telemetry(TelemetryPort))
+                foreach (var t in Telemetry(port))
                 {
                     if (env.Contains(t[0]) && !previouslyOurs.Contains(t[0])) continue;
                     env[t[0]] = t[1]; added.Add(t[0]);
@@ -200,7 +237,7 @@ namespace WidgetScreen
                 {
                     if (!ours.Contains(t[0]) || !env.Contains(t[0])) continue;
                     string value = Text(env.Get(t[0]));
-                    if (t[0] == "OTEL_EXPORTER_OTLP_ENDPOINT" ? value.StartsWith("http://127.0.0.1:", StringComparison.Ordinal) : value == t[1]) env.Remove(t[0]);
+                    if (t[0] == Endpoint ? value.StartsWith(Loopback, StringComparison.Ordinal) : value == t[1]) env.Remove(t[0]);
                 }
                 if (env.Count == 0) root.Remove("env");
             }

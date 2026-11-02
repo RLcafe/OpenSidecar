@@ -1,6 +1,18 @@
 # Claude Code watcher (1 Nov 2026)
 
-The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) and [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals).
+The Claude Code widget on both apps, built from the design brief below (kept as Ali approved it). The technical choices are in [decision 014](../decisions/014-claude-code-bridge.md), [decision 015](../decisions/015-claude-sign-in-and-telemetry.md) (the fix that made it work with the Claude app's Code tab) [decision 016](../decisions/016-claude-projects-and-threads.md) (projects with their threads, and the refresh intervals) and [decision 023](../decisions/023-claude-trust-the-sources.md) (which sessions are alive, Stuck, the plan check and the telemetry port).
+
+## Trust the sources (decision 023, v0.39.0)
+
+Package 1 of the Watcher action plan, both apps:
+
+- **No live session is dropped.** A session goes only with its own SessionEnd or when its process has exited (any process name; a reused pid doesn't count). `/clear` keeps it. Sessions only Claude Code's list or its logs know show too, and Connect reads them at once.
+- **Stuck.** A turn that ended on an API error shows a spinning car, a "Stuck" chip and why: "Rate limited, resets 14:05", "Overloaded, try again", "Sign in again", "Reply too long" and so on. It stays until the next prompt. The heading counts "N stuck", and stuck threads rank after the ones that need you.
+- **Usage-limit waits.** Claude Code carrying on by itself is Working; waiting for Enter is Needs you; giving up is Stuck.
+- **Context ring.** A ring on the car's corner from 60% of the context window (muted), 80% and 95% (warning, filled at 95%). The tip says "Context 82% used, compaction soon". Medium shows the fullest car's ring per garage.
+- **No usage meters.** When Anthropic says the plan has none (403), the plan row says "Your plan has no usage meters." and the sign-in stays.
+- **Telemetry port.** If something else holds the port Claude Code sends telemetry to, the side panel says "Telemetry off: port 43832 in use" and Settings → Claude offers Update connection, which moves it to a free port (43832–43839).
+- **More hooks** for failed tools, denied permissions, helpers, tasks, model switches and folder changes; Settings → Claude offers Update connection once to add them.
 
 ## Archived and hidden threads (decision 020)
 

@@ -634,6 +634,27 @@ public final class AndroidTests {
             ok(CardSizing.claudeWholeRows(new double[] { 52, 36, 36, 52 }, 150) == 124 && CardSizing.claudeWholeRows(new double[] { 80 }, 50) == 50 && CardSizing.claudeWholeRows(new double[0], 100) == 0, "whole rows");
             ok("Coral".equals(Inks.defaultInk("Claude")) && !Inks.inScope("Claude"), "Claude's strip ink");
         } });
+        check("Claude trusts the PC's sources: stuck with a reason, context rings, no meters and the telemetry warning (decision 023)", new Action() { public void run() {
+            PcState state = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"plan\":\"noMeters\",\"warning\":\"Telemetry off: port 43832 in use\","
+                + "\"sessions\":[{\"id\":\"s1\",\"project\":\"api\",\"state\":\"stuck\",\"since\":1000},{\"id\":\"s2\",\"project\":\"web\",\"state\":\"working\",\"since\":1000}],"
+                + "\"threads\":[{\"id\":\"s1\",\"project\":\"api\",\"running\":true,\"state\":\"stuck\",\"pit\":\"stuck\",\"reason\":\"rate_limit\",\"reasonText\":\"Rate limited, resets 14:05\",\"context\":82.4,\"workers\":2,\"tasks\":3,\"failed\":1},"
+                + "{\"id\":\"s2\",\"project\":\"web\",\"running\":true,\"state\":\"working\",\"pit\":\"stuck\",\"reason\":\"\",\"context\":null},"
+                + "{\"id\":\"s3\",\"project\":\"web\",\"running\":true,\"state\":\"stuck\",\"pit\":\"stuck\",\"reason\":\"max_output_tokens\"}],"
+                + "\"limits\":{\"fiveHour\":null,\"week\":null,\"extraUsage\":{\"enabled\":true,\"limit\":50,\"used\":12.5,\"pct\":25}}}}")));
+            PcState.Claude c = state.claude;
+            PcState.ClaudeThread stuck = c.thread("s1"), retrying = c.thread("s2");
+            ok(stuck.reason.equals("rate_limit") && stuck.context == 82.4 && stuck.workers == 2 && stuck.tasks == 3 && stuck.failed == 1 && Double.isNaN(retrying.context), "thread fields");
+            ok(ClaudeText.chip(stuck).equals("Stuck") && ClaudeText.chip(retrying).equals("Retrying") && ClaudeText.state("stuck").equals("Stuck"), "a lasting Stuck and a retry read apart");
+            ok(ClaudeText.stuckReason(stuck).equals("Rate limited, resets 14:05") && ClaudeText.stuckReason(c.thread("s3")).equals("Reply too long") && ClaudeText.stuck(stuck) && !ClaudeText.stuck(retrying), "the reason: " + ClaudeText.stuckReason(stuck));
+            ok(ClaudeText.summary(c, 1, false).equals("1 stuck · 1 running"), "the summary counts stuck: " + ClaudeText.summary(c, 1, false));
+            ok(ClaudeText.rank("needs") < ClaudeText.rank("stuck") && ClaudeText.rank("stuck") < ClaudeText.rank("working"), "stuck ranks after needs you, before working");
+            ok(ClaudeText.contextLevel(Double.NaN) == 0 && ClaudeText.contextLevel(59.9) == 0 && ClaudeText.contextLevel(60) == 1 && ClaudeText.contextLevel(80) == 2 && ClaudeText.contextLevel(95) == 3
+                && ClaudeText.contextTip(82).equals("Context 82% used, compaction soon") && ClaudeText.contextTip(40).isEmpty(), "context ring thresholds");
+            ok(ClaudeText.limitsMissing(c).equals("Your plan has no usage meters.") && c.warning.equals("Telemetry off: port 43832 in use"), "no meters and the warning");
+            ok(c.extraUsage != null && c.extraUsage.enabled && c.extraUsage.limit == 50 && c.extraUsage.used == 12.5 && c.extraUsage.pct == 25, "extra usage");
+            PcState old = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"threads\":[{\"id\":\"t\",\"running\":true}]}}")));
+            ok(old.claude.warning.isEmpty() && old.claude.extraUsage == null && old.claude.thread("t").reason.isEmpty() && Double.isNaN(old.claude.thread("t").context), "an older PC's answer still reads");
+        } });
         check("Claude's tools fact reads like the PC's, partial when telemetry saw fewer calls", new Action() { public void run() {
             PcState.Claude c = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"connected\":true,\"sessions\":[],\"facts\":{\"tools\":1878,\"asked\":5,\"telemetry\":true,\"askedPartial\":true,\"added\":426}}}"))).claude;
             ok(c.facts.tools == 1878 && c.facts.askedPartial && ClaudeText.toolsKey(c.facts).equals("TOOLS · 5 ASKED · PARTIAL"), "partial: " + ClaudeText.toolsKey(c.facts));

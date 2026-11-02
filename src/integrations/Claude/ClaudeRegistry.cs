@@ -28,9 +28,10 @@ namespace WidgetScreen
 
         public ClaudeRegistry(string configFolder) { folder = Path.Combine(configFolder, "sessions"); }
 
-        // Re-reads changed files; alive decides whether an entry's process still runs (ClaudeProcesses.Alive normally),
-        // asked again for every entry when recheck is set or a file changed. Returns whether anything changed.
-        public bool Read(Func<int, bool> alive, bool recheck = true)
+        // Re-reads changed files; alive decides whether an entry's process still runs (ClaudeProcesses.Alive with the
+        // entry's start, normally), asked again for every entry when recheck is set or a file changed. Returns whether
+        // anything changed.
+        public bool Read(Func<ClaudeRegistryEntry, bool> alive, bool recheck = true)
         {
             bool changed = false;
             var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -53,7 +54,7 @@ namespace WidgetScreen
             foreach (var path in files.Keys.Where(p => !present.Contains(p)).ToList()) { files.Remove(path); changed = true; }
             if (!changed && !recheck && live != null) return false;
             var before = live;
-            live = files.Values.Select(c => c.Entry).Where(e => e != null && (alive == null || alive(e.Pid))).ToList();
+            live = files.Values.Select(c => c.Entry).Where(e => e != null && (alive == null || alive(e))).ToList();
             if (before == null || before.Count != live.Count || before.Zip(live, (a, b) => a != b).Any(x => x)) changed = true;
             return changed;
         }
@@ -94,15 +95,22 @@ namespace WidgetScreen
             return null;
         }
 
-        // Where the session runs, for the Large rows: "Desktop", "VS Code", "Terminal".
+        // Where the session runs, for the Large rows: "Desktop", "VS Code", "Terminal", the editors and the Agent SDKs.
+        // An entrypoint this list doesn't know shows as Claude Code wrote it, so a new one is never hidden.
         public static string Where(string entrypoint)
         {
-            switch (entrypoint ?? "")
+            string name = (entrypoint ?? "").Trim();
+            switch (name)
             {
                 case "claude-desktop": return "Desktop";
                 case "claude-vscode": return "VS Code";
+                case "claude-cursor": return "Cursor";
+                case "claude-jetbrains": return "JetBrains";
+                case "claude-zed": return "Zed";
+                case "sdk-ts": return "Agent SDK (TypeScript)";
+                case "sdk-py": return "Agent SDK (Python)";
                 case "cli": return "Terminal";
-                default: return "";
+                default: return name;
             }
         }
 

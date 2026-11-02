@@ -19,7 +19,44 @@ namespace WidgetScreen
     {
         public static string State(ClaudeState state)
         {
-            return state == ClaudeState.NeedsYou ? "Needs you" : state == ClaudeState.Working ? "Working" : state == ClaudeState.Done ? "Your turn" : "Ready";
+            return state == ClaudeState.NeedsYou ? "Needs you" : state == ClaudeState.Working ? "Working" : state == ClaudeState.Done ? "Your turn" : state == ClaudeState.Stuck ? "Stuck" : "Ready";
+        }
+        // Why a session is stuck (decision 023), from StopFailure's error: "Rate limited, resets 14:05".
+        public static string StuckReason(ClaudeSession thread, ClaudeView view, DateTime now, bool use24)
+        {
+            switch (thread == null ? "" : thread.Reason ?? "")
+            {
+                case "rate_limit":
+                    {
+                        var limits = view == null ? null : view.Limits;
+                        var window = limits == null ? null : limits.FiveHour != null && limits.FiveHour.Current(now) && limits.FiveHour.Percent >= 100 ? limits.FiveHour : limits.Week != null && limits.Week.Current(now) && limits.Week.Percent >= 100 ? limits.Week : limits.FiveHour;
+                        return window != null && window.ResetsAt.HasValue && window.Current(now) ? "Rate limited, resets " + When(window.ResetsAt.Value, now, use24) : "Rate limited";
+                    }
+                case "overloaded": return "Overloaded, try again";
+                case "authentication_failed": case "oauth_org_not_allowed": return "Sign in again";
+                case "cloud_credential_error": return "Cloud credentials failed";
+                case "account_on_hold": return "Account on hold";
+                case "billing_error": return "Billing problem";
+                case "invalid_request": return "Request refused";
+                case "model_not_found": return "Model not available";
+                case "server_error": return "Server error, try again";
+                case "max_output_tokens": return "Reply too long";
+                case ClaudeBridge.QuotaDisabled: return "Stopped waiting for the usage limit";
+                default: return "API error";
+            }
+        }
+        // A thread's chip word: a lasting Stuck says so; a working car spinning after an API error is retrying.
+        public static string Chip(ClaudeSession thread)
+        {
+            return thread != null && thread.Pit == PitState.Stuck && thread.State == ClaudeState.Stuck ? "Stuck" : Chip(thread == null ? PitState.Idle : thread.Pit);
+        }
+        // The car's context ring tooltip: "Context 82% used, compaction soon".
+        public static string ContextTip(double percent)
+        {
+            int level = ClaudePace.ContextLevel(percent);
+            if (level == 0) return "";
+            string used = "Context " + Math.Round(percent) + "% used";
+            return level == 1 ? used : level == 2 ? used + ", compaction soon" : used + ", compaction next";
         }
         // "now", "2 min", "3 h".
         public static string Duration(TimeSpan time)
@@ -83,6 +120,7 @@ namespace WidgetScreen
             if (!view.Connected && view.Threads.Count == 0) return "Not connected";
             var parts = new List<string>();
             if (view.NeedsYou > 0) parts.Add(view.NeedsYou + " needs you");
+            if (view.Stuck > 0) parts.Add(view.Stuck + " stuck");
             int turn = view.Sessions.Count(s => s.Pit == PitState.Done);
             if (turn > 0) parts.Add(turn + " your turn");
             if (view.Working > 0) parts.Add(view.Working + " running");
@@ -114,7 +152,7 @@ namespace WidgetScreen
         }
         public static string PlanName(ClaudePlanState plan)
         {
-            return plan == ClaudePlanState.Current ? "current" : plan == ClaudePlanState.Reading ? "reading" : plan == ClaudePlanState.Failed ? "failed" : plan == ClaudePlanState.Expired ? "expired" : "signedOut";
+            return plan == ClaudePlanState.Current ? "current" : plan == ClaudePlanState.Reading ? "reading" : plan == ClaudePlanState.Failed ? "failed" : plan == ClaudePlanState.Expired ? "expired" : plan == ClaudePlanState.NoMeters ? "noMeters" : "signedOut";
         }
         public static string Clock(DateTime time, bool use24) { return time.ToLocalTime().ToString(use24 ? "HH:mm" : "h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant(); }
         // The meters' empty states: the widget's own sign-in is what fills them (decision 015).
@@ -123,6 +161,7 @@ namespace WidgetScreen
             switch (view.Plan)
             {
                 case ClaudePlanState.Expired: return SignInEnded;
+                case ClaudePlanState.NoMeters: return NoMeters;
                 case ClaudePlanState.Reading: return "Reading your plan's limits…";
                 case ClaudePlanState.Failed: return "Couldn't read your plan's limits. Trying again soon.";
                 case ClaudePlanState.Current: return view.NoPlan ? "Plan limits need a Claude Pro or Max login." : "Plan limits show after Claude Code's next reply.";
@@ -130,6 +169,7 @@ namespace WidgetScreen
             }
         }
         public const string SignIn = "Sign in to Claude in Settings → Claude to see plan limits.", SignInEnded = "Your Claude sign-in has ended. Sign in again in Settings → Claude.";
+        public const string NoMeters = "Your plan has no usage meters.";
         public const string NotConnected = "Connect Claude Code in Settings → Claude.", NoSessions = "No Claude Code sessions running.", NoLogs = "Can't read Claude Code's logs.";
         // The plan reports no 5-hour window (only weekly ones), as Anthropic's usage answer can.
         public const string NoFiveHour = "No 5-hour limit on your plan right now";
@@ -220,6 +260,10 @@ namespace WidgetScreen
         {
             var lines = new List<string> { ThreadTitle(thread, now, use24) };
             lines.Add(thread.Running ? StateWords(thread.State, thread.Since, now, true) + (thread.State == ClaudeState.NeedsYou && !String.IsNullOrWhiteSpace(thread.Message) ? " · " + Ask(thread.Message) : "") : "Ended · last active " + Ago(thread.LastActive, now, use24));
+            if (thread.Running && thread.State == ClaudeState.Stuck)
+                lines.Add(StuckReason(thread, null, now, use24) + (String.IsNullOrWhiteSpace(thread.ReasonText) ? "" : ": " + thread.ReasonText.Trim()));
+            string context = thread.Running ? ContextTip(thread.Context) : "";
+            if (context.Length > 0) lines.Add(context);
             var detail = new List<string>();
             if (counted) detail.Add(ClaudeUsage.Format(thread.TokensFor(period)) + " tokens · " + Replies(thread.RepliesFor(period)) + (apiValue ? " · " + ClaudeUsage.Money(thread.CostFor(period)) + " API value" : "") + " " + PeriodName(period).ToLowerInvariant());
             if (!String.IsNullOrWhiteSpace(thread.Model)) detail.Add(thread.Model);
@@ -303,7 +347,9 @@ namespace WidgetScreen
         private ScrollViewer ledgerScroll;
 
         // A thread's car (in the ledger, inline on Medium, Small's or the pit stop strip's) and its row.
-        private sealed class CarPart { public string Id, Folder; public PitSprite Sprite; public FrameworkElement Row; public double Width; public bool Dim; }
+        // A car: its sprite, the context ring on its corner (decision 023) and the two together (View), which is what
+        // goes into a row. OnlyWorst: on Medium, only the fullest context in its garage shows a ring.
+        private sealed class CarPart { public string Id, Folder; public PitSprite Sprite; public ContextRing Ring; public FrameworkElement View, Row; public double Width; public bool Dim, OnlyWorst; }
         // A project's garage and its cars.
         private sealed class GaragePart { public string Folder; public PitSprite Sprite; public FrameworkElement Tap; public readonly List<CarPart> Cars = new List<CarPart>(); }
 
@@ -431,7 +477,13 @@ namespace WidgetScreen
         private CarPart Car(ClaudeSession thread, string folder, double width, string name, bool dim)
         {
             var sprite = names.Add(new PitSprite { Width = width, Height = Math.Round(width * 60 / 140), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, name);
-            var part = new CarPart { Id = thread == null ? null : thread.Id, Folder = folder, Sprite = sprite, Width = width, Dim = dim };
+            double ringSize = Math.Max(10, Math.Min(24, Math.Round(width * 0.26)));
+            var ring = names.Add(new ContextRing { Width = ringSize, Height = ringSize, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Margin = new Thickness(0, -ringSize / 3, -ringSize / 4, 0) }, name + "Context");
+            // The ring hides with its car while a garage rolls the cars in or out.
+            ring.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding("Visibility") { Source = sprite });
+            var both = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            both.Children.Add(sprite); both.Children.Add(ring);
+            var part = new CarPart { Id = thread == null ? null : thread.Id, Folder = folder, Sprite = sprite, Ring = ring, View = both, Width = width, Dim = dim };
             cars.Add(part); clock.Add(sprite);
             return part;
         }
@@ -635,8 +687,8 @@ namespace WidgetScreen
             strip.Background = Tint("Warning", 0.12); strip.BorderBrush = Tint("Warning", 0.45);
             var row = Columns(Auto, Star, Auto);
             var car = Car(thread, thread.Project, 62, "ClaudeAskCar", false);
-            car.Sprite.Margin = new Thickness(0, 0, 12, 0);
-            row.Children.Add(car.Sprite);
+            car.View.Margin = new Thickness(0, 0, 12, 0);
+            row.Children.Add(car.View);
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var title = names.Add(Trimmed(Text("", Scaled(16), "Text")), "ClaudeAskTitle"); title.FontWeight = FontWeights.SemiBold; words.Children.Add(title);
             var reason = names.Add(Trimmed(Text("", 13, "Warning")), "ClaudeAskReason"); words.Children.Add(reason);
@@ -717,7 +769,7 @@ namespace WidgetScreen
         {
             var row = Columns(Auto, Star); row.Margin = new Thickness(0, 12, 0, 0);
             var car = Car(null, "", 62, "ClaudeIdleCar", true);
-            row.Children.Add(car.Sprite);
+            row.Children.Add(car.View);
             string words = !view.Connected && view.Threads.Count == 0 ? ClaudeText.NotConnected : ClaudeText.NoThreads(period);
             var text = names.Add(Wrapped(words, 15, 60), "ClaudeMessage"); text.VerticalAlignment = VerticalAlignment.Center; text.Margin = new Thickness(16, 0, 0, 0);
             row.Children.Add(At(text, 0, 1));
@@ -771,7 +823,7 @@ namespace WidgetScreen
                 var thread = group.Threads[j];
                 var trow = LedgerRow(width, threadHeight);
                 var car = Car(thread, group.Folder, 48, "ClaudeCar" + index + "_" + j, false);
-                trow.Children.Add(car.Sprite);
+                trow.Children.Add(car.View);
                 garage.Cars.Add(car);
                 var what = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), LastChildFill = true };
                 var chip = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -793,11 +845,14 @@ namespace WidgetScreen
                     var t = view.Threads.FirstOrDefault(x => x.Id == id);
                     if (t == null) return;
                     tap.Opacity = ClaudePace.Parked(t.Pit) ? 0.45 : t.Running ? 1 : 0.62;
-                    chipText.Text = ClaudeText.Chip(t.Pit).ToUpperInvariant();
+                    chipText.Text = ClaudeText.Chip(t).ToUpperInvariant();
                     SetChip(chip, chipText, t.Pit);
                     name2.Text = ClaudeText.ThreadTitle(t, now, use24);
                     name2.SetResourceReference(TextBlock.ForegroundProperty, t.Pit == PitState.Need ? "Warning" : "Text");
-                    where.Text = ClaudeText.Where(t, now);
+                    // A stuck thread says why where it would say where it runs (decision 023).
+                    bool stuck = t.Running && t.State == ClaudeState.Stuck;
+                    where.Text = stuck ? ClaudeText.StuckReason(t, view, now, use24) : ClaudeText.Where(t, now);
+                    where.SetResourceReference(TextBlock.ForegroundProperty, stuck ? "Warning" : "Muted");
                     ttokens.Text = Counted ? ClaudeUsage.Format(t.TokensFor(period)) : "—"; tcached.Text = Counted ? ClaudeUsage.Format(t.CacheReadsFor(period)) : ""; tdollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(t.CostFor(period)) : t.RepliesFor(period).ToString(CultureInfo.InvariantCulture);
                     SetModels(tmix, t.ModelsFor(period));
                     var l = t.LinesFor(period); SetLines(tlines, l[0], l[1]);
@@ -887,7 +942,13 @@ namespace WidgetScreen
                 facts.Children.Add(names.Add(fact, "ClaudeFact" + i));
             }
             side.Children.Add(facts);
+            // Telemetry can't arrive (decision 023): "Telemetry off: port 43832 in use".
+            var warning = names.Add(Trimmed(Text("", 12, "Warning")), "ClaudeTelemetryWarning"); warning.Margin = new Thickness(4, 2, 4, 0);
+            warning.ToolTip = "Widget Screen couldn't listen on the port Claude Code sends telemetry to. Settings → Claude → Update connection picks a free one.";
+            side.Children.Add(warning);
             fills.Add(now => {
+                warning.Text = view.TelemetryWarning ?? "";
+                warning.Visibility = String.IsNullOrEmpty(view.TelemetryWarning) ? Visibility.Collapsed : Visibility.Visible;
                 double max = Math.Max(1, view.Lanes.SelectMany(l => l.Bins).DefaultIfEmpty(0).Max());
                 foreach (var b in bins) { b.Maximum = max; b.InvalidateVisual(); }
                 start.Text = ClaudeText.Clock(now - ClaudePace.FiveHours, use24); middle.Text = ClaudeText.Clock(now - TimeSpan.FromMinutes(150), use24);
@@ -952,8 +1013,8 @@ namespace WidgetScreen
                 for (int j = 0; j < shown; j++)
                 {
                     var car = Car(group.Threads[j], group.Folder, 30, "ClaudeCar" + i + "_" + j, true);
-                    car.Sprite.Margin = new Thickness(0, 0, 2, 0);
-                    var tap = Tappable(car.Sprite, group.Threads[j]); tap.ToolTip = ClaudeText.ThreadTip(group.Threads[j], period, DateTime.UtcNow, use24, Counted, showApi);
+                    car.View.Margin = new Thickness(0, 0, 2, 0); car.OnlyWorst = true;
+                    var tap = Tappable(car.View, group.Threads[j]); tap.ToolTip = ClaudeText.ThreadTip(group.Threads[j], period, DateTime.UtcNow, use24, Counted, showApi);
                     car.Row = tap; inline.Children.Add(tap); garage.Cars.Add(car);
                 }
                 if (!folded && shown < group.Threads.Count) { var more = Caption("+" + (group.Threads.Count - shown)); more.VerticalAlignment = VerticalAlignment.Center; more.Margin = new Thickness(2, 0, 0, 0); inline.Children.Add(more); }
@@ -971,9 +1032,10 @@ namespace WidgetScreen
                     var g = view.Groups(period).FirstOrDefault(x => String.Equals(x.Folder, folder, StringComparison.OrdinalIgnoreCase));
                     if (g == null) return;
                     var asking = g.Threads.FirstOrDefault(t => t.Running && t.State == ClaudeState.NeedsYou);
+                    var stuck = asking == null ? g.Threads.FirstOrDefault(t => t.Running && t.State == ClaudeState.Stuck) : null;
                     name.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Text");
-                    sub.Text = asking != null ? "Needs you · " + ClaudeText.ThreadTitle(asking, now, use24) : folded ? ClaudeText.Cars(g.Threads.Count) + " in the garage" : ClaudeText.GroupDetail(g, true);
-                    sub.SetResourceReference(TextBlock.ForegroundProperty, asking != null ? "Warning" : "Muted");
+                    sub.Text = asking != null ? "Needs you · " + ClaudeText.ThreadTitle(asking, now, use24) : stuck != null ? "Stuck · " + ClaudeText.StuckReason(stuck, view, now, use24) : folded ? ClaudeText.Cars(g.Threads.Count) + " in the garage" : ClaudeText.GroupDetail(g, true);
+                    sub.SetResourceReference(TextBlock.ForegroundProperty, asking != null || stuck != null ? "Warning" : "Muted");
                     tokens.Text = Counted ? ClaudeUsage.Format(g.Tokens) : "—"; dollars.Text = !Counted ? "" : showApi ? "$" + ClaudeText.Dollars(g.Cost) : g.Replies.ToString(CultureInfo.InvariantCulture);
                     dollars.ToolTip = showApi ? ClaudeText.ApiValueTip : ClaudeText.Replies(g.Replies);
                     RenderGarage(garage, g);
@@ -1020,7 +1082,7 @@ namespace WidgetScreen
             var top = Columns(Auto, Star); top.VerticalAlignment = VerticalAlignment.Center;
             double size = CardSizing.ClaudeSmallCar(width, height - (caption ? CardSizing.ClaudeSmallMeterHeight : 0));
             var car = Car(first, first == null ? "" : first.Project, size, "ClaudeSmallCar", true);
-            var tap = Tappable(car.Sprite, first); car.Row = tap;
+            var tap = Tappable(car.View, first); car.Row = tap;
             top.Children.Add(tap);
             var side = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
             if (first == null)
@@ -1037,8 +1099,8 @@ namespace WidgetScreen
                 fills.Add(now => {
                     var s = view.Sessions.FirstOrDefault(x => x.Id == id); if (s == null) return;
                     project.Text = s.ProjectName;
-                    state.Text = ClaudeText.StateWords(s.State, s.Since, now, true);
-                    state.SetResourceReference(TextBlock.ForegroundProperty, s.State == ClaudeState.NeedsYou ? "Warning" : "Muted");
+                    state.Text = s.State == ClaudeState.Stuck ? "Stuck · " + ClaudeText.StuckReason(s, view, now, use24) : ClaudeText.StateWords(s.State, s.Since, now, true);
+                    state.SetResourceReference(TextBlock.ForegroundProperty, s.State == ClaudeState.NeedsYou || s.State == ClaudeState.Stuck ? "Warning" : "Muted");
                     int working = view.Sessions.Count(x => x.Id != id && x.State == ClaudeState.Working), others = view.Groups(period).Sum(g => g.Threads.Count) - 1 - working;
                     var parts = new List<string>();
                     if (working > 0) parts.Add("+" + working + " working");
@@ -1096,10 +1158,22 @@ namespace WidgetScreen
             var threads = view.Threads.ToDictionary(t => t.Id);
             // The fuel lamp follows the plan's tightest window: the 5-hour one, or the week when the plan has none.
             double fiveHour = view.Limits == null ? 0 : ClaudeText.Percent(view.Limits.FiveHour ?? view.Limits.Week, now);
+            // Medium shows one context ring per garage: its fullest running thread's.
+            var worst = new Dictionary<string, ClaudeSession>(StringComparer.OrdinalIgnoreCase);
+            foreach (var part in cars.Where(c => c.OnlyWorst && c.Id != null))
+            {
+                ClaudeSession t, best;
+                if (!threads.TryGetValue(part.Id, out t) || !t.Running || ClaudePace.ContextLevel(t.Context) == 0) continue;
+                if (!worst.TryGetValue(part.Folder ?? "", out best) || t.Context > best.Context) worst[part.Folder ?? ""] = t;
+            }
             foreach (var part in cars)
             {
                 ClaudeSession t = null; if (part.Id != null) threads.TryGetValue(part.Id, out t);
                 RenderCar(part, t, fiveHour);
+                ClaudeSession fullest;
+                bool ringed = t != null && t.Running && (!part.OnlyWorst || (worst.TryGetValue(part.Folder ?? "", out fullest) && fullest.Id == t.Id));
+                double context = ringed ? t.Context : Double.NaN;
+                if (!part.Ring.Percent.Equals(context)) { part.Ring.Percent = context; part.Ring.InvalidateVisual(); }
             }
             clock.Update();
         }

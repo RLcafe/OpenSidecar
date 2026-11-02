@@ -84,6 +84,8 @@ namespace WidgetScreen
         public bool SignedIn { get { lock (gate) return session.SignedIn && !session.Expired; } }
         public bool Expired { get { lock (gate) return session.Expired; } }
         public bool SigningIn { get { return signing != null; } }
+        // The last usage check said this plan has no usage meters (403).
+        public bool NoMeters { get; private set; }
 
         public static string Challenge(string verifier) { using (var sha = SHA256.Create()) return Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier))); }
         private static string Base64Url(byte[] value) { return Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_'); }
@@ -272,10 +274,14 @@ namespace WidgetScreen
                     using (response)
                     {
                         if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
-                        if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) { MarkExpired(); return null; }
+                        // 403 is a plan with no usage meters (an API or enterprise account), not an ended sign-in: the
+                        // sign-in stays and the card says so (decision 023). Only a refresh that fails ends it; a 401
+                        // after a refresh that worked is a failed check, tried again later.
+                        if (response.StatusCode == HttpStatusCode.Forbidden) { NoMeters = true; return null; }
                         if (!response.IsSuccessStatusCode) throw new ClaudeHttpException((int)response.StatusCode, "api.anthropic.com answered " + (int)response.StatusCode + ".");
                         var limits = ClaudeBridge.ParseUsageResponse(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
                         if (limits == null) throw new IOException("The plan usage answer couldn't be read.");
+                        NoMeters = false;
                         return limits;
                     }
                 }

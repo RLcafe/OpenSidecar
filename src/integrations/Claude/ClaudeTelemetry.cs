@@ -199,7 +199,10 @@ namespace WidgetScreen
     {
         public const int DefaultPort = 43832;
         public const int MaxBody = 4 * 1024 * 1024;
-        private readonly int requestedPort;
+        // Connect tries the default port and the next ones up to this many in all, and writes the one it bound into
+        // Claude Code's settings (decision 023).
+        public const int PortsTried = 8;
+        private int requestedPort;
         private readonly Action<List<ClaudeTelemetryEvent>> received;
         private TcpListener listener;
         private CancellationTokenSource stop;
@@ -209,20 +212,38 @@ namespace WidgetScreen
         public bool Running { get { return listener != null; } }
 
         public ClaudeTelemetry(int port, Action<List<ClaudeTelemetryEvent>> received) { requestedPort = port; this.received = received; }
+        // The port asked for last (0 lets Windows pick one, for the checks).
+        public int Requested { get { return requestedPort; } }
 
-        public bool Start()
+        public bool Start() { return Start(requestedPort); }
+        // Listens on a loopback port; already listening there (or on the port Windows picked for 0) is fine, and another
+        // port moves the receiver.
+        public bool Start(int port)
         {
-            if (listener != null) return true;
+            if (listener != null && (port == requestedPort || port == Port)) return true;
+            Stop();
+            requestedPort = port;
             try
             {
-                var next = new TcpListener(IPAddress.Loopback, requestedPort);
+                var next = new TcpListener(IPAddress.Loopback, port);
                 next.Start(16);
                 listener = next; Port = ((IPEndPoint)next.LocalEndpoint).Port; Problem = null;
                 stop = new CancellationTokenSource();
                 Task.Run(() => AcceptLoop(next, stop.Token));
                 return true;
             }
-            catch (SocketException e) { Problem = "Port " + requestedPort + " on this PC is in use (" + e.SocketErrorCode + "), so telemetry can't arrive."; return false; }
+            catch (SocketException e) { Problem = "Port " + port + " on this PC is in use (" + e.SocketErrorCode + "), so telemetry can't arrive."; return false; }
+        }
+        // For Connect: the first free port of first and the next ones (PortsTried in all), or false with Problem set
+        // when every one is taken. Port 0 lets Windows pick.
+        public bool StartFirstFree(int first)
+        {
+            if (first <= 0) return Start(0);
+            if (listener != null && Port >= first && Port < first + PortsTried) return true;
+            for (int i = 0; i < PortsTried && first + i < 65536; i++) if (Start(first + i)) return true;
+            requestedPort = first;
+            Problem = "Ports " + first + "–" + (first + PortsTried - 1) + " on this PC are all in use, so telemetry can't arrive.";
+            return false;
         }
 
         public void Stop()

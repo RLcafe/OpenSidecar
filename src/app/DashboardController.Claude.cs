@@ -60,7 +60,7 @@ namespace WidgetScreen
             if (Program.Rendering) return;
             claude.CheckConnected();
             // After an update, Claude Code runs the bridge that came with it.
-            if (claude.Connected) { claude.Connector.RefreshHook(BundledHook); claude.Telemetry.Start(); }
+            if (claude.Connected) { claude.Connector.RefreshHook(BundledHook); claude.StartTelemetry(); }
             if (claude.Account.StartupWarning != null && pendingMessage == null) pendingMessage = claude.Account.StartupWarning;
         }
 
@@ -136,7 +136,8 @@ namespace WidgetScreen
             if (ticks % 10 == 0)
             {
                 bool was = claude.Connected; claude.CheckConnected(); changed |= was != claude.Connected;
-                if (claude.Connected) claude.Telemetry.Start(); else claude.Telemetry.Stop();
+                if (claude.Connected) claude.StartTelemetry(); else claude.Telemetry.Stop();
+                changed |= claudeView != null && claudeView.TelemetryWarning != claude.TelemetryWarning();
             }
             if (changed || claudeDirty) RefreshClaudeView();
         }
@@ -223,7 +224,10 @@ namespace WidgetScreen
         {
             claude.CheckConnected();
             bool update = claude.Connector.NeedsUpdate();
-            Text("ClaudeConnectionStatus", !claude.Connected ? "Not connected" : update ? "Connected by an earlier Widget Screen. Update the connection to add the latest hooks (permission dialogs, compaction) and telemetry." : "Connected. Every Claude Code session on this PC shows on the card.");
+            string portWarning = claude.TelemetryWarning();
+            Text("ClaudeConnectionStatus", !claude.Connected ? "Not connected" : update ? "Connected by an earlier Widget Screen. Update the connection to add the latest hooks (API errors, subagents, tasks, model switches, usage-limit waits) and telemetry."
+                : portWarning.Length > 0 ? portWarning + ". Update the connection to send telemetry to a free port." : "Connected. Every Claude Code session on this PC shows on the card.");
+            update |= claude.Connected && portWarning.Length > 0;
             Text("ClaudeFolderText", "Claude Code folder: " + claude.ConfigFolder);
             var connect = Control<Button>("ClaudeConnectButton");
             connect.Content = update ? "Update connection" : "Connect Claude Code";
@@ -252,6 +256,7 @@ namespace WidgetScreen
             Text("ClaudePlanStatus", claude.Account.SigningIn ? "Waiting for you to sign in in your browser…"
                 : plan == ClaudePlanState.Expired ? "Your Claude sign-in has ended. Sign in again to keep the plan meters current."
                 : plan == ClaudePlanState.SignedOut ? "Not signed in. The card's plan meters need this."
+                : plan == ClaudePlanState.NoMeters ? "Signed in. Anthropic says your plan has no usage meters, so the card shows none."
                 : plan == ClaudePlanState.Failed ? (claude.BackingOff ? "Signed in. Anthropic asked Widget Screen to slow down; it tries again in " + ClaudeText.Wait(claude.NextWait) + "." : "Signed in. The last check didn't go through; it tries again in " + ClaudeText.Wait(claude.NextWait) + ".") + asOf
                 : plan == ClaudePlanState.Reading ? "Signed in. Reading your plan's limits…" : "Signed in." + asOf);
             var signIn = Control<Button>("ClaudeSignInButton");
@@ -324,8 +329,12 @@ namespace WidgetScreen
             if (!yes || disposed) return;
             try
             {
-                claude.Connector.Connect(BundledHook);
-                claude.Telemetry.Start();
+                // Binds the telemetry port first and writes the one it got (decision 023), then reads every source at
+                // once, so sessions already running show without waiting for their next hook.
+                claude.Connect(BundledHook);
+                claude.CheckConnected();
+                claude.ReadSessions(DateTime.UtcNow, true);
+                if (claudeScan == null || claudeScan.IsCompleted) ScanClaudeLogs();
                 Text("SettingsStatus", "Claude Code is connected. Sessions show on the Claude Code widget; turn it on in Edit layout. Sessions already open pick up telemetry when they restart.");
             }
             catch (Exception e) { Text("SettingsStatus", e is InvalidOperationException ? e.Message : "Couldn't connect Claude Code: " + e.Message); }
@@ -410,9 +419,11 @@ namespace WidgetScreen
             // The pit wall (decision 017): each thread's car and what it does, its burn, mix and lines per period.
             Func<ClaudeSession, Func<ClaudePeriod, object>, object> per = (t, value) => D("fiveHour", value(ClaudePeriod.FiveHour), "today", value(ClaudePeriod.Today), "week", value(ClaudePeriod.Week));
             return D("connected", view.Connected, "sample", view.Sample, "logsFailed", view.LogsFailed, "logsRead", view.LogsRead, "noPlan", view.NoPlan, "plan", ClaudeText.PlanName(view.Plan),
-                "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod, "still", ClaudeStill, "apiValue", settings.ClaudeShowApiValue,
+                "every", ClaudeIntervals.Card(settings.ClaudeCardSeconds), "period", settings.ClaudePeriod, "still", ClaudeStill, "apiValue", settings.ClaudeShowApiValue, "warning", view.TelemetryWarning ?? "",
                 "threads", view.Threads.Select(t => (object)D("id", t.Id, "project", t.ProjectName, "title", t.Title, "running", t.Running, "state", ClaudeSessionFile.StateName(t.Running ? t.State : ClaudeState.Ready),
                     "since", ClaudeBridge.Epoch(t.Since) / 1000.0, "lastActive", ClaudeBridge.Epoch(t.LastActive) / 1000.0, "message", t.Message, "model", t.Model, "where", t.Where, "canFocus", t.Running && t.CanFocus, "archived", t.Archived, "resolved", t.Pit == PitState.Resolved,
+                    "reason", t.Running && t.State == ClaudeState.Stuck ? t.Reason : "", "reasonText", t.Running && t.State == ClaudeState.Stuck ? ClaudeText.StuckReason(t, view, DateTime.UtcNow, settings.Use24HourClock) : "",
+                    "context", t.Running && !Double.IsNaN(t.Context) ? (object)Math.Round(t.Context, 1) : null, "workers", t.Workers, "tasks", t.Tasks, "failed", t.Failed,
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),
@@ -427,9 +438,11 @@ namespace WidgetScreen
                     "tokens", D("fiveHour", s.TokensFor(ClaudePeriod.FiveHour), "today", s.TokensFor(ClaudePeriod.Today), "week", s.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(s.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(s.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(s.CostFor(ClaudePeriod.Week), 4)))).ToArray(),
                 "limits", limits == null ? null : D("fiveHour", window(limits.FiveHour), "week", window(limits.Week), "updatedAt", ClaudeBridge.Epoch(limits.UpdatedAt) / 1000.0, "source", limits.Source,
-                    "extra", limits.Extra.Select(p => (object)D("name", p.Key, "pct", p.Value.Percent, "resetsAt", p.Value.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(p.Value.ResetsAt.Value) / 1000.0) : null)).ToArray()),
+                    "extra", limits.Extra.Select(p => (object)D("name", p.Key, "pct", p.Value.Percent, "resetsAt", p.Value.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(p.Value.ResetsAt.Value) / 1000.0) : null)).ToArray(),
+                    "extraUsage", limits.ExtraUsage == null ? null : D("enabled", limits.ExtraUsage.Enabled, "limit", OrNull(limits.ExtraUsage.Limit), "used", OrNull(limits.ExtraUsage.Used), "pct", OrNull(limits.ExtraUsage.Percent))),
                 "usage", D("fiveHour", Projects(view, ClaudePeriod.FiveHour), "today", Projects(view, ClaudePeriod.Today), "week", Projects(view, ClaudePeriod.Week)));
         }
+        private static object OrNull(double value) { return Double.IsNaN(value) ? null : (object)Math.Round(value, 2); }
         private static object[] Names(List<KeyValuePair<string, double>> models) { return models.Take(4).Select(m => (object)D("name", m.Key, "share", Math.Round(m.Value, 3))).ToArray(); }
         private static object[] Shares(double[] mix) { return mix.Select(v => (object)Math.Round(v, 3)).ToArray(); }
         private static object[] Projects(ClaudeView view, ClaudePeriod period) { return view.UsageFor(period).Select(p => (object)D("project", p.Name, "tokens", p.Tokens, "cost", Math.Round(p.Cost, 4))).ToArray(); }

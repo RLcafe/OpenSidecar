@@ -86,7 +86,7 @@ internal static class ClaudeTests
             Assert(post.Count == 2 && ClaudeJson.Str(ClaudeJson.Obj(post[0]), "matcher") == "Edit" && ClaudeJson.Str(ClaudeJson.Obj(((List<object>)ClaudeJson.Obj(post[0]).Get("hooks"))[0]), "command") == "npx prettier --write", "The user's own hook was replaced.");
             foreach (var e in ClaudeConnector.Events) Assert(((List<object>)hooks.Get(e[0])).OfType<JsonObject>().Count(g => ClaudeJson.List(g, "hooks").Any(ClaudeConnector.Ours)) == 1, "Missing hook for " + e[0] + ".");
             var notification = ((List<object>)hooks.Get("Notification")).OfType<JsonObject>().Single();
-            Assert(ClaudeJson.Str(notification, "matcher") == "permission_prompt|elicitation_dialog", "Notification hook matcher wrong.");
+            Assert(ClaudeJson.Str(notification, "matcher") == ClaudeConnector.NotificationTypes && ClaudeConnector.NotificationTypes.StartsWith("permission_prompt|elicitation_dialog|"), "Notification hook matcher wrong.");
             string command = ClaudeJson.Str(ClaudeJson.Obj(ClaudeJson.List(notification, "hooks")[0]), "command");
             Assert(command.StartsWith("\"") && command.EndsWith("\" hook") && !command.Contains("\\") && command.Contains(ClaudeBridge.Marker), "Hook command not in Claude Code's form: " + command);
             var line = ClaudeJson.Obj(root, "statusLine");
@@ -225,8 +225,11 @@ internal static class ClaudeTests
             Action<string, ClaudeState, int, int> write = (id, state, minutes, pid) => ClaudeBridge.WriteAtomic(ClaudeBridge.SessionPath(bridge, id), ClaudeJson.Compact(new ClaudeSessionFile { Id = id, State = state, Project = "C:/Code/" + id, Since = ClaudeBridge.Epoch(Now.AddMinutes(-minutes)), LastEvent = ClaudeBridge.Epoch(Now.AddMinutes(-minutes)), Pid = pid }.ToJson()));
             write("ready", ClaudeState.Ready, 1, 0); write("done", ClaudeState.Done, 3, 0); write("work", ClaudeState.Working, 2, 0);
             write("needs-old", ClaudeState.NeedsYou, 9, 0); write("needs-new", ClaudeState.NeedsYou, 1, 0); write("ancient", ClaudeState.Working, 60 * 13, 0);
-            // A process that isn't Claude Code: the session's Claude Code has gone.
-            write("gone", ClaudeState.Working, 1, Process.GetCurrentProcess().Id);
+            // A process that has exited: the session's Claude Code has gone (decision 023; a running process of any name
+            // keeps its session, see ClaudeTrustTests).
+            int dead;
+            using (var exited = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit") { CreateNoWindow = true, UseShellExecute = false })) { exited.WaitForExit(); dead = exited.Id; }
+            write("gone", ClaudeState.Working, 1, dead);
             var service = new ClaudeService(bridge, Fresh(directory, "config-read"));
             Assert(service.ReadSessions(Now, true), "Nothing was read.");
             var view = service.View(Now, null);
