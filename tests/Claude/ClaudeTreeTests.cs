@@ -121,6 +121,31 @@ internal static class ClaudeTreeTests
             service.Dispose();
         });
 
+        check("Claude names threads the Claude app calls Local session, from Claude Code's own name (v0.41.1)", () => {
+            // Made-up names; nothing here comes from a real session list.
+            foreach (var generic in new[] { "Local session (from a project)", "Local session", "Cloud session", "cloud session (from a project)" })
+                Assert(ClaudeTitles.Placeholder(generic), "A placeholder counts as a title: \"" + generic + "\"");
+            foreach (var real in new[] { "Local session storage cleanup", "Cloud sync for notes" })
+                Assert(!ClaudeTitles.Placeholder(real), "A real title counts as a placeholder: " + real);
+            string config = Fresh(directory, "config-derived"), app = Fresh(directory, "app-derived");
+            string sessions = Path.Combine(config, "sessions"); Directory.CreateDirectory(sessions);
+            Func<string, int, string, string, string, string> listed = (id, pid, folder, name, source) => "{\"pid\":" + pid + ",\"sessionId\":\"" + id + "\",\"cwd\":\"" + Json(folder) + "\",\"startedAt\":" + ClaudeBridge.Epoch(Now.AddMinutes(-30))
+                + ",\"kind\":\"interactive\",\"entrypoint\":\"claude-desktop\",\"name\":\"" + name + "\",\"nameSource\":\"" + source + "\",\"status\":\"busy\",\"updatedAt\":" + ClaudeBridge.Epoch(Now.AddMinutes(-1)) + ",\"statusUpdatedAt\":" + ClaudeBridge.Epoch(Now.AddMinutes(-1)) + "}";
+            File.WriteAllText(Path.Combine(sessions, "501.json"), listed("s-local", 501, "C:\\Code\\alpha", "Sort the release notes", "derived"));
+            File.WriteAllText(Path.Combine(sessions, "502.json"), listed("s-folder", 502, "C:\\Code\\desk", "desk", "derived"));
+            File.WriteAllText(Path.Combine(sessions, "503.json"), listed("s-user", 503, "C:\\Code\\alpha", "My own name", "user"));
+            Record(app, "s-local", "C:\\Code\\alpha", "Local session (from a project)", Now.AddMinutes(-1));
+            Record(app, "s-user", "C:\\Code\\alpha", "Local session (from a project)", Now.AddMinutes(-1));
+            var service = new ClaudeService(Fresh(directory, "bridge-derived"), config, appThreads: new ClaudeAppThreads(() => new[] { app })) { RegistryAlive = pid => true };
+            service.ReadSessions(Now, false);
+            var view = service.View(Now, new List<ClaudeUsageEntry>());
+            Func<string, ClaudeSession> get = id => view.Sessions.FirstOrDefault(t => t.Id == id);
+            Assert(get("s-local") != null && get("s-local").Title == "Sort the release notes", "A Local session placeholder hid Claude Code's own name: " + (get("s-local") == null ? "missing" : get("s-local").Title));
+            Assert(get("s-folder") != null && get("s-folder").Title == "" && ClaudeText.ThreadTitle(get("s-folder"), Now, true) == "Thread sfolde", "A name that only repeats the folder was shown: " + (get("s-folder") == null ? "missing" : get("s-folder").Title));
+            Assert(get("s-user") != null && get("s-user").Title == "My own name", "A name the user gave lost to a placeholder.");
+            service.Dispose();
+        });
+
         check("Claude groups threads under the folder they started in, by period", () => {
             string config = Fresh(directory, "config-group"), app = Fresh(directory, "app-group");
             // A running Code-tab thread whose shell moved into a worktree; the app knows where it started.

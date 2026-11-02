@@ -6,6 +6,13 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.41.1 (2 Nov 2026)
+
+Claude Code watcher fix (Ali's report: threads and their names didn't show; Windows only, the phone gets the better names through the link).
+
+- **Thread names show again.** The Claude app now calls its threads "Local session (from a project)". That counts as no title now (so do "Local session" and "Cloud session"), so the card uses Claude Code's own name for the session, then the first line of the first request, then the id label. A name you give a session still wins.
+- **One dashboard per settings file.** Starting Widget Screen while it already runs brings the running copy forward (out of the tray, or up from the taskbar, without taking the focus from a game) instead of opening a second one underneath, which lost the Claude telemetry port. Renders and copies with their own `--settings` still run side by side, and a restart for full-sensors mode waits for the old copy to close.
+
 ## v0.41.0 (2 Nov 2026)
 
 Claude Code watcher: instant and everywhere (package 3 of the Watcher action plan; Windows only, the phone follows later; decision 025).

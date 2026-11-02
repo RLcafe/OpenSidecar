@@ -43,9 +43,14 @@ namespace WidgetScreen
                 if (renderPath == null && !args.Contains(FullSensors.Argument) && Argument(args, "--settings") == null && DashboardController.HandOverToElevatedCopy(settingsPath)) return 0;
                 Rendering = renderPath != null;
                 if (Rendering) ScreenSize = RenderSize(Argument(args, "--render-size"));
+                // One dashboard per settings file (v0.41.1): a second start shows the running one and closes.
+                SingleInstance single = null;
+                if (!Rendering) { single = SingleInstance.Claim(settingsPath); if (single == null) return 0; }
+                using (single)
                 using (var controller = new DashboardController(window, settingsPath, args.Contains("--windowed") || renderPath != null))
                 {
                     running = controller;
+                    if (single != null) single.OnShow(() => window.Dispatcher.BeginInvoke(new Action(() => { if (controller.Tray != null) controller.Tray.Bring(); })));
                     // A labelled fixture for the Claude card ("Sample" in its heading) instead of this PC's sessions.
                     // The Soundboard's labelled sample sounds (or none), as if Discord were connected; they never play.
                     if (renderPath != null && (args.Contains("--render-soundboard-sample") || args.Contains("--render-soundboard-empty"))) controller.UseSoundboardSample(args.Contains("--render-soundboard-empty"));
