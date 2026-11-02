@@ -39,6 +39,9 @@ public final class AppSettings {
     public boolean use24;
     // The one-time tips under the header were put away with Got it.
     public boolean hintDismissed;
+    // Package 3 (decision 025): a phone notification when a Claude Code session on the PC needs you, gets stuck or
+    // finishes a long turn, while the app is open (Settings → Widgets; on by default, silent in the PC's Quiet mode).
+    public boolean claudeNotify = true;
     // The phone mirrors the PC's layout (docs/design/any-screen-size.md). These hold the last one the PC sent, so the
     // dashboard keeps its arrangement while the PC is away: the current page's layouts per canvas size (the reference
     // 1856 × 576 one in widgetLayout), the page names, the page shown and the canvas of the PC's own screen.
@@ -156,6 +159,7 @@ public final class AppSettings {
         p.setProperty("LayoutMode", layoutMode);
         p.setProperty("Use24Hour", Boolean.toString(use24));
         p.setProperty("HintDismissed", Boolean.toString(hintDismissed));
+        p.setProperty("ClaudeNotify", Boolean.toString(claudeNotify));
         p.setProperty("Inks", inks); p.setProperty("WidgetColours", widgetColours);
         // The reference layout keeps its old keys (Layout.Focus); other canvases add theirs (Layout.1480x552.Focus).
         if (widgetLayout != null) putLayout(p, "Layout.", widgetLayout);
@@ -186,6 +190,7 @@ public final class AppSettings {
         s.layoutMode = p.getProperty("LayoutMode", s.layoutMode);
         s.use24 = readBool(p, "Use24Hour", false);
         s.hintDismissed = readBool(p, "HintDismissed", false);
+        s.claudeNotify = readBool(p, "ClaudeNotify", true);
         s.inks = p.getProperty("Inks", s.inks); s.widgetColours = p.getProperty("WidgetColours", s.widgetColours);
         s.widgetLayout = readLayout(p, "Layout.");
         for (int i = 0; p.getProperty("Page." + i) != null && i < 8; i++) s.pages.add(p.getProperty("Page." + i));

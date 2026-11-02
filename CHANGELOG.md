@@ -6,6 +6,19 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.42.0 (2 Nov 2026)
+
+Claude Code watcher on the phone: packages 2 and 3 of the Watcher action plan reach the Android app (package 1 already had; decision 026).
+
+- **The facts you chose on the PC.** The phone's side panel shows the four facts picked in Settings → Claude, for the card's period. API errors and a lot of failing tool runs turn Amber, and an API value that leaves out a model with no known price shows "~".
+- **When the 5-hour limit fills.** The tank says "full in 1 h 40 at this pace" when it would fill before it resets.
+- **Plan chips** for narrower weekly windows, extra usage and a gateway's spend limit sit under the plan row.
+- **Helpers on the car.** Pit-crew figures for each helper running, and a "3/5" task sticker.
+- **Retries and endings.** A thread retrying after an API error says so with the HTTP status and attempt, and a thread closed in Claude Code says how it ended.
+- **Hold a thread** for its details, as the PC's tooltip shows them: helpers' tokens apart, mode, Claude Code's own cost, crew, and Go to it.
+- **Phone notifications** when a Claude Code session needs you, gets stuck or finishes a long turn, while the app is open. A tap opens the Claude card's page. Settings → Widgets → Notify me when a Claude Code session needs me (on by default; silent in the PC's Quiet mode). Android 13 and later asks for permission once.
+- The PC adds replies, asked tool calls and lines' threads to each period's facts for the phone. No new polling, ports or outbound calls.
+
 ## v0.41.0 (2 Nov 2026)
 
 Claude Code watcher: instant and everywhere (package 3 of the Watcher action plan; Windows only, the phone follows later; decision 025).

@@ -91,7 +91,7 @@ public final class ClaudeWidget extends Widget {
             projects.append(';');
         }
         StringBuilder lanes = new StringBuilder(); for (PcState.ClaudeLane l : c.lanes) lanes.append(l.key).append(',');
-        return c.connected + "|" + c.sample + "|" + ids + "|" + projects + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + c.logsFailed + "|" + period + "|" + lanes + "|" + c.facts.telemetry + c.apiValue;
+        return c.connected + "|" + c.sample + "|" + ids + "|" + projects + "|" + c.limitsKnown() + c.noPlan + c.plan + "|" + c.extra.size() + "|" + ClaudeText.planChips(c, now(), dash.use24()).size() + "|" + c.logsFailed + "|" + period + "|" + lanes + "|" + c.facts.telemetry + c.apiValue + "|" + String.join(",", c.factKinds);
     }
 
     @Override protected View create() {
@@ -135,12 +135,28 @@ public final class ClaudeWidget extends Widget {
     private LinearLayout.LayoutParams carSize(double carWidth) { return ui.ll(ui.px(carWidth), ui.px(PitSprite.carHeight(carWidth))); }
     // A tappable thread: its area brings the thread's window forward on the PC, when one is known.
     private View tappable(View child, final PcState.ClaudeThread thread) {
+        // Holding any thread shows what the PC's tooltip says (package 2 and 3 details: helpers, crew, cost, mode).
+        if (thread != null) {
+            final String tid = thread.id;
+            child.setLongClickable(true);
+            child.setOnLongClickListener(new View.OnLongClickListener() { @Override public boolean onLongClick(View v) { details(tid); return true; } });
+        }
         if (thread == null || !thread.running || !thread.canFocus) return child;
         child.setClickable(true);
         child.setBackground(ui.pressable(0x00000000, 0, 0, 8));
         child.setContentDescription(ClaudeText.threadTitle(thread, now(), dash.use24()) + ". Tap to show its window on the PC.");
         child.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { dash.command(Json.map("action", "claude.focus", "id", thread.id)); } }));
         return child;
+    }
+    // A thread's details on the themed sheet, from the answer on screen now; Go to it when its window can be shown.
+    private void details(final String id) {
+        PcState.Claude c = claude();
+        final PcState.ClaudeThread t = c == null ? null : c.thread(id);
+        if (t == null) return;
+        String text = ClaudeText.details(t, c, period, now(), dash.use24(), counted(c), c.apiValue);
+        int cut = text.indexOf('\n');
+        Runnable go = t.running && t.canFocus ? new Runnable() { @Override public void run() { dash.command(Json.map("action", "claude.focus", "id", id)); } } : null;
+        dash.info("Claude Code thread", cut < 0 ? text : text.substring(0, cut), cut < 0 ? "" : text.substring(cut + 1), "Go to it", go);
     }
     // A project's garage: a tap rolls its cars in or out.
     private GaragePart garage(final PcState.ClaudeGroup group, double size) {
@@ -235,6 +251,9 @@ public final class ClaudeWidget extends Widget {
         column.addView(header(true, width), ui.ll(Ui.MATCH, ui.px(48)));
         column.addView(planRow(c, width), ui.margins(ui.ll(Ui.MATCH, ui.px(CardSizing.CLAUDE_PLAN_HEIGHT)), 0, 12, 0, 0));
         PcState.ClaudeSession asking = null; for (PcState.ClaudeSession s : c.sessions) if ("needs".equals(s.state)) { asking = s; break; }
+        // Package 2: more narrower weekly windows, extra usage and a gateway's spend limit, as chips. They step aside
+        // while a session needs you, so the pit stop strip and the ledger keep their room.
+        if (asking == null && !ClaudeText.planChips(c, now(), dash.use24()).isEmpty()) column.addView(planChips(), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 0, 8, 0, 0));
         if (asking != null) column.addView(askStrip(c, asking), ui.margins(ui.ll(Ui.MATCH, ui.px(Math.max(60, scaled(16) * 1.35 + 13 * 1.35 + 14))), 0, 12, 0, 0));
         boolean side = CardSizing.claudeSide(width);
         LinearLayout ledger = ui.row(); ledger.setGravity(Gravity.TOP);
@@ -243,6 +262,27 @@ public final class ClaudeWidget extends Widget {
         if (side) ledger.addView(sidePanel(c), ui.margins(ui.ll(ui.px(CardSizing.CLAUDE_SIDE_WIDTH), Ui.MATCH), 16, 0, 0, 0));
         column.addView(ledger, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 12, 0, 0));
         return column;
+    }
+
+    // The chips under the plan row: "Opus week 18% · resets Thu", "Extra usage 25% · 12.4 of 50", …
+    private View planChips() {
+        final com.alialyami.widgetscreen.views.FlowLayout row = new com.alialyami.widgetscreen.views.FlowLayout(ui.context, ui.px(6));
+        final List<TextView> chips = new ArrayList<TextView>();
+        for (int i = 0; i < ClaudeText.MOST_PLAN_CHIPS; i++) {
+            TextView chip = ui.text("", 12, ui.theme.muted); chip.setSingleLine(true);
+            chip.setPadding(ui.px(8), ui.px(3), ui.px(8), ui.px(3));
+            chip.setBackground(ui.shape(0x00000000, ui.theme.track, 1, 8));
+            chips.add(chip); row.addView(chip, new ViewGroup.LayoutParams(Ui.WRAP, Ui.WRAP));
+        }
+        fills.add(new Fill() { @Override public void run(PcState.Claude c, double now) {
+            List<String[]> words = ClaudeText.planChips(c, now, dash.use24());
+            for (int i = 0; i < chips.size(); i++) {
+                TextView chip = chips.get(i);
+                chip.setVisibility(i < words.size() ? View.VISIBLE : View.GONE);
+                if (i < words.size()) { chip.setText(words.get(i)[0]); chip.setTextColor("warn".equals(words.get(i)[1]) ? Theme.WARNING : ui.theme.muted); }
+            }
+        } });
+        return row;
     }
 
     private View planRow(PcState.Claude c, double width) {
@@ -275,7 +315,8 @@ public final class ClaudeWidget extends Widget {
             double pct = ClaudeText.percent(w, now), elapsed = ClaudePit.elapsed(w, ClaudePit.FIVE_HOURS, now), projection = ClaudePit.projection(pct, elapsed);
             gauge.value = pct / 100; gauge.projection = Double.isNaN(projection) ? Double.NaN : projection / 100; gauge.pace = elapsed; gauge.warn = pct >= 100; gauge.invalidate();
             if (w == null) value.setText("—"); else value.setText(big(pct, ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.text, 40));
-            pace.setText(ClaudePit.pace(projection)); pace.setTextColor(ClaudePit.warns(projection) || ClaudeText.warns(pct) ? Theme.WARNING : ui.theme.muted);
+            // Package 2: when the tank fills at the last half hour's pace, if that's before it resets.
+            pace.setText(ClaudeText.paceLine(projection, c.limitEta)); pace.setTextColor(ClaudePit.warns(projection) || ClaudeText.warns(pct) || !Double.isNaN(c.limitEta) ? Theme.WARNING : ui.theme.muted);
             reset.setText(w == null ? ClaudeText.NO_FIVE_HOUR : ClaudeText.fiveHourReset(w, now, dash.use24())); reset.setTextColor(pct >= 100 ? Theme.WARNING : ui.theme.muted);
         } });
         return tile(row, 12, 10);
@@ -486,8 +527,11 @@ public final class ClaudeWidget extends Widget {
                 chip(chip, t.pit);
                 name2.setText(ClaudeText.threadTitle(t, now, dash.use24())); name2.setTextColor("need".equals(t.pit) ? Theme.WARNING : ui.theme.text);
                 // A stuck thread says why where it would say where it runs (decision 023).
-                boolean stuck = ClaudeText.stuck(t);
-                where.setText(stuck ? ClaudeText.stuckReason(t) : ClaudeText.where(t, now)); where.setTextColor(stuck ? Theme.WARNING : ui.theme.muted);
+                // A car spinning after an API error says it's retrying; a thread Claude Code closed says how (packages 2 and 3).
+                boolean stuck = ClaudeText.stuck(t), retrying = !stuck && ClaudeText.retryingNow(t);
+                String ended = t.running ? "" : ClaudeText.endedBy(t.endReason);
+                where.setText(stuck ? ClaudeText.stuckReason(t) : retrying ? ClaudeText.retrying(t) : !ended.isEmpty() ? ended + " · " + ClaudeText.duration(now - t.lastActive) + " ago" : ClaudeText.where(t, now));
+                where.setTextColor(stuck || retrying ? Theme.WARNING : ui.theme.muted);
                 ttokens.setText(counted(c) ? ClaudeText.tokens(t.tokens[period]) : "—"); tcached.setText(counted(c) ? ClaudeText.tokens(t.cache[period]) : "");
                 tdollars.setText(!counted(c) ? "" : c.apiValue ? "$" + ClaudeText.dollars(t.cost[period]) : String.valueOf(t.replies[period]));
                 tmix.setText(models(t.models[period]));
@@ -547,14 +591,19 @@ public final class ClaudeWidget extends Widget {
             double max = 1; for (PcState.ClaudeLane l : c.lanes) for (double v : l.bins) max = Math.max(max, v);
             for (PitViews.Lane b : bins) { b.maximum = max; b.invalidate(); }
             start.setText(ClaudeText.clock(now - ClaudePit.FIVE_HOURS, dash.use24())); middle.setText(ClaudeText.clock(now - 150 * 60, dash.use24()));
-            PcState.ClaudeFacts f = c.facts;
-            values[0].setText(counted(c) ? ClaudeText.tokens(f.tokens) : "—"); keys[0].setText(!counted(c) ? "TODAY" : c.apiValue ? "TODAY · $" + ClaudeText.dollars(f.cost) + " API VALUE" : "TODAY · " + f.replies + " REPLIES");
-            values[1].setText(ClaudeText.share(f.cacheHit())); keys[1].setText("CACHE HITS");
-            values[2].setText(counted(c) ? String.valueOf(f.tools) : "—"); keys[2].setText(ClaudeText.toolsKey(f));
-            if (f.added > 0 || f.removed > 0) {
-                SpannableStringBuilder added = new SpannableStringBuilder(ClaudeText.added(f.added)); added.setSpan(new ForegroundColorSpan(PitArt.LIME), 0, added.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                values[3].setText(added); keys[3].setText(ClaudeText.removed(f.removed) + " · " + ClaudeText.threads(f.linesThreads).toUpperCase(Locale.ROOT));
-            } else { values[3].setText("—"); keys[3].setText("LINES"); }
+            // The four facts Settings → Claude picked on the PC, for the chosen period (package 2).
+            for (int i = 0; i < 4; i++) {
+                String kind = c.factKinds[i];
+                String[] fact = ClaudeText.fact(kind, c, period, counted(c), c.apiValue);
+                if (ClaudeText.LINES.equals(kind) && !"—".equals(fact[0])) {
+                    SpannableStringBuilder added = new SpannableStringBuilder(fact[0]); added.setSpan(new ForegroundColorSpan(PitArt.LIME), 0, added.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    values[i].setText(added);
+                } else values[i].setText(fact[0]);
+                values[i].setTextColor(ClaudeText.factWarns(kind, c, period) ? Theme.WARNING : ui.theme.text);
+                // What the fact means (the PC's tooltip) is read aloud with it.
+                keys[i].setText(fact[1]);
+                ((View) values[i].getParent()).setContentDescription(fact[0] + " " + fact[1] + ". " + fact[2]);
+            }
         } });
         return side;
     }
@@ -751,6 +800,9 @@ public final class ClaudeWidget extends Widget {
             renderCar(c, part, t, five);
             boolean ringed = t != null && t.running && (!part.onlyWorst || worst.get(part.key) == t);
             part.sprite.ring(ringed ? t.context : Double.NaN, ui.theme.page, ui.theme.track, ui.theme.muted);
+            // Package 3: the pit crew and task stickers. Medium's small inline cars show only the crew.
+            boolean on = t != null && t.running;
+            part.sprite.crew(on ? t.workers : 0, on ? t.tasksDone : 0, on ? t.tasksTotal : 0, part.width >= 40, ui.theme.page, ui.theme.text, ui.theme.accent);
         }
         updateClock();
     }
