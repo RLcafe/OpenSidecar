@@ -46,18 +46,68 @@ namespace WidgetScreen
         // The env keys Connect added (so Disconnect removes exactly those), beside the bridge.
         public string EnvRecordPath { get { return Path.Combine(BridgeFolder, "connected-env.json"); } }
 
-        // %USERPROFILE%\.claude, or CLAUDE_CONFIG_DIR when Claude Code is set up to use another folder.
+        // %USERPROFILE%\.claude, or CLAUDE_CONFIG_DIR when Claude Code is set up to use another folder: this process's, or
+        // the user's own (package 3), which Claude Code started from a new terminal sees even if Widget Screen was
+        // started before it was set.
         public static string DefaultConfigFolder
         {
             get
             {
                 string configured = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+                if (String.IsNullOrWhiteSpace(configured)) { try { configured = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR", EnvironmentVariableTarget.User); } catch (Exception) { configured = null; } }
                 if (!String.IsNullOrWhiteSpace(configured)) return Environment.ExpandEnvironmentVariables(configured.Trim());
                 return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
             }
         }
 
         public string SettingsPath { get { return Path.Combine(ConfigFolder, "settings.json"); } }
+
+        // ----- Managed settings (package 3) -----
+
+        // The checks point this at a throwaway file, so the PC's real managed settings are never read by them.
+        public const string ManagedVariable = "WIDGETSCREEN_CLAUDE_MANAGED";
+        // An organisation's managed-settings.json, which outranks every other Claude Code settings file: the one this
+        // PC has, or "" when none.
+        public string ManagedPath
+        {
+            get
+            {
+                string set = Environment.GetEnvironmentVariable(ManagedVariable);
+                if (set != null) return File.Exists(set) ? set : "";
+                foreach (var folder in new[] { Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) })
+                {
+                    if (String.IsNullOrEmpty(folder)) continue;
+                    string path = Path.Combine(folder, "ClaudeCode", "managed-settings.json");
+                    if (File.Exists(path)) return path;
+                }
+                return "";
+            }
+        }
+        // What of Widget Screen's connection the managed settings override ("hooks", "status line", "telemetry"), read
+        // only. Writing settings.local.json wouldn't help: managed settings outrank it too, so the card says what can't
+        // work rather than trying.
+        public List<string> ManagedOverrides()
+        {
+            var found = new List<string>();
+            string path = ManagedPath;
+            if (path.Length == 0) return found;
+            JsonObject root;
+            try { root = ClaudeJson.Obj(ClaudeJson.Parse(File.ReadAllText(path, Encoding.UTF8))); } catch (Exception) { return found; }
+            if (root == null) return found;
+            bool noHooks = ClaudeJson.Bool(root, "disableAllHooks");
+            if (noHooks || ClaudeJson.Bool(root, "allowManagedHooksOnly")) found.Add("hooks");
+            if (noHooks || ClaudeJson.Obj(root, "statusLine") != null) found.Add("status line");
+            var env = ClaudeJson.Obj(root, "env");
+            // Telemetry is overridden when a managed key Widget Screen sets says something else (an endpoint anywhere but
+            // this PC, another exporter, telemetry off); the same value is harmless.
+            Func<string[], bool> differs = pair => {
+                if (!env.Contains(pair[0])) return false;
+                string value = Convert.ToString(env.Get(pair[0]), System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                return pair[0] == Endpoint ? !value.StartsWith(Loopback, StringComparison.Ordinal) : !String.Equals(value, pair[1], StringComparison.OrdinalIgnoreCase);
+            };
+            if (env != null && Telemetry(TelemetryPort).Any(differs)) found.Add("telemetry");
+            return found;
+        }
         public string HookPath { get { return Path.Combine(BridgeFolder, ClaudeBridge.HookExe); } }
         // The command as Claude Code runs it: forward slashes (Git Bash eats backslashes) and quotes for spaces.
         public string Command(string mode) { return "\"" + HookPath.Replace('\\', '/') + "\" " + mode; }

@@ -265,6 +265,11 @@ namespace WidgetScreen
             if (thread.Running && thread.Pit == PitState.Stuck && thread.State != ClaudeState.Stuck && Retrying(thread).Length > 0) lines.Add(Retrying(thread));
             string context = thread.Running ? ContextTip(thread.Context) : "";
             if (context.Length > 0) lines.Add(context);
+            // Package 3: its pit crew (helpers running now) and the task list.
+            string crew = thread.Running ? Crew(thread) : "";
+            if (crew.Length > 0) lines.Add(crew);
+            string endedBy = thread.Running ? "" : EndedBy(thread.EndReason);
+            if (endedBy.Length > 0) lines.Add(endedBy);
             // Package 2: helpers' tokens apart from the thread's own, Claude Code's own cost, its mode and setup.
             long helpers = thread.HelperTokensFor(period);
             if (counted && helpers > 0) lines.Add("Own " + ClaudeUsage.Format(Math.Max(0, thread.TokensFor(period) - helpers)) + " · helpers " + ClaudeUsage.Format(helpers) + " tokens " + PeriodName(period).ToLowerInvariant());
@@ -282,6 +287,21 @@ namespace WidgetScreen
             if (detail.Count > 0) lines.Add(String.Join(" · ", detail));
             if (thread.Running && thread.CanFocus) lines.Add("Tap to show its window.");
             return String.Join("\n", lines);
+        }
+        // "2 helpers working · tasks 3 / 5" (package 3), or "".
+        public static string Crew(ClaudeSession thread)
+        {
+            var parts = new List<string>();
+            if (thread.Workers > 0) parts.Add(thread.Workers == 1 ? "1 helper working" : thread.Workers + " helpers working");
+            if (thread.TasksTotal > 0) parts.Add("tasks " + Tasks(thread));
+            return String.Join(" · ", parts);
+        }
+        // The car's task chip: "3 / 5".
+        public static string Tasks(ClaudeSession thread) { return thread.TasksDone + " / " + thread.TasksTotal; }
+        // Why Claude Code ended a thread it kept (package 3).
+        public static string EndedBy(string reason)
+        {
+            return reason == "prompt_input_exit" ? "Closed in Claude Code" : reason == "logout" ? "Ended when Claude Code logged out" : reason == "clear" ? "Cleared with /clear" : "";
         }
         public static string NoThreads(ClaudePeriod period) { return "No Claude Code threads " + (period == ClaudePeriod.FiveHour ? "in the last 5 hours." : period == ClaudePeriod.Today ? "today." : "this week."); }
         // "+1.3k" and "−216": lines added and removed.
@@ -465,7 +485,7 @@ namespace WidgetScreen
         // A thread's car (in the ledger, inline on Medium, Small's or the pit stop strip's) and its row.
         // A car: its sprite, the context ring on its corner (decision 023) and the two together (View), which is what
         // goes into a row. OnlyWorst: on Medium, only the fullest context in its garage shows a ring.
-        private sealed class CarPart { public string Id, Folder; public PitSprite Sprite; public ContextRing Ring; public FrameworkElement View, Row; public double Width; public bool Dim, OnlyWorst; }
+        private sealed class CarPart { public string Id, Folder; public PitSprite Sprite; public ContextRing Ring; public PitCrew Crew; public FrameworkElement View, Row; public double Width; public bool Dim, OnlyWorst; }
         // A project's garage and its cars.
         private sealed class GaragePart { public string Folder; public PitSprite Sprite; public FrameworkElement Tap; public readonly List<CarPart> Cars = new List<CarPart>(); }
 
@@ -601,9 +621,12 @@ namespace WidgetScreen
             var ring = names.Add(new ContextRing { Width = ringSize, Height = ringSize, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Margin = new Thickness(0, -ringSize / 3, -ringSize / 4, 0) }, name + "Context");
             // The ring hides with its car while a garage rolls the cars in or out.
             ring.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding("Visibility") { Source = sprite });
+            // Package 3: the pit crew and task stickers, hidden with the car like its ring.
+            var crew = names.Add(new PitCrew { IsHitTestVisible = false, ShowTasks = width >= 40 }, name + "Crew");
+            crew.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding("Visibility") { Source = sprite });
             var both = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            both.Children.Add(sprite); both.Children.Add(ring);
-            var part = new CarPart { Id = thread == null ? null : thread.Id, Folder = folder, Sprite = sprite, Ring = ring, View = both, Width = width, Dim = dim };
+            both.Children.Add(sprite); both.Children.Add(crew); both.Children.Add(ring);
+            var part = new CarPart { Id = thread == null ? null : thread.Id, Folder = folder, Sprite = sprite, Ring = ring, Crew = crew, View = both, Width = width, Dim = dim };
             cars.Add(part); clock.Add(sprite);
             return part;
         }
@@ -618,6 +641,23 @@ namespace WidgetScreen
                 area.MouseLeftButtonUp += (sender, e) => { e.Handled = true; focus(id); };
             }
             return area;
+        }
+        // A thread's tip, written when it opens from the view shown then (package 3), so it never shows the numbers of
+        // the view the row was built from.
+        private void LiveTip(FrameworkElement area, string id)
+        {
+            area.ToolTip = " ";
+            area.ToolTipOpening += (sender, e) => {
+                var t = view == null ? null : view.Threads.FirstOrDefault(x => x.Id == id);
+                if (t == null) { e.Handled = true; return; }
+                area.ToolTip = ClaudeText.ThreadTip(t, period, DateTime.UtcNow, use24, Counted, showApi);
+            };
+        }
+        // For the checks: the tip a thread's row would show now.
+        public string TipFor(string id)
+        {
+            var t = view == null ? null : view.Threads.FirstOrDefault(x => x.Id == id);
+            return t == null ? null : ClaudeText.ThreadTip(t, period, DateTime.UtcNow, use24, Counted, showApi);
         }
         // A project's garage: a tap rolls its cars in or out.
         private GaragePart Garage(ClaudeProjectGroup group, double size, string name)
@@ -986,7 +1026,7 @@ namespace WidgetScreen
                 var tmix = Trimmed(Text("", 12, "Muted")); tmix.VerticalAlignment = VerticalAlignment.Center; tmix.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeModels(width, textScale)) trow.Children.Add(At(tmix, 0, 5));
                 var tlines = Right(Text("", 12, "Muted")); tlines.Margin = new Thickness(10, 0, 0, 0); if (CardSizing.ClaudeLines(width, textScale)) trow.Children.Add(At(tlines, 0, 6));
                 var tap = Tappable(trow, thread);
-                tap.ToolTip = ClaudeText.ThreadTip(thread, period, DateTime.UtcNow, use24, Counted, showApi);
+                LiveTip(tap, thread.Id);
                 car.Row = tap;
                 list.Children.Add(names.Add(tap, "ClaudeThreadRow" + index + "_" + j));
                 string id = thread.Id;
@@ -1167,7 +1207,7 @@ namespace WidgetScreen
                 {
                     var car = Car(group.Threads[j], group.Folder, 30, "ClaudeCar" + i + "_" + j, true);
                     car.View.Margin = new Thickness(0, 0, 2, 0); car.OnlyWorst = true;
-                    var tap = Tappable(car.View, group.Threads[j]); tap.ToolTip = ClaudeText.ThreadTip(group.Threads[j], period, DateTime.UtcNow, use24, Counted, showApi);
+                    var tap = Tappable(car.View, group.Threads[j]); LiveTip(tap, group.Threads[j].Id);
                     car.Row = tap; inline.Children.Add(tap); garage.Cars.Add(car);
                 }
                 if (!folded && shown < group.Threads.Count) { var more = Caption("+" + (group.Threads.Count - shown)); more.VerticalAlignment = VerticalAlignment.Center; more.Margin = new Thickness(2, 0, 0, 0); inline.Children.Add(more); }
@@ -1327,6 +1367,9 @@ namespace WidgetScreen
                 bool ringed = t != null && t.Running && (!part.OnlyWorst || (worst.TryGetValue(part.Folder ?? "", out fullest) && fullest.Id == t.Id));
                 double context = ringed ? t.Context : Double.NaN;
                 if (!part.Ring.Percent.Equals(context)) { part.Ring.Percent = context; part.Ring.InvalidateVisual(); }
+                // Medium's small inline cars show only the crew; the ledger's and Large's show tasks too.
+                int workers = t != null && t.Running ? t.Workers : 0, done = t != null && t.Running ? t.TasksDone : 0, total = t != null && t.Running ? t.TasksTotal : 0;
+                if (part.Crew.Workers != workers || part.Crew.TasksDone != done || part.Crew.TasksTotal != total) { part.Crew.Workers = workers; part.Crew.TasksDone = done; part.Crew.TasksTotal = total; part.Crew.InvalidateVisual(); }
             }
             clock.Update();
         }

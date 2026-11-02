@@ -204,6 +204,8 @@ namespace WidgetScreen
             // Live state wins over Resolved: working, needing you, compacting or a fresh "your turn" shows as that. An
             // open thread only counts as resolved once it has sat idle for TurnIdle (decision 020, review fix 1).
             bool settled = now - thread.Since >= TurnIdle;
+            // A lead whose helpers (subagents) are still running is working, whatever its own turn says (package 3).
+            if (thread.Workers > 0 && (thread.State == ClaudeState.Done || thread.State == ClaudeState.Ready) && !thread.Compacting) return PitState.Work;
             switch (thread.State)
             {
                 case ClaudeState.NeedsYou: return PitState.Need;

@@ -33,6 +33,10 @@ namespace WidgetScreen
         public string Reason = "", ReasonText = "", LastError = "";
         public double Context = Double.NaN;
         public int Workers, Tasks, Failed, Denied;
+        // Package 3: the task list's tasks done and in all (the car's "3 / 5" chip), and why a session the bridge kept
+        // after its SessionEnd ended ("prompt_input_exit", "logout", "clear"; "" otherwise).
+        public int TasksDone, TasksTotal;
+        public string EndReason = "";
         // Package 2: Claude Code's own cost for the session (its status line's total_cost_usd, NaN when unknown), its
         // wall-clock and API time, output style, --agent name, worktree and permission mode (telemetry); the last API
         // error telemetry saw (HTTP status, attempt, when); whether a tool has run past its usual time (null when
@@ -156,7 +160,22 @@ namespace WidgetScreen
 
         // The projects with a thread active in the period (or running), a project that needs you first, then ones with
         // something running, then the most recently active.
+        // Worked out once per period and filter (package 3: the card's rows and the phone each asked again), and kept
+        // until the threads change; the folds are applied each time, since a tap changes them without a new view.
         public List<ClaudeProjectGroup> Groups(ClaudePeriod period)
+        {
+            string key = period + "|" + ShowArchived + "|" + HideIdle;
+            List<ClaudeProjectGroup> built;
+            if (groupsOf != Threads) { groupsCache.Clear(); groupsOf = Threads; }
+            if (!groupsCache.TryGetValue(key, out built)) { built = BuildGroups(period); groupsCache[key] = built; GroupsBuilt++; }
+            foreach (var g in built) g.Collapsed = Collapsed.Contains(g.Folder);
+            return built.ToList();
+        }
+        private readonly Dictionary<string, List<ClaudeProjectGroup>> groupsCache = new Dictionary<string, List<ClaudeProjectGroup>>();
+        private List<ClaudeSession> groupsOf;
+        // For the checks: how many times the groups were worked out.
+        public int GroupsBuilt;
+        private List<ClaudeProjectGroup> BuildGroups(ClaudePeriod period)
         {
             DateTime start; if (!Starts.TryGetValue(period, out start)) start = DateTime.MinValue;
             return Threads.Where(t => t.Running || t.LastActive >= start)
@@ -244,6 +263,8 @@ namespace WidgetScreen
             }
             threads.First(t => t.Id == "sample-3").Compacting = true;
             // Context rings (decision 023): one thread near compaction, one past 60%.
+            // Package 3: a lead with two helpers out and three of five tasks done.
+            threads.First(t => t.Id == "sample-2").Workers = 2; threads.First(t => t.Id == "sample-2").TasksDone = 3; threads.First(t => t.Id == "sample-2").TasksTotal = 5;
             threads.First(t => t.Id == "sample-2").Context = 82; threads.First(t => t.Id == "sample-7").Context = 64;
             foreach (var t in threads) t.Pit = ClaudePace.State(t, now, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
             view.Threads = threads;
@@ -309,6 +330,21 @@ namespace WidgetScreen
             Registry = new ClaudeRegistry(configFolder);
             Account = account ?? (signInPath == null ? null : new ClaudeAccount(signInPath));
             Telemetry = new ClaudeTelemetry(telemetryPort, Receive);
+            Watch = new ClaudeWatch(() => { var h = Changed; if (h != null) h(); });
+        }
+
+        // Package 3: the folders whose changes the card reacts to at once, and what to call (on a worker thread) when
+        // one changes or telemetry arrives. The dashboard collects what changed with Watch.Take().
+        public readonly ClaudeWatch Watch;
+        public volatile Action Changed;
+        public List<Tuple<string, ClaudeWatch.Kinds, bool>> WatchFolders()
+        {
+            var list = new List<Tuple<string, ClaudeWatch.Kinds, bool>> {
+                Tuple.Create(bridge, ClaudeWatch.Kinds.Sessions, true),
+                Tuple.Create(Path.Combine(ConfigFolder, "sessions"), ClaudeWatch.Kinds.Sessions, false),
+                Tuple.Create(Path.Combine(ConfigFolder, "projects"), ClaudeWatch.Kinds.Logs, true) };
+            foreach (var root in AppThreads.Roots) list.Add(Tuple.Create(root, ClaudeWatch.Kinds.Sessions, true));
+            return list;
         }
 
         public string BridgeFolder { get { return bridge; } }
@@ -340,6 +376,7 @@ namespace WidgetScreen
                     }
                 }
             TelemetryChanged = true;
+            Watch.Poke(ClaudeWatch.Kinds.Telemetry);
         }
         private Dictionary<string, ClaudeTelemetryEvent> Activity { get { lock (activityGate) return new Dictionary<string, ClaudeTelemetryEvent>(activity); } }
 
@@ -430,7 +467,8 @@ namespace WidgetScreen
 
         // Reads the session files that changed since last time. A session is alive until its own SessionEnd or its
         // process is gone (decision 023): a file goes when alive is checked and its process has exited (or the id now
-        // belongs to a later process). A file with no known process, or one /clear ended, goes after 12 quiet hours.
+        // belongs to a later process). A file with no known process goes after 12 quiet hours; one Claude Code ended
+        // (exit, logout or /clear, kept to say how) after the week.
         // Claude Code's own list is read alongside. Returns whether anything changed.
         public bool ReadSessions(DateTime now, bool checkAlive)
         {
@@ -454,8 +492,10 @@ namespace WidgetScreen
             foreach (var pair in files.ToList())
             {
                 var s = pair.Value.Session; if (s == null) continue;
-                bool forgotten = (s.Pid <= 0 || s.Ended) && now - ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since)) > ClaudeBridge.Forgotten;
-                if (forgotten || (checkAlive && s.Pid > 0 && !(SessionAlive ?? (Func<ClaudeSessionFile, bool>)DefaultAlive)(s)))
+                // A session Claude Code ended (kept to say how: package 3) stays for the week whatever its process does.
+                DateTime last = ClaudeBridge.FromEpoch(Math.Max(s.LastEvent, s.Since));
+                bool forgotten = s.Ended ? now - last > ClaudeUsage.Kept : s.Pid <= 0 && now - last > ClaudeBridge.Forgotten;
+                if (forgotten || (checkAlive && !s.Ended && s.Pid > 0 && !(SessionAlive ?? (Func<ClaudeSessionFile, bool>)DefaultAlive)(s)))
                 {
                     // Closed without SessionEnd (the terminal went away): the file goes too, so it doesn't come back.
                     try { File.Delete(pair.Key); } catch (Exception) { }
@@ -596,6 +636,9 @@ namespace WidgetScreen
             foreach (var pair in Usage.Folders) if (!String.IsNullOrEmpty(pair.Value)) result[pair.Key] = pair.Value;
             // The Claude app records the folder a Code-tab thread started in, whatever its shell did since.
             foreach (var t in AppThreads.Threads) if (t.Folder.Length > 0) result[t.Session] = t.Folder;
+            // A --worktree session names the folder its worktree came from (package 3): that is its garage, before any
+            // guessing from the worktree's path.
+            foreach (var s in Sessions) if (s.WorktreeOrigin.Length > 0) result[s.Id] = s.WorktreeOrigin;
             return result;
         }
 
@@ -655,7 +698,7 @@ namespace WidgetScreen
                     Title = file.Title, Message = file.Message, Model = ModelName(file.Model), Pid = file.Pid, WindowPid = file.WindowPid, Window = file.Window,
                     Compacting = file.Compacting && now - ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since)) < ClaudePace.CompactForgotten,
                     Reason = file.State == ClaudeState.Stuck ? file.Error : "", ReasonText = file.State == ClaudeState.Stuck ? file.ErrorText : "", Context = file.Context,
-                    Workers = file.Workers.Count, Tasks = file.OpenTasks, Failed = file.Failed, Denied = file.Denied, LastError = file.LastError,
+                    Workers = file.Workers.Count, Tasks = file.OpenTasks, TasksDone = file.TasksDone.Count(t => file.Tasks.Contains(t)), TasksTotal = file.Tasks.Count, EndReason = file.Ended ? file.EndReason : "", Failed = file.Failed, Denied = file.Denied, LastError = file.LastError,
                     CostUsd = file.CostUsd, DurationMs = file.DurationMs, ApiMs = file.ApiMs, Style = file.Style, Agent = file.Agent, Worktree = file.Worktree };
                 stateAt[file.Id] = ClaudeBridge.FromEpoch(file.Since);
                 if (file.Ended) ended[file.Id] = ClaudeBridge.FromEpoch(Math.Max(file.LastEvent, file.Since));
@@ -767,7 +810,11 @@ namespace WidgetScreen
                 // log file's own time doesn't tell: Claude Code touches it about an hour after a turn (review, 1 Nov 2026).
                 List<ClaudeUsageEntry> replied; DateTime lastReply = DateTime.MinValue;
                 if (perSession.TryGetValue(s.Id, out replied) && replied.Count > 0) lastReply = replied.Max(u => u.At);
-                s.Resolved = a != null && a.Completed && !a.Archived && lastReply <= a.LastActive + ResolvedSlack;
+                // Without the Claude app's record (package 3), a session Claude Code itself closed (exit, logout or /clear)
+                // counts as resolved, unless a reply came after its SessionEnd. The app's record wins when there is one.
+                DateTime endedAt;
+                if (a != null) s.Resolved = a.Completed && !a.Archived && lastReply <= a.LastActive + ResolvedSlack;
+                else s.Resolved = !s.Running && ClaudeBridge.Resolves(s.EndReason) && ended.TryGetValue(s.Id, out endedAt) && lastReply <= endedAt + ResolvedSlack;
                 foreach (var at in new[] { s.Since, seen, a == null ? DateTime.MinValue : a.LastActive }) if (at > s.LastActive) s.LastActive = at;
                 s.CanFocus = s.Running && (s.Window != 0 || s.WindowPid != 0) && ClaudeProcesses.Window(s.Window, s.WindowPid) != IntPtr.Zero;
                 List<ClaudeUsageEntry> mine;
@@ -992,6 +1039,6 @@ namespace WidgetScreen
             return found.Values.OrderByDescending(p => p.LastUsed).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        public void Dispose() { Telemetry.Dispose(); if (Account != null) Account.Dispose(); }
+        public void Dispose() { Watch.Dispose(); Telemetry.Dispose(); if (Account != null) Account.Dispose(); }
     }
 }

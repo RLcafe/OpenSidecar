@@ -134,15 +134,18 @@ internal static class ClaudeTrustTests
             Assert(read().State == ClaudeState.Working && read().Error == "", "quota_auto_resume_fired didn't carry on working.");
             fire("Notification", ",\"message\":\"\",\"notification_type\":\"quota_auto_resume_stale\"", 160);
             Assert(read().State == ClaudeState.NeedsYou && read().Message == ClaudeBridge.QuotaStale, "quota_auto_resume_stale doesn't ask for Enter.");
-            // SessionEnd: /clear keeps the thread, ended; any other reason takes the file away.
+            // SessionEnd: /clear, an exit at the prompt and a logout keep the thread, ended (package 3: resolved); any other
+            // reason takes the file away.
             fire("SessionEnd", ",\"reason\":\"clear\"", 170);
             s = read();
             Assert(s != null && s.Ended && s.EndReason == "clear" && s.State == ClaudeState.Ready && s.Workers.Count == 0, "SessionEnd after /clear didn't keep the thread, ended.");
             var service = new ClaudeService(bridge, Fresh(directory, "events-config"), appThreads: new ClaudeAppThreads(() => new string[0]));
             service.ReadSessions(Now.AddSeconds(171), false);
             var view = service.View(Now.AddSeconds(171), null);
-            Assert(!view.Sessions.Any(x => x.Id == "ev-1") && view.Threads.Any(x => x.Id == "ev-1" && !x.Running && x.Pit == PitState.End), "A cleared session still shows as running.");
+            Assert(!view.Sessions.Any(x => x.Id == "ev-1") && view.Threads.Any(x => x.Id == "ev-1" && !x.Running && x.Pit == PitState.Resolved), "A cleared session still shows as running, or isn't parked.");
             fire("SessionEnd", ",\"reason\":\"prompt_input_exit\"", 180);
+            Assert(File.Exists(path) && read().EndReason == "prompt_input_exit", "An exit at the prompt didn't keep the session, ended.");
+            fire("SessionEnd", ",\"reason\":\"other\"", 190);
             Assert(!File.Exists(path), "SessionEnd didn't remove the session.");
             // The connector registers all of them, and Notification for exactly these types.
             foreach (var name in new[] { "StopFailure", "PostToolUseFailure", "PostCompact", "PermissionDenied", "SubagentStart", "SubagentStop", "TaskCreated", "TaskCompleted", "PostModelSwitch", "CwdChanged" })

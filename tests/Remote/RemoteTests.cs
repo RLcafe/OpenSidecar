@@ -156,6 +156,11 @@ internal static class RemoteTests
                     Assert((string)claudeState["plan"] == "current" && (string)firstSession["where"] == "Desktop" && Convert.ToDouble(((Dictionary<string, object>)firstSession["cost"])["week"]) > 0
                         && Convert.ToDouble(((Dictionary<string, object>)weekProjects[0])["cost"]) > 0 && ((object[])claudeLimits["extra"]).Length == 1 && (string)((Dictionary<string, object>)((object[])claudeLimits["extra"])[0])["name"] == "Opus week"
                         && !get("/state?parts=claude", token).Item2.Contains("Bearer"), "Claude cost, plan state or extra windows missing from the phone's section.");
+                    // Package 3: every answer carries the numbered alerts (none for the sample), and threads their crew and tasks.
+                    var alerting = Json(get("/state?parts=focus", token).Item2);
+                    var crewThread = ((object[])claudeState["threads"]).Cast<Dictionary<string, object>>().First(t => (string)t["id"] == "sample-2");
+                    Assert(alerting["claudeAlerts"] is object[] && ((object[])alerting["claudeAlerts"]).Length == 0 && Convert.ToInt64(alerting["claudeAlertSeq"]) == 0 && alerting["claudeQuiet"] is bool
+                        && Convert.ToInt32(crewThread["workers"]) == 2 && Convert.ToInt32(crewThread["tasksDone"]) == 3 && Convert.ToInt32(crewThread["tasksTotal"]) == 5 && crewThread.ContainsKey("endReason"), "The phone's alerts or a car's crew are missing.");
                     Assert(post("/command", "{\"action\":\"claude.focus\",\"id\":\"sample-2\"}", token).Item1 == 200 && post("/command", "{\"action\":\"claude.focus\",\"id\":\"gone\"}", token).Item1 == 409, "Focusing a Claude session from the phone failed.");
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
                     var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];

@@ -1005,9 +1005,12 @@
                     <TextBlock x:Name="ClaudeFolderText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <WrapPanel><Button x:Name="ClaudeConnectButton" Content="Connect Claude Code" Style="{StaticResource AccentButton}" MinHeight="52" Margin="0,0,8,8"/><Button x:Name="ClaudeDisconnectButton" Content="Disconnect" Margin="0,0,8,8"/></WrapPanel>
                     <TextBlock x:Name="ClaudeTelemetryText" Text="" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="ClaudeManagedText" Text="" Style="{StaticResource Small}" Foreground="{DynamicResource Warning}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
                     <TextBlock Text="Connect and Disconnect take effect right away; you don't need to save. Claude Code picks up the change in sessions you start afterwards." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,16"/>
                     <CheckBox x:Name="ClaudeChimeChoice" Content="Chime when a session needs me"/>
                     <TextBlock Text="The card lights up either way. Quiet mode keeps the chime off." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
+                    <CheckBox x:Name="ClaudeToastChoice" Content="Notify me in Windows when a session needs me" AutomationProperties.Name="Show a Windows notification when a Claude Code session needs me"/>
+                    <TextBlock Text="Also when a session gets stuck, or finishes a turn of 10 minutes or more. Click the notification to bring the session forward. Quiet mode keeps it silent, and your paired phone gets the same alerts." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
                     <CheckBox x:Name="ClaudeStillChoice" Content="Keep the cars still in Quiet mode" AutomationProperties.Name="Keep the Claude cars still in Quiet mode"/>
                     <TextBlock Text="Off: the cars keep driving, revving and rolling into their garages even in Quiet mode. They stop whenever the card is hidden or the window is minimised." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="38,0,0,16"/>
                     <CheckBox x:Name="ClaudeApiValueChoice" Content="Show what the tokens would cost at API list prices" AutomationProperties.Name="Show the API value of the tokens on the Claude card"/>

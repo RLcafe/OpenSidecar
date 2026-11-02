@@ -220,4 +220,45 @@ namespace WidgetScreen
             if (level == 3) dc.DrawEllipse(ink, null, centre, Math.Max(1, r - stroke), Math.Max(1, r - stroke));
         }
     }
+
+    // Package 3: a car's pit crew and task list, as two small stickers over its lower corners. Left: a helper figure
+    // for each subagent running (up to three, then "+N"); right: "3 / 5" tasks done, on cars wide enough to read it.
+    public sealed class PitCrew : PitInstrument
+    {
+        public int Workers, TasksDone, TasksTotal;
+        public bool ShowTasks = true;
+        public string Key { get { return Workers + "|" + TasksDone + "|" + TasksTotal; } }
+        protected override void OnRender(DrawingContext dc)
+        {
+            double w = ActualWidth, h = ActualHeight;
+            if (w <= 0 || h <= 0 || (Workers <= 0 && (TasksTotal <= 0 || !ShowTasks))) return;
+            double size = Math.Max(6, Math.Round(h * 0.42));
+            Brush page = B("Page"), ink = B("Text");
+            Pen edge = Line(ink, Math.Max(1, size / 8), false);
+            if (Workers > 0)
+            {
+                int shown = Math.Min(3, Workers);
+                double person = size * 0.62, gap = size * 0.12;
+                var more = Workers > 3 ? Words("+" + (Workers - 3), size * 0.62, ink) : null;
+                double width = gap + shown * (person + gap) + (more == null ? 0 : more.Width + gap);
+                var area = new Rect(0, h - size, width, size);
+                dc.DrawRoundedRectangle(page, edge, area, size / 3, size / 3);
+                for (int i = 0; i < shown; i++)
+                {
+                    double x = area.X + gap + i * (person + gap) + person / 2;
+                    dc.DrawEllipse(ink, null, new Point(x, area.Y + size * 0.32), person * 0.24, person * 0.24);
+                    dc.DrawRoundedRectangle(ink, null, new Rect(x - person * 0.34, area.Y + size * 0.52, person * 0.68, size * 0.32), person * 0.2, person * 0.2);
+                }
+                if (more != null) dc.DrawText(more, new Point(area.Right - gap - more.Width, area.Y + (size - more.Height) / 2));
+            }
+            if (TasksTotal > 0 && ShowTasks)
+            {
+                var text = Words(TasksDone + "/" + TasksTotal, size * 0.7, ink);
+                double width = text.Width + size * 0.5;
+                var area = new Rect(Math.Max(0, w - width), h - size, Math.Min(w, width), size);
+                dc.DrawRoundedRectangle(page, TasksDone >= TasksTotal ? Line(B("Accent", ink), Math.Max(1, size / 8), false) : edge, area, size / 3, size / 3);
+                dc.DrawText(text, new Point(area.X + (area.Width - text.Width) / 2, area.Y + (size - text.Height) / 2));
+            }
+        }
+    }
 }
