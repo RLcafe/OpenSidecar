@@ -26,6 +26,19 @@ namespace WidgetScreen
         public double Added, Removed;
         public bool Cumulative;
         public string Series = "";
+        // Package 2 (monitoring-usage.md "Events"). tool_decision and tool_result: the tool, its call id, how long it ran
+        // and whether it failed (with error_type's category, never the message). api_request and api_error: how long,
+        // the speed, effort, the subsystem and the subagent, skill or MCP server it served; an error's HTTP status
+        // and attempt. subagent_completed: its type, run time and tool calls. permission_mode_changed: the new mode.
+        public string Tool = "", ToolUse = "", ErrorType = "", Speed = "", Effort = "", QuerySource = "", Agent = "", Skill = "", Mcp = "", Mode = "";
+        public double DurationMs = System.Double.NaN;
+        public bool Failed;
+        public int Status, Attempt, ToolUses;
+        // "metric" (package 2): a counter data point (token.usage, cost.usage, active_time.total, session.count,
+        // commit.count, pull_request.count, code_edit_tool.decision) with its type attribute (input, user, accept…)
+        // and query_source; Value is what the point says, turned into a change by the service when cumulative.
+        public string Metric = "", Type = "";
+        public double Value;
         // Who decided a tool use: the user (asked, allowed or denied it) rather than settings or a hook.
         public bool Asked { get { return Source.StartsWith("user", StringComparison.OrdinalIgnoreCase); } }
         public bool Denied { get { return String.Equals(Decision, "reject", StringComparison.OrdinalIgnoreCase); } }
@@ -56,17 +69,21 @@ namespace WidgetScreen
                         if (name.Length == 0) continue;
                         var e = Event(name, attributes, resourceAttributes, Time(record, attributes));
                         if (e.Session.Length == 0) continue;
+                        Details(e, attributes);
                         if (name == "api_request")
                         {
                             long input = Long(attributes, "input_tokens"), output = Long(attributes, "output_tokens"), read = Long(attributes, "cache_read_tokens"), creation = Long(attributes, "cache_creation_tokens");
-                            double cost = Double(attributes, "cost_usd");
+                            // Claude Code's own cost (package 2): micro-dollars when sent, else cost_usd, else the price table.
+                            double micros = Double(attributes, "cost_usd_micros"), cost = !System.Double.IsNaN(micros) && micros >= 0 ? micros / 1e6 : Double(attributes, "cost_usd");
                             string model = Value(attributes, "model") ?? "";
-                            if (System.Double.IsNaN(cost))
+                            bool priced = !System.Double.IsNaN(cost);
+                            if (!priced)
                             {
                                 long hour = Math.Min(creation, Long(attributes, "cache_creation_1h_tokens"));
                                 cost = ClaudePrices.Cost(model, input, output, creation - hour, hour, read);
                             }
-                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + creation, Prompt = input + read + creation, CacheRead = read, Cost = Math.Max(0, cost), FromTelemetry = true };
+                            e.Usage = new ClaudeUsageEntry { At = e.At, Session = e.Session, Model = model, Request = Value(attributes, "request_id") ?? "", Tokens = input + output + creation, Prompt = input + read + creation, CacheRead = read, Cost = Math.Max(0, cost), FromTelemetry = priced,
+                                Priced = priced || ClaudePrices.Known(model), Sidechain = e.Agent.Length > 0 };
                         }
                         else if (name == "tool_decision") { e.Decision = Value(attributes, "decision") ?? ""; e.Source = Value(attributes, "source") ?? ""; }
                         result.Add(e);
@@ -75,8 +92,28 @@ namespace WidgetScreen
             return result;
         }
 
-        // One "active" event per session a metrics export mentions, at its newest data point, and a "lines" event for
-        // each lines_of_code data point (added or removed).
+        // The details package 2 reads from an event's attributes (only names, categories and numbers; never prompts,
+        // replies, commands or error messages).
+        private static void Details(ClaudeTelemetryEvent e, Dictionary<string, object> attributes)
+        {
+            Func<string, int, string> text = (key, most) => { string v = (Value(attributes, key) ?? "").Trim(); return v.Length <= most ? v : v.Substring(0, most); };
+            e.Tool = text("tool_name", 80); e.ToolUse = text("tool_use_id", 120); e.ErrorType = text("error_type", 60);
+            e.Speed = text("speed", 20); e.Effort = text("effort", 20); e.QuerySource = text("query_source", 80);
+            e.Agent = text("agent.name", 80); e.Skill = text("skill.name", 80); e.Mcp = text("mcp_server.name", 80);
+            double duration = Double(attributes, "duration_ms"); e.DurationMs = duration >= 0 ? duration : System.Double.NaN;
+            e.Failed = e.Name == "tool_result" && String.Equals(Value(attributes, "success"), "false", StringComparison.OrdinalIgnoreCase);
+            e.Status = (int)Long(attributes, "status_code"); e.Attempt = (int)Long(attributes, "attempt");
+            if (e.Name == "subagent_completed") { e.Agent = text("agent_type", 80); e.ToolUses = (int)Long(attributes, "total_tool_uses"); }
+            if (e.Name == "permission_mode_changed") e.Mode = text("to_mode", 40);
+        }
+
+        // The counters package 2 keeps (claude_code.<name>), with the attribute that splits each one.
+        private static readonly Dictionary<string, string> Counters = new Dictionary<string, string> {
+            { "token.usage", "type" }, { "cost.usage", "query_source" }, { "active_time.total", "type" }, { "session.count", "start_type" },
+            { "commit.count", "" }, { "pull_request.count", "" }, { "code_edit_tool.decision", "decision" } };
+
+        // One "active" event per session a metrics export mentions, at its newest data point, a "lines" event for
+        // each lines_of_code data point (added or removed), and a "metric" event for each point of the counters above.
         public static List<ClaudeTelemetryEvent> ParseMetrics(string json)
         {
             var newest = new Dictionary<string, ClaudeTelemetryEvent>();
@@ -108,6 +145,19 @@ namespace WidgetScreen
                                     var start = Number(point.Get("startTimeUnixNano"));
                                     lines.Add(new ClaudeTelemetryEvent { Name = "lines", Session = e.Session, At = e.At, Added = type == "added" ? value : 0, Removed = type == "removed" ? value : 0,
                                         Cumulative = cumulative, Series = e.Session + "|" + type + "|" + (start is double ? ((double)start).ToString("R", CultureInfo.InvariantCulture) : "") });
+                                }
+                            }
+                            string counter = name.Substring("claude_code.".Length), split;
+                            if (Counters.TryGetValue(counter, out split))
+                            {
+                                double value = PointValue(point);
+                                if (!System.Double.IsNaN(value) && value >= 0)
+                                {
+                                    string type = split.Length == 0 ? "" : (Value(attributes, split) ?? "");
+                                    string source = Value(attributes, "query_source") ?? "";
+                                    var start = Number(point.Get("startTimeUnixNano"));
+                                    lines.Add(new ClaudeTelemetryEvent { Name = "metric", Session = e.Session, At = e.At, Metric = counter, Type = type, QuerySource = source, Value = value, Cumulative = cumulative,
+                                        Series = e.Session + "|" + counter + "|" + type + "|" + source + "|" + (Value(attributes, "model") ?? "") + "|" + (Value(attributes, "tool_name") ?? "") + "|" + (start is double ? ((double)start).ToString("R", CultureInfo.InvariantCulture) : "") });
                                 }
                             }
                             ClaudeTelemetryEvent known;

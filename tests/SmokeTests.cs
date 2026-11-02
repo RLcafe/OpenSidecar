@@ -75,6 +75,7 @@ internal static class SmokeTests
         ClaudeTreeTests.Run(directory, Check);
         ClaudeReviewTests.Run(directory, Check);
         ClaudeTrustTests.Run(directory, Check);
+        ClaudeNumbersTests.Run(directory, Check);
         ClipboardTests.Run(directory, Check);
         CalendarTests.Run(directory, Check);
         GameTests.Run(directory, Check);

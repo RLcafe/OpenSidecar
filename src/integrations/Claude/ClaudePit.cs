@@ -38,6 +38,57 @@ namespace WidgetScreen
         // the logs.
         public bool Telemetry, AskedPartial;
         public double CacheHit { get { return Prompt <= 0 ? Double.NaN : (double)CacheRead / Prompt; } }
+        // Package 2, the facts Settings → Claude can pick, for the period (ClaudeView.FactsBy): the tool with the
+        // longest average run and that average; tool runs and how many failed (telemetry's tool_result, else the
+        // hooks' PostToolUseFailure count over the logs' calls: FailuresFromHooks); API errors in the last hour; the
+        // helpers' (subagents') share of the tokens; edits accepted and rejected; commits and pull requests; and active
+        // time, yours and Claude's, in seconds. Metrics: whether telemetry's counters have said anything.
+        public string SlowTool = "";
+        public double SlowMs = Double.NaN, HelperShare = Double.NaN, ActiveUser, ActiveCli;
+        public int Runs, RunFailures, Errors, EditsAccepted, EditsRejected, Commits, PullRequests, Helpers;
+        public bool FailuresFromHooks, Metrics;
+        public double FailureRate { get { return Runs <= 0 ? Double.NaN : (double)RunFailures / Runs; } }
+    }
+
+    // Package 2, what telemetry says beyond the v2 card's events: a finished tool run (its tool, time and whether it
+    // failed, with the error's category), an API error (HTTP status and attempt) and a counter's change.
+    public sealed class ClaudeToolRun { public DateTime At; public string Session = "", Tool = "", ErrorType = ""; public double Ms = Double.NaN; public bool Failed; }
+    public sealed class ClaudeApiError { public DateTime At; public string Session = ""; public int Status, Attempt; }
+    public sealed class ClaudeMetricEntry { public DateTime At; public string Session = "", Name = "", Type = "", Source = ""; public double Value; }
+
+    // The side panel's facts (package 2): four of these, picked in Settings → Claude.
+    public static class ClaudeFactKinds
+    {
+        public const string Tokens = "tokens", Cache = "cache", Tools = "tools", Lines = "lines", Slowest = "slowest", Failures = "failures",
+            Errors = "errors", Helpers = "helpers", Edits = "edits", Commits = "commits", Active = "active";
+        public static readonly string[] All = { Tokens, Cache, Tools, Lines, Slowest, Failures, Errors, Helpers, Edits, Commits, Active };
+        public static readonly string[] Default = { Tokens, Cache, Tools, Lines };
+        public static string Name(string kind)
+        {
+            switch (kind)
+            {
+                case Tokens: return "Tokens";
+                case Cache: return "Cache hits";
+                case Tools: return "Tool calls";
+                case Lines: return "Lines changed";
+                case Slowest: return "Slowest tool";
+                case Failures: return "Tool failures";
+                case Errors: return "API errors in the last hour";
+                case Helpers: return "Helpers' share of the tokens";
+                case Edits: return "Edits accepted and rejected";
+                case Commits: return "Commits and pull requests";
+                case Active: return "Active time, yours and Claude's";
+                default: return kind;
+            }
+        }
+        // Four known kinds, no repeats, defaults filling any gap.
+        public static string[] Clean(string[] kinds)
+        {
+            var result = (kinds ?? new string[0]).Where(k => All.Contains(k)).Distinct().Take(4).ToList();
+            foreach (var k in Default) if (result.Count < 4 && !result.Contains(k)) result.Add(k);
+            foreach (var k in All) if (result.Count < 4 && !result.Contains(k)) result.Add(k);
+            return result.ToArray();
+        }
     }
 
     // A tool decision or result, or lines changed, from telemetry: kept a week for the facts and each thread's lines.
@@ -143,6 +194,12 @@ namespace WidgetScreen
         // spins after an API error (until a later request goes through).
         public static PitState State(ClaudeSession thread, DateTime now, DateTime decision, DateTime result, DateTime error, DateTime request)
         {
+            return State(thread, now, decision, result, error, request, null);
+        }
+        // revving (package 2): whether an allowed tool call has run past its usual time, from telemetry's tool ids and
+        // durations; null when telemetry names no calls, and then the old rule (15 s since the last decision) holds.
+        public static PitState State(ClaudeSession thread, DateTime now, DateTime decision, DateTime result, DateTime error, DateTime request, bool? revving)
+        {
             if (!thread.Running) return thread.Archived ? PitState.Archived : thread.Resolved ? PitState.Resolved : PitState.End;
             // Live state wins over Resolved: working, needing you, compacting or a fresh "your turn" shows as that. An
             // open thread only counts as resolved once it has sat idle for TurnIdle (decision 020, review fix 1).
@@ -157,9 +214,27 @@ namespace WidgetScreen
             }
             if (thread.Compacting) return PitState.Pit;
             if (error > request && now - error < ErrorShows) return PitState.Stuck;
-            if (decision > result && now - decision >= LongTool) return PitState.Rev;
+            if (revving.HasValue ? revving.Value : decision > result && now - decision >= LongTool) return PitState.Rev;
             return PitState.Work;
         }
+        // How long a tool may run before the car revs (package 2): twice its median time over its last 20 runs, between
+        // 3 and 60 seconds; LongTool for a tool with no runs yet.
+        public static TimeSpan RevAfter(IEnumerable<double> lastRuns)
+        {
+            var times = (lastRuns ?? Enumerable.Empty<double>()).Where(ms => !Double.IsNaN(ms) && ms >= 0).OrderBy(ms => ms).ToList();
+            if (times.Count == 0) return LongTool;
+            double median = times.Count % 2 == 1 ? times[times.Count / 2] : (times[times.Count / 2 - 1] + times[times.Count / 2]) / 2;
+            return TimeSpan.FromMilliseconds(Math.Max(3000, Math.Min(60000, 2 * median)));
+        }
+        // When the 5-hour window fills at this pace (package 2): minutes from now, from the share of the window each
+        // token has cost so far (percent over the window's tokens) and the tokens a minute of the last half hour. NaN
+        // with no pace, no tokens or a full window.
+        public static double Eta(double percent, double windowTokens, double perMinute)
+        {
+            if (Double.IsNaN(percent) || percent <= 0 || percent >= 100 || windowTokens <= 0 || perMinute <= 0) return Double.NaN;
+            return (100 - percent) * windowTokens / percent / perMinute;
+        }
+        public static readonly TimeSpan PaceWindow = TimeSpan.FromMinutes(30);
         public static string StateName(PitState state) { return state.ToString().ToLowerInvariant(); }
         // The car's context ring (decision 023): 0 none (under 60% or unknown), 1 from 60%, 2 from 80% (compaction
         // soon), 3 from 95%.

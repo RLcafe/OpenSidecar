@@ -241,6 +241,14 @@ namespace WidgetScreen
             Control<CheckBox>("ClaudeApiValueChoice").IsChecked = settings.ClaudeShowApiValue;
             Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked = !settings.ClaudeShowArchived;
             Control<CheckBox>("ClaudeHideIdleChoice").IsChecked = settings.ClaudeHideIdle;
+            // The side panel's four facts (package 2).
+            var facts = ClaudeFactKinds.Clean(settings.ClaudeFacts);
+            for (int i = 0; i < 4; i++)
+            {
+                var box = Control<ComboBox>("ClaudeFact" + i + "Choice");
+                box.ItemsSource = ClaudeFactKinds.All.Select(k => ClaudeFactKinds.Name(k)).ToList();
+                box.SelectedIndex = Array.IndexOf(ClaudeFactKinds.All, facts[i]);
+            }
             Control<CheckBox>("ClaudeShowNewChoice").IsChecked = settings.ClaudeShowNewProjects;
             Control<TextBox>("ClaudeCardSecondsBox").Text = settings.ClaudeCardSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Control<TextBox>("ClaudePlanSecondsBox").Text = settings.ClaudePlanSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -297,6 +305,7 @@ namespace WidgetScreen
             candidate.ClaudeShowApiValue = Control<CheckBox>("ClaudeApiValueChoice").IsChecked == true;
             candidate.ClaudeShowArchived = Control<CheckBox>("ClaudeHideArchivedChoice").IsChecked != true;
             candidate.ClaudeHideIdle = Control<CheckBox>("ClaudeHideIdleChoice").IsChecked == true;
+            candidate.ClaudeFacts = ClaudeFactKinds.Clean(Enumerable.Range(0, 4).Select(i => { int at = Control<ComboBox>("ClaudeFact" + i + "Choice").SelectedIndex; return at >= 0 && at < ClaudeFactKinds.All.Length ? ClaudeFactKinds.All[at] : ""; }).ToArray());
             candidate.ClaudeShowNewProjects = Control<CheckBox>("ClaudeShowNewChoice").IsChecked == true;
             candidate.ClaudeCardSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudeCardSecondsBox").Text, settings.ClaudeCardSeconds, ClaudeIntervals.Card);
             candidate.ClaudePlanSeconds = ClaudeIntervals.Parse(Control<TextBox>("ClaudePlanSecondsBox").Text, settings.ClaudePlanSeconds, ClaudeIntervals.Plan);
@@ -427,11 +436,23 @@ namespace WidgetScreen
                     "tokens", D("fiveHour", t.TokensFor(ClaudePeriod.FiveHour), "today", t.TokensFor(ClaudePeriod.Today), "week", t.TokensFor(ClaudePeriod.Week)),
                     "cost", D("fiveHour", Math.Round(t.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(t.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(t.CostFor(ClaudePeriod.Week), 4)),
                     "pit", ClaudePace.StateName(t.Pit), "car", ClaudePace.CarName(t.Car), "rate", Math.Round(t.Rate),
-                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()), "replies", per(t, p => t.RepliesFor(p)), "models", per(t, p => Names(t.ModelsFor(p))), "cache", per(t, p => t.CacheReadsFor(p)))).ToArray(),
+                    "mix", per(t, p => Shares(t.MixFor(p))), "lines", per(t, p => t.LinesFor(p).Select(n => (object)n).ToArray()), "replies", per(t, p => t.RepliesFor(p)), "models", per(t, p => Names(t.ModelsFor(p))), "cache", per(t, p => t.CacheReadsFor(p)),
+                    // Package 2 (the phone reads these in a later Android pass): helpers' tokens, Claude Code's own cost,
+                    // its mode and the last API error while it retries.
+                    "helperTokens", per(t, p => t.HelperTokensFor(p)), "costUsd", OrNull(t.CostUsd), "mode", t.Running ? t.Mode : "", "revving", t.Revving,
+                    "errorStatus", t.ErrorAt == DateTime.MinValue ? null : (object)t.ErrorStatus, "errorAttempt", t.ErrorAt == DateTime.MinValue ? null : (object)t.ErrorAttempt)).ToArray(),
                 "burn", D("rate", Math.Round(view.Rate), "scale", view.Scale, "minutes", view.Burn.Select(v => (object)Math.Round(v)).ToArray()),
                 "lanes", view.Lanes.Select(l => (object)D("key", l.Folder, "project", l.Name, "thread", l.Session.Length > 0, "color", ClaudeBridge.ProjectName(l.Folder), "bins", l.Bins.Select(v => (object)Math.Round(v)).ToArray())).ToArray(),
                 "facts", D("tokens", view.Facts.Tokens, "cost", Math.Round(view.Facts.Cost, 4), "prompt", view.Facts.Prompt, "cacheRead", view.Facts.CacheRead, "tools", view.Facts.Tools, "asked", view.Facts.Asked,
                     "denied", view.Facts.Denied, "replies", view.Facts.Replies, "added", view.Facts.Added, "removed", view.Facts.Removed, "linesThreads", view.Facts.LinesThreads, "telemetry", view.Facts.Telemetry, "askedPartial", view.Facts.AskedPartial),
+                // Package 2: every period's facts, the chosen four, where the costs came from, the unpriced models, when
+                // the 5-hour limit fills at this pace, and Claude Code's own cost for the running sessions.
+                "factsBy", D("fiveHour", Facts(view.FactsFor(ClaudePeriod.FiveHour)), "today", Facts(view.FactsFor(ClaudePeriod.Today)), "week", Facts(view.FactsFor(ClaudePeriod.Week))),
+                "factKinds", ClaudeFactKinds.Clean(settings.ClaudeFacts).Cast<object>().ToArray(),
+                "costSource", D("fiveHour", view.CostSourceFor(ClaudePeriod.FiveHour), "today", view.CostSourceFor(ClaudePeriod.Today), "week", view.CostSourceFor(ClaudePeriod.Week)),
+                "unpriced", D("fiveHour", view.UnpricedFor(ClaudePeriod.FiveHour).Cast<object>().ToArray(), "today", view.UnpricedFor(ClaudePeriod.Today).Cast<object>().ToArray(), "week", view.UnpricedFor(ClaudePeriod.Week).Cast<object>().ToArray()),
+                "limitEta", Double.IsNaN(view.LimitEtaMinutes) ? null : (object)Math.Round(view.LimitEtaMinutes, 1),
+                "claudeCodeCost", OrNull(view.ClaudeCodeCost), "estimateCost", OrNull(view.EstimateCost),
                 "groups", D("fiveHour", groups(ClaudePeriod.FiveHour), "today", groups(ClaudePeriod.Today), "week", groups(ClaudePeriod.Week)),
                 "sessions", view.Sessions.Select(s => (object)D("id", s.Id, "project", s.ProjectName, "title", s.Title, "state", ClaudeSessionFile.StateName(s.State),
                     "since", ClaudeBridge.Epoch(s.Since) / 1000.0, "message", s.Message, "model", s.Model, "where", s.Where, "canFocus", s.CanFocus,
@@ -439,10 +460,18 @@ namespace WidgetScreen
                     "cost", D("fiveHour", Math.Round(s.CostFor(ClaudePeriod.FiveHour), 4), "today", Math.Round(s.CostFor(ClaudePeriod.Today), 4), "week", Math.Round(s.CostFor(ClaudePeriod.Week), 4)))).ToArray(),
                 "limits", limits == null ? null : D("fiveHour", window(limits.FiveHour), "week", window(limits.Week), "updatedAt", ClaudeBridge.Epoch(limits.UpdatedAt) / 1000.0, "source", limits.Source,
                     "extra", limits.Extra.Select(p => (object)D("name", p.Key, "pct", p.Value.Percent, "resetsAt", p.Value.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(p.Value.ResetsAt.Value) / 1000.0) : null)).ToArray(),
-                    "extraUsage", limits.ExtraUsage == null ? null : D("enabled", limits.ExtraUsage.Enabled, "limit", OrNull(limits.ExtraUsage.Limit), "used", OrNull(limits.ExtraUsage.Used), "pct", OrNull(limits.ExtraUsage.Percent))),
+                    "extraUsage", limits.ExtraUsage == null ? null : D("enabled", limits.ExtraUsage.Enabled, "limit", OrNull(limits.ExtraUsage.Limit), "used", OrNull(limits.ExtraUsage.Used), "pct", OrNull(limits.ExtraUsage.Percent)),
+                    "spend", limits.Spend == null ? null : D("pct", Math.Round(limits.Spend.Percent, 1), "resetsAt", limits.Spend.ResetsAt.HasValue ? (object)(ClaudeBridge.Epoch(limits.Spend.ResetsAt.Value) / 1000.0) : null, "usedUsd", OrNull(limits.Spend.UsedUsd), "limitUsd", OrNull(limits.Spend.LimitUsd), "period", limits.Spend.Period)),
                 "usage", D("fiveHour", Projects(view, ClaudePeriod.FiveHour), "today", Projects(view, ClaudePeriod.Today), "week", Projects(view, ClaudePeriod.Week)));
         }
         private static object OrNull(double value) { return Double.IsNaN(value) ? null : (object)Math.Round(value, 2); }
+        private static object Facts(ClaudeFacts f)
+        {
+            return D("tokens", f.Tokens, "cost", Math.Round(f.Cost, 4), "cacheHit", OrNull(f.CacheHit), "tools", f.Tools, "slowTool", f.SlowTool, "slowMs", OrNull(f.SlowMs),
+                "runs", f.Runs, "runFailures", f.RunFailures, "failuresFromHooks", f.FailuresFromHooks, "errors", f.Errors, "helperShare", OrNull(f.HelperShare), "helpers", f.Helpers,
+                "editsAccepted", f.EditsAccepted, "editsRejected", f.EditsRejected, "commits", f.Commits, "pullRequests", f.PullRequests,
+                "activeUser", Math.Round(f.ActiveUser), "activeCli", Math.Round(f.ActiveCli), "metrics", f.Metrics, "added", f.Added, "removed", f.Removed);
+        }
         private static object[] Names(List<KeyValuePair<string, double>> models) { return models.Take(4).Select(m => (object)D("name", m.Key, "share", Math.Round(m.Value, 3))).ToArray(); }
         private static object[] Shares(double[] mix) { return mix.Select(v => (object)Math.Round(v, 3)).ToArray(); }
         private static object[] Projects(ClaudeView view, ClaudePeriod period) { return view.UsageFor(period).Select(p => (object)D("project", p.Name, "tokens", p.Tokens, "cost", Math.Round(p.Cost, 4))).ToArray(); }
