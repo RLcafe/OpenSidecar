@@ -6,6 +6,12 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.42.1 (3 Nov 2026)
+
+Claude Code watcher: say where the threads come from (Ali's report, both apps).
+
+- **"on this PC".** The heading's count now reads, for example, "1 running · 1 thread in 5 h on this PC", and the empty state "No Claude Code threads on this PC today." Threads that run in the cloud (claude.ai project threads, Claude Code on the web) leave nothing on the PC, so the card can't show them; the wording no longer suggests it should. On Windows the summary's tooltip says so.
+
 ## v0.42.0 (2 Nov 2026)
 
 Claude Code watcher on the phone: packages 2 and 3 of the Watcher action plan reach the Android app (package 1 already had; decision 026).
