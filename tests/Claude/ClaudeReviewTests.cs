@@ -92,7 +92,7 @@ internal static class ClaudeReviewTests
                 finally { window.Close(); }
             }
             var view = ClaudeView.Fixture(Now, true);
-            Assert(ClaudeText.Summary(view, ClaudePeriod.Week, false).Split('·').Length <= 2 && ClaudeText.Summary(view, ClaudePeriod.Week, true).Contains("this week"), "The Medium summary isn't the two most urgent parts: " + ClaudeText.Summary(view, ClaudePeriod.Week, false));
+            Assert(ClaudeText.Summary(view, ClaudePeriod.Week, false).Split('·').Length <= 2 && ClaudeText.Summary(view, ClaudePeriod.Week, true).Contains("this week on this PC") && ClaudeText.NoThreads(ClaudePeriod.Today) == "No Claude Code threads on this PC today.", "The Medium summary isn't the two most urgent parts: " + ClaudeText.Summary(view, ClaudePeriod.Week, false));
             var group = view.Groups(ClaudePeriod.Week).First(g => g.Name == "widget-screen");
             Assert(!ClaudeText.GroupDetail(group, true).Contains("Claude app") && ClaudeText.GroupDetail(group).Contains("Claude app") && ClaudeText.GroupDetail(group, true).EndsWith("hidden"), "The compact project line keeps where it runs: " + ClaudeText.GroupDetail(group, true));
         });

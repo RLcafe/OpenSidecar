@@ -676,7 +676,7 @@ public final class AndroidTests {
             PcState.ClaudeGroup g = c.groups[2].get(0);
             ok(g.key.equals("C:\\Code\\alpha") && g.collapsed && g.threads.size() == 2 && c.groups[0].isEmpty(), "a group keeps only known threads");
             ok(ClaudeText.groupState(c, g).equals("working") && !ClaudeText.groupNeeds(c, g) && ClaudeText.groupDetail(c, g, 1700000000).equals("2 threads · 1 running") && ClaudeText.threads(1).equals("1 thread"), "project words");
-            ok(ClaudeText.threadTitle(c.thread("t1"), 1700000000, true).equals("Fix it") && ClaudeText.threadTitle(c.thread("t2"), 1700000000, true).equals("Thread t2") && ClaudeText.noThreads(0).equals("No Claude Code threads in the last 5 hours."), "thread words");
+            ok(ClaudeText.threadTitle(c.thread("t1"), 1700000000, true).equals("Fix it") && ClaudeText.threadTitle(c.thread("t2"), 1700000000, true).equals("Thread t2") && ClaudeText.noThreads(0).equals("No Claude Code threads on this PC in the last 5 hours."), "thread words");
             c.thread("t1").running = false; ok(ClaudeText.groupState(c, g).equals("ready"), "a project with nothing running sleeps");
             ok(ClaudeText.groupDetail(c, g, 1700000000 + 3600).equals("2 threads · ended 1 h ago") && ClaudeText.cars(2).equals("2 cars"), "an ended project's words");
         } });
@@ -686,7 +686,7 @@ public final class AndroidTests {
                 + "\"sessions\":[{\"id\":\"a\",\"project\":\"x\",\"state\":\"needs\"},{\"id\":\"b\",\"project\":\"x\",\"state\":\"working\"}],"
                 + "\"threads\":[{\"id\":\"a\",\"project\":\"x\",\"running\":true,\"state\":\"needs\",\"pit\":\"need\",\"where\":\"Desktop\"},{\"id\":\"b\",\"project\":\"x\",\"running\":true,\"state\":\"working\",\"pit\":\"work\",\"where\":\"Desktop\"},{\"id\":\"d\",\"project\":\"x\",\"running\":true,\"state\":\"done\",\"pit\":\"done\",\"where\":\"Desktop\"}],"
                 + "\"groups\":{\"week\":[{\"key\":\"k\",\"project\":\"x\",\"threads\":[\"a\",\"b\",\"d\"],\"hidden\":1}]}}}"))).claude;
-            ok(ClaudeText.summary(c, 2, false).split("·").length == 2 && ClaudeText.summary(c, 2, true).contains("this week"), "summary: " + ClaudeText.summary(c, 2, false));
+            ok(ClaudeText.summary(c, 2, false).split("·").length == 2 && ClaudeText.summary(c, 2, true).contains("this week on this PC"), "summary: " + ClaudeText.summary(c, 2, false));
             PcState.ClaudeGroup g = c.groups[2].get(0);
             ok(!ClaudeText.groupDetail(c, g, now, true).contains("Claude app") && ClaudeText.groupDetail(c, g, now).contains("Claude app") && ClaudeText.groupDetail(c, g, now, true).endsWith("+1 hidden"), "compact: " + ClaudeText.groupDetail(c, g, now, true));
             ok(ClaudeText.flag(c, now, false, true).startsWith("SAMPLE · LIVE · AS OF ") && ClaudeText.flag(c, now, false).equals("SAMPLE"), "flag: " + ClaudeText.flag(c, now, false, true));

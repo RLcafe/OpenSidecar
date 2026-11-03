@@ -176,7 +176,9 @@ public final class ClaudeText {
         for (char c : (id == null ? "" : id).toCharArray()) if (Character.isLetterOrDigit(c) && letters.length() < 6) letters.append(Character.toLowerCase(c));
         return letters.length() == 0 ? "Thread" : "Thread " + letters;
     }
-    // The heading's live summary: "1 needs you · 2 running · 6 threads today".
+    // The heading's live summary: "1 needs you · 2 running · 6 threads today on this PC". The PC only sees threads that
+    // run on it; cloud threads leave nothing there, so the count says where it comes from (like the PC, 3 Nov 2026).
+    public static final String SCOPE = " on this PC";
     public static String summary(PcState.Claude claude, int period, boolean threads) {
         if (!claude.connected && claude.threads.isEmpty()) return "Not connected";
         List<String> parts = new ArrayList<String>();
@@ -187,9 +189,9 @@ public final class ClaudeText {
         if (claude.working() > 0) parts.add(claude.working() + " running");
         if (threads) {
             int count = 0; for (PcState.ClaudeGroup g : claude.groups[period]) count += g.threads.size();
-            parts.add(threads(count) + (period == 0 ? " in 5 h" : period == 1 ? " today" : " this week"));
+            parts.add(threads(count) + (period == 0 ? " in 5 h" : period == 1 ? " today" : " this week") + SCOPE);
         }
-        if (parts.isEmpty()) parts.add(claude.sessions.isEmpty() ? "Nothing running" : "All quiet");
+        if (parts.isEmpty()) parts.add(claude.sessions.isEmpty() ? "Nothing running" + SCOPE : "All quiet");
         // Medium and Small keep the two most urgent parts, like the PC (review fix 3).
         if (!threads && parts.size() > 2) parts = new ArrayList<String>(parts.subList(0, 2));
         return join(parts);
@@ -276,7 +278,7 @@ public final class ClaudeText {
         for (String part : parts) { if (text.length() > 0) text.append(" · "); text.append(part); }
         return text.toString();
     }
-    public static String noThreads(int period) { return "No Claude Code threads " + (period == 0 ? "in the last 5 hours." : period == 1 ? "today." : "this week."); }
+    public static String noThreads(int period) { return "No Claude Code threads on this PC " + (period == 0 ? "in the last 5 hours." : period == 1 ? "today." : "this week."); }
     // A project critter's face: the most urgent running thread's (needs, working, done, ready); asleep with none running.
     public static int rank(String state) { return "needs".equals(state) ? 0 : "stuck".equals(state) ? 1 : "working".equals(state) ? 2 : "done".equals(state) ? 3 : 4; }
     public static String groupState(PcState.Claude claude, PcState.ClaudeGroup group) {

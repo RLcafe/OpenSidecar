@@ -114,7 +114,11 @@ namespace WidgetScreen
         // A meter turns Amber from 80%.
         public static bool Warns(double percent) { return percent >= 80; }
         public static double Percent(ClaudeLimitWindow window, DateTime now) { return window == null || !window.Current(now) ? 0 : window.Percent; }
-        // The heading's live summary: "1 needs you · 2 running · 6 threads today".
+        // The heading's live summary: "1 needs you · 2 running · 6 threads today on this PC". The PC only sees threads
+        // that run on it; threads in the cloud (claude.ai projects, Claude Code on the web) leave nothing here, so the
+        // count says where it comes from (Ali's report, 3 Nov 2026).
+        public const string Scope = " on this PC";
+        public const string ScopeTip = "Claude Code threads running on this PC. Threads that run in the cloud (claude.ai projects, Claude Code on the web) leave nothing on the PC, so they don't show here.";
         public static string Summary(ClaudeView view, ClaudePeriod period, bool threads)
         {
             if (!view.Connected && view.Threads.Count == 0) return "Not connected";
@@ -127,9 +131,9 @@ namespace WidgetScreen
             if (threads)
             {
                 int count = view.Groups(period).Sum(g => g.Threads.Count);
-                parts.Add(Threads(count) + (period == ClaudePeriod.FiveHour ? " in 5 h" : period == ClaudePeriod.Today ? " today" : " this week"));
+                parts.Add(Threads(count) + (period == ClaudePeriod.FiveHour ? " in 5 h" : period == ClaudePeriod.Today ? " today" : " this week") + Scope);
             }
-            if (parts.Count == 0) parts.Add(view.Sessions.Count == 0 ? "Nothing running" : "All quiet");
+            if (parts.Count == 0) parts.Add(view.Sessions.Count == 0 ? "Nothing running" + Scope : "All quiet");
             // Medium and Small keep the two most urgent parts, so the line fits beside the flag (review fix 3).
             if (!threads && parts.Count > 2) parts = parts.Take(2).ToList();
             return String.Join(" · ", parts);
@@ -303,7 +307,7 @@ namespace WidgetScreen
         {
             return reason == "prompt_input_exit" ? "Closed in Claude Code" : reason == "logout" ? "Ended when Claude Code logged out" : reason == "clear" ? "Cleared with /clear" : "";
         }
-        public static string NoThreads(ClaudePeriod period) { return "No Claude Code threads " + (period == ClaudePeriod.FiveHour ? "in the last 5 hours." : period == ClaudePeriod.Today ? "today." : "this week."); }
+        public static string NoThreads(ClaudePeriod period) { return "No Claude Code threads on this PC " + (period == ClaudePeriod.FiveHour ? "in the last 5 hours." : period == ClaudePeriod.Today ? "today." : "this week."); }
         // "+1.3k" and "−216": lines added and removed.
         public static string Added(long lines) { return "+" + ClaudeUsage.Format(lines); }
         public static string Removed(long lines) { return "−" + ClaudeUsage.Format(lines); }
@@ -692,7 +696,7 @@ namespace WidgetScreen
             DockPanel.SetDock(title, Dock.Left); row.Children.Add(title);
             var live = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
             var dot = (Ellipse)Dot(false); DockPanel.SetDock(dot, Dock.Left); live.Children.Add(dot);
-            var summary = names.Add(Trimmed(Text("", Scaled(14), "Text")), "ClaudeSummary"); summary.VerticalAlignment = VerticalAlignment.Center; live.Children.Add(summary);
+            var summary = names.Add(Trimmed(Text("", Scaled(14), "Text")), "ClaudeSummary"); summary.VerticalAlignment = VerticalAlignment.Center; summary.ToolTip = ClaudeText.ScopeTip; live.Children.Add(summary);
             row.Children.Add(live);
             fills.Add(now => {
                 bool needs = view.NeedsYou > 0;
