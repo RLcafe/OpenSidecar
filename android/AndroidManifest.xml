@@ -7,8 +7,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Claude Code alerts from the PC as notifications while the app is open (package 3, decision 025). -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Spotify links from the library open in the browser or the Spotify app. -->
     <queries>

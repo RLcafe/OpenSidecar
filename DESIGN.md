@@ -20,7 +20,7 @@ The dashboard is a dark sheet of cards, glanceable from arm's length on a 1920 �
 | Lemon | `#F0E36E` | System stats, Notes |
 
 - **Changing inks.** Edit layout changes a widget's ink. Settings → Theme → Widget colours → Accent only makes every ink the system accent.
-- **Exception:** the Claude Code card keeps its own pit-wall design (decision 017).
+- **Claude Code** wears its strip and ink like every card since its simple four-tile card (decision 027); the pit-wall exception (decision 017) is gone.
 
 ## A card
 

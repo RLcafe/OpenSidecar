@@ -250,60 +250,52 @@ namespace WidgetScreen
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.
         public static Design Notes(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 700 && height >= 300 ? Design.Large : Design.Medium; }
         public static double NotesListColumn(double width) { return Clamp(Math.Floor(width * 0.46), 300, 520); }
-        // Claude Code (docs/design/claude-watcher-v2.html; decision 017): the car that needs you over the 5-hour meter
-        // under 360 wide or 280 tall, the two plan meters over the top garages between, and the pit wall (plan row, pit
-        // stop strip, ledger, and from 1000 units of body the 5-hour lanes and facts) from 640 × 420. Heights that hold
-        // text follow the text size, so nothing leaves the card at 140%. The phone's CardSizing has the same numbers.
-        public static Design Claude(double width, double height) { return width < 360 || height < 280 ? Design.Small : width >= 640 && height >= 420 ? Design.Large : Design.Medium; }
-        // Large: the plan row's tiles, the rev counter from 860 units of body, the side panel from 1000, and the
-        // ledger's models and lines columns when the table is wide enough for them.
-        public const double ClaudePlanHeight = 124, ClaudeSideWidth = 300;
-        public static bool ClaudeRevs(double bodyWidth) { return bodyWidth >= 860; }
-        public static bool ClaudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-        // The optional columns step aside as the text grows, so a thread's title keeps at least 240 units: the fixed
-        // columns are the car (52), tokens, cache reads and replies, each its scaled width plus a 10-unit gap.
-        public static double ClaudeFixedColumns(double textScale) { return 52 + Math.Round(72 * textScale) + 10 + Math.Round(80 * textScale) + 10 + Math.Round(64 * textScale) + 10; }
-        public static bool ClaudeModels(double tableWidth, double textScale) { return tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + 240; }
-        public static bool ClaudeLines(double tableWidth, double textScale) { return ClaudeModels(tableWidth, textScale) && tableWidth >= ClaudeFixedColumns(textScale) + Math.Round(150 * textScale) + 10 + Math.Round(84 * textScale) + 10 + 240; }
-        // A thread row's title keeps room for about 14 characters (review fix 4): first the "Desktop · 2 min" beside it
-        // steps aside (it stays in the tooltip), then the Cache reads column. ClaudeChip and ClaudeWhere are the chip's
-        // and that text's usual widths with their gaps.
-        public const double ClaudeChip = 70, ClaudeWhereWidth = 103;
-        // The ledger shows whole rows only (review fix 7): the tallest run of rows from the top that fits, and always the
-        // first one; the rest scroll.
-        public static double ClaudeWholeRows(IEnumerable<double> heights, double room)
+        // Claude Code (decision 027, docs/design/claude-card.md): four tiles in one row, a 2 × 2 square or one column,
+        // whichever leaves the tiles closest to a little wider than square (1.25 : 1), so a long card shows a row and a
+        // squarish one a square. Inside a tile the big reading follows the tile's size, and the line under it and the
+        // token history step aside in short tiles. The phone's CardSizing has the same numbers.
+        public const double ClaudeGap = 12, ClaudeTileShape = 1.25;
+        public static int ClaudeColumns(double bodyWidth, double bodyHeight)
         {
-            double used = 0; bool first = true;
-            foreach (double h in heights)
+            int best = 2; double bestScore = Double.MaxValue;
+            foreach (int columns in new[] { 4, 2, 1 })
             {
-                if (!first && used + h > room + 0.5) break;
-                used += h; first = false;
+                int rows = 4 / columns;
+                double w = (bodyWidth - ClaudeGap * (columns - 1)) / columns, h = (bodyHeight - ClaudeGap * (rows - 1)) / rows;
+                if (w <= 0 || h <= 0) continue;
+                double score = Math.Abs(Math.Log(w / h / ClaudeTileShape));
+                if (score < bestScore - 1e-9) { bestScore = score; best = columns; }
             }
-            return Math.Min(used, Math.Max(room, 0)) == used ? used : Math.Max(0, room);
+            return best;
         }
-        public static double ClaudeTitleMin(double textScale) { return Math.Round(110 * textScale); }
-        public static double ClaudeTitleRoom(double tableWidth, double textScale)
+        public static double ClaudePadding(double tileWidth, double tileHeight) { return Math.Min(tileWidth, tileHeight) < 140 ? 10 : 16; }
+        public static double ClaudeValueSize(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
+        public static bool ClaudeNote(double tileHeight) { return tileHeight >= 96; }
+        public static bool ClaudeHistory(double tileHeight) { return tileHeight >= 150; }
+        // The mascot stands beside the counts in a wide tile and over them otherwise, drawn at a whole number of units
+        // a pixel (16 pixels square) so it stays crisp: what's left after the padding and the counts, 32 to 192 units.
+        // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their
+        // words beside a mascot that leaves them 150 units and four lines.
+        public const double ClaudeCountsRow = 24, ClaudeCountWidth = 40, ClaudeCountsWords = 150, ClaudeMascotGap = 8;
+        public static bool ClaudeMascotBeside(double tileWidth, double tileHeight) { return tileWidth >= tileHeight * 1.35; }
+        public static int ClaudeCountColumns(double tileWidth, double tileHeight)
         {
-            return tableWidth - ClaudeFixedColumns(textScale) - (ClaudeModels(tableWidth, textScale) ? Math.Round(150 * textScale) + 10 : 0) - (ClaudeLines(tableWidth, textScale) ? Math.Round(84 * textScale) + 10 : 0);
+            return !ClaudeMascotBeside(tileWidth, tileHeight) && tileWidth - 2 * ClaudePadding(tileWidth, tileHeight) >= 4 * ClaudeCountWidth ? 4 : 2;
         }
-        public static bool ClaudeWhere(double tableWidth, double textScale) { return ClaudeTitleRoom(tableWidth, textScale) - ClaudeChip - ClaudeWhereWidth >= ClaudeTitleMin(textScale); }
-        public static bool ClaudeCache(double tableWidth, double textScale) { return ClaudeTitleRoom(tableWidth, textScale) - ClaudeChip >= ClaudeTitleMin(textScale); }
-        // Medium: two mini plan tiles, then a 44-unit row per garage (taller with bigger text) with up to three cars
-        // beside the project's name when they leave it 110 units.
-        public const double ClaudeMiniHeight = 84;
-        public static double ClaudeMediumRow(double textScale) { return Math.Max(44, Math.Ceiling(Math.Round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
-        public static int ClaudeInlineCars(double nameRoom, int threads)
+        public static double ClaudeMascotSize(double tileWidth, double tileHeight)
         {
-            int fit = (int)Math.Max(0, Math.Floor((nameRoom - 110) / 32));
-            if (threads <= Math.Min(3, fit)) return threads;
-            return (int)Clamp(Math.Min(3, fit - 1), 0, 3);
+            double pad = ClaudePadding(tileWidth, tileHeight);
+            double room = ClaudeMascotBeside(tileWidth, tileHeight)
+                ? Math.Min(Math.Min(tileHeight - 2 * pad, tileWidth * 0.45), tileWidth - 2 * pad - ClaudeMascotGap - 2 * ClaudeCountWidth)
+                : Math.Min(tileWidth - 2 * pad, tileHeight - 2 * pad - 6 - ClaudeCountsRow * (4 / ClaudeCountColumns(tileWidth, tileHeight)));
+            return Clamp(Math.Floor(room / 16) * 16, 32, 192);
         }
-        // Small: the 5-hour meter (its line and bar) only when the project, state, count and Sample flag still fit
-        // beside the car above it.
-        public const double ClaudeSmallMeterHeight = 52;
-        public static bool ClaudeSmallMeter(double bodyHeight, double textScale) { return bodyHeight >= ClaudeSmallMeterHeight + Math.Ceiling(Math.Round(17 * textScale) * 1.33) + 34 + 17; }
-        // The Small car: a third of the card's width, as long as the room above the meter allows.
-        public static double ClaudeSmallCar(double bodyWidth, double room) { return Clamp(Math.Floor(Math.Min(bodyWidth * 0.34, room * 140 / 60)), 48, 120); }
+        public static bool ClaudeCountWords(double tileWidth, double tileHeight)
+        {
+            double pad = ClaudePadding(tileWidth, tileHeight);
+            return ClaudeMascotBeside(tileWidth, tileHeight) && tileHeight - 2 * pad >= 4 * ClaudeCountsRow
+                && tileWidth - 2 * pad - ClaudeMascotSize(tileWidth, tileHeight) - 16 >= ClaudeCountsWords;
+        }
         // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
         // each text was copied at the reference size, and two-line previews with their length from 440 × 400.
         public static Design Clip(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 440 && height >= 400 ? Design.Large : Design.Medium; }

@@ -1,5 +1,7 @@
 # 020 — Archived threads, and hiding archived or idle ones
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali asked (1 Nov 2026, both apps) to tell resolved or archived threads apart from idle ones, and for two choices in Settings → Claude: **Hide resolved/archived threads** (on by default) and **Hide idle threads** (off by default). Both apply to the Large ledger, the Medium rows, the phone and the heading counts. Hidden threads still count in their project's totals, with a small "+N hidden" note. If there is no archived flag on the PC, he asked to be told rather than have a rule guessed.
 
 ## What the PC knows

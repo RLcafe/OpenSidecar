@@ -1,5 +1,7 @@
 # 018 — Claude thread names: no placeholders, the first request as a fallback
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali reported (1 Nov 2026) that the Claude watcher showed threads without names: they were all called "Remote Control". He asked for it to be fixed in v2.
 
 ## What was wrong

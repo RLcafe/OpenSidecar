@@ -59,10 +59,7 @@ internal static class SmokeTests
         Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", Path.Combine(directory, "claude-config"));
         // So are the Claude app's thread records: an empty throwaway folder.
         Directory.CreateDirectory(Path.Combine(directory, "claude-app-data"));
-        Environment.SetEnvironmentVariable(ClaudeAppThreads.RootsVariable, Path.Combine(directory, "claude-app-data"));
-        // And the organisation's managed settings (package 3): a file that doesn't exist. No Claude notification pops up.
-        Environment.SetEnvironmentVariable(ClaudeConnector.ManagedVariable, Path.Combine(directory, "claude-managed-settings.json"));
-        ClaudeToast.Enabled = false;
+        Environment.SetEnvironmentVariable(ClaudeSessions.AppRootsVariable, Path.Combine(directory, "claude-app-data"));
         SpotifyTests.Run(directory, Check);
         DeckTests.Run(directory, Check);
         DiscordTests.Run(directory, Check);
@@ -74,12 +71,6 @@ internal static class SmokeTests
         PrayerTests.Run(directory, Check);
         NotesTests.Run(directory, Check);
         ClaudeTests.Run(directory, Check);
-        ClaudeSourcesTests.Run(directory, Check);
-        ClaudeTreeTests.Run(directory, Check);
-        ClaudeReviewTests.Run(directory, Check);
-        ClaudeTrustTests.Run(directory, Check);
-        ClaudeNumbersTests.Run(directory, Check);
-        ClaudeInstantTests.Run(directory, Check);
         ClipboardTests.Run(directory, Check);
         CalendarTests.Run(directory, Check);
         GameTests.Run(directory, Check);

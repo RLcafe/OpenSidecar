@@ -265,46 +265,44 @@ public final class CardSizing {
     public static int notes(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 700 && height >= 300 ? LARGE : MEDIUM; }
     public static double notesListColumn(double width) { return clamp(Math.floor(width * 0.46), 300, 520); }
 
-    // Claude Code (docs/design/claude-watcher-v2.html; decision 017), the same numbers as the Windows CardSizing: the car
-    // that needs you over the 5-hour meter under 360 wide or 280 tall, the two plan meters over the top garages between,
-    // and the pit wall (plan row, pit stop strip, ledger, and from 1000 units of body the lanes and facts) from 640 × 420.
-    public static int claude(double width, double height) { return width < 360 || height < 280 ? SMALL : width >= 640 && height >= 420 ? LARGE : MEDIUM; }
-    public static final double CLAUDE_PLAN_HEIGHT = 124, CLAUDE_SIDE_WIDTH = 300;
-    public static boolean claudeRevs(double bodyWidth) { return bodyWidth >= 860; }
-    public static boolean claudeSide(double bodyWidth) { return bodyWidth >= 1000; }
-    // The optional columns step aside as the text grows, so a thread's title keeps at least 240 units (as on the PC).
-    public static double claudeFixedColumns(double textScale) { return 52 + Math.round(72 * textScale) + 10 + Math.round(80 * textScale) + 10 + Math.round(64 * textScale) + 10; }
-    public static boolean claudeModels(double tableWidth, double textScale) { return tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + 240; }
-    public static boolean claudeLines(double tableWidth, double textScale) { return claudeModels(tableWidth, textScale) && tableWidth >= claudeFixedColumns(textScale) + Math.round(150 * textScale) + 10 + Math.round(84 * textScale) + 10 + 240; }
-    // A thread title keeps room for about 14 characters, like the PC (review fix 4): the "Desktop · 2 min" text steps
-    // aside first, then the Cache reads column.
-    public static final double CLAUDE_CHIP = 70, CLAUDE_WHERE = 103;
-    // The ledger shows whole rows only, like the PC (review fix 7): the tallest run from the top that fits, and always
-    // the first row.
-    public static double claudeWholeRows(double[] heights, double room) {
-        double used = 0; boolean first = true;
-        for (double h : heights) {
-            if (!first && used + h > room + 0.5) break;
-            used += h; first = false;
+    // Claude Code (decision 027, docs/design/claude-card.md), the same numbers as the Windows CardSizing: four tiles in
+    // one row, a 2 × 2 square or one column, whichever leaves the tiles closest to a little wider than square (1.25 : 1).
+    public static final double CLAUDE_GAP = 12, CLAUDE_TILE_SHAPE = 1.25, CLAUDE_COUNTS_ROW = 24;
+    public static int claudeColumns(double bodyWidth, double bodyHeight) {
+        int best = 2; double bestScore = Double.MAX_VALUE;
+        for (int columns : new int[] { 4, 2, 1 }) {
+            int rows = 4 / columns;
+            double w = (bodyWidth - CLAUDE_GAP * (columns - 1)) / columns, h = (bodyHeight - CLAUDE_GAP * (rows - 1)) / rows;
+            if (w <= 0 || h <= 0) continue;
+            double score = Math.abs(Math.log(w / h / CLAUDE_TILE_SHAPE));
+            if (score < bestScore - 1e-9) { bestScore = score; best = columns; }
         }
-        return used <= Math.max(room, 0) ? used : Math.max(0, room);
+        return best;
     }
-    public static double claudeTitleMin(double textScale) { return Math.round(110 * textScale); }
-    public static double claudeTitleRoom(double tableWidth, double textScale) {
-        return tableWidth - claudeFixedColumns(textScale) - (claudeModels(tableWidth, textScale) ? Math.round(150 * textScale) + 10 : 0) - (claudeLines(tableWidth, textScale) ? Math.round(84 * textScale) + 10 : 0);
+    public static double claudePadding(double tileWidth, double tileHeight) { return Math.min(tileWidth, tileHeight) < 140 ? 10 : 16; }
+    public static double claudeValueSize(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
+    public static boolean claudeNote(double tileHeight) { return tileHeight >= 96; }
+    public static boolean claudeHistory(double tileHeight) { return tileHeight >= 150; }
+    // The mascot beside the counts in a wide tile, over them otherwise, at a whole number of units a pixel (32–192).
+    // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their words
+    // beside a mascot that leaves them 150 units and four lines.
+    public static final double CLAUDE_COUNT_WIDTH = 40, CLAUDE_COUNTS_WORDS = 150, CLAUDE_MASCOT_GAP = 8;
+    public static boolean claudeMascotBeside(double tileWidth, double tileHeight) { return tileWidth >= tileHeight * 1.35; }
+    public static int claudeCountColumns(double tileWidth, double tileHeight) {
+        return !claudeMascotBeside(tileWidth, tileHeight) && tileWidth - 2 * claudePadding(tileWidth, tileHeight) >= 4 * CLAUDE_COUNT_WIDTH ? 4 : 2;
     }
-    public static boolean claudeWhere(double tableWidth, double textScale) { return claudeTitleRoom(tableWidth, textScale) - CLAUDE_CHIP - CLAUDE_WHERE >= claudeTitleMin(textScale); }
-    public static boolean claudeCache(double tableWidth, double textScale) { return claudeTitleRoom(tableWidth, textScale) - CLAUDE_CHIP >= claudeTitleMin(textScale); }
-    public static final double CLAUDE_MINI_HEIGHT = 84;
-    public static double claudeMediumRow(double textScale) { return Math.max(44, Math.ceil(Math.round(15 * textScale) * 1.33 + 12 * 1.33 + 8)); }
-    public static int claudeInlineCars(double nameRoom, int threads) {
-        int fit = (int) Math.max(0, Math.floor((nameRoom - 110) / 32));
-        if (threads <= Math.min(3, fit)) return threads;
-        return (int) clamp(Math.min(3, fit - 1), 0, 3);
+    public static double claudeMascotSize(double tileWidth, double tileHeight) {
+        double pad = claudePadding(tileWidth, tileHeight);
+        double room = claudeMascotBeside(tileWidth, tileHeight)
+            ? Math.min(Math.min(tileHeight - 2 * pad, tileWidth * 0.45), tileWidth - 2 * pad - CLAUDE_MASCOT_GAP - 2 * CLAUDE_COUNT_WIDTH)
+            : Math.min(tileWidth - 2 * pad, tileHeight - 2 * pad - 6 - CLAUDE_COUNTS_ROW * (4 / claudeCountColumns(tileWidth, tileHeight)));
+        return clamp(Math.floor(room / 16) * 16, 32, 192);
     }
-    public static final double CLAUDE_SMALL_METER_HEIGHT = 52;
-    public static boolean claudeSmallMeter(double bodyHeight, double textScale) { return bodyHeight >= CLAUDE_SMALL_METER_HEIGHT + Math.ceil(Math.round(17 * textScale) * 1.33) + 34 + 17; }
-    public static double claudeSmallCar(double bodyWidth, double room) { return clamp(Math.floor(Math.min(bodyWidth * 0.34, room * 140 / 60)), 48, 120); }
+    public static boolean claudeCountWords(double tileWidth, double tileHeight) {
+        double pad = claudePadding(tileWidth, tileHeight);
+        return claudeMascotBeside(tileWidth, tileHeight) && tileHeight - 2 * pad >= 4 * CLAUDE_COUNTS_ROW
+            && tileWidth - 2 * pad - claudeMascotSize(tileWidth, tileHeight) - 16 >= CLAUDE_COUNTS_WORDS;
+    }
     // Clipboard history (docs/design/clipboard-history.md): the same numbers as CardSizing.cs.
     public static int clip(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 400 ? LARGE : MEDIUM; }
 

@@ -8,7 +8,7 @@ using System.Threading;
 namespace WidgetScreen
 {
     // One dashboard per settings file (v0.41.1). Two copies on the same settings stacked on the same screen: the one
-    // underneath couldn't bind the Claude telemetry port or the phone link, and both wrote the same files. A second
+    // underneath couldn't bind the phone link, and both wrote the same files. A second
     // start now asks the running copy to show itself (out of the tray, or restored) and closes. Renders and copies
     // with their own --settings never meet: the name comes from the settings path.
     public sealed class SingleInstance : IDisposable

@@ -1,5 +1,7 @@
 # 016 — Claude projects with their threads, and refresh intervals the user picks
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali reported (1 Nov 2026), on v0.29.0: "it's not showing the projects and threads under the projects. also add a way to make the update time 2 seconds or any value I want." He then asked for the projects to be big critters with their threads as baby critters that a tap on the project eats (folds in) and spits back out.
 
 ## What was wrong

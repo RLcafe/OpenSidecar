@@ -8,7 +8,7 @@ using System.Windows.Media;
 using WidgetScreen;
 
 // Sticker Sheet foundations (decision 017, docs/design/sticker-sheet.md): the eight inks and their defaults, Widget
-// colours, label strips and status stickers on every card but Claude Code, the state language, frozen sticker shapes
+// colours, label strips and status stickers on every card, the state language, frozen sticker shapes
 // with no effects, and the ink picker in Edit layout. Writes ink-defaults.json for the phone's checks to compare.
 internal static class StickerTests
 {
@@ -54,10 +54,10 @@ internal static class StickerTests
             var hex = new Dictionary<string, string> { { "Lime", "#BAF28B" }, { "Glacier", "#8ED8F8" }, { "Lavender", "#C5AEFF" }, { "Amber", "#F5C47D" }, { "Coral", "#FF9E85" }, { "Mint", "#7FE6C0" }, { "Rose", "#FFA6CF" }, { "Lemon", "#F0E36E" } };
             Assert(hex.All(pair => Inks.Hex(pair.Key) == pair.Value), "An ink's colour isn't the approved one.");
             var owners = new Dictionary<string, string> { { "Mixer", "Lime" }, { "Games", "Lime" }, { "Shortcuts", "Glacier" }, { "Clipboard", "Glacier" }, { "Soundboard", "Lavender" }, { "Storage", "Lavender" },
-                { "Focus", "Coral" }, { "Calendar", "Coral" }, { "Spotify", "Mint" }, { "Prayer", "Mint" }, { "Media", "Rose" }, { "Macros", "Rose" }, { "System", "Lemon" }, { "Notes", "Lemon" },
+                { "Focus", "Coral" }, { "Calendar", "Coral" }, { "Claude", "Coral" }, { "Spotify", "Mint" }, { "Prayer", "Mint" }, { "Media", "Rose" }, { "Macros", "Rose" }, { "System", "Lemon" }, { "Notes", "Lemon" },
                 { "Weather", "Glacier" }, { "Clocks", "Glacier" }, { "Home", "Glacier" } };
             Assert(owners.All(pair => Inks.Default(pair.Key) == pair.Value) && WidgetLayout.Ids.Where(Inks.InScope).All(id => owners.ContainsKey(id)), "A widget's default ink isn't the approved one.");
-            Assert(!Inks.InScope("Claude") && !Inks.Choices.Contains("Amber") && WidgetLayout.Ids.All(id => Inks.Default(id) != "Amber"), "Claude Code is in scope, or Amber became a widget's ink.");
+            Assert(WidgetLayout.Ids.All(Inks.InScope) && !Inks.Choices.Contains("Amber") && WidgetLayout.Ids.All(id => Inks.Default(id) != "Amber"), "A widget is out of scope, or Amber became a widget's ink.");
             // Each ink passes 9:1 with the dark text on it.
             Func<string, double> luminance = h => { var c = (Color)ColorConverter.ConvertFromString(h); Func<double, double> lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * lin(c.R) + 0.7152 * lin(c.G) + 0.0722 * lin(c.B); };
             double dark = luminance(Inks.DarkText);
@@ -70,7 +70,7 @@ internal static class StickerTests
             foreach (string accent in new[] { "Lime", "Glacier", "Lavender", "Amber" })
                 Assert(WidgetLayout.Ids.All(id => Inks.Resolve(id, "Focus=Mint;Media=Lemon", Inks.AccentOnly, accent) == accent), "Accent only left a widget in its own ink with " + accent + ".");
             Assert(Inks.Resolve("Focus", "Focus=Mint", Inks.EachOwn, "Lime") == "Mint" && Inks.Resolve("Media", "Focus=Mint", Inks.EachOwn, "Lime") == "Rose", "Each its own doesn't use the chosen ink or the default.");
-            Assert(Inks.Clean("Media=Rose;Focus=Mint;Claude=Lime;Notes=Amber;Bogus=Mint;Home=Sparkle") == "Focus=Mint", "Defaults, Claude, Amber or unknown widgets and inks were kept.");
+            Assert(Inks.Clean("Media=Rose;Focus=Mint;Claude=Lime;Notes=Amber;Bogus=Mint;Home=Sparkle") == "Focus=Mint;Claude=Lime", "Defaults, Amber or unknown widgets and inks were kept, or Claude's ink was dropped.");
             Assert(Inks.With("Focus=Mint", "Focus", "Coral") == "" && Inks.Mode("Accent") == "Accent" && Inks.Mode("anything") == "Each", "Going back to a default or reading Widget colours is wrong.");
             string path = Path.Combine(directory, "inks.xml"); string warning;
             SettingsStore.Save(path, new AppSettings { WidgetInks = "Spotify=Lemon", WidgetColours = "Accent" });
@@ -138,13 +138,7 @@ internal static class StickerTests
                                 Lay(window);
                                 var card = (FrameworkElement)window.FindName(CardName(id));
                                 LabelStrip strip; controller.Strips.TryGetValue(id, out strip);
-                                // Claude Code builds its own heading, with the strip since review fix 9 (none on Small).
-                                if (id == "Claude")
-                                {
-                                    controller.UseClaudeSample(false); Lay(window);
-                                    strip = controller.ClaudeCardView.Strip;
-                                    if (CardSizing.Claude(size.Width, size.Height) == CardSizing.Design.Small) { Assert(strip == null, "Small Claude grew a heading."); continue; }
-                                }
+                                if (id == "Claude") { controller.UseClaudeSample(false); Lay(window); }
                                 if (strip == null && id == "Weather") strip = controller.WeatherStrip;
                                 if (id == "Weather" && CardSizing.Weather(size.Width, size.Height) == CardSizing.Design.Small) { Assert(strip == null, "Small weather grew a heading."); continue; }
                                 Assert(strip != null, id + " has no label strip.");
@@ -181,7 +175,7 @@ internal static class StickerTests
                     Click(window, "EditLayoutButton"); controller.Editor.Select("Focus"); controller.ChooseInk("Lemon");
                     controller.Editor.Select("Claude"); controller.ChooseInk("Rose");
                     Click(window, "SaveLayoutButton");
-                    Assert(SettingsStore.Load(path, out warning).WidgetInks == "Focus=Lemon" && Ink(window, "Focus") == Hex("Lemon"), "Save layout didn't keep the ink, or Claude Code took one.");
+                    Assert(SettingsStore.Load(path, out warning).WidgetInks == "Focus=Lemon;Claude=Rose" && Ink(window, "Focus") == Hex("Lemon") && Ink(window, "Claude") == Hex("Rose"), "Save layout didn't keep the inks.");
                 }
             }
             finally { window.Close(); }

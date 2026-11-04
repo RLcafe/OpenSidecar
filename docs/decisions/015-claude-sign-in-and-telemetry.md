@@ -1,5 +1,7 @@
 # 015 — The Claude watcher's sources: Claude Code's session list, its own Claude sign-in, and telemetry on loopback
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali reported (1 Nov 2026) that the Claude Code watcher from v0.23.0 (decision 014) "is not working" and asked for a final solution, not a workaround. He then added: use Claude Code's official OpenTelemetry, make usage per project solid, and let him choose which projects appear.
 
 ## What was wrong

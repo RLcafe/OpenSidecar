@@ -92,7 +92,7 @@ namespace WidgetScreen
                 case "Clocks": return new Size(240, 152);
                 case "Prayer": return new Size(240, 152);
                 case "Notes": return new Size(260, 200);
-                case "Claude": return new Size(260, 180);
+                case "Claude": return new Size(360, 280);
                 case "Clipboard": return new Size(240, 200);
                 case "Macros": return new Size(288, 204);
                 case "Calendar": return new Size(240, 152);

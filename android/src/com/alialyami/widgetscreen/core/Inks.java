@@ -20,8 +20,8 @@ public final class Inks {
     public static boolean known(String ink) { return ink != null && Theme.contains(Theme.INKS, ink); }
     public static boolean choice(String ink) { return ink != null && Theme.contains(CHOICES, ink); }
 
-    // Every widget but Claude Code wears a label strip.
-    public static boolean inScope(String id) { return id != null && !"Claude".equals(id) && Arrays.asList(WidgetLayout.IDS).contains(id); }
+    // Every widget wears a label strip (Claude Code too since decision 027).
+    public static boolean inScope(String id) { return id != null && Arrays.asList(WidgetLayout.IDS).contains(id); }
 
     public static String defaultInk(String id) {
         if (id == null) return "Glacier";
@@ -63,6 +63,7 @@ public final class Inks {
             case "Clocks": return "CLOCKS";
             case "Clipboard": return "CLIPS";
             case "Home": return "HOME";
+            case "Claude": return "CLAUDE";
             default: return stripName(id);
         }
     }

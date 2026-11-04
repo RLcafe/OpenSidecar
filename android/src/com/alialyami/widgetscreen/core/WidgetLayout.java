@@ -80,7 +80,7 @@ public final class WidgetLayout {
             case "Clocks": return new double[] { 240, 152 };
             case "Prayer": return new double[] { 240, 152 };
             case "Notes": return new double[] { 260, 200 };
-            case "Claude": return new double[] { 260, 180 };
+            case "Claude": return new double[] { 360, 280 };
             case "Clipboard": return new double[] { 240, 200 };
             case "Macros": return new double[] { 288, 204 };
             case "Calendar": return new double[] { 240, 152 };

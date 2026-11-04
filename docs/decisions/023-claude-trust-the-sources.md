@@ -1,5 +1,7 @@
 # 023 — A session is alive until its own SessionEnd or its pid is gone
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 On 2 Nov 2026 Ali asked for the Watcher action plan's first package ("Trust the sources", v0.39.0), from the review of the Claude watcher against Claude Code's documented hooks, status line, telemetry and usage answer. Windows and the phone.
 
 ## Decisions

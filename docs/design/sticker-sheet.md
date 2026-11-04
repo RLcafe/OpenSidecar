@@ -4,6 +4,8 @@ Source: the design doc "Widget redesign: dense, characterful widgets", approved 
 
 The redesign ships in five phases, each a MINOR release (check `main`'s latest tag before tagging). Steam game artwork, per-app mixer level meters and storage "used this week" history are deferred: they're in no phase yet.
 
+> Since decision 027 (4 Nov 2026) the Claude Code card is a simple four-tile card that wears its strip, sticker and ink like the rest; where this note says "except Claude Code", that no longer applies.
+
 ## The world (every widget except Claude Code)
 
 The redesign adds four things only: colour inks, heavier type, denser fact rows and one die-cut sticker per card. These stay the same:

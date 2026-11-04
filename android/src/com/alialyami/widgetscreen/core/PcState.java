@@ -94,156 +94,19 @@ public final class PcState {
         public final List<Todo> items = new ArrayList<Todo>();
     }
 
-    // Claude Code on the PC (docs/design/claude-watcher.md): its sessions, the plan's limits and usage by project.
-    // Periods are 0 five hours, 1 today, 2 the week. Times are Unix seconds.
-    public static final class ClaudeSession {
-        public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
-        public double since;
-        public boolean canFocus;
-        public final long[] tokens = new long[3];
-        // What the tokens would cost at API prices ("≈ $"), per period.
-        public final double[] cost = new double[3];
-        public String shown() { return title == null || title.trim().isEmpty() ? project : title; }
-    }
-    // A thread of the last week (running or ended), as the PC groups them under its projects: the title the Claude
-    // app shows (never prompts), its state while running, and when it was last active.
-    public static final class ClaudeThread {
-        public String id = "", project = "", title = "", state = "ready", message = "", model = "", where = "";
-        public boolean running, canFocus;
-        // Archived in the Claude app, or resolved (its latest reply completed the job; decision 020); its pit is
-        // "archived" or "resolved".
-        public boolean archived, resolved;
-        public double since, lastActive;
-        public final long[] tokens = new long[3];
-        public final double[] cost = new double[3];
-        // Decision 023: why a stuck thread stopped (StopFailure's error, e.g. "rate_limit") and the PC's words for it
-        // ("Rate limited, resets 14:05"); how full its context window is (0–100, NaN when unknown); subagents running,
-        // open tasks and tool calls that failed.
-        public String reason = "", reasonText = "";
-        public double context = Double.NaN;
-        public int workers, tasks, failed;
-        // The pit wall (decision 017): its car ("gt", "sport", "hatch"), what the car does ("idle", "work", "rev",
-        // "need", "pit", "stuck", "done", "end", "archived", "resolved"), its tokens a minute now, and per period its model mix (Opus, Sonnet,
-        // Haiku shares) and lines added and removed.
-        public String pit = "idle", car = "sport";
-        public double rate;
-        public final double[][] mix = new double[3][3];
-        public final long[][] lines = new long[3][2];
-        // Claude's replies and the tokens read from the cache, per period.
-        public final int[] replies = new int[3];
-        public final long[] cache = new long[3];
-        // The models by name with their share of the tokens, biggest first, per period.
-        @SuppressWarnings("unchecked")
-        public final List<ClaudeModel>[] models = new List[] { new ArrayList<ClaudeModel>(), new ArrayList<ClaudeModel>(), new ArrayList<ClaudeModel>() };
-        // Package 2 (decision 024): the helpers' (subagents') share of its tokens per period, Claude Code's own cost for
-        // the session (NaN when its status line hasn't said), its permission mode while running, whether a tool call
-        // has run past twice its usual time, and the last API error while it retries (status and attempt; 0 unknown).
-        public final long[] helperTokens = new long[3];
-        public double costUsd = Double.NaN;
-        public String mode = "";
-        public boolean revving, apiError;
-        public int errorStatus, errorAttempt;
-        // Package 3 (decision 025): tasks done of its task list, and why Claude Code ended a thread it kept
-        // ("prompt_input_exit", "logout", "clear").
-        public int tasksDone, tasksTotal;
-        public String endReason = "";
-    }
-    public static final class ClaudeModel { public String name = ""; public double share; }
-    // A project on the card: its folder (the key claude.collapse names), name, threads in the period by id, whether
-    // it's folded into its critter, and its usage.
-    public static final class ClaudeGroup {
-        public String key = "", project = "";
-        public boolean collapsed;
-        public long tokens, added, removed, cache;
-        public int replies;
-        // Threads the PC's Settings → Claude hides (archived, or idle when asked); they still count in the totals.
-        public int hidden;
-        // When the project was last used (a project with no thread in the period still gets a quiet garage).
-        public double lastActive;
-        public double cost;
-        public double[] mix = new double[3];
-        public final List<ClaudeModel> models = new ArrayList<ClaudeModel>();
-        public final List<String> threads = new ArrayList<String>();
-    }
-    public static final class ClaudeWindow { public double pct; public double resetsAt; public String name = ""; }
-    public static final class ClaudeProject { public String project = ""; public long tokens; public double cost; }
-    // A project's lane on the 5-hour timeline: tokens per 10-minute bin, oldest first.
-    // A project's lane on the 5-hour timeline, or one of its threads' under it (thread set; project is then its title
-    // and color the project's name): tokens per 10-minute bin, oldest first.
-    public static final class ClaudeLane { public String key = "", project = "", color = ""; public boolean thread; public double[] bins = new double[30]; }
-    // Today's facts beside the timeline.
-    public static final class ClaudeFacts {
-        public long tokens, prompt, cacheRead, added, removed;
-        public double cost;
-        public int tools, asked, denied, linesThreads, replies;
-        // Telemetry seen (it alone knows which tool calls asked you), and whether it saw fewer than the logs today.
-        public boolean telemetry, askedPartial;
-        public double cacheHit() { return !Double.isNaN(sentCacheHit) ? sentCacheHit : prompt <= 0 ? Double.NaN : (double) cacheRead / prompt; }
-        // Package 2 (decision 024), per period: the PC's cache hit share, the slowest tool and its average run, tool runs
-        // and failures (from the hooks when telemetry sent none), API errors in the last hour, the helpers' share and
-        // how many finished, edits, commits and pull requests, active time (seconds, yours and Claude's), and whether
-        // telemetry's counters said anything.
-        public double sentCacheHit = Double.NaN, slowMs = Double.NaN, helperShare = Double.NaN, activeUser, activeCli;
-        public String slowTool = "";
-        public int runs, runFailures, errors, helpers, editsAccepted, editsRejected, commits, pullRequests;
-        public boolean failuresFromHooks, metrics;
-        public double failureRate() { return runs <= 0 ? Double.NaN : (double) runFailures / runs; }
-    }
-    // A gateway's spend limit (package 2): percent used, when it resets, dollars used and allowed, and its period.
-    public static final class ClaudeSpend { public double pct, resetsAt, usedUsd = Double.NaN, limitUsd = Double.NaN; public String period = ""; }
-    // One moment the PC tells the phone about (package 3): a session needs you ("need"), got stuck ("stuck"), or
-    // finished a turn of 10 minutes or more ("done"). Seq only grows while the PC's app runs.
-    public static final class ClaudeAlert { public long seq; public String kind = "", session = "", project = "", title = "", text = ""; public double at; }
+    // Claude Code on the PC (decision 027, docs/design/claude-card.md): the four tiles' readings. The plan's 5-hour and
+    // weekly use (from the PC's own Claude sign-in), tokens in each of the last 30 minutes, and how many sessions are
+    // done, need you, are blocked or working. Times are Unix seconds.
+    public static final class ClaudeWindow { public double pct = Double.NaN, resetsAt; }
     public static final class Claude {
-        public boolean connected, sample, logsFailed, logsRead, noPlan;
-        // The PC's own Claude sign-in for the plan meters: signedOut, reading, current, failed, expired or noMeters.
+        public boolean sample, logs, logsRead;
+        // The PC's own Claude sign-in: signedOut, reading, current, failed, expired or noMeters.
         public String plan = "signedOut";
-        // "Telemetry off: port 43832 in use" when the PC can't receive Claude Code's telemetry (decision 023).
-        public String warning = "";
-        // The plan's extra usage (paid credits past the limits), when the PC's usage check reported it.
-        public ClaudeExtraUsage extraUsage;
-        // How often the PC's card reads again (Settings → Claude), and the period the PC's card shows.
-        public int every = 2;
-        public String period = "Today";
-        // Quiet mode with Settings → Claude → Keep the cars still in Quiet mode: the cars hold still (decision 019).
-        public boolean still;
-        // Settings → Claude → Show what the tokens would cost at API list prices (off: replies show instead).
-        public boolean apiValue;
-        public final List<ClaudeSession> sessions = new ArrayList<ClaudeSession>();
-        public final List<ClaudeThread> threads = new ArrayList<ClaudeThread>();
-        @SuppressWarnings("unchecked")
-        public final List<ClaudeGroup>[] groups = new List[] { new ArrayList<ClaudeGroup>(), new ArrayList<ClaudeGroup>(), new ArrayList<ClaudeGroup>() };
-        public ClaudeThread thread(String id) { for (ClaudeThread t : threads) if (t.id.equals(id)) return t; return null; }
-        public ClaudeWindow fiveHour, week;
-        // Narrower weekly windows ("Opus week", "Sonnet week", a model's own), for the Large panel.
-        public final List<ClaudeWindow> extra = new ArrayList<ClaudeWindow>();
         public double updatedAt;
-        public String source = "";
-        @SuppressWarnings("unchecked")
-        public final List<ClaudeProject>[] usage = new List[] { new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>(), new ArrayList<ClaudeProject>() };
-        // The last hour's tokens a minute (oldest first), now, and the rev counter's scale; the lanes and facts.
-        public double[] burn = new double[60];
-        public double rate, scale = 60000;
-        public final List<ClaudeLane> lanes = new ArrayList<ClaudeLane>();
-        public ClaudeFacts facts = new ClaudeFacts();
-        // Package 2 (decision 024): each period's facts, the four Settings → Claude picked on the PC, where each period's
-        // costs came from ("claude", "statusline", "prices", "mixed"), the models with no known price, minutes until the
-        // 5-hour limit fills at the last half hour's pace (NaN: it lasts to the reset), Claude Code's own cost for the
-        // running sessions beside the widget's week for them, and a gateway's spend limit.
-        public final ClaudeFacts[] factsBy = new ClaudeFacts[3];
-        public ClaudeFacts factsFor(int period) { return period >= 0 && period < 3 && factsBy[period] != null ? factsBy[period] : facts; }
-        public String[] factKinds = ClaudeText.DEFAULT_FACTS.clone();
-        public final String[] costSource = { "prices", "prices", "prices" };
-        @SuppressWarnings("unchecked")
-        public final List<String>[] unpriced = new List[] { new ArrayList<String>(), new ArrayList<String>(), new ArrayList<String>() };
-        public double limitEta = Double.NaN, claudeCodeCost = Double.NaN, estimateCost = Double.NaN;
-        public ClaudeSpend spend;
-        public boolean limitsKnown() { return fiveHour != null || week != null; }
-        public int working() { int n = 0; for (ClaudeSession s : sessions) if ("working".equals(s.state)) n++; return n; }
-        public int needsYou() { int n = 0; for (ClaudeSession s : sessions) if ("needs".equals(s.state)) n++; return n; }
-        public int stuck() { int n = 0; for (ClaudeSession s : sessions) if ("stuck".equals(s.state)) n++; return n; }
+        public ClaudeWindow fiveHour, week;
+        public final double[] minutes = new double[30];
+        public int done, needsYou, blocked, working;
     }
-    public static final class ClaudeExtraUsage { public boolean enabled; public double limit = Double.NaN, used = Double.NaN, pct = Double.NaN; }
     // The PC's clipboard history (docs/design/clipboard-history.md): short previews, newest first.
     public static final class Clip { public String id = "", text = ""; public int length; public double at; }
     public static final class Clipboard {
@@ -326,13 +189,6 @@ public final class PcState {
 
     public String name = "", version = "", layoutVersion = "";
     public boolean quiet, use24;
-    // Sessions that need you while the Claude card is on some page, and the first such page (-1: on none), so the
-    // header's pill can light up from another page without asking for the whole claude section.
-    public int claudeNeeds, claudePage = -1;
-    // Package 3 (decision 025): the last ten minutes of Claude alerts, the newest number, and the PC's Quiet mode.
-    public final List<ClaudeAlert> claudeAlerts = new ArrayList<ClaudeAlert>();
-    public long claudeAlertSeq;
-    public boolean claudeQuiet;
     public Claude claude;
     public Layout layout;
     public Focus focus;
@@ -361,14 +217,6 @@ public final class PcState {
         PcState state = new PcState();
         state.name = text(root, "name"); state.version = text(root, "version");
         state.quiet = flag(root, "quiet"); state.use24 = flag(root, "use24"); state.layoutVersion = text(root, "layoutVersion");
-        state.claudeNeeds = (int) Json.number(root, "claudeNeeds"); state.claudePage = Json.has(root, "claudePage") ? (int) Json.number(root, "claudePage") : -1;
-        for (Object item : Json.array(root, "claudeAlerts")) {
-            Map<String, Object> a = Json.obj(item);
-            ClaudeAlert alert = new ClaudeAlert(); alert.seq = (long) Json.number(a, "seq"); alert.kind = text(a, "kind"); alert.session = text(a, "session");
-            alert.project = text(a, "project"); alert.title = text(a, "title"); alert.text = text(a, "text"); alert.at = Json.number(a, "at");
-            if (alert.seq > 0 && !alert.kind.isEmpty()) state.claudeAlerts.add(alert);
-        }
-        state.claudeAlertSeq = (long) Json.number(root, "claudeAlertSeq"); state.claudeQuiet = flag(root, "claudeQuiet");
         if (Json.has(root, "claude")) state.claude = parseClaude(Json.obj(Json.value(root, "claude")));
         if (Json.has(root, "layout")) state.layout = parseLayout(Json.obj(Json.value(root, "layout")));
         if (Json.has(root, "focus")) {
@@ -567,158 +415,24 @@ public final class PcState {
         return state;
     }
 
-    private static final String[] PERIODS = { "fiveHour", "today", "week" };
-
     public static Claude parseClaude(Map<String, Object> c) {
         Claude claude = new Claude();
-        claude.connected = flag(c, "connected"); claude.sample = flag(c, "sample"); claude.logsFailed = flag(c, "logsFailed"); claude.logsRead = flag(c, "logsRead"); claude.noPlan = flag(c, "noPlan");
+        claude.sample = flag(c, "sample"); claude.logs = flag(c, "logs"); claude.logsRead = flag(c, "logsRead");
         if (!text(c, "plan").isEmpty()) claude.plan = text(c, "plan");
-        if (Json.value(c, "every") instanceof Number) claude.every = Math.max(1, (int) Json.number(c, "every"));
-        if (!text(c, "period").isEmpty()) claude.period = text(c, "period");
-        claude.still = flag(c, "still"); claude.apiValue = flag(c, "apiValue"); claude.warning = text(c, "warning");
-        for (Object item : Json.array(c, "threads")) {
-            Map<String, Object> t = Json.obj(item);
-            ClaudeThread thread = new ClaudeThread();
-            thread.id = text(t, "id"); thread.project = text(t, "project"); thread.title = text(t, "title"); thread.state = text(t, "state"); thread.running = flag(t, "running");
-            thread.message = text(t, "message"); thread.model = text(t, "model"); thread.where = text(t, "where"); thread.canFocus = flag(t, "canFocus"); thread.archived = flag(t, "archived"); thread.resolved = flag(t, "resolved");
-            thread.since = Json.number(t, "since"); thread.lastActive = Json.number(t, "lastActive");
-            thread.reason = text(t, "reason"); thread.reasonText = text(t, "reasonText");
-            thread.context = Json.value(t, "context") instanceof Number ? Json.number(t, "context") : Double.NaN;
-            thread.workers = (int) Json.number(t, "workers"); thread.tasks = (int) Json.number(t, "tasks"); thread.failed = (int) Json.number(t, "failed");
-            Map<String, Object> tokens = Json.obj(Json.value(t, "tokens")), cost = Json.obj(Json.value(t, "cost"));
-            for (int i = 0; i < 3; i++) { thread.tokens[i] = (long) Json.number(tokens, PERIODS[i]); thread.cost[i] = Json.number(cost, PERIODS[i]); }
-            if (thread.state.isEmpty()) thread.state = "ready";
-            if (!text(t, "pit").isEmpty()) thread.pit = text(t, "pit");
-            if (!text(t, "car").isEmpty()) thread.car = text(t, "car");
-            thread.rate = Json.number(t, "rate");
-            Map<String, Object> mix = Json.obj(Json.value(t, "mix")), lines = Json.obj(Json.value(t, "lines"));
-            for (int i = 0; i < 3; i++) { numbers(Json.array(mix, PERIODS[i]), thread.mix[i]); double[] l = new double[2]; numbers(Json.array(lines, PERIODS[i]), l); thread.lines[i][0] = (long) l[0]; thread.lines[i][1] = (long) l[1]; }
-            Map<String, Object> replies = Json.obj(Json.value(t, "replies")), cached = Json.obj(Json.value(t, "cache"));
-            for (int i = 0; i < 3; i++) { thread.replies[i] = (int) Json.number(replies, PERIODS[i]); thread.cache[i] = (long) Json.number(cached, PERIODS[i]); }
-            Map<String, Object> models = Json.obj(Json.value(t, "models"));
-            for (int i = 0; i < 3; i++) models(Json.array(models, PERIODS[i]), thread.models[i]);
-            Map<String, Object> helpers = Json.obj(Json.value(t, "helperTokens"));
-            for (int i = 0; i < 3; i++) thread.helperTokens[i] = (long) Json.number(helpers, PERIODS[i]);
-            if (Json.value(t, "costUsd") instanceof Number) thread.costUsd = Json.number(t, "costUsd");
-            thread.mode = text(t, "mode"); thread.revving = flag(t, "revving");
-            thread.apiError = Json.value(t, "errorStatus") instanceof Number || Json.value(t, "errorAttempt") instanceof Number;
-            thread.errorStatus = (int) Json.number(t, "errorStatus"); thread.errorAttempt = (int) Json.number(t, "errorAttempt");
-            thread.tasksDone = (int) Json.number(t, "tasksDone"); thread.tasksTotal = (int) Json.number(t, "tasksTotal"); thread.endReason = text(t, "endReason");
-            if (!thread.id.isEmpty()) claude.threads.add(thread);
-        }
-        Map<String, Object> groups = Json.obj(Json.value(c, "groups"));
-        for (int i = 0; i < 3; i++)
-            for (Object item : Json.array(groups, PERIODS[i])) {
-                Map<String, Object> g = Json.obj(item);
-                ClaudeGroup group = new ClaudeGroup(); group.key = text(g, "key"); group.project = text(g, "project"); group.collapsed = flag(g, "collapsed");
-                group.tokens = (long) Json.number(g, "tokens"); group.cost = Json.number(g, "cost");
-                numbers(Json.array(g, "mix"), group.mix); group.added = (long) Json.number(g, "added"); group.removed = (long) Json.number(g, "removed");
-                models(Json.array(g, "models"), group.models);
-                group.replies = (int) Json.number(g, "replies"); group.cache = (long) Json.number(g, "cache"); group.lastActive = Json.number(g, "lastActive"); group.hidden = (int) Json.number(g, "hidden");
-                for (Object id : Json.array(g, "threads")) if (id instanceof String && claude.thread((String) id) != null) group.threads.add((String) id);
-                if (!group.key.isEmpty()) claude.groups[i].add(group);
-            }
-        for (Object item : Json.array(c, "sessions")) {
-            Map<String, Object> s = Json.obj(item);
-            ClaudeSession session = new ClaudeSession();
-            session.id = text(s, "id"); session.project = text(s, "project"); session.title = text(s, "title"); session.state = text(s, "state");
-            session.message = text(s, "message"); session.model = text(s, "model"); session.since = Json.number(s, "since"); session.canFocus = flag(s, "canFocus"); session.where = text(s, "where");
-            Map<String, Object> tokens = Json.obj(Json.value(s, "tokens")), cost = Json.obj(Json.value(s, "cost"));
-            for (int i = 0; i < 3; i++) { session.tokens[i] = (long) Json.number(tokens, PERIODS[i]); session.cost[i] = Json.number(cost, PERIODS[i]); }
-            if (!session.id.isEmpty()) claude.sessions.add(session);
-        }
-        Map<String, Object> limits = Json.obj(Json.value(c, "limits"));
-        claude.fiveHour = window(Json.value(limits, "fiveHour")); claude.week = window(Json.value(limits, "week"));
-        claude.updatedAt = Json.number(limits, "updatedAt"); claude.source = text(limits, "source");
-        for (Object item : Json.array(limits, "extra")) {
-            ClaudeWindow extra = window(item);
-            if (extra != null) { extra.name = text(Json.obj(item), "name"); if (!extra.name.isEmpty()) claude.extra.add(extra); }
-        }
-        Map<String, Object> paid = Json.obj(Json.value(limits, "extraUsage"));
-        if (paid != null && !paid.isEmpty()) {
-            ClaudeExtraUsage extra = new ClaudeExtraUsage(); extra.enabled = flag(paid, "enabled");
-            if (Json.value(paid, "limit") instanceof Number) extra.limit = Json.number(paid, "limit");
-            if (Json.value(paid, "used") instanceof Number) extra.used = Json.number(paid, "used");
-            if (Json.value(paid, "pct") instanceof Number) extra.pct = Json.number(paid, "pct");
-            claude.extraUsage = extra;
-        }
-        Map<String, Object> spend = Json.obj(Json.value(limits, "spend"));
-        if (spend != null && !spend.isEmpty()) {
-            ClaudeSpend s = new ClaudeSpend(); s.pct = Json.number(spend, "pct"); s.resetsAt = Json.number(spend, "resetsAt"); s.period = text(spend, "period");
-            if (Json.value(spend, "usedUsd") instanceof Number) s.usedUsd = Json.number(spend, "usedUsd");
-            if (Json.value(spend, "limitUsd") instanceof Number) s.limitUsd = Json.number(spend, "limitUsd");
-            claude.spend = s;
-        }
-        Map<String, Object> burn = Json.obj(Json.value(c, "burn"));
-        claude.rate = Json.number(burn, "rate");
-        if (Json.number(burn, "scale") > 0) claude.scale = Json.number(burn, "scale");
-        numbers(Json.array(burn, "minutes"), claude.burn);
-        for (Object item : Json.array(c, "lanes")) {
-            Map<String, Object> l = Json.obj(item);
-            ClaudeLane lane = new ClaudeLane(); lane.key = text(l, "key"); lane.project = text(l, "project"); lane.thread = flag(l, "thread"); lane.color = text(l, "color"); numbers(Json.array(l, "bins"), lane.bins);
-            if (lane.color.isEmpty()) lane.color = lane.project;
-            if (!lane.project.isEmpty()) claude.lanes.add(lane);
-        }
-        Map<String, Object> facts = Json.obj(Json.value(c, "facts"));
-        ClaudeFacts f = claude.facts;
-        f.tokens = (long) Json.number(facts, "tokens"); f.cost = Json.number(facts, "cost"); f.prompt = (long) Json.number(facts, "prompt"); f.cacheRead = (long) Json.number(facts, "cacheRead");
-        f.tools = (int) Json.number(facts, "tools"); f.asked = (int) Json.number(facts, "asked"); f.denied = (int) Json.number(facts, "denied"); f.replies = (int) Json.number(facts, "replies");
-        f.added = (long) Json.number(facts, "added"); f.removed = (long) Json.number(facts, "removed"); f.linesThreads = (int) Json.number(facts, "linesThreads"); f.telemetry = flag(facts, "telemetry"); f.askedPartial = flag(facts, "askedPartial");
-        // Package 2: each period's facts and the four chosen on the PC; where costs came from and the unpriced models.
-        Map<String, Object> by = Json.obj(Json.value(c, "factsBy")), sources = Json.obj(Json.value(c, "costSource")), unpriced = Json.obj(Json.value(c, "unpriced"));
-        for (int i = 0; i < 3; i++) {
-            if (Json.has(by, PERIODS[i])) claude.factsBy[i] = facts(Json.obj(Json.value(by, PERIODS[i])), f);
-            if (!text(sources, PERIODS[i]).isEmpty()) claude.costSource[i] = text(sources, PERIODS[i]);
-            for (Object name : Json.array(unpriced, PERIODS[i])) if (name instanceof String && !((String) name).isEmpty()) claude.unpriced[i].add((String) name);
-        }
-        List<Object> kinds = Json.array(c, "factKinds");
-        if (!kinds.isEmpty()) { List<String> names = new ArrayList<String>(); for (Object k : kinds) if (k instanceof String) names.add((String) k); claude.factKinds = ClaudeText.cleanFacts(names.toArray(new String[0])); }
-        if (Json.value(c, "limitEta") instanceof Number) claude.limitEta = Json.number(c, "limitEta");
-        if (Json.value(c, "claudeCodeCost") instanceof Number) claude.claudeCodeCost = Json.number(c, "claudeCodeCost");
-        if (Json.value(c, "estimateCost") instanceof Number) claude.estimateCost = Json.number(c, "estimateCost");
-        Map<String, Object> usage = Json.obj(Json.value(c, "usage"));
-        for (int i = 0; i < 3; i++)
-            for (Object item : Json.array(usage, PERIODS[i])) {
-                Map<String, Object> u = Json.obj(item);
-                ClaudeProject project = new ClaudeProject(); project.project = text(u, "project"); project.tokens = (long) Json.number(u, "tokens"); project.cost = Json.number(u, "cost");
-                if (!project.project.isEmpty()) claude.usage[i].add(project);
-            }
+        claude.updatedAt = Json.number(c, "updatedAt");
+        claude.fiveHour = window(Json.value(c, "fiveHour")); claude.week = window(Json.value(c, "week"));
+        List<Object> minutes = Json.array(c, "minutes");
+        for (int i = 0; minutes != null && i < claude.minutes.length && i < minutes.size(); i++) if (minutes.get(i) instanceof Number) claude.minutes[i] = ((Number) minutes.get(i)).doubleValue();
+        claude.done = (int) Json.number(c, "done"); claude.needsYou = (int) Json.number(c, "needsYou");
+        claude.blocked = (int) Json.number(c, "blocked"); claude.working = (int) Json.number(c, "working");
         return claude;
-    }
-    // A period's facts (package 2). An older PC leaves out replies, asked and lines' threads; today's facts fill those in.
-    private static ClaudeFacts facts(Map<String, Object> m, ClaudeFacts today) {
-        ClaudeFacts f = new ClaudeFacts();
-        f.tokens = (long) Json.number(m, "tokens"); f.cost = Json.number(m, "cost");
-        if (Json.value(m, "cacheHit") instanceof Number) f.sentCacheHit = Json.number(m, "cacheHit");
-        f.tools = (int) Json.number(m, "tools"); f.slowTool = text(m, "slowTool");
-        if (Json.value(m, "slowMs") instanceof Number) f.slowMs = Json.number(m, "slowMs");
-        f.runs = (int) Json.number(m, "runs"); f.runFailures = (int) Json.number(m, "runFailures"); f.failuresFromHooks = flag(m, "failuresFromHooks");
-        f.errors = (int) Json.number(m, "errors"); f.helpers = (int) Json.number(m, "helpers");
-        if (Json.value(m, "helperShare") instanceof Number) f.helperShare = Json.number(m, "helperShare");
-        f.editsAccepted = (int) Json.number(m, "editsAccepted"); f.editsRejected = (int) Json.number(m, "editsRejected");
-        f.commits = (int) Json.number(m, "commits"); f.pullRequests = (int) Json.number(m, "pullRequests");
-        f.activeUser = Json.number(m, "activeUser"); f.activeCli = Json.number(m, "activeCli"); f.metrics = flag(m, "metrics");
-        f.added = (long) Json.number(m, "added"); f.removed = (long) Json.number(m, "removed");
-        boolean full = Json.has(m, "replies");
-        f.replies = full ? (int) Json.number(m, "replies") : today.replies;
-        f.prompt = Json.has(m, "prompt") ? (long) Json.number(m, "prompt") : today.prompt; f.cacheRead = Json.has(m, "cacheRead") ? (long) Json.number(m, "cacheRead") : today.cacheRead;
-        f.asked = full ? (int) Json.number(m, "asked") : today.asked; f.denied = full ? (int) Json.number(m, "denied") : today.denied;
-        f.linesThreads = full ? (int) Json.number(m, "linesThreads") : today.linesThreads;
-        f.telemetry = Json.has(m, "telemetry") ? flag(m, "telemetry") : today.telemetry; f.askedPartial = full ? flag(m, "askedPartial") : today.askedPartial;
-        return f;
-    }
-    private static void models(List<Object> items, List<ClaudeModel> into) {
-        for (Object item : items) { Map<String, Object> m = Json.obj(item); ClaudeModel model = new ClaudeModel(); model.name = text(m, "name"); model.share = Json.number(m, "share"); if (!model.name.isEmpty()) into.add(model); }
-    }
-    // Numbers from a JSON array into a fixed array (missing ones stay 0).
-    private static void numbers(List<Object> items, double[] into) {
-        for (int i = 0; i < into.length && items != null && i < items.size(); i++) if (items.get(i) instanceof Number) into[i] = ((Number) items.get(i)).doubleValue();
     }
     private static ClaudeWindow window(Object value) {
         if (!(value instanceof Map)) return null;
         Map<String, Object> w = Json.obj(value);
         if (!(Json.value(w, "pct") instanceof Number)) return null;
-        ClaudeWindow window = new ClaudeWindow(); window.pct = Json.number(w, "pct"); window.resetsAt = Json.number(w, "resetsAt");
+        ClaudeWindow window = new ClaudeWindow(); window.pct = Json.number(w, "pct");
+        if (Json.value(w, "resetsAt") instanceof Number) window.resetsAt = Json.number(w, "resetsAt");
         return window;
     }
 

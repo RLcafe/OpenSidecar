@@ -365,7 +365,7 @@ namespace WidgetScreen
             quiet.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, settings.QuietMode ? "Selected" : "Raised");
             quiet.BorderThickness = new Thickness(settings.QuietMode ? 2 : 1);
             AutomationProperties.SetName(quiet, settings.QuietMode ? "Quiet mode, on" : "Quiet mode, off");
-            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock, ClaudePeriodChosen, settings.ClaudeShowApiValue, settings.ClaudeFacts); claude.PlanEvery = TimeSpan.FromSeconds(settings.ClaudePlanSeconds); ApplyClipboard(); BuildMacros(); ApplyCalendar(); UpdateLevelTimer();
+            BuildShortcuts(); UpdateClock(); weatherCard.Configure(settings.WeatherLocation, WeatherImperial, settings.Use24HourClock); storageCard.Configure(settings.StorageLowPercent); clocksCard.Configure(settings.WorldClocks, settings.Use24HourClock); ApplyPrayer(); claudeCard.Configure(settings.Use24HourClock); ApplyClipboard(); BuildMacros(); ApplyCalendar(); UpdateLevelTimer();
         }
 
         private void ApplyAppearance(AppSettings appearance)
@@ -458,7 +458,7 @@ namespace WidgetScreen
                 if (deckShape != DeckShape()) BuildShortcuts();
                 // Card contents follow their card's size (CardSizing, DashboardController.Cards.cs).
                 FitCards();
-                UpdatePages(); UpdateClaudePill();
+                UpdatePages();
             }
             finally { syncingEditor = false; }
         }
@@ -1076,7 +1076,6 @@ namespace WidgetScreen
             candidate.WorldClocks = ClockChoices();
             SavePrayerChoices(candidate); SaveClipboardChoices(candidate); candidate.Macros = macros.ToArray(); candidate.HomeEntities = HomeChoicesToSave(); SaveSensorChoices(candidate);
             candidate.ShowSteamGames = Control<CheckBox>("SteamGamesChoice").IsChecked == true; candidate.ShowEpicGames = Control<CheckBox>("EpicGamesChoice").IsChecked == true; candidate.ShowXboxGames = Control<CheckBox>("XboxGamesChoice").IsChecked == true;
-            SaveClaudeChoices(candidate);
             candidate.Shortcuts = shortcuts; candidate.WeatherLocation = pendingLocation == null ? "" : pendingLocation.Name;
             candidate.Latitude = pendingLocation == null ? 0 : pendingLocation.Latitude; candidate.Longitude = pendingLocation == null ? 0 : pendingLocation.Longitude;
             candidate.WeatherUnits = Control<ComboBox>("WeatherUnitsChoice").SelectedIndex == 1 ? "imperial" : "metric";
@@ -1167,7 +1166,7 @@ namespace WidgetScreen
         public void Dispose()
         {
             SaveNotesDraft(); disposed = true; DisposeRemote(); tray.Dispose(); clockTimer.Stop(); levelTimer.Stop(); SystemEvents.DisplaySettingsChanged -= DisplaysChanged;
-            weather.Dispose(); calendar.Dispose(); home.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); if (claudeToast != null) claudeToast.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
+            weather.Dispose(); calendar.Dispose(); home.Dispose(); prayerAlert.Dispose(); clipboard.Dispose(); spotifyAccount.Dispose(); spotify.Dispose(); discordAccount.Dispose(); soundboard.Dispose(); claude.Dispose(); deckEditor.Dispose(); deckHotkeys.Dispose(); audio.Dispose();
             // Closing the UI must not wait for a performance-counter provider.
             Task.Run(() => system.Dispose());
         }

@@ -10,8 +10,7 @@ using System.Windows.Shapes;
 namespace WidgetScreen
 {
     // Sticker Sheet foundations (decision 017, docs/design/sticker-sheet.md): each card's label strip and status sticker,
-    // the ink resources, Settings → Theme → Widget colours, and the ink picker in Edit layout's list. Card bodies are
-    // unchanged in this phase; the Claude Code card keeps its own design.
+    // the ink resources, Settings → Theme → Widget colours, and the ink picker in Edit layout's list.
     public sealed partial class DashboardController
     {
         // The strip hosts in MainWindow.xaml, by widget (Weather's strip is built by WeatherCard).
@@ -19,12 +18,12 @@ namespace WidgetScreen
             new[] { "Focus", "FocusStrip" }, new[] { "Media", "MediaStrip" }, new[] { "Shortcuts", "DeckHeading" }, new[] { "Mixer", "MixerStrip" },
             new[] { "System", "SystemStrip" }, new[] { "Spotify", "SpotifyStrip" }, new[] { "Soundboard", "SoundboardHeading" }, new[] { "Storage", "StorageStrip" },
             new[] { "Prayer", "PrayerStrip" }, new[] { "Notes", "NotesStrip" }, new[] { "Clipboard", "ClipboardStrip" }, new[] { "Macros", "MacroHeading" },
-            new[] { "Calendar", "CalendarStrip" }, new[] { "Games", "GamesHeading" }, new[] { "Home", "HomeStrip" }, new[] { "Clocks", "ClocksStrip" } };
+            new[] { "Calendar", "CalendarStrip" }, new[] { "Games", "GamesHeading" }, new[] { "Home", "HomeStrip" }, new[] { "Clocks", "ClocksStrip" }, new[] { "Claude", "ClaudeStrip" } };
         // The right-hand captions that become status stickers. Those drawn in the warning colour only speak up for problems.
         private static readonly string[][] StatusCaptions = {
             new[] { "Focus", "FocusState", "" }, new[] { "Media", "MediaSource", "" }, new[] { "Mixer", "MicState", "" }, new[] { "Mixer", "AudioStatus", "warns" }, new[] { "System", "SystemPeak", "" }, new[] { "System", "SystemUptime", "" }, new[] { "System", "SystemStatus", "warns" },
             new[] { "Storage", "StorageStatus", "warns" }, new[] { "Prayer", "PrayerStatus", "" }, new[] { "Notes", "NotesStatus", "" }, new[] { "Clipboard", "ClipStatus", "" },
-            new[] { "Calendar", "CalendarStatus", "warns" }, new[] { "Home", "HomeStatus", "warns" }, new[] { "Clocks", "ClocksStatus", "" }, new[] { "Soundboard", "SoundboardChannel", "" } };
+            new[] { "Calendar", "CalendarStatus", "warns" }, new[] { "Home", "HomeStatus", "warns" }, new[] { "Clocks", "ClocksStatus", "" }, new[] { "Soundboard", "SoundboardChannel", "" }, new[] { "Claude", "ClaudeStatus", "" } };
 
         private readonly Dictionary<string, LabelStrip> strips = new Dictionary<string, LabelStrip>();
         private readonly List<StatusSticker> statusStickers = new List<StatusSticker>();
@@ -121,7 +120,7 @@ namespace WidgetScreen
                 pair.Value.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, on ? "Text" : "ControlBorder");
                 AutomationProperties.SetName(pair.Value, pair.Key + " ink" + (on ? ", chosen" : ""));
             }
-            inkPickerNote.Text = !inScope ? "Claude Code keeps its own colours."
+            inkPickerNote.Text = !inScope ? ""
                 : settings.WidgetColours == Inks.AccentOnly ? "Widget colours is Accent only (Settings → Theme), so every card wears the accent until you choose Each its own."
                 : "Saved with the layout. The phone shows it too.";
         }

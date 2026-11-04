@@ -62,7 +62,7 @@ namespace WidgetScreen
 
         private void PagesChanged()
         {
-            ApplyLayout(settings); UpdatePages(); UpdateLevelTimer(); claudeDirty = true; UpdateClaudePill();
+            ApplyLayout(settings); UpdatePages(); UpdateLevelTimer();
             if (window.IsLoaded) { RefreshSystem(); RefreshAudio(); RefreshMedia(); RefreshWeather(); RefreshStorage(); }
         }
 

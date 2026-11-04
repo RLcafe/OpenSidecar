@@ -12,7 +12,7 @@ using System.Web;
 
 namespace WidgetScreen
 {
-    // An answer from Anthropic that wasn't a success, with its status: 429 and 5xx mean "not now" (ClaudeIntervals.Backoff).
+    // An answer from Anthropic that wasn't a success, with its status: 429 and 5xx mean "not now" (ClaudeService.Backoff).
     public sealed class ClaudeHttpException : IOException
     {
         public readonly int Status;
@@ -34,12 +34,12 @@ namespace WidgetScreen
             var o = ClaudeJson.Obj(ClaudeJson.Parse(Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(path), Entropy, DataProtectionScope.CurrentUser))));
             double expires = ClaudeJson.Num(o, "expires");
             return new ClaudeSignIn { AccessToken = ClaudeJson.Str(o, "access") ?? "", RefreshToken = ClaudeJson.Str(o, "refresh") ?? "", Scope = ClaudeJson.Str(o, "scope") ?? "",
-                ExpiresUtc = Double.IsNaN(expires) ? DateTime.MinValue : ClaudeBridge.FromEpoch(expires), Expired = ClaudeJson.Bool(o, "expired") };
+                ExpiresUtc = Double.IsNaN(expires) ? DateTime.MinValue : ClaudeTime.FromEpoch(expires), Expired = ClaudeJson.Bool(o, "expired") };
         }
         public void Save(string path)
         {
             var o = new JsonObject();
-            o["access"] = AccessToken; o["refresh"] = RefreshToken; o["scope"] = Scope; o["expires"] = new JsonNumber(ClaudeBridge.Epoch(ExpiresUtc)); o["expired"] = Expired;
+            o["access"] = AccessToken; o["refresh"] = RefreshToken; o["scope"] = Scope; o["expires"] = new JsonNumber(ClaudeTime.Epoch(ExpiresUtc)); o["expired"] = Expired;
             byte[] bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(ClaudeJson.Compact(o)), Entropy, DataProtectionScope.CurrentUser);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             string temp = path + ".tmp";
@@ -49,7 +49,7 @@ namespace WidgetScreen
         private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("WidgetScreen.ClaudeSignIn");
     }
 
-    // Settings → Claude → Sign in with Claude (docs/decisions/015-claude-sign-in-and-telemetry.md): the same browser sign-in
+    // Settings → Claude → Sign in with Claude (decisions 015 and 027, docs/design/claude-card.md): the same browser sign-in
     // Claude Code's /login uses (OAuth 2 with PKCE, Claude Code's public client, a loopback redirect), asking only for
     // user:profile, which is what the plan usage check needs. It is the widget's own grant, so refreshing it never
     // touches Claude Code's sign-in. The tokens go only to Anthropic's hosts (platform.claude.com for tokens,
@@ -275,11 +275,11 @@ namespace WidgetScreen
                     {
                         if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
                         // 403 is a plan with no usage meters (an API or enterprise account), not an ended sign-in: the
-                        // sign-in stays and the card says so (decision 023). Only a refresh that fails ends it; a 401
+                        // sign-in stays and the card says so (decision 027). Only a refresh that fails ends it; a 401
                         // after a refresh that worked is a failed check, tried again later.
                         if (response.StatusCode == HttpStatusCode.Forbidden) { NoMeters = true; return null; }
                         if (!response.IsSuccessStatusCode) throw new ClaudeHttpException((int)response.StatusCode, "api.anthropic.com answered " + (int)response.StatusCode + ".");
-                        var limits = ClaudeBridge.ParseUsageResponse(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
+                        var limits = ClaudePlan.ParseUsage(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
                         if (limits == null) throw new IOException("The plan usage answer couldn't be read.");
                         NoMeters = false;
                         return limits;

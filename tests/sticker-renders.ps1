@@ -17,7 +17,7 @@ $ids = 'Focus', 'Media', 'Shortcuts', 'Mixer', 'System', 'Weather', 'Spotify', '
 $pages = [ordered]@{
     'default' = $null
     'readings' = @{ Weather = @(0, 0, 472, 576); System = @(488, 0, 456, 280); Storage = @(488, 296, 456, 280); Prayer = @(960, 0, 420, 280); Clocks = @(960, 296, 420, 280); Calendar = @(1396, 0, 460, 576) }
-    'lists' = @{ Notes = @(0, 0, 472, 576); Clipboard = @(488, 0, 420, 280); Macros = @(488, 296, 420, 280); Games = @(924, 0, 456, 280); Home = @(924, 296, 456, 280); Soundboard = @(1396, 0, 460, 300); Claude = @(1396, 316, 460, 260) }
+    'lists' = @{ Notes = @(0, 0, 472, 576); Clipboard = @(488, 0, 420, 280); Macros = @(488, 296, 420, 280); Games = @(924, 0, 456, 280); Home = @(924, 296, 456, 280); Soundboard = @(1396, 0, 460, 280); Claude = @(1396, 296, 460, 280) }
     'narrow' = @{ Clocks = @(0, 0, 196, 184); Storage = @(212, 0, 240, 152); Calendar = @(468, 0, 240, 152); Prayer = @(724, 0, 240, 152); Focus = @(980, 0, 280, 192); Media = @(1276, 0, 312, 200); Weather = @(1604, 0, 252, 300) }
     # Phase 2, the default five at their Small, Medium, Large and Wide designs.
     'five-small' = @{ Focus = @(0, 0, 280, 192); Media = @(296, 0, 312, 200); Shortcuts = @(624, 0, 288, 204); Mixer = @(928, 0, 320, 224); Spotify = @(1264, 0, 400, 300) }

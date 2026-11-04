@@ -1,5 +1,7 @@
 # 014 — The Claude Code bridge: hooks, the status line and a read-only usage check
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali asked (1 Nov 2026) for a widget that shows the Claude Code sessions on this PC, lights up when one is waiting on him, counts usage per project and per session, and shows his plan's limits (his Claude subscription, not API credits). The design is in [docs/design/claude-watcher.md](../design/claude-watcher.md).
 
 ## Decision

@@ -146,25 +146,17 @@ internal static class RemoteTests
                     // The Claude section comes from the labelled fixture, never from this PC's Claude Code logs.
                     controller.UseClaudeSample(true);
                     File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude", token).Item2);
-                    var claudeState = (Dictionary<string, object>)Json(get("/state?parts=claude", token).Item2)["claude"];
-                    var claudeSessions = (object[])claudeState["sessions"]; var firstSession = (Dictionary<string, object>)claudeSessions[0];
-                    var claudeLimits = (Dictionary<string, object>)claudeState["limits"]; var claudeFive = (Dictionary<string, object>)claudeLimits["fiveHour"];
-                    Assert((bool)claudeState["connected"] && (bool)claudeState["sample"] && claudeSessions.Length == 4 && (string)firstSession["state"] == "needs" && (string)firstSession["project"] == "api-server"
-                        && Convert.ToInt64(((Dictionary<string, object>)firstSession["tokens"])["fiveHour"]) == 412000 && Convert.ToDouble(claudeFive["pct"]) == 84 && Convert.ToDouble(claudeFive["resetsAt"]) > 1e9
-                        && ((object[])((Dictionary<string, object>)claudeState["usage"])["week"]).Length == 5 && !claudeState.ContainsKey("token") && !state.Item2.Contains("accessToken"), "Claude state wrong.");
-                    var weekProjects = (object[])((Dictionary<string, object>)claudeState["usage"])["week"];
-                    Assert((string)claudeState["plan"] == "current" && (string)firstSession["where"] == "Desktop" && Convert.ToDouble(((Dictionary<string, object>)firstSession["cost"])["week"]) > 0
-                        && Convert.ToDouble(((Dictionary<string, object>)weekProjects[0])["cost"]) > 0 && ((object[])claudeLimits["extra"]).Length == 1 && (string)((Dictionary<string, object>)((object[])claudeLimits["extra"])[0])["name"] == "Opus week"
-                        && !get("/state?parts=claude", token).Item2.Contains("Bearer"), "Claude cost, plan state or extra windows missing from the phone's section.");
-                    // Package 3: every answer carries the numbered alerts (none for the sample), and threads their crew and tasks.
-                    var alerting = Json(get("/state?parts=focus", token).Item2);
-                    var crewThread = ((object[])claudeState["threads"]).Cast<Dictionary<string, object>>().First(t => (string)t["id"] == "sample-2");
-                    Assert(alerting["claudeAlerts"] is object[] && ((object[])alerting["claudeAlerts"]).Length == 0 && Convert.ToInt64(alerting["claudeAlertSeq"]) == 0 && alerting["claudeQuiet"] is bool
-                        && Convert.ToInt32(crewThread["workers"]) == 2 && Convert.ToInt32(crewThread["tasksDone"]) == 3 && Convert.ToInt32(crewThread["tasksTotal"]) == 5 && crewThread.ContainsKey("endReason"), "The phone's alerts or a car's crew are missing.");
-                    // The Android pass: each period's facts carry what the phone's side panel needs besides package 2's.
-                    var todayFacts = (Dictionary<string, object>)((Dictionary<string, object>)claudeState["factsBy"])["today"];
-                    Assert(todayFacts.ContainsKey("replies") && todayFacts.ContainsKey("asked") && todayFacts.ContainsKey("telemetry") && todayFacts.ContainsKey("linesThreads") && todayFacts.ContainsKey("cacheRead") && claudeState["factKinds"] is object[], "The phone's facts are missing replies, asked or lines' threads.");
-                    Assert(post("/command", "{\"action\":\"claude.focus\",\"id\":\"sample-2\"}", token).Item1 == 200 && post("/command", "{\"action\":\"claude.focus\",\"id\":\"gone\"}", token).Item1 == 409, "Focusing a Claude session from the phone failed.");
+                    // The Claude card's four tiles (decision 027): percentages, the minutes' tokens and the counts, never a token or a path.
+                    var claudeAnswer = get("/state?parts=claude", token).Item2;
+                    var claudeState = (Dictionary<string, object>)Json(claudeAnswer)["claude"];
+                    var claudeFive = (Dictionary<string, object>)claudeState["fiveHour"]; var claudeWeek = (Dictionary<string, object>)claudeState["week"];
+                    Assert((bool)claudeState["sample"] && (string)claudeState["plan"] == "current" && Convert.ToDouble(claudeFive["pct"]) == 64 && Convert.ToDouble(claudeFive["resetsAt"]) > 1e9 && Convert.ToDouble(claudeWeek["pct"]) == 31
+                        && ((object[])claudeState["minutes"]).Length == ClaudeTokens.Minutes && (bool)claudeState["logs"]
+                        && Convert.ToInt32(claudeState["done"]) == 2 && Convert.ToInt32(claudeState["needsYou"]) == 3 && Convert.ToInt32(claudeState["blocked"]) == 1 && Convert.ToInt32(claudeState["working"]) == 2
+                        && !claudeState.ContainsKey("sessions") && !claudeState.ContainsKey("threads") && !claudeAnswer.Contains("Bearer") && !state.Item2.Contains("accessToken"), "Claude state wrong.");
+                    // The old watcher's extras are gone: no alerts in every answer, no focus command.
+                    var plain = Json(get("/state?parts=focus", token).Item2);
+                    Assert(!plain.ContainsKey("claudeAlerts") && !plain.ContainsKey("claudeNeeds") && post("/command", "{\"action\":\"claude.focus\",\"id\":\"sample-2\"}", token).Item1 == 400, "The old Claude watcher still answers.");
                     Assert(liveState.ContainsKey("media") && liveState.ContainsKey("audio") && liveState.ContainsKey("system"), "Live parts missing.");
                     var storageState = (Dictionary<string, object>)Json(get("/state?parts=storage", token).Item2)["storage"];
                     Assert(Convert.ToInt32(storageState["lowPercent"]) == 10 && ((object[])storageState["drives"]).Length > 0 && ((Dictionary<string, object>)((object[])storageState["drives"])[0]).ContainsKey("free"), "Storage state wrong.");
@@ -250,9 +242,9 @@ internal static class RemoteTests
                     // Sticker Sheet inks (decision 021) ride in the layout section and come back with the phone's saves.
                     layout = (Dictionary<string, object>)Json(get("/state?parts=layout", token).Item2)["layout"];
                     var inks = (Dictionary<string, object>)layout["inks"];
-                    Assert((string)layout["colours"] == "Each" && WidgetLayout.Ids.Where(Inks.InScope).All(id => (string)inks[id] == Inks.Default(id)) && !inks.ContainsKey("Claude"), "The layout section doesn't carry every widget's ink and Widget colours.");
+                    Assert((string)layout["colours"] == "Each" && WidgetLayout.Ids.All(id => (string)inks[id] == Inks.Default(id)), "The layout section doesn't carry every widget's ink and Widget colours.");
                     string inkedLayout = phoneLayout.TrimEnd('}') + ",\"inks\":{\"Focus\":\"Mint\",\"Media\":\"Amber\",\"Claude\":\"Rose\",\"Notes\":\"Glitter\"}}";
-                    Assert(post("/command", inkedLayout, token).Item1 == 200 && SettingsStore.Load(path, out ignored).WidgetInks == "Focus=Mint", "Inks saved with the phone's layout weren't kept, or Amber, Claude or an unknown ink was accepted.");
+                    Assert(post("/command", inkedLayout, token).Item1 == 200 && SettingsStore.Load(path, out ignored).WidgetInks == "Focus=Mint;Claude=Rose", "Inks saved with the phone's layout weren't kept, or Amber or an unknown ink was accepted.");
                     layoutState = Json(get("/state?parts=layout", token).Item2);
                     Assert((string)((Dictionary<string, object>)((Dictionary<string, object>)layoutState["layout"])["inks"])["Focus"] == "Mint", "The PC doesn't report the phone's ink back.");
                     string inkVersion = (string)layoutState["layoutVersion"];

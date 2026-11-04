@@ -6,6 +6,17 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.43.0 (4 Nov 2026)
+
+A simple Claude Code card on both apps (Ali's request; decision 027). It replaces the Claude watcher, which is deleted from the code base.
+
+- **Four tiles.** 5-HOUR and WEEKLY show your plan's use with a bar and when it resets, TOKENS / MIN shows the last five minutes (with half an hour of bars in a tall tile), and an original pixel robot shows how many sessions **need you** (orange), are **blocked**, are **done** (green) and are **working**. The counts never say which session.
+- **The tiles follow the card.** One row on a long card, a 2 × 2 square on a squarish one, one column on a tall one, switching live while you resize. The robot's eyes and lights follow the most urgent count, and it sleeps when nothing is open.
+- **Like every other card.** Claude Code now has a label strip and status sticker, and its colour can be picked in Edit layout. Its smallest size is 360 × 280.
+- **No hooks any more.** The card reads Claude Code's session list, its logs and the Claude app's thread records, read-only. On its first start this version takes the old hooks, status line and telemetry settings out of Claude Code's `settings.json` (after a dated backup, restoring your earlier status line) and deletes the old bridge folder; setup removes the installed `ClaudeHook.exe`.
+- **Removed:** the pit wall, projects and threads, periods, facts, costs and models, the header pill, the chime, Windows and phone notifications (and the phone's notification permission), Connect Claude Code, the telemetry receiver on 127.0.0.1:43832, the folder watchers and their Settings → Claude options.
+- The phone link's `claude` section now carries only the four tiles' readings, and the phone asks for it with the other cards. Sign in with Claude stays in Settings → Claude on the PC.
+
 ## v0.42.0 (2 Nov 2026)
 
 Claude Code watcher on the phone: packages 2 and 3 of the Watcher action plan reach the Android app (package 1 already had; decision 026).

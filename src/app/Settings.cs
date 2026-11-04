@@ -19,14 +19,6 @@ namespace WidgetScreen
         public Shortcut Copy() { return (Shortcut)MemberwiseClone(); }
     }
 
-    // A project's tick in Settings → Claude → Projects, by its folder (docs/design/claude-watcher.md).
-    public sealed class ClaudeProjectChoice
-    {
-        [XmlAttribute] public string Folder { get; set; }
-        [XmlAttribute] public bool Shown { get; set; }
-        public ClaudeProjectChoice Copy() { return (ClaudeProjectChoice)MemberwiseClone(); }
-    }
-
     public sealed class AppSettings
     {
         public int Version { get; set; }
@@ -105,36 +97,6 @@ namespace WidgetScreen
         public bool PrayerHanafi { get; set; }
         public bool PrayerAlert { get; set; }
         public string PrayerSound { get; set; }
-        // Claude Code (Settings → Claude): a chime when a session starts needing you, and which projects the card shows.
-        // A project with no choice follows ClaudeShowNewProjects (on by default). The plan meters always show the plan.
-        public bool ClaudeChime { get; set; }
-        // A Windows notification when a session needs you, gets stuck or finishes a turn of 10 minutes or more (package 3;
-        // on by default, silent in Quiet mode).
-        public bool ClaudeToast { get; set; }
-        // Quiet mode stops other motion; the Claude cars keep moving unless this is set (Ali, 1 Nov 2026; decision 019).
-        public bool ClaudeStillInQuiet { get; set; }
-        // The ledger's "API value" (what the tokens would cost at API list prices): off by default, since a plan
-        // doesn't pay those prices and Ali can't check them; replies show instead (decision 019).
-        public bool ClaudeShowApiValue { get; set; }
-        // Resolved and archived threads are hidden unless this is set ("Hide resolved and archived threads", on by default), and idle ones when
-        // ClaudeHideIdle is (off by default). Hidden threads still count in their project's totals (Ali, 1 Nov 2026; decision 020).
-        public bool ClaudeShowArchived { get; set; }
-        public bool ClaudeHideIdle { get; set; }
-        public bool ClaudeShowNewProjects { get; set; }
-        [XmlArray("ClaudeProjects"), XmlArrayItem("Project")]
-        public ClaudeProjectChoice[] ClaudeProjects { get; set; }
-        // How often the card re-reads sessions, threads, telemetry totals and logs while it's on a page (default 2 s),
-        // and how often the plan check asks Anthropic (default 300 s): the user's numbers, Quiet mode or not (Ali, 1 Nov 2026).
-        public int ClaudeCardSeconds { get; set; }
-        public int ClaudePlanSeconds { get; set; }
-        // Project folders folded into their big critter on the card (the phone shares them), and the period the card
-        // and the phone count threads and usage over: FiveHour, Today or Week.
-        [XmlArray("ClaudeCollapsed"), XmlArrayItem("Folder")]
-        public string[] ClaudeCollapsed { get; set; }
-        public string ClaudePeriod { get; set; }
-        // The four facts on the Claude card's side panel (package 2), from ClaudeFactKinds.All.
-        [XmlArray("ClaudeFacts"), XmlArrayItem("Fact")]
-        public string[] ClaudeFacts { get; set; }
         // Clipboard history (Settings → Widgets): how many texts to keep, and whether they outlast the app (encrypted).
         public int ClipboardSize { get; set; }
         public bool ClipboardKeep { get; set; }
@@ -189,10 +151,6 @@ namespace WidgetScreen
             HideToTrayWithPhone = false;
             FocusChime = true;
             StorageLowPercent = StorageService.DefaultLowPercent;
-            ClaudeShowNewProjects = true;
-            ClaudeToast = true;
-            ClaudeCardSeconds = ClaudeIntervals.CardDefault; ClaudePlanSeconds = ClaudeIntervals.PlanDefault;
-            ClaudePeriod = "Today";
             Monitor = "";
             WeatherLocation = "";
             WeatherUnits = RegionWeatherUnits();
@@ -213,9 +171,6 @@ namespace WidgetScreen
             copy.CanvasLayouts = CanvasLayouts == null ? null : CanvasLayouts.Where(c => c != null).Select(c => c.Copy()).ToArray();
             copy.Macros = Macros == null ? null : Macros.Where(m => m != null).Select(m => m.Copy()).ToArray();
             copy.WorldClocks = WorldClocks == null ? null : WorldClocks.Where(c => c != null).Select(c => c.Copy()).ToArray();
-            copy.ClaudeProjects = ClaudeProjects == null ? null : ClaudeProjects.Where(c => c != null).Select(c => c.Copy()).ToArray();
-            copy.ClaudeCollapsed = ClaudeCollapsed == null ? null : ClaudeCollapsed.ToArray();
-            copy.ClaudeFacts = ClaudeFacts == null ? null : ClaudeFacts.ToArray();
             copy.MorePages = MorePages == null ? null : MorePages.Where(p => p != null).Select(p => p.Copy()).ToArray();
             return copy;
         }
@@ -250,11 +205,6 @@ namespace WidgetScreen
             StorageLowPercent = StorageLowPercent == 0 ? StorageService.DefaultLowPercent : StorageService.ClampPercent(StorageLowPercent);
             WorldClocks = WorldClockService.Clean(WorldClocks);
             ClipboardSize = ClipboardHistory.ClampSize(ClipboardSize);
-            ClaudeCardSeconds = ClaudeCardSeconds == 0 ? ClaudeIntervals.CardDefault : ClaudeIntervals.Card(ClaudeCardSeconds);
-            ClaudePlanSeconds = ClaudePlanSeconds == 0 ? ClaudeIntervals.PlanDefault : ClaudeIntervals.Plan(ClaudePlanSeconds);
-            ClaudeCollapsed = (ClaudeCollapsed ?? new string[0]).Select(ClaudeUsage.Key).Where(f => f.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            if (ClaudePeriod != "FiveHour" && ClaudePeriod != "Today" && ClaudePeriod != "Week") ClaudePeriod = "Today";
-            ClaudeFacts = ClaudeFactKinds.Clean(ClaudeFacts);
             HomeEntities = (HomeEntities ?? new string[0]).Where(id => !String.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct().Take(HomeAssistantService.MaxEntities).ToArray();
             Macros = MacroActions.Clean(Macros).ToArray();
             FocusSessionsToday = Math.Max(0, FocusSessionsToday); FocusMinutesToday = Math.Max(0, FocusMinutesToday);
@@ -295,7 +245,8 @@ namespace WidgetScreen
     {
         public static string SpotifyPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "spotify-session.dat"); }
         public static string DiscordPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "discord-session.dat"); }
-        // The Claude Code bridge's folder (ClaudeHook.exe, sessions\, limits.json) beside settings.xml.
+        // Where earlier versions kept the Claude Code bridge (ClaudeHook.exe, sessions\, limits.json), beside settings.xml;
+        // ClaudeCleanup deletes it.
         public static string ClaudePath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "claude"); }
         // The widget's own Claude sign-in (DPAPI-encrypted), beside settings.xml.
         public static string ClaudeSignInPath(string settingsPath) { return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settingsPath)), "claude-session.dat"); }

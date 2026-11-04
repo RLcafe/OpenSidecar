@@ -1,0 +1,20 @@
+# 027: A simple Claude Code card
+
+On 4 Nov 2026 Ali asked to take the Claude Code widget "down to a simple widget": four tiles (the 5-hour limit, the weekly limit, tokens per minute, and a mascot "similar to" Claude's loading-screen robot) that only say whether something is pending, as counts ("2 green are finished, 3 orange are pending me"), plus another useful stat if there is one. "Anything else, delete it from the code base. Don't leave it in the background." The tiles reflow with the card: a row when it's long, a square when it's square. Only the Claude widget changes, on both apps. This supersedes decisions 014, 015, 016 (Claude projects and threads), 017, 018, 019, 020, 022 (Claude review fixes), 023, 024, 025 and 026. The design is in [docs/design/claude-card.md](../design/claude-card.md).
+
+## Decisions
+
+- **Four tiles, nothing else.** 5-HOUR, WEEKLY, TOKENS / MIN and the mascot with its counts. `CardSizing.ClaudeColumns` picks one row, 2 × 2 or one column by the tile shape closest to 1.25 : 1, the same numbers on the phone.
+- **The counts.** Needs you (Amber, "orange"), blocked (Coral), done (Mint, "green"), and **working** (Glacier) as the extra stat: it says Claude is busy rather than idle, which none of the other three do. The Claude app's `review_ready` counts as needs you (it's waiting on Ali to look), and `blocked` and an API error at the end of a session's log count as blocked. The counts never name a session.
+- **An original mascot.** A 16 × 16 pixel robot drawn in code (no image, no font glyph), in the card's ink, whose eyes and lights follow the most urgent count. It echoes the loading-screen robot's spirit without copying it, and it never animates (no new timer).
+- **Read-only sources only.** The plan limits keep the widget's own Sign in with Claude (decision 015's sign-in, unchanged). Sessions come from Claude Code's session list and the Claude app's thread records; tokens and API errors from Claude Code's logs. With these the card needs no hooks, status line, telemetry or watchers, so `ClaudeHook.exe`, Connect Claude Code, the loopback telemetry receiver on 127.0.0.1:43832, `ClaudeWatch`, the toasts and the phone notifications are deleted, not just hidden.
+- **The old connection comes out by itself.** A user who connected an earlier version still has hooks and a status line in `settings.json` that run `ClaudeHook.exe`, which no longer exists. `ClaudeCleanup` removes exactly those once at startup, after a dated backup, restores the earlier status line, removes Connect's telemetry keys only while they hold Connect's values, and deletes the old bridge folder. A `settings.json` that isn't valid JSON is left alone and Settings → Claude says so. The setup exe deletes an installed `ClaudeHook.exe`.
+- **A card like the others.** Claude Code now wears a label strip and a status sticker, and its ink is pickable in Edit layout (default Coral). Its minimum size rose from 260 × 180 to 360 × 280 so the mascot and its counts fit the smallest tiles.
+- **The phone link shrinks.** The `claude` section carries only the tiles' readings; `claudeNeeds`, `claudePage`, `claudeAlerts`, `claudeAlertSeq` and `claudeQuiet` are gone from every answer, and `claude.focus` and `claude.collapse` are unknown commands. The phone asks for `claude` with the other cards.
+
+## Tradeoffs
+
+- The header pill, the chime and the notifications told Ali about a waiting session while the card was on another page or the app was in the background. They are gone with everything else, as asked; the card on a shown page (and its Amber count) is the only signal.
+- Without hooks, "needs you" relies on Claude Code's session list saying `waiting` and the Claude app's summaries. A permission dialog in an older Claude Code that doesn't write `status` shows as done until its next reply.
+- Tokens per minute count fresh input, cache writes and output. Cache reads are left out, as in decision 019, so the number matches what Claude's apps show more closely than the raw total.
+- Users who never signed in see the plan tiles empty with "Sign in: Settings → Claude"; the tokens and the counts work without a sign-in.
