@@ -21,7 +21,7 @@ namespace WidgetScreen
         private DateTime lastClaudeScan = DateTime.MinValue;
         private bool claudeSample, claudePlanBusy;
         private ClaudeReading claudeSampleReading;
-        private string claudeCleanupProblem;
+        private volatile string claudeCleanupProblem;
         private string claudePagesKey; private bool claudeOnAnyPage;
         // The card and service, for the checks (tests/Claude/ClaudeTests.cs).
         public ClaudeCard ClaudeCardView { get { return claudeCard; } }
@@ -44,7 +44,7 @@ namespace WidgetScreen
             if (Program.Rendering) return;
             if (claude.Account.StartupWarning != null && pendingMessage == null) pendingMessage = claude.Account.StartupWarning;
             // Earlier versions hooked into Claude Code; that connection comes out once, off the UI thread.
-            Task.Run(() => claude.Cleanup.Run()).ContinueWith(t => { claudeCleanupProblem = t.IsFaulted ? "Couldn't remove the old Claude Code hooks." : t.Result; }, TaskScheduler.FromCurrentSynchronizationContext());
+            Task.Run(() => claude.Cleanup.Run()).ContinueWith(t => { claudeCleanupProblem = t.IsFaulted ? "Couldn't remove the old Claude Code hooks." : t.Result; });
         }
 
         // A labelled fixture instead of this PC's sessions, for renders (--render-claude-sample) and checks.
