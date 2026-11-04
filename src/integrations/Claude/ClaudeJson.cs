@@ -35,7 +35,7 @@ namespace WidgetScreen
         public override string ToString() { return Text; }
     }
 
-    // A small JSON reader and writer for the Claude Code bridge (docs/design/claude-watcher.md). Objects are JsonObject,
+    // A small JSON reader and writer for the Claude Code card (docs/design/claude-card.md). Objects are JsonObject,
     // arrays List<object>, numbers JsonNumber, and strings, booleans and null are themselves. The writer indents with
     // two spaces like Claude Code's own JSON.stringify(…, null, 2), so settings.json keeps its look.
     public static class ClaudeJson

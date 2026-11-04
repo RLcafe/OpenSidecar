@@ -1,5 +1,7 @@
 # 019 — Claude watcher fixes from the live app
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali tried v0.32.1 on his PC (1 Nov 2026) and reported:
 
 1. No animation (car states, roll in and out, pit stop).

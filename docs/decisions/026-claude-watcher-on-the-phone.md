@@ -1,5 +1,7 @@
 # 026: The phone shows packages 2 and 3 of the Claude watcher
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 On 2 Nov 2026 Ali asked for the Watcher action plan's changes so far to reach the Android app: "implement the changes we made so far to reflect in android release. package 1 to 3". Package 1 (decision 023, v0.39.0) already changed both apps. Packages 2 (decision 024, v0.40.0) and 3 (decision 025, v0.41.0) changed only the Windows app, and the PC side of the phone link already sent their fields. Package 4 was cancelled, so this is the Android pass decision 024 promised. It changes `android/` only, plus a few more fields in each period's facts on the PC side (below).
 
 ## Decisions

@@ -16,7 +16,7 @@ public final class HistoryBars extends View {
     private final RectF bar = new RectF();
     private final List<Double> values = new ArrayList<Double>(), second = new ArrayList<Double>();
     private double maximum;
-    private final int capacity = 24;
+    private int capacity = 24;
 
     public HistoryBars(Context context, int color, int guideColor, int secondColor, double maximum) {
         super(context);
@@ -24,6 +24,8 @@ public final class HistoryBars extends View {
         fill.setColor(color); muted.setColor(secondColor); guide.setColor(guideColor);
     }
     public void setColor(int color) { fill.setColor(color); invalidate(); }
+    // How many bars fit across (24 by default; the Claude card's tokens show 30 minutes).
+    public void setCapacity(int next) { if (next > 0 && next != capacity) { capacity = next; invalidate(); } }
     public void setMaximum(double next) { if (next != maximum) { maximum = next; invalidate(); } }
     public void setValues(List<Double> next, List<Double> other) {
         values.clear(); values.addAll(next); second.clear(); if (other != null) second.addAll(other);

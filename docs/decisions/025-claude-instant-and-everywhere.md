@@ -1,5 +1,7 @@
 # 025: The card reacts at once and tells you wherever you are (package 3)
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 On 2 Nov 2026, Ali asked for the third package of the Watcher action plan, "Instant and everywhere" (v0.41.0), to be started once v0.40.0 had been released. Like packages 2 and 4, this package is for Windows first (decision 024). The PC side of the phone link sends the new fields. The phone will read and draw them in the Android pass after package 4.
 
 ## Decisions

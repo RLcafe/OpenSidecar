@@ -291,27 +291,34 @@ namespace WidgetScreen
             return Tile(layout, 14, new Thickness(pad));
         }
 
-        // The mascot with the counts: beside it in a wide tile (a line each, with words), under it otherwise (a dot and
-        // a number each; the words are in the tooltip).
+        // The mascot with the counts: beside it in a wide tile (a line each with words when there's room, else a dot and
+        // a number each, two to a line), under it otherwise (two or four to a line). The words are always in the tooltip.
         private Border MascotTile(double w, double h)
         {
             double pad = CardSizing.ClaudePadding(w, h), size = CardSizing.ClaudeMascotSize(w, h);
             bool beside = CardSizing.ClaudeMascotBeside(w, h);
             mascot = names.Add(new ClaudeMascot { Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, "ClaudeMascot");
             mascot.SetResourceReference(ClaudeMascot.BodyProperty, Stickers.InkKey("Claude")); mascot.SetResourceReference(ClaudeMascot.VisorProperty, "Page");
-            compactCounts = !beside;
-            counts = names.Add(beside ? (Panel)new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) }
-                : new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) }, "ClaudeCounts");
+            compactCounts = !CardSizing.ClaudeCountWords(w, h);
+            counts = names.Add(compactCounts
+                ? (Panel)new WrapPanel { Width = CardSizing.ClaudeCountColumns(w, h) * CardSizing.ClaudeCountWidth, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center }
+                : new StackPanel { VerticalAlignment = VerticalAlignment.Center }, "ClaudeCounts");
             Panel layout;
-            if (beside) { var row = Columns(Auto, Star); row.Children.Add(mascot); row.Children.Add(At(counts, 0, 1)); row.HorizontalAlignment = HorizontalAlignment.Center; layout = row; }
-            else { var column = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; column.Children.Add(mascot); column.Children.Add(counts); layout = column; }
+            if (beside)
+            {
+                var row = Columns(Auto, Auto); row.Children.Add(mascot); row.Children.Add(At(counts, 0, 1)); row.HorizontalAlignment = HorizontalAlignment.Center;
+                counts.Margin = new Thickness(compactCounts ? CardSizing.ClaudeMascotGap : 16, 0, 0, 0);
+                layout = row;
+            }
+            else { var column = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; column.Children.Add(mascot); counts.Margin = new Thickness(0, 6, 0, 0); column.Children.Add(counts); layout = column; }
             return names.Add(Tile(layout, 14, new Thickness(pad)), "ClaudeMascotTile");
         }
 
         // One count: a dot in its colour, the number, and its words when there's room.
         private FrameworkElement Count(ClaudeStatus kind, int n)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = compactCounts ? new Thickness(5, 2, 5, 2) : new Thickness(0, 2, 0, 2) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Height = CardSizing.ClaudeCountsRow };
+            if (compactCounts) row.Width = CardSizing.ClaudeCountWidth;
             var dot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
             dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, ClaudeText.Brush(kind));
             row.Children.Add(dot);
@@ -338,7 +345,7 @@ namespace WidgetScreen
             mascot.ToolTip = ClaudeText.Summary(r.Counts);
             counts.Children.Clear();
             foreach (var kind in ClaudeText.Order) { int n = r.Counts.Of(kind); if (n > 0) counts.Children.Add(Count(kind, n)); }
-            if (counts.Children.Count == 0) { var quiet = Caption(r.Counts.Total == 0 ? "All quiet" : ""); quiet.HorizontalAlignment = HorizontalAlignment.Center; counts.Children.Add(quiet); }
+            if (counts.Children.Count == 0) { var quiet = Caption("All quiet"); quiet.HorizontalAlignment = HorizontalAlignment.Center; quiet.TextAlignment = TextAlignment.Center; counts.Children.Add(quiet); }
         }
 
         private void FillPlan(ClaudeReading r, bool week, TextBlock value, MeterBar bar, TextBlock note)

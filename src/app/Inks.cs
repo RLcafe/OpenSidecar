@@ -85,6 +85,7 @@ namespace WidgetScreen
                 case "Notes": return "NOTES";
                 case "Clipboard": return "CLIPS";
                 case "Home": return "HOME";
+                case "Claude": return "CLAUDE";
                 default: return StripName(id);
             }
         }

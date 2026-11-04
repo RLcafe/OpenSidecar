@@ -36,7 +36,7 @@ $scenes = [ordered]@{
     'notes-large'   = @{ Notes = @(0, 0, 1000, 420) }
     # Claude Code with its labelled fixture (--render-claude-sample): "SAMPLE" shows in the card's heading. The four
     # tiles go in one row on a long card, a 2 x 2 square on a squarish one and one column on a tall one.
-    'claude-small'  = @{ Claude = @(0, 0, 300, 240); Focus = @(316, 0, 320, 576) }
+    'claude-small'  = @{ Claude = @(0, 0, 360, 280); Focus = @(376, 0, 320, 576) }
     'claude-medium' = @{ Claude = @(0, 0, 472, 310); Focus = @(488, 0, 320, 576) }
     'claude-square' = @{ Claude = @(0, 0, 576, 576); Focus = @(592, 0, 320, 576) }
     'claude-row'    = @{ Claude = @(0, 0, 1856, 280) }

@@ -49,7 +49,7 @@ namespace WidgetScreen
         private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("WidgetScreen.ClaudeSignIn");
     }
 
-    // Settings → Claude → Sign in with Claude (docs/decisions/015-claude-sign-in-and-telemetry.md): the same browser sign-in
+    // Settings → Claude → Sign in with Claude (decisions 015 and 027, docs/design/claude-card.md): the same browser sign-in
     // Claude Code's /login uses (OAuth 2 with PKCE, Claude Code's public client, a loopback redirect), asking only for
     // user:profile, which is what the plan usage check needs. It is the widget's own grant, so refreshing it never
     // touches Claude Code's sign-in. The tokens go only to Anthropic's hosts (platform.claude.com for tokens,
@@ -275,7 +275,7 @@ namespace WidgetScreen
                     {
                         if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) continue;
                         // 403 is a plan with no usage meters (an API or enterprise account), not an ended sign-in: the
-                        // sign-in stays and the card says so (decision 023). Only a refresh that fails ends it; a 401
+                        // sign-in stays and the card says so (decision 027). Only a refresh that fails ends it; a 401
                         // after a refresh that worked is a failed check, tried again later.
                         if (response.StatusCode == HttpStatusCode.Forbidden) { NoMeters = true; return null; }
                         if (!response.IsSuccessStatusCode) throw new ClaudeHttpException((int)response.StatusCode, "api.anthropic.com answered " + (int)response.StatusCode + ".");

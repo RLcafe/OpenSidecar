@@ -1,5 +1,7 @@
 # 017 — Claude watcher v2: the pit wall, and pixel cars drawn in code
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 Ali approved the v2 design on 1 Nov 2026 ([docs/design/claude-watcher-v2.html](../design/claude-watcher-v2.html)): each project is a pit garage, each thread a race car, and the plan meters become car gauges. He chose the drawn pixel-art cars from the mock over generated image art, so no PNGs ship. This replaces the critters of decisions 014–016 on both apps; the data sources stay the same.
 
 ## Decision

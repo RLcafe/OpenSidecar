@@ -279,10 +279,7 @@ public final class SettingsPanel {
             }), 0);
         }
 
-        add(right, heading("Claude Code"), 0);
-        add(right, ui.check("Notify me when a Claude Code session needs me", draft.claudeNotify, new CheckBox.Listener() { @Override public void changed(CheckBox box, boolean checked) { draft.claudeNotify = checked; } }), 8);
-        add(right, note("While this app is open and the Claude Code card is on a page on the PC: a session that needs you, gets stuck or finishes a turn of 10 minutes or more. Silent while the PC is in Quiet mode."), 6);
-        add(right, heading("On the PC"), 24);
+        add(right, heading("On the PC"), 0);
         add(right, note("The cards show and control your PC. Quick Launch buttons, System stats readings, the weather city, the world clocks' cities, prayer times, calendars, macros, the games' stores, Spotify and Discord are set up in Settings on the PC, and the phone follows."), 10);
     }
 

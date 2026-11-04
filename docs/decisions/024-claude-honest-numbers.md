@@ -1,5 +1,7 @@
 # 024 — Claude Code's own numbers first, and Windows first for packages 2–4
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 On 2 Nov 2026 Ali asked for the Watcher action plan's second package ("Honest numbers", v0.40.0). The same day he said: "skip for android for the remaining packages. do for windows only. after that we will implement for android."
 
 ## Decisions

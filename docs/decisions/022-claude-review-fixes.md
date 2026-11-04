@@ -1,5 +1,7 @@
 # 022 — Claude watcher review fixes
 
+> **Superseded by [027](027-simple-claude-card.md) (4 Nov 2026).** The Claude Code card is now four simple tiles, and what this record describes was removed. It stays as history.
+
 On 1 Nov 2026 the Claude watcher was reviewed against its spec (`docs/design/claude-watcher-v2.html`), the later decisions (017–020) and the code, on both apps. Ali asked for all eleven findings to be fixed, on Windows and Android, in this order.
 
 ## Decisions

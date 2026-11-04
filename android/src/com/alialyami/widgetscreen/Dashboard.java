@@ -20,7 +20,6 @@ import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.core.WidgetLayout;
 import com.alialyami.widgetscreen.integrations.Async;
-import com.alialyami.widgetscreen.integrations.ClaudeNotifier;
 import com.alialyami.widgetscreen.integrations.Images;
 import com.alialyami.widgetscreen.integrations.Pc;
 import com.alialyami.widgetscreen.views.CheckBox;
@@ -29,10 +28,7 @@ import com.alialyami.widgetscreen.views.ScaledHost;
 import com.alialyami.widgetscreen.widgets.CalendarWidget;
 import com.alialyami.widgetscreen.widgets.ClipboardWidget;
 import com.alialyami.widgetscreen.widgets.ClocksWidget;
-import com.alialyami.widgetscreen.core.PitArt;
-import com.alialyami.widgetscreen.views.PitSprite;
 import com.alialyami.widgetscreen.widgets.ClaudeWidget;
-import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.widgets.FocusWidget;
 import com.alialyami.widgetscreen.widgets.GamesWidget;
 import com.alialyami.widgetscreen.widgets.HomeWidget;
@@ -168,15 +164,10 @@ public final class Dashboard {
     private final java.util.Set<String> extraParts = new java.util.LinkedHashSet<String>();
     public void wantPart(String part, boolean want) { if (want ? extraParts.add(part) : extraParts.remove(part)) if (want) refreshSoon(); }
 
-    // The claude section follows the PC card's interval (Settings → Claude, at least 2 s), whatever the rest does.
-    private int claudePolled = -1000;
-    private boolean claudeDue() { return isActive("Claude") && ticks - claudePolled >= ClaudeText.pollEvery(pc.state == null ? null : pc.state.claude); }
-
     private void poll(boolean force) {
         List<String> parts = new ArrayList<String>();
         for (Widget widget : widgets.values()) {
             if (!isActive(widget.id) || parts.contains(widget.part())) continue;
-            if (widget.id.equals("Claude")) { if (!force && !claudeDue()) continue; claudePolled = ticks; }
             parts.add(widget.part());
         }
         for (String part : extraParts) if (!parts.contains(part)) parts.add(part);
@@ -198,8 +189,6 @@ public final class Dashboard {
         if (pc.state != null && pc.problem == null && settings.use24 != pc.state.use24) { settings.use24 = pc.state.use24; persist(); }
         updateClock(); updateQuiet();
         if (pc.state != null && pc.state.layout != null) mirror(pc.state.layout, pc.state.layoutVersion);
-        updateClaudePill();
-        updateClaudeAlerts();
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.stateChanged(); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -267,8 +256,7 @@ public final class Dashboard {
         updateClock();
         if (ticks >= statusClearsAt && !editor.editing()) { setStatus(""); statusClearsAt = Integer.MAX_VALUE; }
         // The PC is asked every 2 s, or every 5 s in its Quiet mode, like the Windows refresh cadence.
-        if (pc.paired() && (ticks % (quiet() ? 5 : 2) == 0 || claudeDue())) poll(false);
-        if (claudePill != null && claudePill.getVisibility() == View.VISIBLE) updateClaudePill();
+        if (pc.paired() && ticks % (quiet() ? 5 : 2) == 0) poll(false);
         for (Widget widget : widgets.values()) if (widget.built()) {
             try { widget.tick(ticks, quiet()); }
             catch (Exception e) { /* One failing widget never stops the others. */ }
@@ -455,58 +443,7 @@ public final class Dashboard {
         row.addView(label, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 14, 0, 14, 0));
         nextPage = ui.iconButton("chevron-right", "Next page", 22, true, new View.OnClickListener() { @Override public void onClick(View v) { showPage(settings.page + 1); } });
         row.addView(nextPage, ui.ll(ui.px(48), ui.px(48)));
-        LinearLayout pill = ui.row();
-        pill.setBackground(ui.pressable(ui.theme.raised, Theme.WARNING, 2, 12));
-        pill.setPadding(ui.px(10), ui.px(4), ui.px(16), ui.px(4));
-        pill.setMinimumHeight(ui.px(48));
-        // The pill's car waits with its hazards on (one still frame: the header never animates).
-        PitSprite car = new PitSprite(activity);
-        car.show("pill", PitSprite.carFrames(PitArt.AMBER, PitArt.NEED, new PitArt.Look(), 40), 0, false);
-        pill.addView(car, ui.ll(ui.px(40), ui.px(PitSprite.carHeight(40))));
-        TextView words = ui.text("Claude needs you", ui.small(), Theme.WARNING);
-        words.setTypeface(Ui.MEDIUM);
-        pill.addView(words, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 8, 0, 0, 0));
-        pill.setClickable(true);
-        pill.setContentDescription("Claude needs you. Show the Claude page.");
-        pill.setOnClickListener(Ui.haptic(new View.OnClickListener() { @Override public void onClick(View v) { if (pc.state != null && pc.state.claudePage >= 0) showPage(pc.state.claudePage); } }));
-        pill.setVisibility(View.GONE);
-        claudePill = pill;
-        row.addView(pill, ui.margins(ui.ll(Ui.WRAP, Ui.WRAP), 20, 0, 0, 0));
         return row;
-    }
-
-    // The header pill (as on the PC): a Claude Code session needs you while the Claude card is on another page. A
-    // session that newly needs you taps the phone once while the app is open.
-    private View claudePill;
-    private int claudeNeeds = -1;
-    // Package 3: the PC's Claude alerts as phone notifications, and a tapped notification's wish to see the card.
-    private ClaudeNotifier claudeNotifier;
-    private boolean claudeWanted;
-    private void updateClaudeAlerts() {
-        PcState state = pc.state;
-        if (state == null || pc.problem != null) return;
-        try {
-            if (claudeNotifier == null) claudeNotifier = new ClaudeNotifier(activity);
-            claudeNotifier.prepare(state, settings.claudeNotify);
-            claudeNotifier.update(state, settings.claudeNotify);
-        } catch (Exception e) { /* Notifications never break the dashboard. */ }
-        if (claudeWanted && state.claudePage >= 0) { claudeWanted = false; showPage(state.claudePage); }
-    }
-    // A tapped Claude notification: show the page with the Claude card (once the PC says which).
-    public void showClaude() {
-        if (pc.state != null && pc.online() && pc.state.claudePage >= 0) showPage(pc.state.claudePage);
-        else claudeWanted = true;
-    }
-    private void updateClaudePill() {
-        PcState state = pc.state;
-        int needs = state != null && pc.online() ? state.claudeNeeds : 0;
-        if (claudeNeeds >= 0 && needs > claudeNeeds && root != null) {
-            try { root.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK); } catch (Exception ignored) { }
-        }
-        claudeNeeds = needs;
-        if (claudePill == null) return;
-        boolean show = needs > 0 && state.claudePage >= 0 && !editor.isVisible("Claude") && !editor.editing();
-        claudePill.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void updatePages() {
@@ -518,7 +455,6 @@ public final class Dashboard {
         Ui.enable(previousPage, settings.page > 0);
         Ui.enable(nextPage, settings.page < count - 1);
         updateHint();
-        updateClaudePill();
     }
 
     // The page shown is the PC's: switching here switches the PC, and the PC's layout for that page follows.
@@ -764,8 +700,6 @@ public final class Dashboard {
     // The one way the phone asks "are you sure": a themed sheet over the dashboard (the same look as the PC's), with
     // 52-unit buttons. Tapping outside, Cancel or Back answers no.
     public void confirm(String title, String subject, String detail, String action, final Runnable yes) { sheet(title, subject, detail, 6, "Cancel", action, yes); }
-    // The same sheet to read something (a Claude thread's details, what a fact means): Close, and an optional action.
-    public void info(String title, String subject, String detail, String action, final Runnable act) { sheet(title, subject, detail, 14, "Close", act == null ? null : action, act); }
     private void sheet(String title, String subject, String detail, int detailLines, String cancelLabel, String action, final Runnable yes) {
         closeConfirm();
         if (root == null) return;
@@ -866,7 +800,7 @@ public final class Dashboard {
             swatches.addView(swatch, ui.margins(ui.ll(ui.px(48), ui.px(48)), 0, 0, 4, 0));
         }
         panel.addView(swatches, ui.ll(Ui.MATCH, Ui.WRAP));
-        String note = !inScope ? "Claude Code keeps its own colours."
+        String note = !inScope ? ""
             : Inks.ACCENT_ONLY.equals(look().widgetColours) ? "Widget colours is Accent only (Settings → Theme), so every card wears the accent until you choose Each its own."
             : "Saved with the layout on the PC.";
         panel.addView(Ui.wrap(ui.smallText(note), 3), ui.margins(ui.ll(Ui.MATCH, Ui.WRAP), 4, 4, 0, 0));

@@ -274,13 +274,27 @@ namespace WidgetScreen
         public static bool ClaudeHistory(double tileHeight) { return tileHeight >= 150; }
         // The mascot stands beside the counts in a wide tile and over them otherwise, drawn at a whole number of units
         // a pixel (16 pixels square) so it stays crisp: what's left after the padding and the counts, 32 to 192 units.
+        // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their
+        // words beside a mascot that leaves them 150 units and four lines.
+        public const double ClaudeCountsRow = 24, ClaudeCountWidth = 40, ClaudeCountsWords = 150, ClaudeMascotGap = 8;
         public static bool ClaudeMascotBeside(double tileWidth, double tileHeight) { return tileWidth >= tileHeight * 1.35; }
-        public const double ClaudeCountsRow = 24;
+        public static int ClaudeCountColumns(double tileWidth, double tileHeight)
+        {
+            return !ClaudeMascotBeside(tileWidth, tileHeight) && tileWidth - 2 * ClaudePadding(tileWidth, tileHeight) >= 4 * ClaudeCountWidth ? 4 : 2;
+        }
         public static double ClaudeMascotSize(double tileWidth, double tileHeight)
         {
             double pad = ClaudePadding(tileWidth, tileHeight);
-            double room = ClaudeMascotBeside(tileWidth, tileHeight) ? Math.Min(tileHeight - 2 * pad, tileWidth * 0.45) : Math.Min(tileWidth - 2 * pad, tileHeight - 2 * pad - ClaudeCountsRow - 6);
+            double room = ClaudeMascotBeside(tileWidth, tileHeight)
+                ? Math.Min(Math.Min(tileHeight - 2 * pad, tileWidth * 0.45), tileWidth - 2 * pad - ClaudeMascotGap - 2 * ClaudeCountWidth)
+                : Math.Min(tileWidth - 2 * pad, tileHeight - 2 * pad - 6 - ClaudeCountsRow * (4 / ClaudeCountColumns(tileWidth, tileHeight)));
             return Clamp(Math.Floor(room / 16) * 16, 32, 192);
+        }
+        public static bool ClaudeCountWords(double tileWidth, double tileHeight)
+        {
+            double pad = ClaudePadding(tileWidth, tileHeight);
+            return ClaudeMascotBeside(tileWidth, tileHeight) && tileHeight - 2 * pad >= 4 * ClaudeCountsRow
+                && tileWidth - 2 * pad - ClaudeMascotSize(tileWidth, tileHeight) - 16 >= ClaudeCountsWords;
         }
         // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
         // each text was copied at the reference size, and two-line previews with their length from 440 × 400.
