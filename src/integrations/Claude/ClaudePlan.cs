@@ -78,4 +78,43 @@ namespace WidgetScreen
             return window.ResetsAt.HasValue && window.ResetsAt.Value <= now ? 0 : window.Percent;
         }
     }
+
+    // The instruments' arithmetic (decision 028), the same as ClaudePace in the phone's ClaudeText: how much of a window
+    // has passed (the gauge's pace tick and the week's laps), where the window ends at this rate, the lap the week is
+    // on, and the tokens gauge's scale. All of it comes from the percentages and reset times the sign-in already reads.
+    public static class ClaudePace
+    {
+        public static readonly TimeSpan FiveHours = TimeSpan.FromHours(5), Week = TimeSpan.FromDays(7);
+        public const int Laps = 7;
+        // The tokens gauge's redline (three quarters of its scale) and the least its scale shows.
+        public const double Redline = 0.75, MinScale = 10000;
+
+        // How much of the window has passed (0–1); NaN when its reset time isn't known or has passed.
+        public static double Elapsed(ClaudeLimitWindow window, TimeSpan length, DateTime now)
+        {
+            if (window == null || !window.ResetsAt.HasValue || window.ResetsAt.Value <= now) return Double.NaN;
+            double done = 1 - (window.ResetsAt.Value - now).TotalSeconds / length.TotalSeconds;
+            return Math.Max(0, Math.Min(1, done));
+        }
+        // Where the window ends at this rate ("on pace for 92%"): NaN in its first twentieth, when it says nothing yet.
+        public static double Projection(double percent, double elapsed)
+        {
+            if (Double.IsNaN(percent) || Double.IsNaN(elapsed) || elapsed < 0.05) return Double.NaN;
+            return Math.Min(999, percent / elapsed);
+        }
+        // The projection turns Amber near the limit.
+        public static bool Warns(double projection) { return !Double.IsNaN(projection) && projection >= 90; }
+        // A lap's fill (0–1): the share of that day's seventh of the window that the percentage covers.
+        public static double Lap(double percent, int lap) { return Double.IsNaN(percent) ? 0 : Math.Max(0, Math.Min(1, (percent / 100 - lap / 7.0) * 7)); }
+        // The lap the week is on (0–6), from how much of it has passed; -1 when that isn't known.
+        public static int LapNow(double elapsed) { return Double.IsNaN(elapsed) ? -1 : Math.Min(Laps - 1, (int)Math.Floor(elapsed * Laps)); }
+        // The tokens gauge's full scale: 10k a minute, or the next round step above the half hour's busiest minute.
+        public static double Scale(double peak)
+        {
+            if (Double.IsNaN(peak) || peak <= MinScale) return MinScale;
+            double power = Math.Pow(10, Math.Floor(Math.Log10(peak)));
+            foreach (double step in new[] { 1, 1.5, 2, 3, 4, 6, 8, 10 }) if (step * power >= peak) return step * power;
+            return 10 * power;
+        }
+    }
 }

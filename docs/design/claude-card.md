@@ -1,6 +1,6 @@
 # The Claude Code card
 
-The simple Claude Code card (Ali, 4 Nov 2026; decision 027). It replaces the Claude watcher (decisions 014–026): the pit wall, the critters before it, the per-thread lists and everything that fed them are gone from both apps.
+The simple Claude Code card (Ali, 4 Nov 2026; decision 027, with the instruments brought back by decision 028). It replaces the Claude watcher (decisions 014–026): the pit wall, the critters before it, the per-thread lists and everything that fed them are gone from both apps.
 
 > "I want to remove the complexity we worked on, take it down to a simple widget … four dashboards on the top, which shows the 5 hour, the weekly, and the tokens per minute. And I want a fourth one, which shows the official Claude mascot … Make a similar one to it. And it only indicates if there's an action pending … So just a general count under the mascot."
 
@@ -8,12 +8,14 @@ The simple Claude Code card (Ali, 4 Nov 2026; decision 027). It replaces the Cla
 
 Four tiles, the same on the PC and the phone:
 
-| Tile | Big reading | Under it |
+| Tile | Instrument | Reading and lines |
 | --- | --- | --- |
-| **5-HOUR** | The plan's 5-hour use, as a percentage, with a bar in the card's ink (Amber from 90%) | "Resets 3:40 PM" |
-| **WEEKLY** | The plan's weekly use, the same way | "Resets Sat 9 AM" |
-| **TOKENS / MIN** | Tokens a minute over the last five minutes | A bar a minute for the last 30 minutes in a tall tile, then "Last 5 minutes" |
+| **5-HOUR** | A half-circle needle gauge: the use as an arc in the card's ink (Amber from 90%), a pace tick for how much of the five hours has passed, and the projection (where this pace ends at the reset) as a dashed Amber arc past the needle | The percentage, "Resets 3:40 PM", "on pace for 92%" (Amber from 90%) |
+| **WEEKLY** | The week as a race: seven laps, one a day from the window's start with the day's name under each, filled by the use (each lap a seventh of the limit), the projection hatched past it, the lap the week is on outlined, and a chequered flag at the reset | The percentage, "LAP 4 OF 7", the pace and "Resets Sat 9 AM" |
+| **TOKENS / MIN** | A needle gauge with a redline at three quarters of its scale (10k a minute, or the next round step above the half hour's busiest minute), over a burn line of the last 30 minutes with the redline dashed and the latest minute marked | Tokens a minute over the last five minutes (Amber past the redline), "Last 5 minutes" |
 | **Mascot** | An original pixel robot | How many sessions need you, are blocked, are done and are working |
+
+The instruments are the old card's (the pit wall of decision 017), redrawn in the card's ink and theme (`ClaudeGauges.cs`, `views/ClaudeGauges.java`; decision 028). The pace and the projection come from the two percentages and their reset times, so nothing new is read: the pace is how much of the window has passed (`ClaudePace.Elapsed`), and the projection is the use divided by it, shown from the window's first twentieth.
 
 The counts are a coloured dot and a number each: **Amber** needs you, **Coral** blocked, **Mint** done, **Glacier** working (the extra stat). Only the kinds with sessions show; nothing open says "All quiet". Beside the mascot in a roomy tile each count has its words ("3 need you"); elsewhere the words are in the tooltip (Windows) and the content description (Android). The counts never name a session, a project or a thread.
 
@@ -21,7 +23,7 @@ The mascot is our own 16 × 16 pixel robot (antenna, visor, ears, arms and a che
 
 ## Layout
 
-`CardSizing.ClaudeColumns` (Windows) and `claudeColumns` (Android) put the four tiles in **one row**, a **2 × 2 square** or **one column**, whichever leaves each tile closest to 1.25 : 1. A long card shows a row, a squarish one a square and a tall one a column, and the choice follows the card live while it is resized. Inside a tile the big reading follows the tile's size (18–64 units); the note under it shows from 96 units tall and the token history from 150. The mascot goes beside the counts when the tile is at least 1.35 times as wide as it is tall, and over them otherwise. The card's minimum is 360 × 280.
+`CardSizing.ClaudeColumns` (Windows) and `claudeColumns` (Android) put the four tiles in **one row**, a **2 × 2 square** or **one column**, whichever leaves each tile closest to 1.25 : 1. A long card shows a row, a squarish one a square and a tall one a column, and the choice follows the card live while it is resized. Inside a tile the big reading follows the tile's size (18–64 units). A gauge sits beside its reading when the tile is at least 2.4 times as wide as the room under its name (the gauge takes up to 45% of the width), and over it otherwise; the reading shrinks to 22 units to keep its first line, and the other lines (the burn line among them) step aside when they don't fit (`CardSizing.ClaudeFit`). The week's laps are 30 units tall with the day names when that leaves a 22-unit reading, and 14 without them; narrow laps show the days' first letters. The mascot goes beside the counts when the tile is at least 1.35 times as wide as it is tall, and over them otherwise. The card's minimum is 360 × 280.
 
 The card wears a label strip and status sticker like every other card (it used to be the exception), and its ink is chosen in Edit layout like theirs. The sticker says SAMPLE on the labelled fixture (`--render-claude-sample`, `--render-claude-needs`) and PC OFFLINE on the phone when the PC is away.
 

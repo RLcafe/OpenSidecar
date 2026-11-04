@@ -518,6 +518,28 @@ public final class AndroidTests {
             c.needsYou = 1; ok(ClaudeText.mood(c) == ClaudeText.MOOD_NEEDS_YOU && ClaudeText.color(ClaudeText.NEEDS_YOU) == Theme.WARNING && ClaudeText.summary(c).equals("1 needs you, 1 blocked, 2 done, 1 working"), "needs you");
             ok(ClaudeText.summary(new PcState.Claude()).equals("No Claude Code sessions"), "no sessions");
         } });
+        check("Claude Code's instruments pace each window like the PC: the gauge's tick, the projection, the laps and the tokens scale", new Action() { public void run() {
+            double now = 1793793600; // 4 Nov 2026 12:00 UTC
+            PcState.ClaudeWindow five = new PcState.ClaudeWindow(); five.pct = 40; five.resetsAt = now + 3 * 3600;
+            double elapsed = ClaudeText.elapsed(five, ClaudeText.FIVE_HOURS, now);
+            ok(Math.abs(elapsed - 0.4) < 1e-9 && Math.abs(ClaudeText.projection(40, elapsed) - 100) < 1e-9 && ClaudeText.warns(100) && !ClaudeText.warns(89), "5-hour pace");
+            PcState.ClaudeWindow passed = new PcState.ClaudeWindow(); passed.pct = 5; passed.resetsAt = now - 60;
+            ok(Double.isNaN(ClaudeText.elapsed(passed, ClaudeText.FIVE_HOURS, now)) && Double.isNaN(ClaudeText.elapsed(new PcState.ClaudeWindow(), ClaudeText.FIVE_HOURS, now)) && Double.isNaN(ClaudeText.elapsed(null, ClaudeText.WEEK, now)), "no pace without a reset");
+            ok(Double.isNaN(ClaudeText.projection(3, 0.02)) && ClaudeText.projection(90, 0.06) == 999 && ClaudeText.pace(Double.NaN).equals("") && ClaudeText.pace(91.6).equals("on pace for 92%"), "projection words");
+            PcState.ClaudeWindow week = new PcState.ClaudeWindow(); week.pct = 31; week.resetsAt = now + 3 * 86400 + 5 * 3600;
+            int lap = ClaudeText.lapNow(ClaudeText.elapsed(week, ClaudeText.WEEK, now));
+            ok(lap == 3 && ClaudeText.lapText(3).equals("LAP 4 OF 7") && ClaudeText.lapText(-1).equals("") && ClaudeText.lapNow(1) == 6, "the week's lap");
+            ok(ClaudeText.lap(31, 0) == 1 && ClaudeText.lap(31, 1) == 1 && Math.abs(ClaudeText.lap(31, 2) - 0.17) < 1e-9 && ClaudeText.lap(31, 3) == 0 && ClaudeText.lap(Double.NaN, 0) == 0, "laps fill");
+            String[] days = ClaudeText.lapDays(week, now, ZoneId.of("UTC"));
+            ok(days.length == 7 && days[0].equals("Sat") && days[3].equals("Tue") && days[6].equals("Fri"), "laps named by the window's days: " + String.join(",", days));
+            ok(ClaudeText.scale(0) == 10000 && ClaudeText.scale(Double.NaN) == 10000 && ClaudeText.scale(10001) == 15000 && ClaudeText.scale(41000) == 60000 && ClaudeText.scale(250000) == 300000
+                && ClaudeText.peak(new double[] { 3, 9, 4 }) == 9 && ClaudeText.peak(null) == 0, "tokens scale");
+            double[] size = { 50 };
+            ok(CardSizing.claudeFit(69.5, new double[] { 18, 18 }, size) == 1 && size[0] == 38, "the reading shrinks to keep its first line");
+            size[0] = 26;
+            ok(CardSizing.claudeFit(41, new double[] { 18, 18 }, size) == 0 && size[0] == 26, "no shrinking for a line that won't fit");
+            ok(CardSizing.claudeGaugeBeside(186, 62) && !CardSizing.claudeGaugeBeside(168, 127) && CardSizing.claudeLapsHeight(47) == 14 && CardSizing.claudeLapsHeight(66) == 30, "tile layouts");
+        } });
         check("Claude Code's tiles read the PC's claude section and word it like the PC", new Action() { public void run() {
             ZoneId utc = ZoneId.of("UTC");
             double now = 1793793600; // 4 Nov 2026 12:00 UTC

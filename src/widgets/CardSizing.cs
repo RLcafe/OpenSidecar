@@ -270,8 +270,34 @@ namespace WidgetScreen
         }
         public static double ClaudePadding(double tileWidth, double tileHeight) { return Math.Min(tileWidth, tileHeight) < 140 ? 10 : 16; }
         public static double ClaudeValueSize(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
-        public static bool ClaudeNote(double tileHeight) { return tileHeight >= 96; }
-        public static bool ClaudeHistory(double tileHeight) { return tileHeight >= 150; }
+        // Inside a tile (decision 028): the 5-hour use and tokens per minute are needle gauges, beside their reading in a
+        // tile at least 2.4 times as wide as the room under its name (the gauge takes up to 45% of the width) and over it
+        // otherwise (the reading and its lines take up to half the room). The reading shrinks to 22 to keep its first
+        // line, and lines are added while they fit: 18 units each, 30 for the burn line. The week is its reading over
+        // seven laps, 30 units tall with the day names when that leaves room for a 22-unit reading, else 14.
+        public const double ClaudeLineHeight = 1.34, ClaudeLine = 18, ClaudeBurnRoom = 30, ClaudeBurnHeight = 24, ClaudeKeepLine = 22;
+        public const double ClaudeGaugeGap = 12, ClaudeGaugeShare = 0.45, ClaudeTextShare = 0.5, ClaudeLapsGap = 4;
+        public static bool ClaudeGaugeBeside(double innerWidth, double bodyHeight) { return innerWidth >= bodyHeight * 2.4; }
+        public static double ClaudeGaugeWidth(double innerWidth, double bodyHeight) { return Math.Max(1, Math.Floor(Math.Min(innerWidth * ClaudeGaugeShare, bodyHeight * 140 / 84))); }
+        public static int ClaudeFit(double room, double[] lines, ref double size)
+        {
+            size = Math.Max(18, Math.Min(size, Math.Floor(room / ClaudeLineHeight)));
+            if (lines.Length > 0 && size * ClaudeLineHeight + lines[0] > room)
+            {
+                double smaller = Math.Floor((room - lines[0]) / ClaudeLineHeight);
+                if (smaller >= ClaudeKeepLine) size = Math.Min(size, smaller);
+            }
+            int shown = 0; double used = size * ClaudeLineHeight;
+            while (shown < lines.Length && used + lines[shown] <= room + 0.01) { used += lines[shown]; shown++; }
+            return shown;
+        }
+        public static double ClaudeLapsHeight(double bodyHeight) { return bodyHeight - 30 - ClaudeLapsGap >= ClaudeKeepLine * ClaudeLineHeight ? 30 : 14; }
+        // The week's pace and reset sit beside its reading, one or two lines, when that leaves them 70 units.
+        public static int ClaudeWeekNotes(double innerWidth, double room, double size)
+        {
+            if (innerWidth - size * 2.1 - 10 < 70) return 0;
+            return (int)Math.Max(0, Math.Min(2, Math.Floor(room / ClaudeLine)));
+        }
         // The mascot stands beside the counts in a wide tile and over them otherwise, drawn at a whole number of units
         // a pixel (16 pixels square) so it stays crisp: what's left after the padding and the counts, 32 to 192 units.
         // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their

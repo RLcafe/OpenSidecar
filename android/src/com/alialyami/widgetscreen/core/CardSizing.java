@@ -281,8 +281,30 @@ public final class CardSizing {
     }
     public static double claudePadding(double tileWidth, double tileHeight) { return Math.min(tileWidth, tileHeight) < 140 ? 10 : 16; }
     public static double claudeValueSize(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
-    public static boolean claudeNote(double tileHeight) { return tileHeight >= 96; }
-    public static boolean claudeHistory(double tileHeight) { return tileHeight >= 150; }
+    // Inside a tile (decision 028), as on the PC: the gauges sit beside their reading in a tile at least 2.4 times as
+    // wide as the room under its name (up to 45% of the width) and over it otherwise (the reading and its lines take up
+    // to half the room); the reading shrinks to 22 to keep its first line, then lines are added while they fit (18 units
+    // each, 30 for the burn line). The week's laps are 30 tall with the day names when that leaves a 22-unit reading.
+    public static final double CLAUDE_LINE_HEIGHT = 1.34, CLAUDE_LINE = 18, CLAUDE_BURN_ROOM = 30, CLAUDE_BURN_HEIGHT = 24, CLAUDE_KEEP_LINE = 22;
+    public static final double CLAUDE_GAUGE_GAP = 12, CLAUDE_GAUGE_SHARE = 0.45, CLAUDE_TEXT_SHARE = 0.5, CLAUDE_LAPS_GAP = 4;
+    public static boolean claudeGaugeBeside(double innerWidth, double bodyHeight) { return innerWidth >= bodyHeight * 2.4; }
+    public static double claudeGaugeWidth(double innerWidth, double bodyHeight) { return Math.max(1, Math.floor(Math.min(innerWidth * CLAUDE_GAUGE_SHARE, bodyHeight * 140 / 84))); }
+    // How many lines fit under the reading; size[0] is the reading's size, shrunk to fit.
+    public static int claudeFit(double room, double[] lines, double[] size) {
+        size[0] = Math.max(18, Math.min(size[0], Math.floor(room / CLAUDE_LINE_HEIGHT)));
+        if (lines.length > 0 && size[0] * CLAUDE_LINE_HEIGHT + lines[0] > room) {
+            double smaller = Math.floor((room - lines[0]) / CLAUDE_LINE_HEIGHT);
+            if (smaller >= CLAUDE_KEEP_LINE) size[0] = Math.min(size[0], smaller);
+        }
+        int shown = 0; double used = size[0] * CLAUDE_LINE_HEIGHT;
+        while (shown < lines.length && used + lines[shown] <= room + 0.01) { used += lines[shown]; shown++; }
+        return shown;
+    }
+    public static double claudeLapsHeight(double bodyHeight) { return bodyHeight - 30 - CLAUDE_LAPS_GAP >= CLAUDE_KEEP_LINE * CLAUDE_LINE_HEIGHT ? 30 : 14; }
+    public static int claudeWeekNotes(double innerWidth, double room, double size) {
+        if (innerWidth - size * 2.1 - 10 < 70) return 0;
+        return (int) Math.max(0, Math.min(2, Math.floor(room / CLAUDE_LINE)));
+    }
     // The mascot beside the counts in a wide tile, over them otherwise, at a whole number of units a pixel (32–192).
     // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their words
     // beside a mascot that leaves them 150 units and four lines.

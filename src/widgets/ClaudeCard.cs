@@ -95,6 +95,18 @@ namespace WidgetScreen
             if (window.ResetsAt.Value <= r.Now) return "Reset";
             return "Resets " + When(window.ResetsAt.Value, r.Now, use24);
         }
+        // "on pace for 92%", or nothing early in a window.
+        public static string Pace(double projection) { return Double.IsNaN(projection) ? "" : "on pace for " + Math.Round(projection).ToString(CultureInfo.InvariantCulture) + "%"; }
+        // The week's lap counter: "LAP 5 OF 7".
+        public static string Lap(int lap) { return lap < 0 ? "" : "LAP " + (lap + 1) + " OF 7"; }
+        // The day names under the laps, from the window's start (the week before the reset), or the week to today.
+        public static string[] LapDays(ClaudeLimitWindow week, DateTime nowUtc)
+        {
+            var days = new string[ClaudePace.Laps];
+            DateTime start = week != null && week.ResetsAt.HasValue ? week.ResetsAt.Value - ClaudePace.Week : nowUtc.AddDays(-6);
+            for (int i = 0; i < days.Length; i++) days[i] = start.AddDays(i).ToLocalTime().ToString("ddd", CultureInfo.InvariantCulture);
+            return days;
+        }
         public static string TokensValue(ClaudeReading r) { return !r.LogsScanned ? "…" : !r.LogsFound ? "—" : ClaudeTokens.Format(r.PerMinute); }
         public static string TokensNote(ClaudeReading r) { return !r.LogsScanned ? "Reading Claude Code's logs…" : !r.LogsFound ? "No Claude Code logs on this PC" : "Last " + ClaudeTokens.RateMinutes + " minutes"; }
 
@@ -188,9 +200,10 @@ namespace WidgetScreen
         }
     }
 
-    // The Claude card (decision 027, docs/design/claude-card.md): four tiles, 5-hour and weekly use of the plan, tokens
-    // per minute, and the mascot with the session counts, laid out by CardSizing.ClaudeColumns (one row, a 2 × 2 square
-    // or a column) and rebuilt only when the card's size changes. The phone's ClaudeWidget draws the same.
+    // The Claude card (decisions 027 and 028, docs/design/claude-card.md): four tiles, the 5-hour use as a needle
+    // gauge, the week as seven laps, tokens per minute as a needle gauge over its burn line, and the mascot with the
+    // session counts, laid out by CardSizing.ClaudeColumns (one row, a 2 × 2 square or a column) and rebuilt only when
+    // the card's size or text size changes. The phone's ClaudeWidget draws the same.
     public sealed class ClaudeCard : CardParts
     {
         private readonly Grid host;
@@ -200,12 +213,14 @@ namespace WidgetScreen
         private string built = "";
         private bool use24;
         private ClaudeReading reading = new ClaudeReading { Plan = ClaudePlanState.Reading };
-        private TextBlock fiveValue, fiveNote, weekValue, weekNote, tokensValue, tokensNote;
-        private MeterBar fiveBar, weekBar;
-        private HistoryBars history;
+        private TextBlock fiveValue, fiveNote, fivePace, weekValue, weekLap, weekNote, weekPace, tokensValue, tokensNote;
+        private ClaudeGauge fiveGauge, tokensGauge;
+        private ClaudeLaps laps;
+        private ClaudeBurn burn;
         private ClaudeMascot mascot;
         private Panel counts;
         private bool compactCounts;
+        private double labelHeight;
 
         public ClaudeCard(FrameworkElement scope, Grid host, TextBlock status) { this.host = host; this.status = status; names = new PartNames(scope); }
 
@@ -214,13 +229,15 @@ namespace WidgetScreen
         public ClaudeMascot Mascot { get { return mascot; } }
 
         public void Fit(Rect card) { bounds = card; Rebuild(); }
-        public void Configure(bool use24Hour) { use24 = use24Hour; Render(); }
+        public void Configure(bool use24Hour) { use24 = use24Hour; Rebuild(); }
         public void Update(ClaudeReading next) { reading = next ?? new ClaudeReading(); Render(); }
+
+        private double SmallSize { get { object size = host.TryFindResource("SmallSize"); return size is double ? (double)size : 15; } }
 
         private void Rebuild()
         {
-            if (bounds.IsEmpty) return;
-            string key = Math.Round(bounds.Width) + "x" + Math.Round(bounds.Height);
+            if (bounds.IsEmpty) { Render(); return; }
+            string key = Math.Round(bounds.Width) + "x" + Math.Round(bounds.Height) + "@" + SmallSize.ToString(CultureInfo.InvariantCulture);
             if (key != built) { built = key; Build(); }
             Render();
         }
@@ -228,6 +245,7 @@ namespace WidgetScreen
         private void Build()
         {
             host.Children.Clear(); names.Clear();
+            labelHeight = Math.Ceiling(SmallSize * CardSizing.ClaudeLineHeight) + 2;
             // The body: the card less its 24-unit padding, the 28-unit heading and the 8-unit gap under it.
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48 - 36), gap = CardSizing.ClaudeGap;
             TileColumns = CardSizing.ClaudeColumns(width, height);
@@ -236,11 +254,7 @@ namespace WidgetScreen
             var grid = new Grid();
             for (int c = 0; c < TileColumns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
             for (int r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = Star });
-            var tiles = new FrameworkElement[] {
-                PlanTile("5-HOUR", tileWidth, tileHeight, out fiveValue, out fiveBar, out fiveNote, "ClaudeFive"),
-                PlanTile("WEEKLY", tileWidth, tileHeight, out weekValue, out weekBar, out weekNote, "ClaudeWeek"),
-                TokensTile(tileWidth, tileHeight),
-                MascotTile(tileWidth, tileHeight) };
+            var tiles = new FrameworkElement[] { FiveHourTile(tileWidth, tileHeight), WeekTile(tileWidth, tileHeight), TokensTile(tileWidth, tileHeight), MascotTile(tileWidth, tileHeight) };
             for (int i = 0; i < tiles.Length; i++)
             {
                 int row = i / TileColumns, column = i % TileColumns;
@@ -250,45 +264,90 @@ namespace WidgetScreen
             host.Children.Add(names.Add(grid, "ClaudeTiles"));
         }
 
-        private static TextBlock TileLabel(string text) { var label = Label(text); label.TextTrimming = TextTrimming.CharacterEllipsis; return label; }
-
-        // A plan tile: its name, the percentage used, a bar, and when it resets.
-        private Border PlanTile(string name, double w, double h, out TextBlock value, out MeterBar bar, out TextBlock note, string id)
+        private static TextBlock TileLabel(string text) { var label = Label(text); label.TextTrimming = TextTrimming.CharacterEllipsis; label.Margin = new Thickness(0, 0, 0, 2); return label; }
+        private static TextBlock Line(string id, PartNames names)
         {
-            double pad = CardSizing.ClaudePadding(w, h);
-            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            stack.Children.Add(TileLabel(name));
-            value = names.Add(Reading("—", CardSizing.ClaudeValueSize(w, h)), id + "Value"); value.Margin = new Thickness(0, 2, 0, 0);
-            stack.Children.Add(value);
-            bar = names.Add(new MeterBar { Height = h >= 120 ? 8 : 6, Margin = new Thickness(0, 6, 0, 0) }, id + "Bar");
-            bar.SetResourceReference(MeterBar.TrackProperty, "Track");
-            stack.Children.Add(bar);
-            note = names.Add(Caption(""), id + "Note"); note.Margin = new Thickness(0, 6, 0, 0); note.TextTrimming = TextTrimming.CharacterEllipsis;
-            if (!CardSizing.ClaudeNote(h)) note.Visibility = Visibility.Collapsed;
-            stack.Children.Add(note);
-            return Tile(stack, 14, new Thickness(pad));
+            var line = names.Add(Caption(""), id); line.TextTrimming = TextTrimming.CharacterEllipsis;
+            return line;
         }
 
-        // Tokens per minute: the rate over the last five minutes and, in a tall tile, a bar a minute for half an hour.
+        // A gauge tile: its name over the gauge, with the reading and the lines under it beside the gauge in a wide tile
+        // and under it otherwise. The reading shrinks, and lines step aside, to fit (CardSizing.ClaudeFit).
+        private Border GaugeTile(string name, double w, double h, ClaudeGauge gauge, TextBlock value, FrameworkElement[] lines, double[] heights, string id)
+        {
+            double pad = CardSizing.ClaudePadding(w, h), inner = Math.Max(1, w - 2 * pad), body = Math.Max(1, h - 2 * pad - labelHeight);
+            bool beside = CardSizing.ClaudeGaugeBeside(inner, body);
+            double gaugeWidth = CardSizing.ClaudeGaugeWidth(inner, body), textWidth = inner - gaugeWidth - CardSizing.ClaudeGaugeGap;
+            double size = beside ? Math.Min(CardSizing.ClaudeValueSize(w, h), Math.Floor(textWidth / 2.3)) : CardSizing.ClaudeValueSize(w, h);
+            int shown = CardSizing.ClaudeFit(beside ? body : body * CardSizing.ClaudeTextShare, heights, ref size);
+            value.FontSize = size;
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(value);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (i >= shown) continue;
+                if (!beside && lines[i] is TextBlock) ((TextBlock)lines[i]).TextAlignment = TextAlignment.Center;
+                text.Children.Add(lines[i]);
+            }
+            if (!beside) value.TextAlignment = TextAlignment.Center;
+            var layout = Rows(Auto, Star);
+            layout.Children.Add(TileLabel(name));
+            Grid content;
+            if (beside)
+            {
+                content = Columns(new GridLength(gaugeWidth), new GridLength(CardSizing.ClaudeGaugeGap), Star);
+                content.Children.Add(gauge); content.Children.Add(At(text, 0, 2));
+            }
+            else { content = Rows(Star, Auto); content.Children.Add(gauge); content.Children.Add(At(text, 1)); }
+            layout.Children.Add(At(content, 1));
+            return names.Add(Tile(layout, 14, new Thickness(pad)), id + "Tile");
+        }
+
+        // The 5-hour use: a needle gauge with the pace tick and the projection, the reading, when it resets and the pace.
+        private Border FiveHourTile(double w, double h)
+        {
+            fiveGauge = names.Add(new ClaudeGauge(Stickers.InkKey("Claude")), "ClaudeFiveGauge");
+            fiveValue = names.Add(Reading("—", 32), "ClaudeFiveValue");
+            fiveNote = Line("ClaudeFiveNote", names); fivePace = Line("ClaudeFivePace", names);
+            return GaugeTile("5-HOUR", w, h, fiveGauge, fiveValue, new FrameworkElement[] { fiveNote, fivePace }, new[] { CardSizing.ClaudeLine, CardSizing.ClaudeLine }, "ClaudeFive");
+        }
+
+        // Tokens per minute: a needle gauge with a redline, the last five minutes' rate, and the half hour's burn line.
         private Border TokensTile(double w, double h)
         {
-            double pad = CardSizing.ClaudePadding(w, h);
-            var layout = Rows(Auto, Auto, Star, Auto);
-            layout.Children.Add(TileLabel("TOKENS / MIN"));
-            tokensValue = names.Add(Reading("—", CardSizing.ClaudeValueSize(w, h)), "ClaudeTokensValue"); tokensValue.Margin = new Thickness(0, 2, 0, 0);
-            layout.Children.Add(At(tokensValue, 1));
-            history = null;
-            if (CardSizing.ClaudeHistory(h))
-            {
-                history = names.Add(new HistoryBars { Capacity = ClaudeTokens.Minutes, Maximum = 0, Margin = new Thickness(0, 8, 0, 0), MinHeight = 16 }, "ClaudeHistory");
-                history.SetResourceReference(HistoryBars.FillProperty, Stickers.InkKey("Claude")); history.SetResourceReference(HistoryBars.TrackProperty, "Track");
-                layout.Children.Add(At(history, 2));
-            }
-            else layout.VerticalAlignment = VerticalAlignment.Center;
-            tokensNote = names.Add(Caption(""), "ClaudeTokensNote"); tokensNote.Margin = new Thickness(0, 6, 0, 0); tokensNote.TextTrimming = TextTrimming.CharacterEllipsis;
-            if (!CardSizing.ClaudeNote(h)) tokensNote.Visibility = Visibility.Collapsed;
-            layout.Children.Add(At(tokensNote, 3));
-            return Tile(layout, 14, new Thickness(pad));
+            tokensGauge = names.Add(new ClaudeGauge(Stickers.InkKey("Claude")) { Red = ClaudePace.Redline }, "ClaudeTokensGauge");
+            tokensValue = names.Add(Reading("—", 32), "ClaudeTokensValue");
+            burn = names.Add(new ClaudeBurn(Stickers.InkKey("Claude")) { Height = CardSizing.ClaudeBurnHeight, Margin = new Thickness(0, 2, 0, 4) }, "ClaudeBurn");
+            burn.ToolTip = "Tokens a minute, the last " + ClaudeTokens.Minutes + " minutes";
+            tokensNote = Line("ClaudeTokensNote", names);
+            return GaugeTile("TOKENS / MIN", w, h, tokensGauge, tokensValue, new FrameworkElement[] { burn, tokensNote }, new[] { CardSizing.ClaudeBurnRoom, CardSizing.ClaudeLine }, "ClaudeTokens");
+        }
+
+        // The week as a race: the lap it's on, the reading with the pace and the reset beside it, and seven laps, one a
+        // day, with the projection hatched and a flag at the reset.
+        private Border WeekTile(double w, double h)
+        {
+            double pad = CardSizing.ClaudePadding(w, h), inner = Math.Max(1, w - 2 * pad), body = Math.Max(1, h - 2 * pad - labelHeight);
+            double lapsHeight = CardSizing.ClaudeLapsHeight(body), room = Math.Max(1, body - lapsHeight - CardSizing.ClaudeLapsGap);
+            double size = Math.Max(18, Math.Min(CardSizing.ClaudeValueSize(w, h), Math.Floor(room / CardSizing.ClaudeLineHeight)));
+            int notes = CardSizing.ClaudeWeekNotes(inner, room, size);
+            var top = new DockPanel { LastChildFill = true };
+            weekLap = names.Add(Caption(""), "ClaudeWeekLap"); weekLap.Margin = new Thickness(8, 0, 0, 2); weekLap.VerticalAlignment = VerticalAlignment.Bottom;
+            DockPanel.SetDock(weekLap, Dock.Right); top.Children.Add(weekLap);
+            top.Children.Add(TileLabel("WEEKLY"));
+            var middle = Columns(Auto, Star); middle.VerticalAlignment = VerticalAlignment.Center;
+            weekValue = names.Add(Reading("—", size), "ClaudeWeekValue"); weekValue.VerticalAlignment = VerticalAlignment.Center;
+            middle.Children.Add(weekValue);
+            var lines = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            weekNote = Line("ClaudeWeekNote", names); weekPace = Line("ClaudeWeekPace", names);
+            weekNote.TextAlignment = TextAlignment.Right; weekPace.TextAlignment = TextAlignment.Right;
+            if (notes >= 1) lines.Children.Add(weekPace);
+            if (notes >= 2) lines.Children.Add(weekNote);
+            middle.Children.Add(At(lines, 0, 1));
+            laps = names.Add(new ClaudeLaps(Stickers.InkKey("Claude")) { Height = lapsHeight, Margin = new Thickness(0, CardSizing.ClaudeLapsGap, 0, 0) }, "ClaudeLaps");
+            var layout = Rows(Auto, Star, Auto);
+            layout.Children.Add(top); layout.Children.Add(At(middle, 1)); layout.Children.Add(At(laps, 2));
+            return names.Add(Tile(layout, 14, new Thickness(pad)), "ClaudeWeekTile");
         }
 
         // The mascot with the counts: beside it in a wide tile (a line each with words when there's room, else a dot and
@@ -335,10 +394,35 @@ namespace WidgetScreen
             var r = reading;
             status.Text = r.Sample ? "SAMPLE" : "";
             if (fiveValue == null) return;
-            FillPlan(r, false, fiveValue, fiveBar, fiveNote);
-            FillPlan(r, true, weekValue, weekBar, weekNote);
-            tokensValue.Text = ClaudeText.TokensValue(r); tokensNote.Text = ClaudeText.TokensNote(r);
-            if (history != null) history.SetValues(r.History);
+            bool stale = r.Plan == ClaudePlanState.Failed || r.Plan == ClaudePlanState.Expired;
+            var five = r.Limits == null ? null : r.Limits.FiveHour;
+            var week = r.Limits == null ? null : r.Limits.Week;
+
+            double pct = ClaudePlan.Percent(five, r.Now), elapsed = ClaudePace.Elapsed(five, ClaudePace.FiveHours, r.Now), projection = ClaudePace.Projection(pct, elapsed);
+            fiveGauge.Value = Double.IsNaN(pct) ? 0 : pct / 100; fiveGauge.Projection = Double.IsNaN(projection) ? Double.NaN : projection / 100;
+            fiveGauge.Pace = elapsed; fiveGauge.Warn = pct >= 90; fiveGauge.InvalidateVisual();
+            fiveValue.Text = ClaudeText.Percent(r, false); fiveValue.SetResourceReference(TextBlock.ForegroundProperty, pct >= 90 ? "Warning" : "Text");
+            fiveNote.Text = ClaudeText.PlanNote(r, false, use24);
+            Pace(fivePace, projection);
+            Stickers.Stale(fiveGauge, stale); Stickers.Stale(fiveValue, stale);
+
+            pct = ClaudePlan.Percent(week, r.Now); elapsed = ClaudePace.Elapsed(week, ClaudePace.Week, r.Now); projection = ClaudePace.Projection(pct, elapsed);
+            laps.Percent = pct; laps.Projection = projection; laps.Now = ClaudePace.LapNow(elapsed); laps.Warn = pct >= 90; laps.Days = ClaudeText.LapDays(week, r.Now); laps.InvalidateVisual();
+            weekLap.Text = ClaudeText.Lap(laps.Now);
+            weekValue.Text = ClaudeText.Percent(r, true); weekValue.SetResourceReference(TextBlock.ForegroundProperty, pct >= 90 ? "Warning" : "Text");
+            weekNote.Text = ClaudeText.PlanNote(r, true, use24);
+            Pace(weekPace, projection);
+            // Signed out, or with nothing to pace, the note says why where the pace would be.
+            if (weekPace.Text.Length == 0) { weekPace.Text = weekNote.Text; weekNote.Text = ""; }
+            Stickers.Stale(laps, stale); Stickers.Stale(weekValue, stale);
+
+            double scale = ClaudePace.Scale(r.History == null || r.History.Length == 0 ? 0 : r.History.Max()), rate = r.PerMinute;
+            bool counted = r.LogsScanned && r.LogsFound;
+            tokensGauge.Value = counted ? Math.Min(1, rate / scale) : 0; tokensGauge.High = ClaudeTokens.Format(scale); tokensGauge.InvalidateVisual();
+            tokensValue.Text = ClaudeText.TokensValue(r); tokensValue.SetResourceReference(TextBlock.ForegroundProperty, counted && rate >= scale * ClaudePace.Redline ? "Warning" : "Text");
+            tokensNote.Text = ClaudeText.TokensNote(r);
+            burn.Values = counted ? r.History : new double[0]; burn.Maximum = scale; burn.InvalidateVisual();
+
             var mood = ClaudeText.Mood(r.Counts);
             mascot.Mood = mood; mascot.SetResourceReference(ClaudeMascot.LightProperty, ClaudeText.MoodBrush(mood));
             AutomationProperties.SetName(mascot, ClaudeText.Summary(r.Counts));
@@ -348,15 +432,10 @@ namespace WidgetScreen
             if (counts.Children.Count == 0) { var quiet = Caption("All quiet"); quiet.HorizontalAlignment = HorizontalAlignment.Center; quiet.TextAlignment = TextAlignment.Center; counts.Children.Add(quiet); }
         }
 
-        private void FillPlan(ClaudeReading r, bool week, TextBlock value, MeterBar bar, TextBlock note)
+        private static void Pace(TextBlock line, double projection)
         {
-            value.Text = ClaudeText.Percent(r, week);
-            note.Text = ClaudeText.PlanNote(r, week, use24);
-            double pct = r.Limits == null ? Double.NaN : ClaudePlan.Percent(week ? r.Limits.Week : r.Limits.FiveHour, r.Now);
-            bar.Value = Double.IsNaN(pct) ? 0 : pct;
-            bar.SetResourceReference(MeterBar.FillProperty, !Double.IsNaN(pct) && pct >= 90 ? "Warning" : Stickers.InkKey("Claude"));
-            bool stale = r.Plan == ClaudePlanState.Failed || r.Plan == ClaudePlanState.Expired;
-            Stickers.Stale(value, stale); Stickers.Stale(bar, stale);
+            line.Text = ClaudeText.Pace(projection);
+            line.SetResourceReference(TextBlock.ForegroundProperty, ClaudePace.Warns(projection) ? "Warning" : "Muted");
         }
     }
 }

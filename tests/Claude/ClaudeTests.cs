@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -269,6 +270,26 @@ internal static class ClaudeTests
             Assert(ClaudeText.PlanNote(new ClaudeReading(), false, false) == "Sign in: Settings → Claude" && ClaudeText.Percent(new ClaudeReading { Plan = ClaudePlanState.Reading }, true) == "…", "Signed out or reading doesn't say so.");
         });
 
+        check("Claude instruments: the pace through each window, the projection, the week's laps and the tokens scale", () => {
+            var five = new ClaudeLimitWindow { Percent = 40, ResetsAt = Now.AddHours(3) };
+            double elapsed = ClaudePace.Elapsed(five, ClaudePace.FiveHours, Now);
+            Assert(Math.Abs(elapsed - 0.4) < 1e-9 && Math.Abs(ClaudePace.Projection(40, elapsed) - 100) < 1e-9 && ClaudePace.Warns(100) && !ClaudePace.Warns(89), "The 5-hour pace or projection is wrong.");
+            Assert(Double.IsNaN(ClaudePace.Elapsed(new ClaudeLimitWindow { Percent = 5, ResetsAt = Now.AddMinutes(-1) }, ClaudePace.FiveHours, Now)) && Double.IsNaN(ClaudePace.Elapsed(new ClaudeLimitWindow { Percent = 5 }, ClaudePace.FiveHours, Now)) && Double.IsNaN(ClaudePace.Elapsed(null, ClaudePace.Week, Now)), "A passed or unknown reset still has a pace.");
+            Assert(Double.IsNaN(ClaudePace.Projection(3, 0.02)) && ClaudePace.Projection(90, 0.06) == 999 && ClaudeText.Pace(Double.NaN) == "" && ClaudeText.Pace(91.6) == "on pace for 92%", "The projection speaks too early or reads wrongly.");
+            var week = new ClaudeLimitWindow { Percent = 31, ResetsAt = Now.AddDays(3).AddHours(5) };
+            double weekElapsed = ClaudePace.Elapsed(week, ClaudePace.Week, Now);
+            Assert(ClaudePace.LapNow(weekElapsed) == 3 && ClaudeText.Lap(3) == "LAP 4 OF 7" && ClaudeText.Lap(-1) == "" && ClaudePace.LapNow(1) == 6 && ClaudePace.LapNow(Double.NaN) == -1, "The week's lap is wrong.");
+            Assert(ClaudePace.Lap(31, 0) == 1 && ClaudePace.Lap(31, 1) == 1 && Math.Abs(ClaudePace.Lap(31, 2) - 0.17) < 1e-9 && ClaudePace.Lap(31, 3) == 0 && ClaudePace.Lap(Double.NaN, 0) == 0, "The laps fill wrongly.");
+            var days = ClaudeText.LapDays(week, Now);
+            Assert(days.Length == 7 && days[0] == (week.ResetsAt.Value - ClaudePace.Week).ToLocalTime().ToString("ddd", CultureInfo.InvariantCulture) && days.Distinct().Count() == 7, "The laps aren't named by the window's days.");
+            Assert(ClaudePace.Scale(0) == 10000 && ClaudePace.Scale(Double.NaN) == 10000 && ClaudePace.Scale(10001) == 15000 && ClaudePace.Scale(41000) == 60000 && ClaudePace.Scale(250000) == 300000, "The tokens gauge's scale is wrong.");
+            double size = 50;
+            Assert(CardSizing.ClaudeFit(69.5, new[] { 18.0, 18.0 }, ref size) == 1 && size == 38, "The reading doesn't shrink to keep its first line.");
+            size = 26;
+            Assert(CardSizing.ClaudeFit(41, new[] { 18.0, 18.0 }, ref size) == 0 && size == 26, "The reading shrank for a line that still doesn't fit.");
+            Assert(CardSizing.ClaudeGaugeBeside(186, 62) && !CardSizing.ClaudeGaugeBeside(168, 127) && CardSizing.ClaudeLapsHeight(47) == 14 && CardSizing.ClaudeLapsHeight(66) == 30, "The tiles' layouts are chosen wrongly.");
+        });
+
         check("Claude card keeps its tiles inside the card at every size, at text 100% and 140%", () => {
             foreach (double scale in new[] { 1.0, 1.4 })
                 foreach (var size in new[] { WidgetLayout.Minimum("Claude"), new Size(472, 310), new Size(1856, 300), new Size(460, 460), new Size(320, 576), new Size(1856, 576) })
@@ -291,11 +312,20 @@ internal static class ClaudeTests
                             int expected = CardSizing.ClaudeColumns(card.ActualWidth - 48, card.ActualHeight - 84);
                             Assert(view.TileColumns == expected, "The card at " + size + " has " + view.TileColumns + " columns, not " + expected + ".");
                             Assert(view.Mascot.Mood == ClaudeMood.NeedsYou && ((TextBlock)window.FindName("ClaudeStatus")).Text == "SAMPLE" && ((TextBlock)window.FindName("ClaudeFiveValue")).Text == "64%", "The sample isn't labelled, or the tiles don't show it.");
-                            foreach (var element in Descendants(card).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeMascot || e is MeterBar) && Shown(e, card) && e.ActualWidth > 0))
+                            foreach (var element in Descendants(card).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeMascot || e is ClaudeInstrument) && Shown(e, card) && e.ActualWidth > 0))
                             {
                                 var box = element.TransformToAncestor(card).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
                                 Assert(box.Left >= -0.5 && box.Top >= -0.5 && box.Right <= card.ActualWidth + 0.5 && box.Bottom <= card.ActualHeight + 0.5, element.GetType().Name + " '" + (element is TextBlock ? ((TextBlock)element).Text : "") + "' leaves the " + size + " card at " + scale * 100 + "%: " + box);
                             }
+                            // Inside each tile too, so nothing in one tile runs into the next.
+                            foreach (var tile in ((Panel)window.FindName("ClaudeTiles")).Children.OfType<Border>())
+                                foreach (var element in Descendants(tile).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeMascot || e is ClaudeInstrument) && Shown(e, tile) && e.ActualWidth > 0))
+                                {
+                                    var box = element.TransformToAncestor(tile).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+                                    Assert(box.Left >= -0.5 && box.Top >= -0.5 && box.Right <= tile.ActualWidth + 0.5 && box.Bottom <= tile.ActualHeight + 0.5, element.GetType().Name + " '" + (element is TextBlock ? ((TextBlock)element).Text : "") + "' leaves its tile in the " + size + " card at " + scale * 100 + "%: " + box + " in " + tile.ActualWidth + " x " + tile.ActualHeight);
+                                }
+                            var gauge = (ClaudeGauge)window.FindName("ClaudeFiveGauge"); var laps = (ClaudeLaps)window.FindName("ClaudeLaps");
+                            Assert(gauge.Scale > 0.3 && Math.Abs(gauge.Value - 0.64) < 1e-9 && !Double.IsNaN(gauge.Pace) && laps.Now == 3 && laps.ActualWidth > 100 && ((ClaudeGauge)window.FindName("ClaudeTokensGauge")).Scale > 0.3, "The gauges or laps are missing, too small, or not filled from the sample at " + size + ".");
                             var counts = (Panel)window.FindName("ClaudeCounts");
                             Assert(counts.Children.Count == 4, "The sample's four counts don't all show.");
                         }
