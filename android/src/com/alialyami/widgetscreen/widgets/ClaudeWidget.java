@@ -2,7 +2,6 @@ package com.alialyami.widgetscreen.widgets;
 
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -14,28 +13,21 @@ import com.alialyami.widgetscreen.core.ClaudeText;
 import com.alialyami.widgetscreen.core.PcState;
 import com.alialyami.widgetscreen.core.Theme;
 import com.alialyami.widgetscreen.views.ClaudeGauges;
-import com.alialyami.widgetscreen.views.ClaudeMascot;
-import com.alialyami.widgetscreen.views.FlowLayout;
 import com.alialyami.widgetscreen.views.Stickers;
 
 import java.time.ZoneId;
 
-// Claude Code on the PC (decisions 027 and 028, docs/design/claude-card.md), the same four tiles as the Windows
-// ClaudeCard: the 5-hour use as a needle gauge, the week as seven laps, tokens per minute as a needle gauge over its
-// burn line, and the mascot with how many sessions are done, need you, are blocked or working. CardSizing.claudeColumns
-// lays them out in one row, a 2 × 2 square or one column, and the card is rebuilt only when its size changes. It reads
-// the PC's claude section with the other cards.
+// Claude Code on the PC (decisions 027 and 028, docs/design/claude-card.md), the same three tiles as the Windows
+// ClaudeCard: the 5-hour use as a needle gauge, the week as seven laps, and tokens per minute as a needle gauge over its
+// burn line. CardSizing.claudeArrange lays them out in one row, the two plan tiles over the tokens, or one column, and
+// the card is rebuilt only when its size changes. It reads the PC's claude section with the other cards.
 public final class ClaudeWidget extends Widget {
     private TextView status;
     private TextView fiveValue, fiveNote, fivePace, weekValue, weekLap, weekNote, weekPace, tokensValue, tokensNote;
     private ClaudeGauges.Gauge fiveGauge, tokensGauge;
     private ClaudeGauges.Laps laps;
     private ClaudeGauges.Burn burn;
-    private ClaudeMascot mascot;
-    private LinearLayout countsList;
-    private FlowLayout countsFlow;
-    private boolean compactCounts;
-    private int columns;
+    private int arrangement;
     private double labelHeight;
 
     public ClaudeWidget(Dashboard dash) { super("Claude", dash); }
@@ -45,7 +37,7 @@ public final class ClaudeWidget extends Widget {
     private PcState.Claude claude() { PcState state = dash.state(); return state == null || !dash.online() ? null : state.claude; }
     private static double now() { return System.currentTimeMillis() / 1000.0; }
     // For the checks: how the tiles were laid out.
-    public int columns() { return columns; }
+    public int arrangement() { return arrangement; }
 
     @Override protected View create() {
         LinearLayout column = ui.column();
@@ -58,15 +50,19 @@ public final class ClaudeWidget extends Widget {
         // The body: the card less its 24-unit padding, the 28-unit heading and the 8-unit gap under it.
         labelHeight = Math.ceil(ui.small() * CardSizing.CLAUDE_LINE_HEIGHT) + 2;
         double bodyWidth = Math.max(1, width - 48), bodyHeight = Math.max(1, height - 48 - 36), gap = CardSizing.CLAUDE_GAP;
-        columns = CardSizing.claudeColumns(bodyWidth, bodyHeight);
-        int rows = 4 / columns;
+        arrangement = CardSizing.claudeArrange(bodyWidth, bodyHeight);
+        int columns = CardSizing.claudeGridColumns(arrangement), rows = CardSizing.claudeGridRows(arrangement);
         double tileWidth = (bodyWidth - gap * (columns - 1)) / columns, tileHeight = (bodyHeight - gap * (rows - 1)) / rows;
-        View[] tiles = { fiveHourTile(tileWidth, tileHeight), weekTile(tileWidth, tileHeight), tokensTile(tileWidth, tileHeight), mascotTile(tileWidth, tileHeight) };
+        // Under the two plan tiles, the tokens tile takes the whole width.
+        boolean wide = arrangement == CardSizing.CLAUDE_TWO_OVER_ONE;
+        View[] tiles = { fiveHourTile(tileWidth, tileHeight), weekTile(tileWidth, tileHeight), tokensTile(wide ? bodyWidth : tileWidth, tileHeight) };
         LinearLayout grid = ui.column();
+        int next = 0;
         for (int r = 0; r < rows; r++) {
             LinearLayout line = ui.row(); line.setGravity(Gravity.FILL_VERTICAL);
-            for (int c = 0; c < columns; c++)
-                line.addView(tiles[r * columns + c], ui.margins(ui.ll(0, Ui.MATCH, 1), c == 0 ? 0 : gap / 2, 0, c == columns - 1 ? 0 : gap / 2, 0));
+            int across = wide && r == 1 ? 1 : columns;
+            for (int c = 0; c < across; c++)
+                line.addView(tiles[next++], ui.margins(ui.ll(0, Ui.MATCH, 1), c == 0 ? 0 : gap / 2, 0, c == across - 1 ? 0 : gap / 2, 0));
             grid.addView(line, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, r == 0 ? 0 : gap, 0, 0));
         }
         column.addView(grid, ui.margins(ui.ll(Ui.MATCH, 0, 1), 0, 8, 0, 0));
@@ -163,47 +159,6 @@ public final class ClaudeWidget extends Widget {
         return tile(layout, pad);
     }
 
-    // The mascot with the counts: beside it in a wide tile (a line each with words when there's room, else a dot and
-    // a number each, two to a line), under it otherwise (two or four to a line).
-    private View mascotTile(double w, double h) {
-        double size = CardSizing.claudeMascotSize(w, h);
-        boolean beside = CardSizing.claudeMascotBeside(w, h);
-        compactCounts = !CardSizing.claudeCountWords(w, h);
-        mascot = new ClaudeMascot(ui.context, dash.ink(id), ui.theme.page);
-        countsList = null; countsFlow = null;
-        View counts;
-        if (compactCounts) { countsFlow = new FlowLayout(ui.context, 0); counts = countsFlow; }
-        else { countsList = ui.column(); countsList.setGravity(Gravity.CENTER_VERTICAL); counts = countsList; }
-        int countsWidth = compactCounts ? ui.px(CardSizing.claudeCountColumns(w, h) * CardSizing.CLAUDE_COUNT_WIDTH) : Ui.WRAP;
-        LinearLayout layout = beside ? ui.row() : ui.column();
-        layout.setGravity(Gravity.CENTER);
-        layout.addView(mascot, ui.ll(ui.px(size), ui.px(size)));
-        if (beside) layout.addView(counts, ui.margins(ui.ll(countsWidth, Ui.WRAP), compactCounts ? CardSizing.CLAUDE_MASCOT_GAP : 16, 0, 0, 0));
-        else layout.addView(counts, ui.margins(ui.ll(countsWidth, Ui.WRAP), 0, 6, 0, 0));
-        FrameLayout tile = new FrameLayout(ui.context);
-        tile.setBackground(ui.shape(ui.theme.raised, 0, 0, 14));
-        double pad = CardSizing.claudePadding(w, h);
-        tile.setPadding(ui.px(pad), ui.px(pad), ui.px(pad), ui.px(pad));
-        tile.addView(layout, ui.frame(Ui.WRAP, Ui.WRAP, Gravity.CENTER));
-        return tile;
-    }
-
-    // One count: a dot in its colour, the number, and its words when there's room.
-    private View count(int kind, int n) {
-        LinearLayout row = ui.row();
-        row.setMinimumHeight(ui.px(CardSizing.CLAUDE_COUNTS_ROW));
-        if (compactCounts) row.setMinimumWidth(ui.px(CardSizing.CLAUDE_COUNT_WIDTH));
-        View dot = new View(ui.context);
-        dot.setBackground(ui.shape(ClaudeText.color(kind), 0, 0, 5));
-        row.addView(dot, ui.margins(ui.ll(ui.px(10), ui.px(10)), 0, 0, 6, 0));
-        TextView number = Ui.tabular(ui.text(String.valueOf(n), ui.body(), ClaudeText.color(kind)));
-        number.setTypeface(Ui.MEDIUM);
-        row.addView(number, ui.ll(Ui.WRAP, Ui.WRAP));
-        if (!compactCounts) row.addView(ui.text(" " + ClaudeText.words(kind, n), ui.small(), ui.theme.text), ui.ll(Ui.WRAP, Ui.WRAP));
-        row.setContentDescription(n + " " + ClaudeText.words(kind, n));
-        return row;
-    }
-
     @Override public void render() {
         if (!built()) return;
         PcState.Claude c = claude();
@@ -241,26 +196,6 @@ public final class ClaudeWidget extends Widget {
         tokensNote.setText(c == null ? (dash.online() ? "Waiting for the PC…" : "") : ClaudeText.tokensNote(c));
         burn.setInk(ink);
         burn.values = counted ? c.minutes : new double[0]; burn.maximum = scale; burn.invalidate();
-
-        int mood = ClaudeText.mood(c);
-        int light = ClaudeText.moodColor(mood);
-        mascot.set(mood, light == 0 ? ui.theme.muted : light);
-        mascot.setContentDescription(c == null ? "Claude Code" : ClaudeText.summary(c));
-        LinearLayout list = countsList; FlowLayout flow = countsFlow;
-        if (list != null) list.removeAllViews();
-        if (flow != null) flow.removeAllViews();
-        int shown = 0;
-        for (int kind : ClaudeText.ORDER) {
-            int n = ClaudeText.count(c, kind);
-            if (n <= 0) continue;
-            View row = count(kind, n); shown++;
-            if (list != null) list.addView(row, ui.ll(Ui.WRAP, Ui.WRAP));
-            else flow.addView(row, new ViewGroup.LayoutParams(Ui.WRAP, Ui.WRAP));
-        }
-        if (shown == 0) {
-            TextView quiet = ui.caption(c == null ? "" : "All quiet"); quiet.setGravity(Gravity.CENTER);
-            if (list != null) list.addView(quiet, ui.ll(Ui.WRAP, Ui.WRAP)); else flow.addView(quiet, new ViewGroup.LayoutParams(Ui.WRAP, Ui.WRAP));
-        }
     }
 
     private void pace(TextView line, double projection) {

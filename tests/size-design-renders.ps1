@@ -42,8 +42,7 @@ $scenes = [ordered]@{
     'claude-row'    = @{ Claude = @(0, 0, 1856, 280) }
     'claude-tall'   = @{ Claude = @(0, 0, 320, 576); Focus = @(336, 0, 320, 576) }
     'claude-wide'   = @{ Claude = @(0, 0, 1856, 576) }
-    'claude-needs'  = @{ Claude = @(0, 0, 472, 310); Storage = @(488, 0, 300, 220) }
-    'claude-needs-row' = @{ Claude = @(0, 0, 1216, 300) }
+    'claude-small'  = @{ Claude = @(0, 0, 360, 280); Storage = @(376, 0, 300, 220) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
@@ -69,7 +68,7 @@ foreach ($name in $scenes.Keys) {
     '<?xml version="1.0"?><NotesData><Text>TEST FIXTURE: example notes. Call about the order on Tuesday.</Text><Items><TodoItem><Id>a1</Id><Text>Example: renew the domain</Text><Done>true</Done></TodoItem><TodoItem><Id>a2</Id><Text>Example: back up the photos</Text><Done>false</Done></TodoItem><TodoItem><Id>a3</Id><Text>Example: book a haircut</Text><Done>false</Done></TodoItem></Items></NotesData>' | Set-Content -Encoding UTF8 $notesFile
     $png = Join-Path $output ($name + '.png')
     $arguments = @('--settings', "`"$settings`"", '--render', "`"$png`"", '--render-wait', $Wait)
-    if ($name -like 'claude-*') { $arguments += '--render-claude-sample'; if ($name -like 'claude-needs*') { $arguments += '--render-claude-needs' } }
+    if ($name -like 'claude-*') { $arguments += '--render-claude-sample' }
     $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -Wait
     if ($process.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "Render failed: $name" }
     Write-Output "Rendered $png"

@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace WidgetScreen
 {
-    // What the Claude card shows (decision 027): the plan's two limits, tokens per minute, and the session counts.
+    // What the Claude card shows (decisions 027 and 028): the plan's two limits and tokens per minute.
     public sealed class ClaudeReading
     {
         // A labelled fixture (renders and checks): the card's sticker says SAMPLE.
@@ -19,57 +18,20 @@ namespace WidgetScreen
         public bool LogsFound, LogsScanned;
         public double[] History = new double[ClaudeTokens.Minutes];
         public double PerMinute { get { return ClaudeTokens.Rate(History); } }
-        public ClaudeCounts Counts = new ClaudeCounts();
         public DateTime Now = DateTime.UtcNow;
 
-        public static ClaudeReading Fixture(DateTime now, bool needsYou)
+        public static ClaudeReading Fixture(DateTime now)
         {
             var history = new double[ClaudeTokens.Minutes];
             for (int i = 0; i < history.Length; i++) history[i] = 4200 + 3100 * Math.Sin(i / 3.0) + (i % 7) * 900 + (i > 24 ? 6000 : 0);
             return new ClaudeReading {
                 Sample = true, Plan = ClaudePlanState.Current, LogsFound = true, LogsScanned = true, History = history, Now = now,
-                Limits = new ClaudeLimits { UpdatedAt = now, FiveHour = new ClaudeLimitWindow { Percent = 64, ResetsAt = now.AddMinutes(102) }, Week = new ClaudeLimitWindow { Percent = 31, ResetsAt = now.AddDays(3).AddHours(5) } },
-                Counts = needsYou ? new ClaudeCounts { Done = 2, NeedsYou = 3, Blocked = 1, Working = 2 } : new ClaudeCounts { Done = 2, Working = 1 } };
+                Limits = new ClaudeLimits { UpdatedAt = now, FiveHour = new ClaudeLimitWindow { Percent = 64, ResetsAt = now.AddMinutes(102) }, Week = new ClaudeLimitWindow { Percent = 31, ResetsAt = now.AddDays(3).AddHours(5) } } };
         }
     }
 
-    // The mascot's face: the most urgent count wins.
-    public enum ClaudeMood { Sleeping, Done, Working, Blocked, NeedsYou }
-
     public static class ClaudeText
     {
-        public static readonly ClaudeStatus[] Order = { ClaudeStatus.NeedsYou, ClaudeStatus.Blocked, ClaudeStatus.Done, ClaudeStatus.Working };
-
-        public static ClaudeMood Mood(ClaudeCounts c)
-        {
-            if (c == null) return ClaudeMood.Sleeping;
-            return c.NeedsYou > 0 ? ClaudeMood.NeedsYou : c.Blocked > 0 ? ClaudeMood.Blocked : c.Working > 0 ? ClaudeMood.Working : c.Done > 0 ? ClaudeMood.Done : ClaudeMood.Sleeping;
-        }
-        public static string Words(ClaudeStatus status, int n)
-        {
-            switch (status)
-            {
-                case ClaudeStatus.NeedsYou: return n == 1 ? "needs you" : "need you";
-                case ClaudeStatus.Blocked: return "blocked";
-                case ClaudeStatus.Working: return "working";
-                default: return "done";
-            }
-        }
-        // The ink each count wears: green done, orange waiting on you, coral blocked, blue working.
-        public static string Brush(ClaudeStatus status)
-        {
-            return status == ClaudeStatus.NeedsYou ? "Warning" : status == ClaudeStatus.Blocked ? "InkCoral" : status == ClaudeStatus.Working ? "InkGlacier" : "InkMint";
-        }
-        public static string MoodBrush(ClaudeMood mood)
-        {
-            return mood == ClaudeMood.NeedsYou ? "Warning" : mood == ClaudeMood.Blocked ? "InkCoral" : mood == ClaudeMood.Working ? "InkGlacier" : mood == ClaudeMood.Done ? "InkMint" : "Muted";
-        }
-        public static string Summary(ClaudeCounts c)
-        {
-            if (c == null || c.Total == 0) return "No Claude Code sessions";
-            return String.Join(", ", Order.Where(s => c.Of(s) > 0).Select(s => c.Of(s) + " " + Words(s, c.Of(s))));
-        }
-
         // The big reading and the line under it for a plan tile.
         public static string Percent(ClaudeReading r, bool week)
         {
@@ -124,86 +86,10 @@ namespace WidgetScreen
         }
     }
 
-    // The Claude mascot: an original pixel robot (16 × 16, drawn in code, no image) in the card's ink, with its antenna
-    // light and eyes in the colour of the most urgent count. Sleeping (nothing open) it closes its eyes and dims; it
-    // never animates.
-    public sealed class ClaudeMascot : FrameworkElement
-    {
-        // '#' body (the ink), 'v' visor, 'L' the antenna light. The phone's ClaudeMascot draws the same rows.
-        public static readonly string[] Sprite = {
-            "......LLLL......",
-            ".......##.......",
-            "..############..",
-            ".##############.",
-            ".##vvvvvvvvvv##.",
-            "###vvvvvvvvvv###",
-            "###vvvvvvvvvv###",
-            ".##vvvvvvvvvv##.",
-            ".##############.",
-            "..############..",
-            ".....######.....",
-            "..############..",
-            ".#.####vv####.#.",
-            ".#.####vv####.#.",
-            "...##########...",
-            "...###....###..." };
-        // Each eye, three pixels wide and four tall, set into the visor at columns 4 and 9, rows 4 to 7.
-        public static string[] Eye(ClaudeMood mood)
-        {
-            switch (mood)
-            {
-                case ClaudeMood.NeedsYou: return new[] { "eee", "e.e", "eee", "..." };
-                case ClaudeMood.Blocked: return new[] { "e.e", ".e.", "e.e", "..." };
-                case ClaudeMood.Working: return new[] { "...", ".ee", ".ee", "..." };
-                case ClaudeMood.Done: return new[] { "...", ".e.", "e.e", "..." };
-                default: return new[] { "...", "...", "eee", "..." };
-            }
-        }
-        public static readonly int[] EyeColumns = { 4, 9 };
-        public const int EyeRow = 4, Size = 16;
-
-        public static readonly DependencyProperty MoodProperty = DependencyProperty.Register("Mood", typeof(ClaudeMood), typeof(ClaudeMascot), new FrameworkPropertyMetadata(ClaudeMood.Sleeping, FrameworkPropertyMetadataOptions.AffectsRender));
-        public static readonly DependencyProperty BodyProperty = DependencyProperty.Register("Body", typeof(Brush), typeof(ClaudeMascot), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-        public static readonly DependencyProperty VisorProperty = DependencyProperty.Register("Visor", typeof(Brush), typeof(ClaudeMascot), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-        public static readonly DependencyProperty LightProperty = DependencyProperty.Register("Light", typeof(Brush), typeof(ClaudeMascot), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-        public ClaudeMood Mood { get { return (ClaudeMood)GetValue(MoodProperty); } set { SetValue(MoodProperty, value); } }
-        public Brush Body { get { return (Brush)GetValue(BodyProperty); } set { SetValue(BodyProperty, value); } }
-        public Brush Visor { get { return (Brush)GetValue(VisorProperty); } set { SetValue(VisorProperty, value); } }
-        public Brush Light { get { return (Brush)GetValue(LightProperty); } set { SetValue(LightProperty, value); } }
-
-        public ClaudeMascot() { SnapsToDevicePixels = true; RenderOptions.SetEdgeMode(this, EdgeMode.Aliased); }
-
-        protected override void OnRender(DrawingContext context)
-        {
-            double cell = Math.Floor(Math.Min(ActualWidth, ActualHeight) / Size);
-            if (cell < 1) cell = Math.Min(ActualWidth, ActualHeight) / Size;
-            if (cell <= 0) return;
-            double left = Math.Round((ActualWidth - cell * Size) / 2), top = Math.Round((ActualHeight - cell * Size) / 2);
-            bool asleep = Mood == ClaudeMood.Sleeping;
-            if (asleep) context.PushOpacity(0.55);
-            var eye = Eye(Mood);
-            for (int row = 0; row < Size; row++)
-                for (int col = 0; col < Size; col++)
-                {
-                    char c = Sprite[row][col];
-                    Brush brush = c == '#' ? Body : c == 'v' ? Visor : c == 'L' ? Light : null;
-                    if (c == 'v')
-                    {
-                        foreach (int at in EyeColumns)
-                            if (col >= at && col < at + 3 && row >= EyeRow && row < EyeRow + 4 && eye[row - EyeRow][col - at] == 'e') brush = Light;
-                        // The chest panel lights up too.
-                        if (row >= 12) brush = Light;
-                    }
-                    if (brush != null) context.DrawRectangle(brush, null, new Rect(left + col * cell, top + row * cell, cell, cell));
-                }
-            if (asleep) context.Pop();
-        }
-    }
-
-    // The Claude card (decisions 027 and 028, docs/design/claude-card.md): four tiles, the 5-hour use as a needle
-    // gauge, the week as seven laps, tokens per minute as a needle gauge over its burn line, and the mascot with the
-    // session counts, laid out by CardSizing.ClaudeColumns (one row, a 2 × 2 square or a column) and rebuilt only when
-    // the card's size or text size changes. The phone's ClaudeWidget draws the same.
+    // The Claude card (decisions 027 and 028, docs/design/claude-card.md): three tiles, the 5-hour use as a needle
+    // gauge, the week as seven laps, and tokens per minute as a needle gauge over its burn line, laid out by
+    // CardSizing.ClaudeArrange (one row, the two plan tiles over the tokens, or one column) and rebuilt only when the
+    // card's size or text size changes. The phone's ClaudeWidget draws the same.
     public sealed class ClaudeCard : CardParts
     {
         private readonly Grid host;
@@ -217,16 +103,12 @@ namespace WidgetScreen
         private ClaudeGauge fiveGauge, tokensGauge;
         private ClaudeLaps laps;
         private ClaudeBurn burn;
-        private ClaudeMascot mascot;
-        private Panel counts;
-        private bool compactCounts;
         private double labelHeight;
 
         public ClaudeCard(FrameworkElement scope, Grid host, TextBlock status) { this.host = host; this.status = status; names = new PartNames(scope); }
 
-        public int TileColumns { get; private set; }
+        public ClaudeLayout Arrangement { get; private set; }
         public ClaudeReading Current { get { return reading; } }
-        public ClaudeMascot Mascot { get { return mascot; } }
 
         public void Fit(Rect card) { bounds = card; Rebuild(); }
         public void Configure(bool use24Hour) { use24 = use24Hour; Rebuild(); }
@@ -248,18 +130,20 @@ namespace WidgetScreen
             labelHeight = Math.Ceiling(SmallSize * CardSizing.ClaudeLineHeight) + 2;
             // The body: the card less its 24-unit padding, the 28-unit heading and the 8-unit gap under it.
             double width = Math.Max(1, bounds.Width - 48), height = Math.Max(1, bounds.Height - 48 - 36), gap = CardSizing.ClaudeGap;
-            TileColumns = CardSizing.ClaudeColumns(width, height);
-            int rows = 4 / TileColumns;
-            double tileWidth = (width - gap * (TileColumns - 1)) / TileColumns, tileHeight = (height - gap * (rows - 1)) / rows;
+            Arrangement = CardSizing.ClaudeArrange(width, height);
+            int columns = CardSizing.ClaudeGridColumns(Arrangement), rows = CardSizing.ClaudeGridRows(Arrangement);
+            double tileWidth = (width - gap * (columns - 1)) / columns, tileHeight = (height - gap * (rows - 1)) / rows;
             var grid = new Grid();
-            for (int c = 0; c < TileColumns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
+            for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = Star });
             for (int r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = Star });
-            var tiles = new FrameworkElement[] { FiveHourTile(tileWidth, tileHeight), WeekTile(tileWidth, tileHeight), TokensTile(tileWidth, tileHeight), MascotTile(tileWidth, tileHeight) };
+            // Over the two plan tiles, the tokens tile takes the whole width.
+            bool wide = Arrangement == ClaudeLayout.TwoOverOne;
+            var tiles = new FrameworkElement[] { FiveHourTile(tileWidth, tileHeight), WeekTile(tileWidth, tileHeight), TokensTile(wide ? width : tileWidth, tileHeight) };
             for (int i = 0; i < tiles.Length; i++)
             {
-                int row = i / TileColumns, column = i % TileColumns;
-                tiles[i].Margin = new Thickness(column == 0 ? 0 : gap / 2, row == 0 ? 0 : gap / 2, column == TileColumns - 1 ? 0 : gap / 2, row == rows - 1 ? 0 : gap / 2);
-                grid.Children.Add(At(tiles[i], row, column));
+                int row = i / columns, column = i % columns, span = wide && i == 2 ? 2 : 1;
+                tiles[i].Margin = new Thickness(column == 0 ? 0 : gap / 2, row == 0 ? 0 : gap / 2, column + span == columns ? 0 : gap / 2, row == rows - 1 ? 0 : gap / 2);
+                grid.Children.Add(At(tiles[i], row, column, span));
             }
             host.Children.Add(names.Add(grid, "ClaudeTiles"));
         }
@@ -350,45 +234,6 @@ namespace WidgetScreen
             return names.Add(Tile(layout, 14, new Thickness(pad)), "ClaudeWeekTile");
         }
 
-        // The mascot with the counts: beside it in a wide tile (a line each with words when there's room, else a dot and
-        // a number each, two to a line), under it otherwise (two or four to a line). The words are always in the tooltip.
-        private Border MascotTile(double w, double h)
-        {
-            double pad = CardSizing.ClaudePadding(w, h), size = CardSizing.ClaudeMascotSize(w, h);
-            bool beside = CardSizing.ClaudeMascotBeside(w, h);
-            mascot = names.Add(new ClaudeMascot { Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, "ClaudeMascot");
-            mascot.SetResourceReference(ClaudeMascot.BodyProperty, Stickers.InkKey("Claude")); mascot.SetResourceReference(ClaudeMascot.VisorProperty, "Page");
-            compactCounts = !CardSizing.ClaudeCountWords(w, h);
-            counts = names.Add(compactCounts
-                ? (Panel)new WrapPanel { Width = CardSizing.ClaudeCountColumns(w, h) * CardSizing.ClaudeCountWidth, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center }
-                : new StackPanel { VerticalAlignment = VerticalAlignment.Center }, "ClaudeCounts");
-            Panel layout;
-            if (beside)
-            {
-                var row = Columns(Auto, Auto); row.Children.Add(mascot); row.Children.Add(At(counts, 0, 1)); row.HorizontalAlignment = HorizontalAlignment.Center;
-                counts.Margin = new Thickness(compactCounts ? CardSizing.ClaudeMascotGap : 16, 0, 0, 0);
-                layout = row;
-            }
-            else { var column = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; column.Children.Add(mascot); counts.Margin = new Thickness(0, 6, 0, 0); column.Children.Add(counts); layout = column; }
-            return names.Add(Tile(layout, 14, new Thickness(pad)), "ClaudeMascotTile");
-        }
-
-        // One count: a dot in its colour, the number, and its words when there's room.
-        private FrameworkElement Count(ClaudeStatus kind, int n)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Height = CardSizing.ClaudeCountsRow };
-            if (compactCounts) row.Width = CardSizing.ClaudeCountWidth;
-            var dot = new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-            dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, ClaudeText.Brush(kind));
-            row.Children.Add(dot);
-            var number = Text(n.ToString(CultureInfo.InvariantCulture), "BodySize", ClaudeText.Brush(kind)); number.FontWeight = FontWeights.SemiBold; number.VerticalAlignment = VerticalAlignment.Center;
-            row.Children.Add(number);
-            if (!compactCounts) { var words = Text(" " + ClaudeText.Words(kind, n), "SmallSize", "Text"); words.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(words); }
-            row.ToolTip = n + " " + ClaudeText.Words(kind, n);
-            AutomationProperties.SetName(row, n + " " + ClaudeText.Words(kind, n));
-            return row;
-        }
-
         private void Render()
         {
             var r = reading;
@@ -423,13 +268,6 @@ namespace WidgetScreen
             tokensNote.Text = ClaudeText.TokensNote(r);
             burn.Values = counted ? r.History : new double[0]; burn.Maximum = scale; burn.InvalidateVisual();
 
-            var mood = ClaudeText.Mood(r.Counts);
-            mascot.Mood = mood; mascot.SetResourceReference(ClaudeMascot.LightProperty, ClaudeText.MoodBrush(mood));
-            AutomationProperties.SetName(mascot, ClaudeText.Summary(r.Counts));
-            mascot.ToolTip = ClaudeText.Summary(r.Counts);
-            counts.Children.Clear();
-            foreach (var kind in ClaudeText.Order) { int n = r.Counts.Of(kind); if (n > 0) counts.Children.Add(Count(kind, n)); }
-            if (counts.Children.Count == 0) { var quiet = Caption("All quiet"); quiet.HorizontalAlignment = HorizontalAlignment.Center; quiet.TextAlignment = TextAlignment.Center; counts.Children.Add(quiet); }
         }
 
         private static void Pace(TextBlock line, double projection)

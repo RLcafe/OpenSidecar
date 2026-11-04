@@ -1,5 +1,7 @@
 # 027: A simple Claude Code card
 
+> Partly superseded by [decision 028](028-claude-card-instruments.md): the robot tile and its counts were removed, and the other three tiles got their instruments back.
+
 On 4 Nov 2026 Ali asked to take the Claude Code widget "down to a simple widget": four tiles (the 5-hour limit, the weekly limit, tokens per minute, and a mascot "similar to" Claude's loading-screen robot) that only say whether something is pending, as counts ("2 green are finished, 3 orange are pending me"), plus another useful stat if there is one. "Anything else, delete it from the code base. Don't leave it in the background." The tiles reflow with the card: a row when it's long, a square when it's square. Only the Claude widget changes, on both apps. This supersedes decisions 014, 015, 016 (Claude projects and threads), 017, 018, 019, 020, 022 (Claude review fixes), 023, 024, 025 and 026. The design is in [docs/design/claude-card.md](../design/claude-card.md).
 
 ## Decisions

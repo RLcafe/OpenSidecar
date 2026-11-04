@@ -14,9 +14,9 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using WidgetScreen;
 
-// The Claude Code card (decision 027, docs/design/claude-card.md): the plan check and sign-in, the session counts, tokens
-// per minute, the removal of the old connection, and the four tiles' layout. Everything runs in temporary folders under
-// the test output; Claude Code's real folder, the Claude app's data and Anthropic are never reached.
+// The Claude Code card (decisions 027 and 028, docs/design/claude-card.md): the plan check and sign-in, tokens per
+// minute, the removal of the old connection, the instruments' arithmetic and the three tiles' layout. Everything runs in
+// temporary folders under the test output; Claude Code's real folder and Anthropic are never reached.
 internal static class ClaudeTests
 {
     private static void Assert(bool valid, string message) { if (!valid) throw new Exception(message); }
@@ -109,7 +109,7 @@ internal static class ClaudeTests
                 if (request.Headers.Authorization.Parameter == "old-access") return Reply(HttpStatusCode.Unauthorized, "{}");
                 return Reply(HttpStatusCode.OK, "{\"five_hour\":{\"utilization\":37,\"resets_at\":\"2026-11-04T15:00:00Z\"},\"seven_day\":{\"utilization\":61,\"resets_at\":\"2026-11-06T04:00:00Z\"}}");
             } };
-            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, handler, url => { }), () => new string[0]))
+            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, handler, url => { })))
             {
                 Assert(service.Plan == ClaudePlanState.Reading && service.PlanDue(Now), "A fresh sign-in isn't checked at once.");
                 Assert(service.CheckPlanAsync(Now).GetAwaiter().GetResult() && service.Plan == ClaudePlanState.Current && service.Limits.FiveHour.Percent == 37 && service.Limits.Week.Percent == 61 && usageCalls == 2, "The usage wasn't read after one refresh.");
@@ -120,7 +120,7 @@ internal static class ClaudeTests
             }
             new ClaudeSignIn { AccessToken = "", RefreshToken = "revoked", ExpiresUtc = DateTime.MinValue }.Save(path);
             var refused = new Handler { Send = (request, body) => Reply(HttpStatusCode.BadRequest, "{\"error\":\"invalid_grant\"}") };
-            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, refused, url => { }), () => new string[0]))
+            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, refused, url => { })))
             {
                 service.CheckPlanAsync(Now).GetAwaiter().GetResult();
                 Assert(service.Plan == ClaudePlanState.Expired && ClaudeSignIn.Load(path).Expired, "A revoked sign-in didn't end.");
@@ -129,7 +129,7 @@ internal static class ClaudeTests
             }
             new ClaudeSignIn { AccessToken = "access", RefreshToken = "refresh", ExpiresUtc = DateTime.UtcNow.AddHours(1) }.Save(path);
             var forbidden = new Handler { Send = (request, body) => Reply(HttpStatusCode.Forbidden, "{\"error\":{\"type\":\"permission_error\"}}") };
-            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, forbidden, url => { }), () => new string[0]))
+            using (var service = new ClaudeService(Fresh(directory, "plan-config"), path, Fresh(directory, "plan-bridge"), new ClaudeAccount(path, forbidden, url => { })))
             {
                 service.CheckPlanAsync(Now).GetAwaiter().GetResult();
                 Assert(service.Plan == ClaudePlanState.NoMeters && service.Account.SignedIn && !ClaudeSignIn.Load(path).Expired, "A 403 ended the sign-in or isn't the no-limits state.");
@@ -144,7 +144,7 @@ internal static class ClaudeTests
             new ClaudeSignIn { AccessToken = "ok", RefreshToken = "r", ExpiresUtc = DateTime.UtcNow.AddHours(1) }.Save(path);
             var status = HttpStatusCode.OK;
             var handler = new Handler { Send = (request, body) => status == HttpStatusCode.OK ? Reply(status, "{\"five_hour\":{\"utilization\":10,\"resets_at\":\"2026-11-04T15:00:00Z\"},\"seven_day\":{\"utilization\":20,\"resets_at\":\"2026-11-06T04:00:00Z\"}}") : Reply(status, "{}") };
-            using (var service = new ClaudeService(Fresh(directory, "backoff-config"), path, Fresh(directory, "backoff-bridge"), new ClaudeAccount(path, handler, url => { }), () => new string[0]))
+            using (var service = new ClaudeService(Fresh(directory, "backoff-config"), path, Fresh(directory, "backoff-bridge"), new ClaudeAccount(path, handler, url => { })))
             {
                 service.CheckPlanAsync(Now).GetAwaiter().GetResult();
                 status = (HttpStatusCode)429; service.CheckPlanAsync(Now).GetAwaiter().GetResult();
@@ -158,51 +158,21 @@ internal static class ClaudeTests
                 Assert(service.Plan == ClaudePlanState.Current && !service.BackingOff && service.NextWait == ClaudeService.PlanEvery, "A success didn't go back to every 5 minutes.");
             }
             var offline = new Handler { Send = (request, body) => { throw new HttpRequestException("offline"); } };
-            using (var service = new ClaudeService(Fresh(directory, "backoff-config"), path, Fresh(directory, "backoff-bridge"), new ClaudeAccount(path, offline, url => { }), () => new string[0]))
+            using (var service = new ClaudeService(Fresh(directory, "backoff-config"), path, Fresh(directory, "backoff-bridge"), new ClaudeAccount(path, offline, url => { })))
             {
                 service.CheckPlanAsync(Now).GetAwaiter().GetResult();
                 Assert(service.Plan == ClaudePlanState.Failed && !service.BackingOff, "A network failure backed off or wasn't a failure.");
             }
         });
 
-        check("Claude counts sessions: working, needs you, blocked and done, from Claude Code's list and the Claude app", () => {
-            var live = ClaudeSessions.ParseLive("{\"pid\":4242,\"sessionId\":\"s1\",\"cwd\":\"C:\\\\Code\\\\a\",\"status\":\"busy\",\"startedAt\":1793537932958}");
-            Assert(live.Session == "s1" && live.Pid == 4242 && live.Status == "busy" && live.Started.Year == 2026, "A session list entry was read wrongly.");
-            Assert(ClaudeSessions.ParseLive("{\"pid\":1,\"sessionId\":\"x\",\"spare\":true}") == null && ClaudeSessions.ParseLive("nope") == null, "A spare process or broken file counted.");
-            var thread = ClaudeSessions.ParseThread("{\"cliSessionId\":\"t1\",\"isArchived\":false,\"lastActivityAt\":1793537990000,\"lastAssistantUuid\":\"u2\",\"postTurnSummary\":{\"status_category\":\"review_ready\",\"summarizes_uuid\":\"u2\"}}");
-            Assert(thread.Session == "t1" && thread.Category == "review_ready" && !thread.Archived, "A Claude app thread was read wrongly.");
-            Assert(ClaudeSessions.ParseThread("{\"cliSessionId\":\"t2\",\"lastAssistantUuid\":\"u3\",\"postTurnSummary\":{\"status_category\":\"blocked\",\"summarizes_uuid\":\"u2\"}}").Category == "", "A summary of an older reply counted.");
-            Assert(ClaudeSessions.ParseThread("{\"sessionId\":\"local_x\"}") == null, "A record without a Claude Code session was kept.");
-            Func<string, string, ClaudeLiveSession> running = (id, state) => new ClaudeLiveSession { Session = id, Status = state };
-            Func<string, string, bool, double, ClaudeAppThread> app = (id, category, archived, hoursAgo) => new ClaudeAppThread { Session = id, Category = category, Archived = archived, LastActive = Now.AddHours(-hoursAgo) };
-            var counts = ClaudeSessions.Count(
-                new[] { running("busy", "busy"), running("ask", "waiting"), running("idle", "idle"), running("idle-review", "idle"), running("idle-error", "idle"), running("busy", "busy") },
-                new[] { app("idle-review", "review_ready", false, 1), app("done-app", "completed", false, 2), app("blocked-app", "blocked", false, 3), app("old", "completed", false, 30), app("archived", "blocked", true, 1), app("busy", "blocked", false, 1), app("plain", "", false, 5) },
-                new HashSet<string> { "idle-error" }, Now);
-            Assert(counts.Working == 1 && counts.NeedsYou == 2 && counts.Blocked == 2 && counts.Done == 3 && counts.Total == 8, "Counts wrong: " + counts.Done + " done, " + counts.NeedsYou + " need you, " + counts.Blocked + " blocked, " + counts.Working + " working.");
-            // From files: a dead process doesn't count, a live one does; a thread the app archived doesn't.
-            string config = Fresh(directory, "sessions-config"), appData = Fresh(directory, "sessions-app");
-            Directory.CreateDirectory(Path.Combine(config, "sessions")); Directory.CreateDirectory(Path.Combine(appData, "org", "acct"));
-            int me = Process.GetCurrentProcess().Id;
-            File.WriteAllText(Path.Combine(config, "sessions", me + ".json"), "{\"pid\":" + me + ",\"sessionId\":\"mine\",\"status\":\"waiting\"}");
-            File.WriteAllText(Path.Combine(config, "sessions", "1.json"), "{\"pid\":2147483000,\"sessionId\":\"gone\",\"status\":\"busy\"}");
-            File.WriteAllText(Path.Combine(appData, "org", "acct", "local_a.json"), "{\"cliSessionId\":\"app-1\",\"lastActivityAt\":" + ClaudeTime.Epoch(DateTime.UtcNow.AddMinutes(-5)) + ",\"postTurnSummary\":{\"status_category\":\"completed\"}}");
-            File.WriteAllText(Path.Combine(appData, "org", "acct", "local_b.json"), "{\"cliSessionId\":\"app-2\",\"isArchived\":true,\"lastActivityAt\":" + ClaudeTime.Epoch(DateTime.UtcNow.AddMinutes(-5)) + "}");
-            var sessions = new ClaudeSessions(config, () => new[] { appData });
-            Assert(sessions.Read(DateTime.UtcNow, new HashSet<string>()) && sessions.Counts.NeedsYou == 1 && sessions.Counts.Working == 0 && sessions.Counts.Done == 1 && sessions.Counts.Total == 2, "The session list and app records weren't counted right.");
-            Assert(!sessions.Read(DateTime.UtcNow, new HashSet<string>()), "Reading again without changes reported a change.");
-            File.WriteAllText(Path.Combine(config, "sessions", me + ".json"), "{\"pid\":" + me + ",\"sessionId\":\"mine\",\"status\":\"busy\"}");
-            Assert(sessions.Read(DateTime.UtcNow, new HashSet<string>()) && sessions.Counts.Working == 1 && sessions.Counts.NeedsYou == 0, "A changed session file wasn't read again.");
-        });
-
-        check("Claude tokens per minute: each reply once, no cache reads, API errors mark the session blocked", () => {
+        check("Claude tokens per minute: each reply once, no cache reads, helpers count", () => {
             var lines = ClaudeTokens.Lines(String.Join("\n", new[] {
                 "{\"type\":\"user\",\"message\":{\"content\":\"hi\"}}",
                 Reply("r1", "2026-11-04T11:58:00Z", 10, 20, 30, 4000),
                 "{\"type\":\"assistant\",\"isApiErrorMessage\":true,\"timestamp\":\"2026-11-04T11:59:00Z\",\"message\":{\"model\":\"<synthetic>\",\"content\":[{\"type\":\"text\",\"text\":\"API Error\"}]}}",
                 "{\"type\":\"user\",\"isMeta\":true,\"message\":{\"content\":\"note\"}}",
                 "not json", "" }));
-            Assert(lines.Count == 4 && lines[1].Tokens == 60 && lines[1].Key == "r1" && lines[2].Error && lines[3].Type == null, "Log lines parsed wrongly.");
+            Assert(lines.Count == 1 && lines[0].Tokens == 60 && lines[0].Key == "r1", "Log lines parsed wrongly.");
             var bins = ClaudeTokens.Bins(new[] { new KeyValuePair<DateTime, long>(Now.AddSeconds(-10), 600), new KeyValuePair<DateTime, long>(Now.AddMinutes(-4).AddSeconds(-1), 400), new KeyValuePair<DateTime, long>(Now.AddMinutes(-40), 999) }, Now);
             Assert(bins.Length == 30 && bins[29] == 600 && bins[25] == 400 && bins.Sum() == 1000 && ClaudeTokens.Rate(bins) == 200, "Minutes or the rate wrong.");
             Assert(ClaudeTokens.Format(940) == "940" && ClaudeTokens.Format(9450) == "9.4k" && ClaudeTokens.Format(12400) == "12k" && ClaudeTokens.Format(1250000) == "1.2M" && ClaudeTokens.Format(Double.NaN) == "—", "Token numbers formatted wrongly.");
@@ -216,13 +186,12 @@ internal static class ClaudeTests
             var tokens = new ClaudeTokens(config);
             Assert(!tokens.Scanned, "Scanned before a scan.");
             tokens.Scan(now);
-            Assert(tokens.Found && tokens.Scanned && tokens.History.Sum() == 500 && tokens.Errored.Count == 0, "The first scan counted " + tokens.History.Sum() + " tokens (helpers count, repeats and old replies don't), or a helper's error blocked its session.");
-            File.AppendAllText(log, "{\"type\":\"assistant\",\"isApiErrorMessage\":true,\"timestamp\":\"" + Iso(now) + "\",\"message\":{\"model\":\"<synthetic>\"}}\n");
+            Assert(tokens.Found && tokens.Scanned && tokens.History.Sum() == 500, "The first scan counted " + tokens.History.Sum() + " tokens (helpers count, repeats and old replies don't).");
             tokens.Scan(now);
-            Assert(tokens.Errored.Contains("s1") && tokens.History.Sum() == 500, "An API error at the end of the log didn't mark it blocked, or a scan counted again.");
+            Assert(tokens.History.Sum() == 500, "A scan with nothing new counted again.");
             File.AppendAllText(log, "{\"type\":\"user\",\"message\":{\"content\":\"try again\"}}\n" + Reply("d", Iso(now), 50, 50, 0, 0) + "\n");
             tokens.Scan(now);
-            Assert(!tokens.Errored.Contains("s1") && tokens.History.Sum() == 600, "The next prompt didn't clear blocked, or the new reply wasn't counted.");
+            Assert(tokens.History.Sum() == 600, "The new reply wasn't counted.");
             Assert(!new ClaudeTokens(Fresh(directory, "tokens-none")).Found, "A missing logs folder was found.");
             var none = new ClaudeTokens(Path.Combine(directory, "claude-checks", "nowhere")); none.Scan(now);
             Assert(!none.Found && none.Scanned && ClaudeText.TokensValue(new ClaudeReading { LogsScanned = true }) == "—", "No logs don't say so.");
@@ -255,16 +224,11 @@ internal static class ClaudeTests
             Assert(new ClaudeCleanup(Fresh(directory, "cleanup-empty"), Path.Combine(directory, "claude-checks", "no-bridge")).Run() == null, "No settings.json at all failed.");
         });
 
-        check("Claude tiles: a row on a long card, a square on a squarer one, a column on a tall one", () => {
-            Assert(CardSizing.ClaudeColumns(1808, 228) == 4 && CardSizing.ClaudeColumns(900, 180) == 4 && CardSizing.ClaudeColumns(412, 376) == 2 && CardSizing.ClaudeColumns(424, 226) == 2 && CardSizing.ClaudeColumns(252, 640) == 1 && CardSizing.ClaudeColumns(252, 156) == 2, "Tile arrangement wrong.");
-            Assert(CardSizing.ClaudeMascotSize(200, 180) % 16 == 0 && CardSizing.ClaudeMascotSize(60, 60) == 32 && CardSizing.ClaudeMascotSize(2000, 2000) == 192, "The mascot isn't a whole number of units a pixel, or leaves its bounds.");
-            Assert(ClaudeMascot.Sprite.Length == 16 && ClaudeMascot.Sprite.All(r => r.Length == 16) && ClaudeMascot.Sprite.All(r => r.SequenceEqual(r.Reverse())), "The mascot isn't 16 × 16 and symmetric.");
-            foreach (ClaudeMood mood in Enum.GetValues(typeof(ClaudeMood)))
-                foreach (int at in ClaudeMascot.EyeColumns)
-                    for (int row = 0; row < 4; row++) for (int col = 0; col < 3; col++)
-                        Assert(ClaudeMascot.Eye(mood)[row][col] != 'e' || ClaudeMascot.Sprite[ClaudeMascot.EyeRow + row][at + col] == 'v', "An eye leaves the visor.");
-            Assert(ClaudeText.Mood(new ClaudeCounts { Done = 1, NeedsYou = 1, Blocked = 1 }) == ClaudeMood.NeedsYou && ClaudeText.Mood(new ClaudeCounts { Done = 1, Blocked = 1 }) == ClaudeMood.Blocked && ClaudeText.Mood(new ClaudeCounts { Done = 2, Working = 1 }) == ClaudeMood.Working && ClaudeText.Mood(new ClaudeCounts()) == ClaudeMood.Sleeping, "The mascot's mood doesn't follow the most urgent count.");
-            Assert(ClaudeText.Summary(new ClaudeCounts { Done = 2, NeedsYou = 3, Blocked = 1 }) == "3 need you, 1 blocked, 2 done" && ClaudeText.Summary(new ClaudeCounts { NeedsYou = 1 }) == "1 needs you", "Count words wrong.");
+        check("Claude tiles: a row on a long card, two over one on a squarer one, a column on a tall one", () => {
+            Assert(CardSizing.ClaudeArrange(1808, 228) == ClaudeLayout.Row && CardSizing.ClaudeArrange(1808, 492) == ClaudeLayout.Row && CardSizing.ClaudeArrange(312, 196) == ClaudeLayout.TwoOverOne
+                && CardSizing.ClaudeArrange(424, 226) == ClaudeLayout.TwoOverOne && CardSizing.ClaudeArrange(412, 376) == ClaudeLayout.TwoOverOne && CardSizing.ClaudeArrange(252, 640) == ClaudeLayout.Column
+                && CardSizing.ClaudeArrange(272, 492) == ClaudeLayout.Column, "Tile arrangement wrong.");
+            Assert(CardSizing.ClaudeGridColumns(ClaudeLayout.Row) == 3 && CardSizing.ClaudeGridRows(ClaudeLayout.TwoOverOne) == 2 && CardSizing.ClaudeGridRows(ClaudeLayout.Column) == 3, "The grids are the wrong shape.");
             var reading = new ClaudeReading { Plan = ClaudePlanState.Current, Now = Now, Limits = new ClaudeLimits { UpdatedAt = Now, FiveHour = new ClaudeLimitWindow { Percent = 64.4, ResetsAt = Now.AddMinutes(90) }, Week = null } };
             Assert(ClaudeText.Percent(reading, false) == "64%" && ClaudeText.PlanNote(reading, false, true).StartsWith("Resets ") && ClaudeText.Percent(reading, true) == "—" && ClaudeText.PlanNote(reading, true, true) == "No weekly limit", "Plan tile words wrong.");
             Assert(ClaudeText.PlanNote(new ClaudeReading(), false, false) == "Sign in: Settings → Claude" && ClaudeText.Percent(new ClaudeReading { Plan = ClaudePlanState.Reading }, true) == "…", "Signed out or reading doesn't say so.");
@@ -304,30 +268,28 @@ internal static class ClaudeTests
                     {
                         using (var controller = new DashboardController(window, path, true))
                         {
-                            controller.UseClaudeSample(true);
+                            controller.UseClaudeSample();
                             var dashboard = (FrameworkElement)window.FindName("Dashboard");
                             dashboard.Measure(new Size(1920, 720)); dashboard.Arrange(new Rect(0, 0, 1920, 720)); dashboard.UpdateLayout();
                             var card = (FrameworkElement)window.FindName("ClaudeCard");
                             var view = controller.ClaudeCardView;
-                            int expected = CardSizing.ClaudeColumns(card.ActualWidth - 48, card.ActualHeight - 84);
-                            Assert(view.TileColumns == expected, "The card at " + size + " has " + view.TileColumns + " columns, not " + expected + ".");
-                            Assert(view.Mascot.Mood == ClaudeMood.NeedsYou && ((TextBlock)window.FindName("ClaudeStatus")).Text == "SAMPLE" && ((TextBlock)window.FindName("ClaudeFiveValue")).Text == "64%", "The sample isn't labelled, or the tiles don't show it.");
-                            foreach (var element in Descendants(card).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeMascot || e is ClaudeInstrument) && Shown(e, card) && e.ActualWidth > 0))
+                            var expected = CardSizing.ClaudeArrange(card.ActualWidth - 48, card.ActualHeight - 84);
+                            Assert(view.Arrangement == expected, "The card at " + size + " is laid out " + view.Arrangement + ", not " + expected + ".");
+                            Assert(((Panel)window.FindName("ClaudeTiles")).Children.Count == 3 && ((TextBlock)window.FindName("ClaudeStatus")).Text == "SAMPLE" && ((TextBlock)window.FindName("ClaudeFiveValue")).Text == "64%", "The sample isn't labelled, or the three tiles don't show it.");
+                            foreach (var element in Descendants(card).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeInstrument) && Shown(e, card) && e.ActualWidth > 0))
                             {
                                 var box = element.TransformToAncestor(card).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
                                 Assert(box.Left >= -0.5 && box.Top >= -0.5 && box.Right <= card.ActualWidth + 0.5 && box.Bottom <= card.ActualHeight + 0.5, element.GetType().Name + " '" + (element is TextBlock ? ((TextBlock)element).Text : "") + "' leaves the " + size + " card at " + scale * 100 + "%: " + box);
                             }
                             // Inside each tile too, so nothing in one tile runs into the next.
                             foreach (var tile in ((Panel)window.FindName("ClaudeTiles")).Children.OfType<Border>())
-                                foreach (var element in Descendants(tile).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeMascot || e is ClaudeInstrument) && Shown(e, tile) && e.ActualWidth > 0))
+                                foreach (var element in Descendants(tile).OfType<FrameworkElement>().Where(e => (e is TextBlock || e is ClaudeInstrument) && Shown(e, tile) && e.ActualWidth > 0))
                                 {
                                     var box = element.TransformToAncestor(tile).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
                                     Assert(box.Left >= -0.5 && box.Top >= -0.5 && box.Right <= tile.ActualWidth + 0.5 && box.Bottom <= tile.ActualHeight + 0.5, element.GetType().Name + " '" + (element is TextBlock ? ((TextBlock)element).Text : "") + "' leaves its tile in the " + size + " card at " + scale * 100 + "%: " + box + " in " + tile.ActualWidth + " x " + tile.ActualHeight);
                                 }
                             var gauge = (ClaudeGauge)window.FindName("ClaudeFiveGauge"); var laps = (ClaudeLaps)window.FindName("ClaudeLaps");
                             Assert(gauge.Scale > 0.3 && Math.Abs(gauge.Value - 0.64) < 1e-9 && !Double.IsNaN(gauge.Pace) && laps.Now == 3 && laps.ActualWidth > 100 && ((ClaudeGauge)window.FindName("ClaudeTokensGauge")).Scale > 0.3, "The gauges or laps are missing, too small, or not filled from the sample at " + size + ".");
-                            var counts = (Panel)window.FindName("ClaudeCounts");
-                            Assert(counts.Children.Count == 4, "The sample's four counts don't all show.");
                         }
                     }
                     finally { window.Close(); }

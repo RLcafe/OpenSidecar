@@ -51,10 +51,10 @@ namespace WidgetScreen
                 {
                     running = controller;
                     if (single != null) single.OnShow(() => window.Dispatcher.BeginInvoke(new Action(() => { if (controller.Tray != null) controller.Tray.Bring(); })));
-                    // A labelled fixture for the Claude card (a SAMPLE sticker) instead of this PC's sessions and plan.
+                    // A labelled fixture for the Claude card (a SAMPLE sticker) instead of this PC's plan and logs.
                     // The Soundboard's labelled sample sounds (or none), as if Discord were connected; they never play.
                     if (renderPath != null && (args.Contains("--render-soundboard-sample") || args.Contains("--render-soundboard-empty"))) controller.UseSoundboardSample(args.Contains("--render-soundboard-empty"));
-                    if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
+                    if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample();
             // Renders Now Playing's empty state (an empty sleeve) whatever plays on this PC; it shows an absence, not a reading.
             if (renderPath != null && args.Contains("--render-no-media")) controller.IgnoreMedia = true;
                     // Weather's failure states: the real reading shown stale, or no reading at all; never made-up readings.

@@ -4,14 +4,13 @@ using System.Threading.Tasks;
 
 namespace WidgetScreen
 {
-    // Everything the Claude card reads (decision 027): the plan's 5-hour and weekly limits from the widget's own sign-in,
-    // tokens per minute and API errors from Claude Code's logs, and the session counts from Claude Code's session list
-    // and the Claude app's thread records. All of it is read-only; nothing listens on a port or hooks into Claude Code.
+    // Everything the Claude card reads (decisions 027 and 028): the plan's 5-hour and weekly limits from the widget's
+    // own sign-in, and tokens per minute from Claude Code's logs. All of it is read-only; nothing listens on a port or
+    // hooks into Claude Code.
     public sealed class ClaudeService : IDisposable
     {
         public static readonly TimeSpan PlanEvery = TimeSpan.FromMinutes(5), BackoffLimit = TimeSpan.FromMinutes(15);
         public readonly ClaudeAccount Account;
-        public readonly ClaudeSessions Sessions;
         public readonly ClaudeTokens Tokens;
         public readonly ClaudeCleanup Cleanup;
         public readonly string ConfigFolder;
@@ -19,11 +18,10 @@ namespace WidgetScreen
         private bool failed;
         private DateTime lastCheck = DateTime.MinValue;
 
-        public ClaudeService(string configFolder, string signInPath, string bridgeFolder, ClaudeAccount account = null, Func<System.Collections.Generic.IEnumerable<string>> appRoots = null)
+        public ClaudeService(string configFolder, string signInPath, string bridgeFolder, ClaudeAccount account = null)
         {
             ConfigFolder = configFolder;
             Account = account ?? new ClaudeAccount(signInPath);
-            Sessions = new ClaudeSessions(configFolder, appRoots);
             Tokens = new ClaudeTokens(configFolder);
             Cleanup = new ClaudeCleanup(configFolder, bridgeFolder);
             NextWait = PlanEvery;

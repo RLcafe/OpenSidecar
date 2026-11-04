@@ -57,9 +57,6 @@ internal static class SmokeTests
         Program.ScreenSize = new System.Windows.Size(1920, 720);
         // Claude Code's folder is a throwaway one for every check: the real settings.json, sign-in and logs are never touched.
         Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", Path.Combine(directory, "claude-config"));
-        // So are the Claude app's thread records: an empty throwaway folder.
-        Directory.CreateDirectory(Path.Combine(directory, "claude-app-data"));
-        Environment.SetEnvironmentVariable(ClaudeSessions.AppRootsVariable, Path.Combine(directory, "claude-app-data"));
         SpotifyTests.Run(directory, Check);
         DeckTests.Run(directory, Check);
         DiscordTests.Run(directory, Check);
