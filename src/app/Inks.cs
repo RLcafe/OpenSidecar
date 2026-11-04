@@ -35,9 +35,8 @@ namespace WidgetScreen
 
         public static bool Known(string ink) { return ink != null && Names.Contains(ink); }
 
-        // Which widgets' inks Edit layout can change. Claude Code wears its label strip in its own Coral (review fix 9) but
-        // keeps the rest of its own design, so its ink isn't picked.
-        public static bool InScope(string id) { return id != "Claude" && WidgetLayout.Ids.Contains(id); }
+        // Which widgets' inks Edit layout can change: every widget's.
+        public static bool InScope(string id) { return WidgetLayout.Ids.Contains(id); }
 
         // The widget's own ink. Weather, World clocks and Smart home will take theirs from live data later and use
         // Glacier until then.

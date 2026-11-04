@@ -34,18 +34,16 @@ $scenes = [ordered]@{
     'prayer-wide'   = @{ Prayer = @(0, 0, 1200, 420) }
     'notes'         = @{ Notes = @(0, 0, 472, 310); Prayer = @(488, 0, 300, 200) }
     'notes-large'   = @{ Notes = @(0, 0, 1000, 420) }
-    # Claude Code with its labelled fixture (--render-claude-sample): "Sample" shows in the card's heading.
-    'claude-small'  = @{ Claude = @(0, 0, 300, 200); Focus = @(316, 0, 320, 576) }
+    # Claude Code with its labelled fixture (--render-claude-sample): "SAMPLE" shows in the card's heading. The four
+    # tiles go in one row on a long card, a 2 x 2 square on a squarish one and one column on a tall one.
+    'claude-small'  = @{ Claude = @(0, 0, 300, 240); Focus = @(316, 0, 320, 576) }
     'claude-medium' = @{ Claude = @(0, 0, 472, 310); Focus = @(488, 0, 320, 576) }
-    'claude-large'  = @{ Claude = @(0, 0, 1216, 576); Focus = @(1232, 0, 320, 576) }
-    'claude-large-narrow' = @{ Claude = @(0, 0, 900, 576); Focus = @(916, 0, 320, 576) }
-    'claude-large-min' = @{ Claude = @(0, 0, 640, 420) }
+    'claude-square' = @{ Claude = @(0, 0, 576, 576); Focus = @(592, 0, 320, 576) }
+    'claude-row'    = @{ Claude = @(0, 0, 1856, 280) }
+    'claude-tall'   = @{ Claude = @(0, 0, 320, 576); Focus = @(336, 0, 320, 576) }
     'claude-wide'   = @{ Claude = @(0, 0, 1856, 576) }
     'claude-needs'  = @{ Claude = @(0, 0, 472, 310); Storage = @(488, 0, 300, 220) }
-    'claude-needs-small' = @{ Claude = @(0, 0, 300, 200); Storage = @(316, 0, 300, 220) }
-    'claude-needs-large' = @{ Claude = @(0, 0, 1216, 576) }
-    # The Claude card on a second page: the header's pill says a session needs you.
-    'claude-pill'   = @{ Focus = @(0, 0, 320, 576); Media = @(336, 0, 472, 310) }
+    'claude-needs-row' = @{ Claude = @(0, 0, 1216, 300) }
 }
 foreach ($name in $scenes.Keys) {
     if ($Only.Count -gt 0 -and $Only -notcontains $name) { continue }
@@ -63,7 +61,7 @@ foreach ($name in $scenes.Keys) {
   <HintDismissed>true</HintDismissed>
   <PrayerLocation>Riyadh, Riyadh Region, Saudi Arabia</PrayerLocation><PrayerLatitude>24.6877</PrayerLatitude><PrayerLongitude>46.7219</PrayerLongitude><PrayerMethod>Makkah</PrayerMethod>
   <WorldClocks><WorldClock><Zone>Tokyo Standard Time</Zone><Label>Tokyo</Label></WorldClock><WorldClock><Zone>GMT Standard Time</Zone><Label>London</Label></WorldClock><WorldClock><Zone>Pacific Standard Time</Zone><Label>San Francisco</Label></WorldClock></WorldClocks>
-  <WidgetLayout>$($placements -join '')</WidgetLayout>$(if ($name -eq 'claude-pill') { '<MorePages><LayoutPage><Name>Claude</Name><WidgetLayout><WidgetPlacement><Id>Claude</Id><X>0</X><Y>0</Y><Width>472</Width><Height>310</Height><Visible>true</Visible></WidgetPlacement></WidgetLayout></LayoutPage></MorePages>' })
+  <WidgetLayout>$($placements -join '')</WidgetLayout>
 </AppSettings>
 "@ | Set-Content -Encoding UTF8 $settings
     # A labelled fixture for the Notes card: made-up notes in the scene's own notes.xml.
@@ -71,7 +69,7 @@ foreach ($name in $scenes.Keys) {
     '<?xml version="1.0"?><NotesData><Text>TEST FIXTURE: example notes. Call about the order on Tuesday.</Text><Items><TodoItem><Id>a1</Id><Text>Example: renew the domain</Text><Done>true</Done></TodoItem><TodoItem><Id>a2</Id><Text>Example: back up the photos</Text><Done>false</Done></TodoItem><TodoItem><Id>a3</Id><Text>Example: book a haircut</Text><Done>false</Done></TodoItem></Items></NotesData>' | Set-Content -Encoding UTF8 $notesFile
     $png = Join-Path $output ($name + '.png')
     $arguments = @('--settings', "`"$settings`"", '--render', "`"$png`"", '--render-wait', $Wait)
-    if ($name -like 'claude-*') { $arguments += '--render-claude-sample'; if ($name -like 'claude-needs*' -or $name -eq 'claude-pill') { $arguments += '--render-claude-needs' } }
+    if ($name -like 'claude-*') { $arguments += '--render-claude-sample'; if ($name -like 'claude-needs*') { $arguments += '--render-claude-needs' } }
     $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -Wait
     if ($process.ExitCode -ne 0 -or -not (Test-Path $png)) { throw "Render failed: $name" }
     Write-Output "Rendered $png"

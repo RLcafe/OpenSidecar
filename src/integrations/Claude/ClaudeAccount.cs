@@ -12,7 +12,7 @@ using System.Web;
 
 namespace WidgetScreen
 {
-    // An answer from Anthropic that wasn't a success, with its status: 429 and 5xx mean "not now" (ClaudeIntervals.Backoff).
+    // An answer from Anthropic that wasn't a success, with its status: 429 and 5xx mean "not now" (ClaudeService.Backoff).
     public sealed class ClaudeHttpException : IOException
     {
         public readonly int Status;
@@ -34,12 +34,12 @@ namespace WidgetScreen
             var o = ClaudeJson.Obj(ClaudeJson.Parse(Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(path), Entropy, DataProtectionScope.CurrentUser))));
             double expires = ClaudeJson.Num(o, "expires");
             return new ClaudeSignIn { AccessToken = ClaudeJson.Str(o, "access") ?? "", RefreshToken = ClaudeJson.Str(o, "refresh") ?? "", Scope = ClaudeJson.Str(o, "scope") ?? "",
-                ExpiresUtc = Double.IsNaN(expires) ? DateTime.MinValue : ClaudeBridge.FromEpoch(expires), Expired = ClaudeJson.Bool(o, "expired") };
+                ExpiresUtc = Double.IsNaN(expires) ? DateTime.MinValue : ClaudeTime.FromEpoch(expires), Expired = ClaudeJson.Bool(o, "expired") };
         }
         public void Save(string path)
         {
             var o = new JsonObject();
-            o["access"] = AccessToken; o["refresh"] = RefreshToken; o["scope"] = Scope; o["expires"] = new JsonNumber(ClaudeBridge.Epoch(ExpiresUtc)); o["expired"] = Expired;
+            o["access"] = AccessToken; o["refresh"] = RefreshToken; o["scope"] = Scope; o["expires"] = new JsonNumber(ClaudeTime.Epoch(ExpiresUtc)); o["expired"] = Expired;
             byte[] bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(ClaudeJson.Compact(o)), Entropy, DataProtectionScope.CurrentUser);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             string temp = path + ".tmp";
@@ -279,7 +279,7 @@ namespace WidgetScreen
                         // after a refresh that worked is a failed check, tried again later.
                         if (response.StatusCode == HttpStatusCode.Forbidden) { NoMeters = true; return null; }
                         if (!response.IsSuccessStatusCode) throw new ClaudeHttpException((int)response.StatusCode, "api.anthropic.com answered " + (int)response.StatusCode + ".");
-                        var limits = ClaudeBridge.ParseUsageResponse(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
+                        var limits = ClaudePlan.ParseUsage(await response.Content.ReadAsStringAsync().ConfigureAwait(false), now);
                         if (limits == null) throw new IOException("The plan usage answer couldn't be read.");
                         NoMeters = false;
                         return limits;

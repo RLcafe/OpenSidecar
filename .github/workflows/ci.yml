@@ -72,7 +72,6 @@ jobs:
           path: |
             artifacts/app/WidgetScreen.exe
             artifacts/app/WidgetScreen.exe.config
-            artifacts/app/ClaudeHook.exe
             artifacts/setup/*.exe
             artifacts/android/WidgetScreen.apk
             artifacts/tests/remote-state-sample.json

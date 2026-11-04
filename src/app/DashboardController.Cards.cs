@@ -29,7 +29,7 @@ namespace WidgetScreen
             clocksCard.Fit(Editor.Bounds("Clocks"));
             prayerCard.Fit(Editor.Bounds("Prayer")); RenderPrayer();
             notesCard.Fit(Editor.Bounds("Notes"));
-            claudeCard.Fit(Editor.Bounds("Claude"), settings.TextScale);
+            claudeCard.Fit(Editor.Bounds("Claude"));
             clipCard.Fit(Editor.Bounds("Clipboard"));
             FitMacros();
             calendarCard.Fit(Editor.Bounds("Calendar"));

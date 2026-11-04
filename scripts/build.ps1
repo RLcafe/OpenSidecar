@@ -35,14 +35,9 @@ $arguments = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/utf
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)." }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\app\App.config') -Destination (Join-Path $outputPath 'WidgetScreen.exe.config') -Force
 Write-Output "Built: $outputPath\WidgetScreen.exe ($informationalVersion)"
-# ClaudeHook.exe, the Claude Code bridge (decision 014): a console exe from hook\ and the shared Claude files in src\.
-$claudeShared = @('ClaudeJson.cs', 'ClaudeBridge.cs', 'ClaudeProcesses.cs') | ForEach-Object { Join-Path $projectRoot "src\integrations\Claude\$_" }
-$hookSources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'hook') -Filter '*.cs' | Sort-Object FullName | Select-Object -ExpandProperty FullName) + $claudeShared + $versionSource
-$hookArguments = @('/nologo', '/target:exe', '/platform:x64', '/optimize+', '/utf8output', '/warn:4', ('/out:' + (Join-Path $outputPath 'ClaudeHook.exe')), ('/win32icon:' + (Join-Path $projectRoot 'assets\WidgetScreen.ico')),
-    ('/reference:' + (Join-Path $frameworkPath 'System.dll')), ('/reference:' + (Join-Path $frameworkPath 'System.Core.dll'))) + $hookSources
-& $compilerPath $hookArguments
-if ($LASTEXITCODE -ne 0) { throw "ClaudeHook build failed (exit $LASTEXITCODE)." }
-Write-Output "Built: $outputPath\ClaudeHook.exe"
+# Earlier builds also made ClaudeHook.exe, the Claude Code bridge the simple Claude card no longer needs (decision 027).
+$oldHook = Join-Path $outputPath 'ClaudeHook.exe'
+if (Test-Path -LiteralPath $oldHook) { Remove-Item -LiteralPath $oldHook -Force -ErrorAction SilentlyContinue }
 # Hardware sensors (decision 016): the pinned LibreHardwareMonitor files go in sensors\ when scripts\get-sensors.ps1 has
 # fetched them, each checked against SHA256SUMS.txt, with the third-party notice and licences. Without them the app
 # builds and runs as before, and says the sensors aren't installed.
@@ -72,7 +67,6 @@ if ($Test) {
     & $compilerPath $testArguments
     if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
     Copy-Item -LiteralPath (Join-Path $outputPath 'WidgetScreen.exe') -Destination $testOutput -Force
-    Copy-Item -LiteralPath (Join-Path $outputPath 'ClaudeHook.exe') -Destination $testOutput -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot 'src\app\App.config') -Destination (Join-Path $testOutput 'WidgetScreen.Tests.exe.config') -Force
     & (Join-Path $testOutput 'WidgetScreen.Tests.exe') $testOutput
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }

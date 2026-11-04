@@ -107,6 +107,9 @@ namespace WidgetScreenSetup
             long bytes = 0;
             // Leaving the sensors out (or taking them out on an update) removes the whole folder.
             if (!sensors && Directory.Exists(SensorsDir)) Retry(() => Directory.Delete(SensorsDir, true));
+            // Earlier versions also installed ClaudeHook.exe, the Claude Code bridge the simple Claude card no longer
+            // needs (decision 027).
+            DeleteFile(Path.Combine(InstallDir, "ClaudeHook.exe"));
             foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith("payload/", StringComparison.Ordinal)))
             {
                 if (!sensors && name.StartsWith(SensorsPrefix, StringComparison.Ordinal)) continue;

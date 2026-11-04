@@ -51,7 +51,7 @@ namespace WidgetScreen
                 {
                     running = controller;
                     if (single != null) single.OnShow(() => window.Dispatcher.BeginInvoke(new Action(() => { if (controller.Tray != null) controller.Tray.Bring(); })));
-                    // A labelled fixture for the Claude card ("Sample" in its heading) instead of this PC's sessions.
+                    // A labelled fixture for the Claude card (a SAMPLE sticker) instead of this PC's sessions and plan.
                     // The Soundboard's labelled sample sounds (or none), as if Discord were connected; they never play.
                     if (renderPath != null && (args.Contains("--render-soundboard-sample") || args.Contains("--render-soundboard-empty"))) controller.UseSoundboardSample(args.Contains("--render-soundboard-empty"));
                     if (renderPath != null && args.Contains("--render-claude-sample")) controller.UseClaudeSample(args.Contains("--render-claude-needs"));
