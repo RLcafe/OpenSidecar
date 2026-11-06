@@ -6,7 +6,7 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
-## v0.44.0 (4 Nov 2026)
+## v0.44.0 (6 Nov 2026)
 
 The Claude Code card keeps three tiles and gets their instruments back on both apps (Ali's requests; decision 028).
 
