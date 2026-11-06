@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace WidgetScreen
 {
+    // How the Claude Code card's three tiles sit (CardSizing.ClaudeArrange).
+    public enum ClaudeLayout { Row, TwoOverOne, Column }
+
     // How each card's content follows its size (docs/design/any-screen-size.md), the same numbers as the Android
     // app's CardSizing.java. Quick Launch and the Soundboard show six buttons a page that grow with the card; Focus, Now
     // Playing and Weather grow their main reading; Spotify adds columns on wide cards. The mixer list and System
@@ -250,51 +253,57 @@ namespace WidgetScreen
         // (Small under 340 × 220 keeps the same tabs in less room), and both side by side from 700 × 300.
         public static Design Notes(double width, double height) { return width < 340 || height < 220 ? Design.Small : width >= 700 && height >= 300 ? Design.Large : Design.Medium; }
         public static double NotesListColumn(double width) { return Clamp(Math.Floor(width * 0.46), 300, 520); }
-        // Claude Code (decision 027, docs/design/claude-card.md): four tiles in one row, a 2 × 2 square or one column,
-        // whichever leaves the tiles closest to a little wider than square (1.25 : 1), so a long card shows a row and a
-        // squarish one a square. Inside a tile the big reading follows the tile's size, and the line under it and the
-        // token history step aside in short tiles. The phone's CardSizing has the same numbers.
+        // Claude Code (decisions 027 and 028, docs/design/claude-card.md): three tiles in one row, the two plan tiles
+        // over a full-width tokens tile, or one column, whichever leaves the tiles on average closest to a little wider
+        // than square (1.25 : 1), so a long card shows a row, a squarish one two over one and a tall one a column. Inside
+        // a tile the big reading follows the tile's size. The phone's CardSizing has the same numbers.
         public const double ClaudeGap = 12, ClaudeTileShape = 1.25;
-        public static int ClaudeColumns(double bodyWidth, double bodyHeight)
+        public static ClaudeLayout ClaudeArrange(double bodyWidth, double bodyHeight)
         {
-            int best = 2; double bestScore = Double.MaxValue;
-            foreach (int columns in new[] { 4, 2, 1 })
+            var best = ClaudeLayout.TwoOverOne; double bestScore = Double.MaxValue;
+            foreach (ClaudeLayout layout in new[] { ClaudeLayout.Row, ClaudeLayout.TwoOverOne, ClaudeLayout.Column })
             {
-                int rows = 4 / columns;
+                int columns = ClaudeGridColumns(layout), rows = ClaudeGridRows(layout);
                 double w = (bodyWidth - ClaudeGap * (columns - 1)) / columns, h = (bodyHeight - ClaudeGap * (rows - 1)) / rows;
                 if (w <= 0 || h <= 0) continue;
-                double score = Math.Abs(Math.Log(w / h / ClaudeTileShape));
-                if (score < bestScore - 1e-9) { bestScore = score; best = columns; }
+                double score = Shape(w, h);
+                if (layout == ClaudeLayout.TwoOverOne) score = (2 * score + Shape(bodyWidth, h)) / 3;
+                if (score < bestScore - 1e-9) { bestScore = score; best = layout; }
             }
             return best;
         }
+        private static double Shape(double w, double h) { return Math.Abs(Math.Log(w / h / ClaudeTileShape)); }
+        public static int ClaudeGridColumns(ClaudeLayout layout) { return layout == ClaudeLayout.Row ? 3 : layout == ClaudeLayout.TwoOverOne ? 2 : 1; }
+        public static int ClaudeGridRows(ClaudeLayout layout) { return layout == ClaudeLayout.Row ? 1 : layout == ClaudeLayout.TwoOverOne ? 2 : 3; }
         public static double ClaudePadding(double tileWidth, double tileHeight) { return Math.Min(tileWidth, tileHeight) < 140 ? 10 : 16; }
         public static double ClaudeValueSize(double tileWidth, double tileHeight) { return Clamp(Math.Round(Math.Min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
-        public static bool ClaudeNote(double tileHeight) { return tileHeight >= 96; }
-        public static bool ClaudeHistory(double tileHeight) { return tileHeight >= 150; }
-        // The mascot stands beside the counts in a wide tile and over them otherwise, drawn at a whole number of units
-        // a pixel (16 pixels square) so it stays crisp: what's left after the padding and the counts, 32 to 192 units.
-        // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their
-        // words beside a mascot that leaves them 150 units and four lines.
-        public const double ClaudeCountsRow = 24, ClaudeCountWidth = 40, ClaudeCountsWords = 150, ClaudeMascotGap = 8;
-        public static bool ClaudeMascotBeside(double tileWidth, double tileHeight) { return tileWidth >= tileHeight * 1.35; }
-        public static int ClaudeCountColumns(double tileWidth, double tileHeight)
+        // Inside a tile (decision 028): the 5-hour use and tokens per minute are needle gauges, beside their reading in a
+        // tile at least 2.4 times as wide as the room under its name (the gauge takes up to 45% of the width) and over it
+        // otherwise (the reading and its lines take up to half the room). The reading shrinks to 22 to keep its first
+        // line, and lines are added while they fit: 18 units each, 30 for the burn line. The week is its reading over
+        // seven laps, 30 units tall with the day names when that leaves room for a 22-unit reading, else 14.
+        public const double ClaudeLineHeight = 1.34, ClaudeLine = 18, ClaudeBurnRoom = 30, ClaudeBurnHeight = 24, ClaudeKeepLine = 22;
+        public const double ClaudeGaugeGap = 12, ClaudeGaugeShare = 0.45, ClaudeTextShare = 0.5, ClaudeLapsGap = 4;
+        public static bool ClaudeGaugeBeside(double innerWidth, double bodyHeight) { return innerWidth >= bodyHeight * 2.4; }
+        public static double ClaudeGaugeWidth(double innerWidth, double bodyHeight) { return Math.Max(1, Math.Floor(Math.Min(innerWidth * ClaudeGaugeShare, bodyHeight * 140 / 84))); }
+        public static int ClaudeFit(double room, double[] lines, ref double size)
         {
-            return !ClaudeMascotBeside(tileWidth, tileHeight) && tileWidth - 2 * ClaudePadding(tileWidth, tileHeight) >= 4 * ClaudeCountWidth ? 4 : 2;
+            size = Math.Max(18, Math.Min(size, Math.Floor(room / ClaudeLineHeight)));
+            if (lines.Length > 0 && size * ClaudeLineHeight + lines[0] > room)
+            {
+                double smaller = Math.Floor((room - lines[0]) / ClaudeLineHeight);
+                if (smaller >= ClaudeKeepLine) size = Math.Min(size, smaller);
+            }
+            int shown = 0; double used = size * ClaudeLineHeight;
+            while (shown < lines.Length && used + lines[shown] <= room + 0.01) { used += lines[shown]; shown++; }
+            return shown;
         }
-        public static double ClaudeMascotSize(double tileWidth, double tileHeight)
+        public static double ClaudeLapsHeight(double bodyHeight) { return bodyHeight - 30 - ClaudeLapsGap >= ClaudeKeepLine * ClaudeLineHeight ? 30 : 14; }
+        // The week's pace and reset sit beside its reading, one or two lines, when that leaves them 70 units.
+        public static int ClaudeWeekNotes(double innerWidth, double room, double size)
         {
-            double pad = ClaudePadding(tileWidth, tileHeight);
-            double room = ClaudeMascotBeside(tileWidth, tileHeight)
-                ? Math.Min(Math.Min(tileHeight - 2 * pad, tileWidth * 0.45), tileWidth - 2 * pad - ClaudeMascotGap - 2 * ClaudeCountWidth)
-                : Math.Min(tileWidth - 2 * pad, tileHeight - 2 * pad - 6 - ClaudeCountsRow * (4 / ClaudeCountColumns(tileWidth, tileHeight)));
-            return Clamp(Math.Floor(room / 16) * 16, 32, 192);
-        }
-        public static bool ClaudeCountWords(double tileWidth, double tileHeight)
-        {
-            double pad = ClaudePadding(tileWidth, tileHeight);
-            return ClaudeMascotBeside(tileWidth, tileHeight) && tileHeight - 2 * pad >= 4 * ClaudeCountsRow
-                && tileWidth - 2 * pad - ClaudeMascotSize(tileWidth, tileHeight) - 16 >= ClaudeCountsWords;
+            if (innerWidth - size * 2.1 - 10 < 70) return 0;
+            return (int)Math.Max(0, Math.Min(2, Math.Floor(room / ClaudeLine)));
         }
         // Clipboard history (docs/design/clipboard-history.md): one-line rows under 340 wide or 220 tall, rows with when
         // each text was copied at the reference size, and two-line previews with their length from 440 × 400.

@@ -7,14 +7,13 @@ using System.Windows.Controls;
 
 namespace WidgetScreen
 {
-    // The Claude Code card (decision 027, docs/design/claude-card.md): four tiles, the plan's 5-hour and weekly use,
-    // tokens per minute and the mascot with the session counts. While the card is on the page shown, the heartbeat
-    // reads Claude Code's session list and the Claude app's thread records every 2 s (only changed files are parsed) and
-    // Claude Code's logs every 10 s off the UI thread; the plan check runs every 5 minutes while signed in and the card
-    // is on any page, so the phone gets it too. Nothing else runs for Claude.
+    // The Claude Code card (decisions 027 and 028, docs/design/claude-card.md): three tiles, the plan's 5-hour and
+    // weekly use and tokens per minute. While the card is on the page shown, the heartbeat reads Claude Code's logs
+    // every 10 s off the UI thread; the plan check runs every 5 minutes while signed in and the card is on any page, so
+    // the phone gets it too. Nothing else runs for Claude.
     public sealed partial class DashboardController
     {
-        private const int ClaudeSessionsEvery = 2, ClaudeLogsEvery = 10;
+        private const int ClaudeLogsEvery = 10;
         private ClaudeService claude;
         private ClaudeCard claudeCard;
         private Task claudeScan;
@@ -47,11 +46,11 @@ namespace WidgetScreen
             Task.Run(() => claude.Cleanup.Run()).ContinueWith(t => { claudeCleanupProblem = t.IsFaulted ? "Couldn't remove the old Claude Code hooks." : t.Result; });
         }
 
-        // A labelled fixture instead of this PC's sessions, for renders (--render-claude-sample) and checks.
-        public void UseClaudeSample(bool needsYou)
+        // A labelled fixture instead of this PC's plan and logs, for renders (--render-claude-sample) and checks.
+        public void UseClaudeSample()
         {
             claudeSample = true;
-            claudeSampleReading = ClaudeReading.Fixture(DateTime.UtcNow, needsYou);
+            claudeSampleReading = ClaudeReading.Fixture(DateTime.UtcNow);
             claudeCard.Update(claudeSampleReading);
         }
 
@@ -73,7 +72,6 @@ namespace WidgetScreen
         private void TickClaude()
         {
             if (claudeSample || Program.Rendering || !Editor.IsVisible("Claude") || Editor.Editing) return;
-            if (ticks % ClaudeSessionsEvery == 0) ReadClaudeSessions();
             if (ticks % ClaudeLogsEvery == 0) ScanClaudeLogs();
         }
 
@@ -82,12 +80,6 @@ namespace WidgetScreen
         {
             if (Program.Rendering || claudeSample || claudePlanBusy || !ClaudeOnAnyPage || !claude.PlanDue(DateTime.UtcNow)) return;
             CheckClaudePlan();
-        }
-
-        private void ReadClaudeSessions()
-        {
-            claude.Sessions.Read(DateTime.UtcNow, claude.Tokens.Errored);
-            RefreshClaude();
         }
 
         private async void ScanClaudeLogs()
@@ -112,7 +104,7 @@ namespace WidgetScreen
         {
             if (claudeSample) return claudeSampleReading;
             return new ClaudeReading { Plan = claude.Plan, Limits = claude.Limits, LogsFound = claude.Tokens.Found, LogsScanned = claude.Tokens.Scanned,
-                History = claude.Tokens.History, Counts = claude.Sessions.Counts ?? new ClaudeCounts(), Now = DateTime.UtcNow };
+                History = claude.Tokens.History, Now = DateTime.UtcNow };
         }
         private void RefreshClaude() { claudeCard.Update(ClaudeNow()); }
 
@@ -180,22 +172,16 @@ namespace WidgetScreen
 
         // ----- The phone link -----
 
-        // The phone's claude section: the same four tiles' readings. Never a token, a path or a session's name. The
-        // dashboard may be in the tray, so the phone's question reads the sources itself (the logs at most every 10 s).
+        // The phone's claude section: the same three tiles' readings. Never a token, a path or a session's name. The
+        // dashboard may be in the tray, so the phone's question reads the logs itself (at most every 10 s).
         private Dictionary<string, object> RemoteClaude()
         {
-            if (!claudeSample && !Program.Rendering)
-            {
-                claude.Sessions.Read(DateTime.UtcNow, claude.Tokens.Errored);
-                if (DateTime.UtcNow - lastClaudeScan >= TimeSpan.FromSeconds(ClaudeLogsEvery)) ScanClaudeLogs();
-            }
+            if (!claudeSample && !Program.Rendering && DateTime.UtcNow - lastClaudeScan >= TimeSpan.FromSeconds(ClaudeLogsEvery)) ScanClaudeLogs();
             var r = ClaudeNow();
             Func<ClaudeLimitWindow, object> window = w => w == null ? null : D("pct", Math.Round(ClaudePlan.Percent(w, r.Now), 1), "resetsAt", w.ResetsAt.HasValue ? (object)(ClaudeTime.Epoch(w.ResetsAt.Value) / 1000.0) : null);
-            var c = r.Counts ?? new ClaudeCounts();
             return D("sample", r.Sample, "plan", PlanName(r.Plan), "updatedAt", r.Limits == null ? null : (object)(ClaudeTime.Epoch(r.Limits.UpdatedAt) / 1000.0),
                 "fiveHour", r.Limits == null ? null : window(r.Limits.FiveHour), "week", r.Limits == null ? null : window(r.Limits.Week),
-                "logs", r.LogsFound, "logsRead", r.LogsScanned, "minutes", r.History.Select(v => (object)Math.Round(v)).ToArray(),
-                "done", c.Done, "needsYou", c.NeedsYou, "blocked", c.Blocked, "working", c.Working);
+                "logs", r.LogsFound, "logsRead", r.LogsScanned, "minutes", r.History.Select(v => (object)Math.Round(v)).ToArray());
         }
         private static string PlanName(ClaudePlanState plan)
         {

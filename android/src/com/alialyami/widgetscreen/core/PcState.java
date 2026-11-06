@@ -94,9 +94,9 @@ public final class PcState {
         public final List<Todo> items = new ArrayList<Todo>();
     }
 
-    // Claude Code on the PC (decision 027, docs/design/claude-card.md): the four tiles' readings. The plan's 5-hour and
-    // weekly use (from the PC's own Claude sign-in), tokens in each of the last 30 minutes, and how many sessions are
-    // done, need you, are blocked or working. Times are Unix seconds.
+    // Claude Code on the PC (decisions 027 and 028, docs/design/claude-card.md): the three tiles' readings. The plan's
+    // 5-hour and weekly use (from the PC's own Claude sign-in) and tokens in each of the last 30 minutes. Times are Unix
+    // seconds.
     public static final class ClaudeWindow { public double pct = Double.NaN, resetsAt; }
     public static final class Claude {
         public boolean sample, logs, logsRead;
@@ -105,7 +105,6 @@ public final class PcState {
         public double updatedAt;
         public ClaudeWindow fiveHour, week;
         public final double[] minutes = new double[30];
-        public int done, needsYou, blocked, working;
     }
     // The PC's clipboard history (docs/design/clipboard-history.md): short previews, newest first.
     public static final class Clip { public String id = "", text = ""; public int length; public double at; }
@@ -423,8 +422,6 @@ public final class PcState {
         claude.fiveHour = window(Json.value(c, "fiveHour")); claude.week = window(Json.value(c, "week"));
         List<Object> minutes = Json.array(c, "minutes");
         for (int i = 0; minutes != null && i < claude.minutes.length && i < minutes.size(); i++) if (minutes.get(i) instanceof Number) claude.minutes[i] = ((Number) minutes.get(i)).doubleValue();
-        claude.done = (int) Json.number(c, "done"); claude.needsYou = (int) Json.number(c, "needsYou");
-        claude.blocked = (int) Json.number(c, "blocked"); claude.working = (int) Json.number(c, "working");
         return claude;
     }
     private static ClaudeWindow window(Object value) {

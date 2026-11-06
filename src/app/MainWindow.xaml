@@ -600,7 +600,7 @@
                 <Grid x:Name="ClocksBody" Grid.Row="1" Margin="0,8,0,0"/>
               </Grid>
             </Border>
-            <!-- Claude Code: four tiles (5-hour, weekly, tokens per minute, the mascot with the session counts). ClaudeCard lays them out in ClaudeBody (docs/design/claude-card.md). -->
+            <!-- Claude Code: three tiles (the 5-hour gauge, the week's laps, the tokens gauge). ClaudeCard lays them out in ClaudeBody (docs/design/claude-card.md). -->
             <Border x:Name="ClaudeCard" Grid.Row="1" Style="{StaticResource Card}" AutomationProperties.Name="Claude Code">
               <Grid><Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition/></Grid.RowDefinitions>
                 <DockPanel><Border x:Name="ClaudeStrip"/><TextBlock x:Name="ClaudeStatus" Text="" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"/></DockPanel>
@@ -1007,8 +1007,8 @@
                   </StackPanel></ScrollViewer>
                   <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"><StackPanel Margin="0,0,12,0">
                     <TextBlock Text="What the card shows" FontSize="24" Margin="0,0,0,12"/>
-                    <TextBlock Text="Four tiles: your plan's 5-hour and weekly use, tokens per minute over the last 5 minutes on this PC, and the Claude robot with how many sessions are done, need you, are blocked or are working." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                    <TextBlock Text="Sessions and tokens come from Claude Code's own files on this PC, read only: its list of running sessions, its logs, and the Claude app's thread records (threads from the last 24 hours that aren't archived). Nothing is added to Claude Code's settings." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Three tiles: your plan's 5-hour use on a gauge with its pace, the week as seven laps, and tokens per minute over the last 5 minutes on this PC." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <TextBlock Text="Tokens come from Claude Code's own logs on this PC, read only. Nothing is added to Claude Code's settings." Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="Turn on the Claude Code widget in Edit layout. Its tiles sit in a row on a long card and in a square on a squarer one." Style="{StaticResource Small}" TextWrapping="Wrap"/>
                   </StackPanel></ScrollViewer>
                 </Grid>

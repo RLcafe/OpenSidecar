@@ -144,15 +144,15 @@ internal static class RemoteTests
                     var liveState = Json(live.Item2);
                     // The Android checks parse this real answer, so both apps agree on the format.
                     // The Claude section comes from the labelled fixture, never from this PC's Claude Code logs.
-                    controller.UseClaudeSample(true);
+                    controller.UseClaudeSample();
                     File.WriteAllText(Path.Combine(directory, "remote-state-sample.json"), get("/state?parts=focus,media,audio,system,deck,weather,spotify,discord,storage,clocks,prayer,notes,claude", token).Item2);
-                    // The Claude card's four tiles (decision 027): percentages, the minutes' tokens and the counts, never a token or a path.
+                    // The Claude card's three tiles (decisions 027 and 028): percentages and the minutes' tokens, never a token, a path or a count.
                     var claudeAnswer = get("/state?parts=claude", token).Item2;
                     var claudeState = (Dictionary<string, object>)Json(claudeAnswer)["claude"];
                     var claudeFive = (Dictionary<string, object>)claudeState["fiveHour"]; var claudeWeek = (Dictionary<string, object>)claudeState["week"];
                     Assert((bool)claudeState["sample"] && (string)claudeState["plan"] == "current" && Convert.ToDouble(claudeFive["pct"]) == 64 && Convert.ToDouble(claudeFive["resetsAt"]) > 1e9 && Convert.ToDouble(claudeWeek["pct"]) == 31
                         && ((object[])claudeState["minutes"]).Length == ClaudeTokens.Minutes && (bool)claudeState["logs"]
-                        && Convert.ToInt32(claudeState["done"]) == 2 && Convert.ToInt32(claudeState["needsYou"]) == 3 && Convert.ToInt32(claudeState["blocked"]) == 1 && Convert.ToInt32(claudeState["working"]) == 2
+                        && !claudeState.ContainsKey("done") && !claudeState.ContainsKey("needsYou") && !claudeState.ContainsKey("working")
                         && !claudeState.ContainsKey("sessions") && !claudeState.ContainsKey("threads") && !claudeAnswer.Contains("Bearer") && !state.Item2.Contains("accessToken"), "Claude state wrong.");
                     // The old watcher's extras are gone: no alerts in every answer, no focus command.
                     var plain = Json(get("/state?parts=focus", token).Item2);

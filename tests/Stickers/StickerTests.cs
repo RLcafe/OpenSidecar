@@ -138,7 +138,7 @@ internal static class StickerTests
                                 Lay(window);
                                 var card = (FrameworkElement)window.FindName(CardName(id));
                                 LabelStrip strip; controller.Strips.TryGetValue(id, out strip);
-                                if (id == "Claude") { controller.UseClaudeSample(false); Lay(window); }
+                                if (id == "Claude") { controller.UseClaudeSample(); Lay(window); }
                                 if (strip == null && id == "Weather") strip = controller.WeatherStrip;
                                 if (id == "Weather" && CardSizing.Weather(size.Width, size.Height) == CardSizing.Design.Small) { Assert(strip == null, "Small weather grew a heading."); continue; }
                                 Assert(strip != null, id + " has no label strip.");

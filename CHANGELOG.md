@@ -6,6 +6,16 @@ Released versions of Widget Screen, newest first. Each version is an annotated `
 
 Nothing yet.
 
+## v0.44.0 (6 Nov 2026)
+
+The Claude Code card keeps three tiles and gets their instruments back on both apps (Ali's requests; decision 028).
+
+- **5-HOUR is a dial again.** A needle gauge with a pace tick for how much of the five hours has passed and a dashed arc for where this pace ends at the reset, with "on pace for 92%" under the reading.
+- **WEEKLY is a race.** Seven laps, one a day with the day's name, filled by your use, the projection hatched, today's lap outlined and a chequered flag at the reset, with "LAP 4 OF 7" and the pace.
+- **TOKENS / MIN is a rev counter.** A needle gauge with a redline over a burn line of the last half hour.
+- **The robot tile is gone**, with its session counts and everything that read Claude Code's session list and the Claude app's thread records. The three tiles sit in a row on a long card, the two plan tiles over a wide tokens tile on a squarish one, and a column on a tall one.
+- The pace comes from the plan's percentages and reset times the sign-in already reads: no telemetry, no new requests. The phone link's `claude` section no longer carries the counts.
+
 ## v0.43.0 (4 Nov 2026)
 
 A simple Claude Code card on both apps (Ali's request; decision 027). It replaces the Claude watcher, which is deleted from the code base.

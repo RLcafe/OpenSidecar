@@ -374,13 +374,13 @@ public final class AndroidTests {
             ok(state.games != null, "games");
             ok(state.home != null && !state.home.connected && state.home.devices.isEmpty(), "home");
             if (!state.storage.error) ok(!state.storage.drives.isEmpty() && state.storage.drives.get(0).total > 0 && state.storage.lowPercent == 10, "storage");
-            // The PC's Claude section comes from its labelled fixture: the plan's two limits, half an hour of tokens and
-            // the four counts (decision 027). Nothing else: no sessions, threads, alerts or page numbers.
+            // The PC's Claude section comes from its labelled fixture: the plan's two limits and half an hour of tokens
+            // (decisions 027 and 028). Nothing else: no counts, sessions, threads, alerts or page numbers.
             PcState.Claude claude = state.claude;
             ok(claude != null && claude.sample && claude.plan.equals("current") && claude.logs && claude.logsRead && claude.updatedAt > 1e9
                 && claude.fiveHour != null && claude.fiveHour.pct == 64 && claude.fiveHour.resetsAt > 1e9 && claude.week != null && claude.week.pct == 31
-                && claude.minutes.length == 30 && claude.minutes[29] > 0 && claude.done == 2 && claude.needsYou == 3 && claude.blocked == 1 && claude.working == 2, "claude");
-            ok(ClaudeText.mood(claude) == ClaudeText.MOOD_NEEDS_YOU && ClaudeText.summary(claude).equals("3 need you, 1 blocked, 2 done, 2 working") && ClaudeText.percentText(claude, false, claude.updatedAt).equals("64%")
+                && claude.minutes.length == 30 && claude.minutes[29] > 0, "claude");
+            ok(ClaudeText.percentText(claude, false, claude.updatedAt).equals("64%")
                 && !ClaudeText.tokensValue(claude).equals("—") && ClaudeText.tokensNote(claude).equals("Last 5 minutes"), "claude words from the PC's sample");
             if (state.audio.available) ok(!state.audio.device.isEmpty() && state.audio.volume >= 0 && state.audio.volume <= 1, "audio");
             if (!state.system.error) ok(state.system.uptimeMs > 0, "system");
@@ -481,49 +481,43 @@ public final class AndroidTests {
             ok(NotesText.line("  Call the\nbank\t now ").equals("Call the bank now") && NotesText.line(new String(new char[500]).replace('\0', 'y')).length() == 200 && NotesText.line(" \n ").isEmpty(), "line");
             ok(!WidgetLayout.find(WidgetLayout.defaults(), "Notes").visible && WidgetLayout.title("Notes").equals("Notes and to-do"), "hidden by default");
         } });
-        check("Claude Code's four tiles reflow like the PC's: a row, a 2 x 2 square or a column", new Action() { public void run() {
-            ok(CardSizing.claudeColumns(1808, 228) == 4 && CardSizing.claudeColumns(900, 180) == 4 && CardSizing.claudeColumns(412, 376) == 2 && CardSizing.claudeColumns(424, 226) == 2
-                && CardSizing.claudeColumns(252, 640) == 1 && CardSizing.claudeColumns(252, 156) == 2 && CardSizing.claudeColumns(1808, 492) == 4 && CardSizing.claudeColumns(272, 492) == 1, "columns");
-            ok(CardSizing.claudeMascotSize(200, 180) % 16 == 0 && CardSizing.claudeMascotSize(60, 60) == 32 && CardSizing.claudeMascotSize(2000, 2000) == 192, "mascot sizes");
-            ok(CardSizing.claudeMascotBeside(443, 108) && !CardSizing.claudeMascotBeside(200, 182) && CardSizing.claudeCountColumns(200, 182) == 4 && CardSizing.claudeCountColumns(150, 92) == 2
-                && CardSizing.claudeCountWords(443, 140) && !CardSizing.claudeCountWords(150, 92), "counts beside or under the mascot");
-            // The minimum card's tiles still hold the mascot and two lines of compact counts.
+        check("Claude Code's three tiles reflow like the PC's: a row, two over one or a column", new Action() { public void run() {
+            ok(CardSizing.claudeArrange(1808, 228) == CardSizing.CLAUDE_ROW && CardSizing.claudeArrange(1808, 492) == CardSizing.CLAUDE_ROW && CardSizing.claudeArrange(312, 196) == CardSizing.CLAUDE_TWO_OVER_ONE
+                && CardSizing.claudeArrange(424, 226) == CardSizing.CLAUDE_TWO_OVER_ONE && CardSizing.claudeArrange(412, 376) == CardSizing.CLAUDE_TWO_OVER_ONE && CardSizing.claudeArrange(252, 640) == CardSizing.CLAUDE_COLUMN
+                && CardSizing.claudeArrange(272, 492) == CardSizing.CLAUDE_COLUMN, "arrangement");
+            ok(CardSizing.claudeGridColumns(CardSizing.CLAUDE_ROW) == 3 && CardSizing.claudeGridRows(CardSizing.CLAUDE_TWO_OVER_ONE) == 2 && CardSizing.claudeGridRows(CardSizing.CLAUDE_COLUMN) == 3, "grids");
             double[] min = WidgetLayout.minimum("Claude");
-            double bodyW = min[0] - 48, bodyH = min[1] - 84; int columns = CardSizing.claudeColumns(bodyW, bodyH), rows = 4 / columns;
-            double tileW = (bodyW - 12 * (columns - 1)) / columns, tileH = (bodyH - 12 * (rows - 1)) / rows, pad = CardSizing.claudePadding(tileW, tileH);
-            ok(min[0] == 360 && min[1] == 280 && columns == 2 && CardSizing.claudeMascotSize(tileW, tileH) + 8 + 2 * CardSizing.CLAUDE_COUNT_WIDTH <= tileW - 2 * pad && 2 * CardSizing.CLAUDE_COUNTS_ROW <= tileH - 2 * pad, "the minimum card");
+            ok(min[0] == 360 && min[1] == 280 && CardSizing.claudeArrange(min[0] - 48, min[1] - 84) == CardSizing.CLAUDE_TWO_OVER_ONE, "the minimum card");
             ok(Inks.inScope("Claude") && Inks.defaultInk("Claude").equals("Coral") && Inks.stripName("Claude").equals("CLAUDE CODE") && Inks.shortName("Claude").equals("CLAUDE"), "Claude Code wears a strip like every card");
         } });
-        check("Claude Code's mascot is an original 16 x 16 robot whose face follows the most urgent count", new Action() { public void run() {
-            ok(ClaudeText.SPRITE.length == 16, "16 rows");
-            for (String row : ClaudeText.SPRITE) ok(row.length() == 16 && new StringBuilder(row).reverse().toString().equals(row), "a row isn't 16 wide or symmetric: " + row);
-            int[] moods = { ClaudeText.SLEEPING, ClaudeText.MOOD_DONE, ClaudeText.MOOD_WORKING, ClaudeText.MOOD_BLOCKED, ClaudeText.MOOD_NEEDS_YOU };
-            java.util.Set<String> faces = new java.util.HashSet<String>();
-            for (int mood : moods) {
-                StringBuilder face = new StringBuilder();
-                for (int at : ClaudeText.EYE_COLUMNS) for (int r = 0; r < 4; r++) for (int c = 0; c < 3; c++) {
-                    boolean lit = ClaudeText.eye(mood)[r].charAt(c) == 'e';
-                    ok(!lit || ClaudeText.SPRITE[ClaudeText.EYE_ROW + r].charAt(at + c) == 'v', "an eye leaves the visor");
-                    ok(ClaudeText.pixel(mood, ClaudeText.EYE_ROW + r, at + c) == (lit ? 'L' : 'v'), "the eye isn't lit");
-                    face.append(lit ? 'e' : '.');
-                }
-                faces.add(face.toString());
-            }
-            ok(faces.size() == 5 && ClaudeText.pixel(ClaudeText.SLEEPING, 12, 7) == 'L' && ClaudeText.pixel(ClaudeText.SLEEPING, 0, 6) == 'L' && ClaudeText.pixel(ClaudeText.SLEEPING, 2, 2) == '#', "five faces, the antenna and chest light up");
-            PcState.Claude c = new PcState.Claude();
-            ok(ClaudeText.mood(null) == ClaudeText.SLEEPING && ClaudeText.mood(c) == ClaudeText.SLEEPING && ClaudeText.moodColor(ClaudeText.SLEEPING) == 0, "asleep with nothing open");
-            c.done = 2; ok(ClaudeText.mood(c) == ClaudeText.MOOD_DONE && ClaudeText.moodColor(ClaudeText.MOOD_DONE) == Theme.INK_MINT, "done");
-            c.working = 1; ok(ClaudeText.mood(c) == ClaudeText.MOOD_WORKING, "working");
-            c.blocked = 1; ok(ClaudeText.mood(c) == ClaudeText.MOOD_BLOCKED && ClaudeText.color(ClaudeText.BLOCKED) == Theme.INK_CORAL, "blocked");
-            c.needsYou = 1; ok(ClaudeText.mood(c) == ClaudeText.MOOD_NEEDS_YOU && ClaudeText.color(ClaudeText.NEEDS_YOU) == Theme.WARNING && ClaudeText.summary(c).equals("1 needs you, 1 blocked, 2 done, 1 working"), "needs you");
-            ok(ClaudeText.summary(new PcState.Claude()).equals("No Claude Code sessions"), "no sessions");
+        check("Claude Code's instruments pace each window like the PC: the gauge's tick, the projection, the laps and the tokens scale", new Action() { public void run() {
+            double now = 1793793600; // 4 Nov 2026 12:00 UTC
+            PcState.ClaudeWindow five = new PcState.ClaudeWindow(); five.pct = 40; five.resetsAt = now + 3 * 3600;
+            double elapsed = ClaudeText.elapsed(five, ClaudeText.FIVE_HOURS, now);
+            ok(Math.abs(elapsed - 0.4) < 1e-9 && Math.abs(ClaudeText.projection(40, elapsed) - 100) < 1e-9 && ClaudeText.warns(100) && !ClaudeText.warns(89), "5-hour pace");
+            PcState.ClaudeWindow passed = new PcState.ClaudeWindow(); passed.pct = 5; passed.resetsAt = now - 60;
+            ok(Double.isNaN(ClaudeText.elapsed(passed, ClaudeText.FIVE_HOURS, now)) && Double.isNaN(ClaudeText.elapsed(new PcState.ClaudeWindow(), ClaudeText.FIVE_HOURS, now)) && Double.isNaN(ClaudeText.elapsed(null, ClaudeText.WEEK, now)), "no pace without a reset");
+            ok(Double.isNaN(ClaudeText.projection(3, 0.02)) && ClaudeText.projection(90, 0.06) == 999 && ClaudeText.pace(Double.NaN).equals("") && ClaudeText.pace(91.6).equals("on pace for 92%"), "projection words");
+            PcState.ClaudeWindow week = new PcState.ClaudeWindow(); week.pct = 31; week.resetsAt = now + 3 * 86400 + 5 * 3600;
+            int lap = ClaudeText.lapNow(ClaudeText.elapsed(week, ClaudeText.WEEK, now));
+            ok(lap == 3 && ClaudeText.lapText(3).equals("LAP 4 OF 7") && ClaudeText.lapText(-1).equals("") && ClaudeText.lapNow(1) == 6, "the week's lap");
+            ok(ClaudeText.lap(31, 0) == 1 && ClaudeText.lap(31, 1) == 1 && Math.abs(ClaudeText.lap(31, 2) - 0.17) < 1e-9 && ClaudeText.lap(31, 3) == 0 && ClaudeText.lap(Double.NaN, 0) == 0, "laps fill");
+            String[] days = ClaudeText.lapDays(week, now, ZoneId.of("UTC"));
+            ok(days.length == 7 && days[0].equals("Sat") && days[3].equals("Tue") && days[6].equals("Fri"), "laps named by the window's days: " + String.join(",", days));
+            ok(ClaudeText.scale(0) == 10000 && ClaudeText.scale(Double.NaN) == 10000 && ClaudeText.scale(10001) == 15000 && ClaudeText.scale(41000) == 60000 && ClaudeText.scale(250000) == 300000
+                && ClaudeText.peak(new double[] { 3, 9, 4 }) == 9 && ClaudeText.peak(null) == 0, "tokens scale");
+            double[] size = { 50 };
+            ok(CardSizing.claudeFit(69.5, new double[] { 18, 18 }, size) == 1 && size[0] == 38, "the reading shrinks to keep its first line");
+            size[0] = 26;
+            ok(CardSizing.claudeFit(41, new double[] { 18, 18 }, size) == 0 && size[0] == 26, "no shrinking for a line that won't fit");
+            ok(CardSizing.claudeGaugeBeside(186, 62) && !CardSizing.claudeGaugeBeside(168, 127) && CardSizing.claudeLapsHeight(47) == 14 && CardSizing.claudeLapsHeight(66) == 30, "tile layouts");
         } });
         check("Claude Code's tiles read the PC's claude section and word it like the PC", new Action() { public void run() {
             ZoneId utc = ZoneId.of("UTC");
             double now = 1793793600; // 4 Nov 2026 12:00 UTC
             PcState.Claude c = PcState.parse(Json.obj(Json.parse("{\"claude\":{\"plan\":\"current\",\"updatedAt\":" + now + ",\"fiveHour\":{\"pct\":64.4,\"resetsAt\":" + (now + 5400) + "},\"week\":{\"pct\":31,\"resetsAt\":" + (now + 3 * 86400) + "},"
-                + "\"logs\":true,\"logsRead\":true,\"minutes\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,600,0,0,0,400],\"done\":2,\"needsYou\":3,\"blocked\":0,\"working\":1}}"))).claude;
-            ok(c.done == 2 && c.needsYou == 3 && c.working == 1 && c.minutes[25] == 600 && ClaudeText.rate(c.minutes) == 200 && ClaudeText.tokensValue(c).equals("200"), "parse and rate");
+                + "\"logs\":true,\"logsRead\":true,\"minutes\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,600,0,0,0,400]}}"))).claude;
+            ok(c.minutes[25] == 600 && ClaudeText.rate(c.minutes) == 200 && ClaudeText.tokensValue(c).equals("200"), "parse and rate");
             ok(ClaudeText.percentText(c, false, now).equals("64%") && ClaudeText.planNote(c, false, now, false, utc).equals("Resets 1:30 PM") && ClaudeText.planNote(c, true, now, true, utc).equals("Resets Sat 12:00")
                 && ClaudeText.planNote(c, false, now + 6000, false, utc).equals("Reset") && ClaudeText.percentText(c, false, now + 6000).equals("0%"), "plan tiles");
             ok(ClaudeText.tokens(940) == null ? false : ClaudeText.tokens(940).equals("940") && ClaudeText.tokens(9450).equals("9.4k") && ClaudeText.tokens(12400).equals("12k") && ClaudeText.tokens(1250000).equals("1.2M") && ClaudeText.tokens(Double.NaN).equals("—"), "token numbers");

@@ -265,43 +265,51 @@ public final class CardSizing {
     public static int notes(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 700 && height >= 300 ? LARGE : MEDIUM; }
     public static double notesListColumn(double width) { return clamp(Math.floor(width * 0.46), 300, 520); }
 
-    // Claude Code (decision 027, docs/design/claude-card.md), the same numbers as the Windows CardSizing: four tiles in
-    // one row, a 2 × 2 square or one column, whichever leaves the tiles closest to a little wider than square (1.25 : 1).
-    public static final double CLAUDE_GAP = 12, CLAUDE_TILE_SHAPE = 1.25, CLAUDE_COUNTS_ROW = 24;
-    public static int claudeColumns(double bodyWidth, double bodyHeight) {
-        int best = 2; double bestScore = Double.MAX_VALUE;
-        for (int columns : new int[] { 4, 2, 1 }) {
-            int rows = 4 / columns;
+    // Claude Code (decisions 027 and 028, docs/design/claude-card.md), the same numbers as the Windows CardSizing:
+    // three tiles in one row, the two plan tiles over a full-width tokens tile, or one column, whichever leaves the tiles
+    // on average closest to a little wider than square (1.25 : 1).
+    public static final double CLAUDE_GAP = 12, CLAUDE_TILE_SHAPE = 1.25;
+    public static final int CLAUDE_ROW = 0, CLAUDE_TWO_OVER_ONE = 1, CLAUDE_COLUMN = 2;
+    public static int claudeArrange(double bodyWidth, double bodyHeight) {
+        int best = CLAUDE_TWO_OVER_ONE; double bestScore = Double.MAX_VALUE;
+        for (int layout : new int[] { CLAUDE_ROW, CLAUDE_TWO_OVER_ONE, CLAUDE_COLUMN }) {
+            int columns = claudeGridColumns(layout), rows = claudeGridRows(layout);
             double w = (bodyWidth - CLAUDE_GAP * (columns - 1)) / columns, h = (bodyHeight - CLAUDE_GAP * (rows - 1)) / rows;
             if (w <= 0 || h <= 0) continue;
-            double score = Math.abs(Math.log(w / h / CLAUDE_TILE_SHAPE));
-            if (score < bestScore - 1e-9) { bestScore = score; best = columns; }
+            double score = shape(w, h);
+            if (layout == CLAUDE_TWO_OVER_ONE) score = (2 * score + shape(bodyWidth, h)) / 3;
+            if (score < bestScore - 1e-9) { bestScore = score; best = layout; }
         }
         return best;
     }
+    private static double shape(double w, double h) { return Math.abs(Math.log(w / h / CLAUDE_TILE_SHAPE)); }
+    public static int claudeGridColumns(int layout) { return layout == CLAUDE_ROW ? 3 : layout == CLAUDE_TWO_OVER_ONE ? 2 : 1; }
+    public static int claudeGridRows(int layout) { return layout == CLAUDE_ROW ? 1 : layout == CLAUDE_TWO_OVER_ONE ? 2 : 3; }
     public static double claudePadding(double tileWidth, double tileHeight) { return Math.min(tileWidth, tileHeight) < 140 ? 10 : 16; }
     public static double claudeValueSize(double tileWidth, double tileHeight) { return clamp(Math.round(Math.min(tileHeight * 0.3, tileWidth * 0.22)), 18, 64); }
-    public static boolean claudeNote(double tileHeight) { return tileHeight >= 96; }
-    public static boolean claudeHistory(double tileHeight) { return tileHeight >= 150; }
-    // The mascot beside the counts in a wide tile, over them otherwise, at a whole number of units a pixel (32–192).
-    // The counts are a dot and a number each, two or four to a line (40 units each), or a line each with their words
-    // beside a mascot that leaves them 150 units and four lines.
-    public static final double CLAUDE_COUNT_WIDTH = 40, CLAUDE_COUNTS_WORDS = 150, CLAUDE_MASCOT_GAP = 8;
-    public static boolean claudeMascotBeside(double tileWidth, double tileHeight) { return tileWidth >= tileHeight * 1.35; }
-    public static int claudeCountColumns(double tileWidth, double tileHeight) {
-        return !claudeMascotBeside(tileWidth, tileHeight) && tileWidth - 2 * claudePadding(tileWidth, tileHeight) >= 4 * CLAUDE_COUNT_WIDTH ? 4 : 2;
+    // Inside a tile (decision 028), as on the PC: the gauges sit beside their reading in a tile at least 2.4 times as
+    // wide as the room under its name (up to 45% of the width) and over it otherwise (the reading and its lines take up
+    // to half the room); the reading shrinks to 22 to keep its first line, then lines are added while they fit (18 units
+    // each, 30 for the burn line). The week's laps are 30 tall with the day names when that leaves a 22-unit reading.
+    public static final double CLAUDE_LINE_HEIGHT = 1.34, CLAUDE_LINE = 18, CLAUDE_BURN_ROOM = 30, CLAUDE_BURN_HEIGHT = 24, CLAUDE_KEEP_LINE = 22;
+    public static final double CLAUDE_GAUGE_GAP = 12, CLAUDE_GAUGE_SHARE = 0.45, CLAUDE_TEXT_SHARE = 0.5, CLAUDE_LAPS_GAP = 4;
+    public static boolean claudeGaugeBeside(double innerWidth, double bodyHeight) { return innerWidth >= bodyHeight * 2.4; }
+    public static double claudeGaugeWidth(double innerWidth, double bodyHeight) { return Math.max(1, Math.floor(Math.min(innerWidth * CLAUDE_GAUGE_SHARE, bodyHeight * 140 / 84))); }
+    // How many lines fit under the reading; size[0] is the reading's size, shrunk to fit.
+    public static int claudeFit(double room, double[] lines, double[] size) {
+        size[0] = Math.max(18, Math.min(size[0], Math.floor(room / CLAUDE_LINE_HEIGHT)));
+        if (lines.length > 0 && size[0] * CLAUDE_LINE_HEIGHT + lines[0] > room) {
+            double smaller = Math.floor((room - lines[0]) / CLAUDE_LINE_HEIGHT);
+            if (smaller >= CLAUDE_KEEP_LINE) size[0] = Math.min(size[0], smaller);
+        }
+        int shown = 0; double used = size[0] * CLAUDE_LINE_HEIGHT;
+        while (shown < lines.length && used + lines[shown] <= room + 0.01) { used += lines[shown]; shown++; }
+        return shown;
     }
-    public static double claudeMascotSize(double tileWidth, double tileHeight) {
-        double pad = claudePadding(tileWidth, tileHeight);
-        double room = claudeMascotBeside(tileWidth, tileHeight)
-            ? Math.min(Math.min(tileHeight - 2 * pad, tileWidth * 0.45), tileWidth - 2 * pad - CLAUDE_MASCOT_GAP - 2 * CLAUDE_COUNT_WIDTH)
-            : Math.min(tileWidth - 2 * pad, tileHeight - 2 * pad - 6 - CLAUDE_COUNTS_ROW * (4 / claudeCountColumns(tileWidth, tileHeight)));
-        return clamp(Math.floor(room / 16) * 16, 32, 192);
-    }
-    public static boolean claudeCountWords(double tileWidth, double tileHeight) {
-        double pad = claudePadding(tileWidth, tileHeight);
-        return claudeMascotBeside(tileWidth, tileHeight) && tileHeight - 2 * pad >= 4 * CLAUDE_COUNTS_ROW
-            && tileWidth - 2 * pad - claudeMascotSize(tileWidth, tileHeight) - 16 >= CLAUDE_COUNTS_WORDS;
+    public static double claudeLapsHeight(double bodyHeight) { return bodyHeight - 30 - CLAUDE_LAPS_GAP >= CLAUDE_KEEP_LINE * CLAUDE_LINE_HEIGHT ? 30 : 14; }
+    public static int claudeWeekNotes(double innerWidth, double room, double size) {
+        if (innerWidth - size * 2.1 - 10 < 70) return 0;
+        return (int) Math.max(0, Math.min(2, Math.floor(room / CLAUDE_LINE)));
     }
     // Clipboard history (docs/design/clipboard-history.md): the same numbers as CardSizing.cs.
     public static int clip(double width, double height) { return width < 340 || height < 220 ? SMALL : width >= 440 && height >= 400 ? LARGE : MEDIUM; }
